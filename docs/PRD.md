@@ -1,4 +1,5 @@
 # Bhajan Song Composer — Product Requirements Document
+<!-- beads-id: prd-bsc -->
 
 > **Version**: 1.0  
 > **Date**: 2026-06-29  
@@ -8,6 +9,7 @@
 ---
 
 ## Problem Statement
+<!-- beads-id: prd-bsc-s1 -->
 
 Sahaja Yoga practitioners worldwide learn, practice, and perform bhajans (devotional songs) using scattered resources — YouTube videos of varying quality, hand-copied lyric sheets, informal chord charts passed between musicians, and occasionally formal ABC notation sheets maintained by individual contributors. There is **no unified, open-source platform** that:
 
@@ -20,10 +22,12 @@ Sahaja Yoga practitioners worldwide learn, practice, and perform bhajans (devoti
 ---
 
 ## Solution
+<!-- beads-id: prd-bsc-s2 -->
 
 **Bhajan Song Composer** is an open-source web application that serves as both a **Playback Hub** and a **Composition Workstation** for Sahaja Yoga devotional music.
 
 ### Three Core Modules
+<!-- beads-id: prd-bsc-s3 -->
 
 | Module | Description |
 |:---|:---|
@@ -32,6 +36,7 @@ Sahaja Yoga practitioners worldwide learn, practice, and perform bhajans (devoti
 | **🤖 AI Theory Assistant** | Rule-based music theory engine that **analyzes a melody-only treble clef sheet** and auto-generates: harmonized chord progressions, guitar chord voicings (accompaniment and fingerstyle), and piano arrangements (accompaniment and solo, both left and right hand) based on the song's key, scale, and raga. |
 
 ### Song Data Model
+<!-- beads-id: prd-bsc-s4 -->
 
 Each song is a **Markdown file with YAML frontmatter** stored in `data/songs/{language}/{song-slug}.md`:
 
@@ -86,8 +91,10 @@ The ABC notation content is stored in separate `.abc` files alongside the Markdo
 ---
 
 ## User Stories
+<!-- beads-id: prd-bsc-s5 -->
 
 ### Playback Module
+<!-- beads-id: prd-bsc-s6 -->
 
 1. As a **practitioner**, I want to browse songs organized by language/tradition (Hindi, Marathi, Sanskrit, English), so that I can find songs from my cultural background quickly.
 2. As a **practitioner**, I want an A-Z alphabetical navigation within each language category, so that I can jump to a specific song by its first letter.
@@ -106,6 +113,7 @@ The ABC notation content is stored in separate `.abc` files alongside the Markdo
 15. As a **practitioner**, I want the app to be fully responsive and work well on mobile devices, so that I can use it during group meditation sessions from my phone.
 
 ### Composer Module
+<!-- beads-id: prd-bsc-s7 -->
 
 16. As a **composer**, I want to create a new song entry using the same Markdown+YAML+ABC format as the Playback module, so that my compositions are immediately compatible with the catalogue.
 17. As a **composer**, I want a form-based song editor where I can fill in the frontmatter fields (title, language, category, raga, taal, key, time signature, videos, tags), so that I don't need to write raw YAML.
@@ -121,8 +129,10 @@ The ABC notation content is stored in separate `.abc` files alongside the Markdo
 27. As a **composer**, I want to save work-in-progress compositions to browser localStorage, so that I don't lose unsaved work if I accidentally close the tab.
 
 ### AI Theory Assistant Module
+<!-- beads-id: prd-bsc-s8 -->
 
 #### Core Use Case: Melody → Full Arrangement
+<!-- beads-id: prd-bsc-s9 -->
 
 _The most common scenario: a user has a melody-only ABC sheet (treble clef / G clef only, no bass clef / F clef) and wants to generate piano accompaniment or guitar fingerstyle arrangements._
 
@@ -136,6 +146,7 @@ _The most common scenario: a user has a melody-only ABC sheet (treble clef / G c
 35. As a **practitioner**, I want each generated arrangement to be output as a **separate ABC notation layer** (e.g., `namostute.piano-accompaniment.abc`, `namostute.fingerstyle.abc`) that I can view in the Playback module or edit in the Composer, so that AI-generated arrangements are first-class song content.
 
 #### Chord & Voicing Suggestions
+<!-- beads-id: prd-bsc-s10 -->
 
 36. As a **practitioner learning music theory**, I want the AI assistant to suggest a chord progression based on the song's key and raga, so that I can understand the harmonic structure.
 37. As a **practitioner**, I want the chord suggestions to be rendered as interactive visual diagrams (guitar fretboard with finger positions, piano keyboard with highlighted keys), so that I can learn the voicings visually.
@@ -146,6 +157,7 @@ _The most common scenario: a user has a melody-only ABC sheet (treble clef / G c
 42. As a **practitioner**, I want to override individual chords in the auto-harmonized progression (e.g., change one chord from Am to Am7), so that I can fine-tune the arrangement to my taste while keeping the rest of the AI-generated output.
 
 ### Community & Open Source
+<!-- beads-id: prd-bsc-s11 -->
 
 43. As a **contributor**, I want clear documentation on how to add a new song to the catalogue (file format, naming conventions, PR process), so that I can contribute without needing deep technical knowledge.
 44. As a **contributor**, I want a song data validation tool that checks my Markdown+YAML+ABC files for correctness before I submit a PR, so that I can fix errors locally.
@@ -155,8 +167,10 @@ _The most common scenario: a user has a melody-only ABC sheet (treble clef / G c
 ---
 
 ## Implementation Decisions
+<!-- beads-id: prd-bsc-s12 -->
 
 ### Architecture
+<!-- beads-id: prd-bsc-s13 -->
 
 - **Framework**: Next.js with TypeScript, using App Router. Static Site Generation (SSG) for song pages to enable zero-cost hosting on Vercel/Netlify.
 - **Song Data Storage**: Markdown files with YAML frontmatter in `data/songs/{language}/` directory. ABC notation in separate `.abc` files alongside the Markdown. Git is the database — community contributes via Pull Requests.
@@ -174,6 +188,7 @@ _The most common scenario: a user has a melody-only ABC sheet (treble clef / G c
   - **ABC notation generation** from chord/voicing data
 
 ### Data Flow
+<!-- beads-id: prd-bsc-s14 -->
 
 ```
 Song Markdown (.md)  →  Next.js SSG Build  →  Static Song Pages
@@ -201,6 +216,7 @@ Melody ABC (.abc)  ─┤  1. Melody Analyzer                 │
 ```
 
 ### Key Modules
+<!-- beads-id: prd-bsc-s15 -->
 
 1. **Song Catalogue Module** — File-system based song registry with language categorization and A-Z index. Uses `fs.readFileSync` + `gray-matter` at build time for SSG.
 2. **Playback Controller Module** — Unified controller component that manages the currently active media type (video vs. sheet) and sub-type selection (which video, which sheet notation layer).
@@ -211,6 +227,7 @@ Melody ABC (.abc)  ─┤  1. Melody Analyzer                 │
 5. **Visual Instrument Module** — Reusable guitar fretboard and piano keyboard SVG components that can highlight specific notes/chords. Adapted from patterns in the existing `music-theory` project.
 
 ### File Organization
+<!-- beads-id: prd-bsc-s16 -->
 
 ```
 data/
@@ -272,6 +289,7 @@ src/
 ```
 
 ### Instrument-Specific Output Detail
+<!-- beads-id: prd-bsc-s17 -->
 
 The AI Theory Assistant provides **visual chord diagrams** as the primary output format:
 
@@ -288,12 +306,15 @@ The AI Theory Assistant provides **visual chord diagrams** as the primary output
 ---
 
 ## Testing Decisions
+<!-- beads-id: prd-bsc-s18 -->
 
 ### What Makes a Good Test
+<!-- beads-id: prd-bsc-s19 -->
 
 Tests should verify **external behavior and user-visible outcomes**, not implementation details. A good test for this application asks: "Can the user see/hear/interact with the correct output given this input?"
 
 ### Modules to Test
+<!-- beads-id: prd-bsc-s20 -->
 
 1. **Song Loader** — Given a valid Markdown+ABC file set, assert that the parsed output matches the expected data shape (frontmatter fields, ABC content, correct file associations). Given invalid files, assert meaningful error messages.
 
@@ -324,6 +345,7 @@ Tests should verify **external behavior and user-visible outcomes**, not impleme
    - No duplicate slugs within the same language
 
 ### Testing Tools
+<!-- beads-id: prd-bsc-s21 -->
 
 - **Vitest** for unit tests (theory engine, song loader, validation)
 - **Playwright** for E2E tests (playback controller interactions, composer workflow)
@@ -332,6 +354,7 @@ Tests should verify **external behavior and user-visible outcomes**, not impleme
 ---
 
 ## Out of Scope
+<!-- beads-id: prd-bsc-s22 -->
 
 The following are explicitly **out of scope** for this PRD (v1.0):
 
@@ -349,8 +372,10 @@ The following are explicitly **out of scope** for this PRD (v1.0):
 ---
 
 ## Further Notes
+<!-- beads-id: prd-bsc-s23 -->
 
 ### Relationship to Existing `music-theory` Project
+<!-- beads-id: prd-bsc-s24 -->
 
 This project draws architectural inspiration from the existing [`music-theory`](file:///Users/steve/duyhunghd6/music-theory) application, particularly:
 - ABC notation rendering patterns (abcjs integration)
@@ -360,6 +385,7 @@ This project draws architectural inspiration from the existing [`music-theory`](
 However, Bhajan Song Composer is a **standalone project** with its own repository, focused specifically on the devotional music community's needs rather than general music education.
 
 ### Raga-to-Scale Mapping
+<!-- beads-id: prd-bsc-s25 -->
 
 A key differentiator is the raga-to-Western-scale mapping table that powers the AI Theory Assistant. Common mappings include:
 
@@ -375,6 +401,7 @@ A key differentiator is the raga-to-Western-scale mapping table that powers the 
 This mapping enables the theory engine to suggest Western chord voicings that are harmonically compatible with Indian raga-based melodies.
 
 ### Contribution Model
+<!-- beads-id: prd-bsc-s26 -->
 
 The open-source contribution model follows a "Git is the database" philosophy:
 1. Fork the repository
@@ -385,12 +412,14 @@ The open-source contribution model follows a "Git is the database" philosophy:
 6. Maintainers review and merge
 
 ### Deployment Strategy
+<!-- beads-id: prd-bsc-s27 -->
 
 - **Primary**: Vercel (free tier) with automatic deployments from `main` branch
 - **Alternative**: Netlify, GitHub Pages (via `next export`)
 - **Domain**: To be determined by the community
 
 ### Vietnamese Music Terminology Reference
+<!-- beads-id: prd-bsc-s28 -->
 
 | Vietnamese | English | Context |
 |:---|:---|:---|
