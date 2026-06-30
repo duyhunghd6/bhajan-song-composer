@@ -25,7 +25,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       title: `${song.meta.title} — ${song.meta.language.toUpperCase()} Bhajan | Bhajan Song Composer`,
       description: `Lyrics and sheet music for ${song.meta.title} (${song.meta.language}). Raga: ${song.meta.raga || "N/A"}, Taal: ${song.meta.taal || "N/A"}.`,
     };
-  } catch (e) {
+  } catch {
     return {
       title: "Song Not Found",
     };
@@ -38,7 +38,7 @@ export default async function SongPage({ params }: PageProps) {
   let song;
   try {
     song = await loadSong(language, slug);
-  } catch (e) {
+  } catch {
     notFound();
   }
 

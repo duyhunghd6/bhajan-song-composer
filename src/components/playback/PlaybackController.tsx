@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useTransition } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { Song, SongVideo, SongAbcNotation } from "@/lib/songs/schema";
 import YouTubePlayer from "./YouTubePlayer";
@@ -20,36 +20,24 @@ export default function PlaybackController({ song }: PlaybackControllerProps) {
   const notations = song.abcNotations;
 
   // Determine defaults
-  const defaultVideo = videos.find((v) => v.default) || videos[0];
-  const defaultNotation = notations.find((n) => n.default) || notations[0];
+  const defaultVideo = videos.find((v) => v.default) || videos[0] || null;
+  const defaultNotation = notations.find((n) => n.default) || notations[0] || null;
 
-  // States
-  const [viewMode, setViewMode] = useState<"video" | "sheet" | "split">("split");
-  const [activeVideo, setActiveVideo] = useState<SongVideo | null>(defaultVideo);
-  const [activeNotation, setActiveNotation] = useState<
-    (SongAbcNotation & { content: string }) | null
-  >(defaultNotation as any);
+  // Derive active values directly from URL search parameters (Single Source of Truth)
+  const viewParam = searchParams.get("view");
+  const viewMode = (viewParam === "video" || viewParam === "sheet" || viewParam === "split")
+    ? viewParam
+    : "split";
 
-  // Sync state with URL search params after mounting
-  useEffect(() => {
-    const videoParam = searchParams.get("video");
-    const sheetParam = searchParams.get("sheet");
-    const viewParam = searchParams.get("view");
+  const videoParam = searchParams.get("video");
+  const activeVideo = videoParam
+    ? (videos.find((v) => v.type === videoParam) || defaultVideo)
+    : defaultVideo;
 
-    if (viewParam === "video" || viewParam === "sheet" || viewParam === "split") {
-      setViewMode(viewParam);
-    }
-
-    if (videoParam) {
-      const match = videos.find((v) => v.type === videoParam);
-      if (match) setActiveVideo(match);
-    }
-
-    if (sheetParam) {
-      const match = notations.find((n) => n.type === sheetParam);
-      if (match) setActiveNotation(match as any);
-    }
-  }, [searchParams, videos, notations]);
+  const sheetParam = searchParams.get("sheet");
+  const activeNotation = sheetParam
+    ? (notations.find((n) => n.type === sheetParam) || defaultNotation)
+    : defaultNotation;
 
   // Helper to update URL search parameters
   const updateUrlParams = (updates: Record<string, string | null>) => {
@@ -69,17 +57,14 @@ export default function PlaybackController({ song }: PlaybackControllerProps) {
   };
 
   const handleViewModeChange = (mode: "video" | "sheet" | "split") => {
-    setViewMode(mode);
     updateUrlParams({ view: mode });
   };
 
   const handleVideoChange = (video: SongVideo) => {
-    setActiveVideo(video);
     updateUrlParams({ video: video.type });
   };
 
   const handleNotationChange = (notation: SongAbcNotation & { content: string }) => {
-    setActiveNotation(notation);
     updateUrlParams({ sheet: notation.type });
   };
 
@@ -153,7 +138,7 @@ export default function PlaybackController({ song }: PlaybackControllerProps) {
                     <button
                       key={n.type}
                       id={`split-sheet-select-${n.type}`}
-                      onClick={() => handleNotationChange(n as any)}
+                      onClick={() => handleNotationChange(n)}
                       className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all cursor-pointer ${
                         activeNotation?.type === n.type
                           ? "bg-amber-500/10 text-amber-600 border-amber-400 dark:text-amber-400"
@@ -217,7 +202,7 @@ export default function PlaybackController({ song }: PlaybackControllerProps) {
                   <button
                     key={n.type}
                     id={`sheet-only-select-${n.type}`}
-                    onClick={() => handleNotationChange(n as any)}
+                    onClick={() => handleNotationChange(n)}
                     className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all cursor-pointer ${
                       activeNotation?.type === n.type
                         ? "bg-amber-500/10 text-amber-600 border-amber-400 dark:text-amber-400"

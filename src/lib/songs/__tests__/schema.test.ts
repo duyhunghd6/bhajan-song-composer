@@ -52,7 +52,7 @@ describe("SongMetadataSchema", () => {
 
   it("fails if required fields are missing", () => {
     const invalid = { ...baseValidMetadata };
-    // @ts-ignore
+    // @ts-expect-error - Deleting required title property to test schema validation failure
     delete invalid.title;
     const result = SongMetadataSchema.safeParse(invalid);
     expect(result.success).toBe(false);
@@ -74,7 +74,7 @@ describe("SongMetadataSchema", () => {
   });
 
   it("allows optional fields like raga, composer, contributors to be omitted", () => {
-    const metadata = { ...baseValidMetadata };
+    const metadata: Partial<typeof baseValidMetadata> = { ...baseValidMetadata };
     delete metadata.raga;
     delete metadata.composer;
     delete metadata.contributors;

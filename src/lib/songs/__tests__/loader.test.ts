@@ -1,6 +1,7 @@
 import { vi, describe, it, expect, beforeEach } from "vitest";
 import { loadSong, listSongs } from "../loader";
 import fs from "fs/promises";
+import { Dirent, Stats } from "fs";
 
 vi.mock("fs/promises", () => {
   return {
@@ -50,11 +51,12 @@ This is a marathi bhajan in praise of Shri Mataji.
 
   it("loads a song with correct metadata, lyrics, notes, and ABC content", async () => {
     // Mock the markdown file read
-    vi.mocked(fs.readFile).mockImplementation((path: any) => {
-      if (path.endsWith("namostute.md")) {
+    vi.mocked(fs.readFile).mockImplementation((path: unknown) => {
+      const pathStr = path as string;
+      if (pathStr.endsWith("namostute.md")) {
         return Promise.resolve(sampleMarkdown);
       }
-      if (path.endsWith("namostute.melody.abc")) {
+      if (pathStr.endsWith("namostute.melody.abc")) {
         return Promise.resolve("X:1\nT:Namostute\nM:4/4\nK:Em\nE E G A | B B A G");
       }
       return Promise.reject(new Error("File not found"));
@@ -83,8 +85,9 @@ language: "marathi"
   });
 
   it("throws an error if a companion ABC file is missing", async () => {
-    vi.mocked(fs.readFile).mockImplementation((path: any) => {
-      if (path.endsWith("namostute.md")) {
+    vi.mocked(fs.readFile).mockImplementation((path: unknown) => {
+      const pathStr = path as string;
+      if (pathStr.endsWith("namostute.md")) {
         return Promise.resolve(sampleMarkdown);
       }
       return Promise.reject(new Error("File not found"));
@@ -94,34 +97,36 @@ language: "marathi"
   });
 
   it("lists all songs across subdirectories", async () => {
-    // Mock readdir to return directory entries
-    vi.mocked(fs.readdir).mockImplementation((path: any) => {
-      if (path.endsWith("songs")) {
+    // @ts-expect-error - Custom readdir mock implementation returns Dirent mock matching expected directory shape
+    vi.mocked(fs.readdir).mockImplementation((path: unknown) => {
+      const pathStr = path as string;
+      if (pathStr.endsWith("songs")) {
         return Promise.resolve([
-          { name: "marathi", isDirectory: () => true },
-          { name: "hindi", isDirectory: () => true },
-        ] as any);
+          { name: "marathi", isDirectory: () => true, isFile: () => false },
+          { name: "hindi", isDirectory: () => true, isFile: () => false },
+        ] as unknown as Dirent[]);
       }
-      if (path.endsWith("marathi")) {
+      if (pathStr.endsWith("marathi")) {
         return Promise.resolve([
           { name: "namostute.md", isDirectory: () => false, isFile: () => true },
           { name: "namostute.melody.abc", isDirectory: () => false, isFile: () => true },
-        ] as any);
+        ] as unknown as Dirent[]);
       }
-      if (path.endsWith("hindi")) {
+      if (pathStr.endsWith("hindi")) {
         return Promise.resolve([
           { name: "ignore.txt", isDirectory: () => false, isFile: () => true },
-        ] as any);
+        ] as unknown as Dirent[]);
       }
       return Promise.resolve([]);
     });
 
-    vi.mocked(fs.stat).mockImplementation((path: any) => {
-      const isDir = path.endsWith("songs") || path.endsWith("marathi") || path.endsWith("hindi");
+    vi.mocked(fs.stat).mockImplementation((path: unknown) => {
+      const pathStr = path as string;
+      const isDir = pathStr.endsWith("songs") || pathStr.endsWith("marathi") || pathStr.endsWith("hindi");
       return Promise.resolve({
         isDirectory: () => isDir,
         isFile: () => !isDir,
-      } as any);
+      } as unknown as Stats);
     });
 
     vi.mocked(fs.readFile).mockResolvedValue(sampleMarkdown);

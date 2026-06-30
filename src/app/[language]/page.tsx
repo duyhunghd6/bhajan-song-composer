@@ -15,7 +15,7 @@ export async function generateStaticParams() {
     return files
       .filter((file) => file.isDirectory())
       .map((file) => ({ language: file.name.toLowerCase() }));
-  } catch (err) {
+  } catch {
     return [
       { language: "hindi" },
       { language: "marathi" },

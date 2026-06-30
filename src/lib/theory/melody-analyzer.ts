@@ -1,4 +1,4 @@
-import { getNoteValue, getScaleNotes } from "./scales";
+import { getScaleNotes } from "./scales";
 
 export interface AbcHeader {
   key: string;
@@ -128,7 +128,7 @@ export function detectKeyFromNotes(
           bestRoot = root;
           bestMode = mode;
         }
-      } catch (e) {
+      } catch {
         // Skip invalid root/mode combinations
       }
     }

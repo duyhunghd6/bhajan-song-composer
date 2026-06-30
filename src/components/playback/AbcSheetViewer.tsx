@@ -7,61 +7,61 @@ interface AbcSheetViewerProps {
   songTitle: string;
 }
 
-export default function AbcSheetViewer({ abcString, songTitle }: AbcSheetViewerProps) {
+type AbcjsType = {
+  renderAbc: (
+    target: string | HTMLElement,
+    abcString: string,
+    options?: Record<string, unknown>
+  ) => unknown[];
+  synth: unknown;
+};
+
+interface SynthType {
+  init(options: {
+    visualObj: unknown;
+    audioContext: AudioContext;
+    millisecondsPerMeasure: number;
+  }): Promise<unknown>;
+  prime(): Promise<unknown>;
+  start(): void;
+  pause(): void;
+  stop(): void;
+}
+
+export default function AbcSheetViewer({ abcString }: AbcSheetViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [abcjsModule, setAbcjsModule] = useState<any>(null);
+  const [abcjsModule, setAbcjsModule] = useState<AbcjsType | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [tempo, setTempo] = useState(120);
-  const synthRef = useRef<any>(null);
-  const synthControlRef = useRef<any>(null);
-  const visualObjRef = useRef<any>(null);
+  const synthRef = useRef<SynthType | null>(null);
+  const visualObjRef = useRef<unknown>(null);
 
-  // Load abcjs on client side
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      import("abcjs").then((mod) => {
-        setAbcjsModule(mod.default);
-      });
+  const stopSynth = () => {
+    if (synthRef.current) {
+      try {
+        synthRef.current.stop();
+      } catch (err) {
+        console.error("Error stopping synth:", err);
+      }
+      synthRef.current = null;
     }
-  }, []);
-
-  // Render ABC notation when module or string changes
-  useEffect(() => {
-    if (!abcjsModule || !containerRef.current) return;
-
-    try {
-      // Clear previous rendering
-      containerRef.current.innerHTML = "";
-
-      const visualObj = abcjsModule.renderAbc(containerRef.current, abcString, {
-        responsive: "resize",
-        add_classes: true,
-      });
-
-      visualObjRef.current = visualObj[0];
-
-      // Cleanup synthesizer when tune changes
-      stopSynth();
-    } catch (err) {
-      console.error("Error rendering ABC notation:", err);
-    }
-
-    return () => {
-      stopSynth();
-    };
-  }, [abcjsModule, abcString]);
+    setIsPlaying(false);
+  };
 
   const initSynth = async () => {
-    if (!abcjsModule || !visualObjRef.current) return;
+    if (!abcjsModule || !visualObjRef.current) return null;
 
     try {
-      if (typeof window !== "undefined" && window.AudioContext || (window as any).webkitAudioContext) {
+      const win = window as Window & { webkitAudioContext?: typeof AudioContext };
+      if (typeof window !== "undefined" && (window.AudioContext || win.webkitAudioContext)) {
         // Create audio context
-        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-        const audioContext = new AudioContext();
+        const AudioContextClass = window.AudioContext || win.webkitAudioContext;
+        if (!AudioContextClass) return null;
+        const audioContext = new AudioContextClass();
 
         // Create Synth instance
-        const synth = new abcjsModule.synth.CreateSynth();
+        const CreateSynth = (abcjsModule.synth as { CreateSynth: new () => SynthType }).CreateSynth;
+        const synth = new CreateSynth();
         synthRef.current = synth;
 
         await synth.init({
@@ -107,17 +107,37 @@ export default function AbcSheetViewer({ abcString, songTitle }: AbcSheetViewerP
     }
   };
 
-  const stopSynth = () => {
-    if (synthRef.current) {
-      try {
-        synthRef.current.stop();
-      } catch (err) {
-        console.error("Error stopping synth:", err);
-      }
-      synthRef.current = null;
+  // Load abcjs on client side
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      import("abcjs").then((mod) => {
+        setAbcjsModule(mod.default);
+      });
     }
-    setIsPlaying(false);
-  };
+  }, []);
+
+  // Render ABC notation when module or string changes
+  useEffect(() => {
+    if (!abcjsModule || !containerRef.current) return;
+
+    try {
+      // Clear previous rendering
+      containerRef.current.innerHTML = "";
+
+      const visualObj = abcjsModule.renderAbc(containerRef.current, abcString, {
+        responsive: "resize",
+        add_classes: true,
+      });
+
+      visualObjRef.current = visualObj[0];
+    } catch (err) {
+      console.error("Error rendering ABC notation:", err);
+    }
+
+    return () => {
+      stopSynth();
+    };
+  }, [abcjsModule, abcString]);
 
   return (
     <div className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 shadow-md flex flex-col space-y-6">
