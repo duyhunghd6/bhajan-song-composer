@@ -1,0 +1,322 @@
+import { AccompanimentStage } from "./accompaniment-stage";
+import {
+  DjembeArrangement,
+  DjembeEvent,
+  DjembeStroke,
+  generateDjembeArrangement,
+} from "./djembe-arranger";
+import {
+  EnsembleConflictReportEntry,
+  EnsembleConflictResolution,
+  resolveEnsembleConflicts,
+} from "./ensemble-conflicts";
+import {
+  EnsembleIntegrationHandshake,
+  generateEnsembleIntegrationHandshake,
+} from "./ensemble-expander";
+import {
+  FluteBreathEvent,
+  generateOrchestralSupport,
+  OrchestralSupportArrangement,
+  OrchestralSupportEvent,
+  OrchestralSupportMode,
+  ViolinExpressionEvent,
+} from "./orchestral-arranger";
+
+export type EnsemblePlaybackInstrument = "djembe" | "flute" | "violin";
+export type EnsembleVisualInstrument = EnsemblePlaybackInstrument;
+
+export interface EnsembleExpansionOutputOptions {
+  accompaniment: AccompanimentStage;
+  handshake?: EnsembleIntegrationHandshake;
+  djembe?: DjembeArrangement;
+  orchestral?: OrchestralSupportArrangement;
+}
+
+export interface EnsembleEventMaps {
+  djembe: DjembeEvent[];
+  flute: OrchestralSupportEvent[];
+  violin: OrchestralSupportEvent[];
+  fluteBreath: FluteBreathEvent[];
+  violinExpression: ViolinExpressionEvent[];
+}
+
+export interface EnsembleAbcLayers {
+  layer3Djembe: string;
+  layer3Flute: string;
+  layer3Violin: string;
+  combined: string;
+}
+
+export interface EnsemblePlaybackEvent {
+  layer: 3;
+  instrument: EnsemblePlaybackInstrument;
+  measureIndex: number;
+  beat: number;
+  startMs: number;
+  durationMs: number;
+  midi: number;
+  note: string;
+  velocity: number;
+  source: DjembeEvent["source"] | OrchestralSupportEvent["source"];
+}
+
+export interface EnsembleVisualActivityEvent {
+  layer: 3;
+  instrument: EnsembleVisualInstrument;
+  measureIndex: number;
+  beat: number;
+  startMs: number;
+  durationMs: number;
+  active: boolean;
+  label: string;
+  density?: EnsembleIntegrationHandshake["rhythmicDensityGrid"][number]["density"];
+  mode?: OrchestralSupportMode;
+}
+
+export interface EnsembleMidiControlEvent extends ViolinExpressionEvent {
+  layer: 3;
+}
+
+export interface EnsembleExpansionValidation {
+  handshakeReady: boolean;
+  eventMapsReady: boolean;
+  abcLayersReady: boolean;
+  playbackEventsReady: boolean;
+  midiControlEventsReady: boolean;
+  visualActivityReady: boolean;
+}
+
+export interface EnsembleExpansionOutput {
+  handshake: EnsembleIntegrationHandshake;
+  djembe: DjembeArrangement;
+  orchestral: OrchestralSupportArrangement;
+  conflicts: EnsembleConflictResolution;
+  eventMaps: EnsembleEventMaps;
+  yieldDecisions: OrchestralSupportArrangement["yieldDecisions"];
+  conflictReport: EnsembleConflictReportEntry[];
+  abcLayers: EnsembleAbcLayers;
+  playbackEvents: EnsemblePlaybackEvent[];
+  midiControlEvents: EnsembleMidiControlEvent[];
+  visualActivity: EnsembleVisualActivityEvent[];
+  validation: EnsembleExpansionValidation;
+}
+
+const DJEMBE_MIDI_BY_STROKE: Record<DjembeStroke, number> = {
+  bass: 36,
+  "mid-tone": 60,
+  slap: 62,
+};
+
+function noteToAbc(note: string): string {
+  const match = note.match(/^([A-G])(#?)(\d)$/);
+  if (!match) return note;
+
+  const [, pitch, accidental, octaveText] = match;
+  const octave = Number(octaveText);
+  const accidentalPrefix = accidental === "#" ? "^" : "";
+
+  if (octave <= 3) return `${accidentalPrefix}${pitch},`;
+  if (octave === 4) return `${accidentalPrefix}${pitch}`;
+  return `${accidentalPrefix}${pitch.toLowerCase()}${"'".repeat(Math.max(0, octave - 5))}`;
+}
+
+function buildOrchestralLayerAbc(
+  voiceName: string,
+  events: OrchestralSupportEvent[],
+  measureCount: number
+): string {
+  const measures = Array.from({ length: measureCount }, (_, measureIndex) => {
+    const notes = events
+      .filter((event) => event.measureIndex === measureIndex)
+      .sort((a, b) => a.beat - b.beat)
+      .map((event) => `${noteToAbc(event.note)}2`);
+
+    return notes.length > 0 ? notes.join(" ") : "z8";
+  });
+
+  return `V:${voiceName} name="Layer 3 ${voiceName} Support"\n| ${measures.join(" | ")} |`;
+}
+
+function buildAbcLayers(
+  djembe: DjembeArrangement,
+  orchestral: OrchestralSupportArrangement,
+  measureCount: number
+): EnsembleAbcLayers {
+  const layer3Flute = buildOrchestralLayerAbc("Flute", orchestral.fluteSupportMap, measureCount);
+  const layer3Violin = buildOrchestralLayerAbc("Violin", orchestral.violinSupportMap, measureCount);
+
+  return {
+    layer3Djembe: djembe.abc,
+    layer3Flute,
+    layer3Violin,
+    combined: [djembe.abc, layer3Flute, layer3Violin].join("\n"),
+  };
+}
+
+function buildPlaybackEvents(
+  djembe: DjembeArrangement,
+  orchestral: OrchestralSupportArrangement
+): EnsemblePlaybackEvent[] {
+  const djembeEvents = djembe.eventMap.map<EnsemblePlaybackEvent>((event) => ({
+    layer: 3,
+    instrument: "djembe",
+    measureIndex: event.measureIndex,
+    beat: event.beat,
+    startMs: event.startMs,
+    durationMs: event.durationMs,
+    midi: DJEMBE_MIDI_BY_STROKE[event.stroke],
+    note: event.stroke,
+    velocity: event.velocity,
+    source: event.source,
+  }));
+  const fluteEvents = orchestral.fluteSupportMap.map<EnsemblePlaybackEvent>((event) => ({
+    layer: 3,
+    instrument: "flute",
+    measureIndex: event.measureIndex,
+    beat: event.beat,
+    startMs: event.startMs,
+    durationMs: event.durationMs,
+    midi: event.midiNote,
+    note: event.note,
+    velocity: event.velocity,
+    source: event.source,
+  }));
+  const violinEvents = orchestral.violinSupportMap.map<EnsemblePlaybackEvent>((event) => ({
+    layer: 3,
+    instrument: "violin",
+    measureIndex: event.measureIndex,
+    beat: event.beat,
+    startMs: event.startMs,
+    durationMs: event.durationMs,
+    midi: event.midiNote,
+    note: event.note,
+    velocity: event.velocity,
+    source: event.source,
+  }));
+
+  return [...djembeEvents, ...fluteEvents, ...violinEvents].sort((a, b) =>
+    a.measureIndex - b.measureIndex || a.startMs - b.startMs || a.instrument.localeCompare(b.instrument)
+  );
+}
+
+function activityDensity(
+  handshake: EnsembleIntegrationHandshake,
+  event: Pick<EnsemblePlaybackEvent, "measureIndex" | "startMs">
+): EnsembleVisualActivityEvent["density"] {
+  return handshake.rhythmicDensityGrid.find((slice) =>
+    slice.measureIndex === event.measureIndex && slice.startMs === event.startMs
+  )?.density;
+}
+
+function buildVisualActivity(
+  handshake: EnsembleIntegrationHandshake,
+  djembe: DjembeArrangement,
+  orchestral: OrchestralSupportArrangement
+): EnsembleVisualActivityEvent[] {
+  const djembeActivity = djembe.eventMap.map<EnsembleVisualActivityEvent>((event) => ({
+    layer: 3,
+    instrument: "djembe",
+    measureIndex: event.measureIndex,
+    beat: event.beat,
+    startMs: event.startMs,
+    durationMs: event.durationMs,
+    active: true,
+    label: `Djembe ${event.stroke}`,
+    density: activityDensity(handshake, event),
+  }));
+  const fluteActivity = orchestral.fluteSupportMap.map<EnsembleVisualActivityEvent>((event) => ({
+    layer: 3,
+    instrument: "flute",
+    measureIndex: event.measureIndex,
+    beat: event.beat,
+    startMs: event.startMs,
+    durationMs: event.durationMs,
+    active: true,
+    label: `Flute ${event.mode}`,
+    density: activityDensity(handshake, event),
+    mode: event.mode,
+  }));
+  const violinActivity = orchestral.violinSupportMap.map<EnsembleVisualActivityEvent>((event) => ({
+    layer: 3,
+    instrument: "violin",
+    measureIndex: event.measureIndex,
+    beat: event.beat,
+    startMs: event.startMs,
+    durationMs: event.durationMs,
+    active: true,
+    label: `Violin ${event.mode}`,
+    density: activityDensity(handshake, event),
+    mode: event.mode,
+  }));
+
+  return [...djembeActivity, ...fluteActivity, ...violinActivity].sort((a, b) =>
+    a.measureIndex - b.measureIndex || a.startMs - b.startMs || a.instrument.localeCompare(b.instrument)
+  );
+}
+
+function buildMidiControlEvents(orchestral: OrchestralSupportArrangement): EnsembleMidiControlEvent[] {
+  return orchestral.violinExpressionMap.map((event) => ({
+    ...event,
+    layer: 3,
+  }));
+}
+
+function validateOutput(
+  output: Pick<EnsembleExpansionOutput, "handshake" | "eventMaps" | "abcLayers" | "playbackEvents" | "midiControlEvents" | "visualActivity">
+): EnsembleExpansionValidation {
+  return {
+    handshakeReady: output.handshake.layerPrerequisites.layer1Melody && output.handshake.layerPrerequisites.layer2Foundation,
+    eventMapsReady: output.eventMaps.djembe.length > 0 && output.eventMaps.flute.length > 0 && output.eventMaps.violin.length > 0,
+    abcLayersReady: Object.values(output.abcLayers).every((abc) => abc.trim().length > 0),
+    playbackEventsReady: output.playbackEvents.length > 0,
+    midiControlEventsReady: output.midiControlEvents.length > 0,
+    visualActivityReady: output.visualActivity.length > 0,
+  };
+}
+
+export function generateEnsembleExpansionOutput(
+  melodyAbc: string,
+  options: EnsembleExpansionOutputOptions
+): EnsembleExpansionOutput {
+  const { accompaniment } = options;
+  const handshake = options.handshake ?? generateEnsembleIntegrationHandshake(melodyAbc, { accompaniment });
+  const sourceDjembe = options.djembe ?? generateDjembeArrangement(melodyAbc, { accompaniment, handshake });
+  const sourceOrchestral = options.orchestral ?? generateOrchestralSupport(melodyAbc, { accompaniment, handshake });
+  const conflicts = resolveEnsembleConflicts({
+    handshake,
+    djembe: sourceDjembe,
+    orchestral: sourceOrchestral,
+  });
+  const djembe = conflicts.djembe;
+  const orchestral = conflicts.orchestral;
+  const eventMaps: EnsembleEventMaps = {
+    djembe: djembe.eventMap,
+    flute: orchestral.fluteSupportMap,
+    violin: orchestral.violinSupportMap,
+    fluteBreath: orchestral.fluteBreathMap,
+    violinExpression: orchestral.violinExpressionMap,
+  };
+  const abcLayers = buildAbcLayers(djembe, orchestral, accompaniment.measures.length);
+  const playbackEvents = buildPlaybackEvents(djembe, orchestral);
+  const midiControlEvents = buildMidiControlEvents(orchestral);
+  const visualActivity = buildVisualActivity(handshake, djembe, orchestral);
+  const output = {
+    handshake,
+    djembe,
+    orchestral,
+    conflicts,
+    eventMaps,
+    yieldDecisions: orchestral.yieldDecisions,
+    conflictReport: conflicts.report,
+    abcLayers,
+    playbackEvents,
+    midiControlEvents,
+    visualActivity,
+  };
+
+  return {
+    ...output,
+    validation: validateOutput(output),
+  };
+}

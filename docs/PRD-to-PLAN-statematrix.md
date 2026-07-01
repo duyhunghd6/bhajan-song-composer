@@ -40,16 +40,16 @@ plan_child_completion = (implemented_children + verified_children) / total_plan_
 plan_child_verification = verified_children / total_plan_children
 ```
 
-Current implementation evidence scan found implementation files for the initial catalogue, playback, composer, theory, instrument, testing, validation work, and the standalone mockup gate. Newly planned advanced arrangement engines and remaining mockup POC pages remain Planned or In Progress until implementation artifacts exist.
+Current implementation evidence scan found implementation files for the initial catalogue, playback, composer, theory, instrument, testing, validation work, the standalone mockup gate, and the ensemble expansion output contract. Newly planned advanced arrangement engines and remaining mockup POC pages remain Planned or In Progress until implementation artifacts exist.
 
 | Metric | Formula | Value |
 |:---|:---|---:|
 | Total PLAN child items | `sum(children under br-plan-01..12)` | **59** |
-| Planned child items | `28 / 59` | **47.5%** |
+| Planned child items | `27 / 59` | **45.8%** |
 | In-progress child items | `8 / 59` | **13.6%** |
-| Implemented child items | `23 / 59` | **39.0%** |
+| Implemented child items | `24 / 59` | **40.7%** |
 | Verified child items | `0 / 59` | **0.0%** |
-| Child completion coverage | `(Implemented + Verified) / 59` | **39.0%** |
+| Child completion coverage | `(Implemented + Verified) / 59` | **40.7%** |
 
 ---
 
@@ -143,10 +143,10 @@ Current implementation evidence scan found implementation files for the initial 
 | `br-plan-09` | Workflow Mockup / Proof-of-Concept Demo Pages | `prd-bsc-s54`, `prd-bsc-s55` | 7 | 6 | 0 | 1 | 0 | 14.3% |
 | `br-plan-10` | Multi-Layer Fingerstyle Arrangement Engine | `prd-bsc-s33`, `prd-bsc-s34`, `prd-bsc-s35`, `prd-bsc-s36`, `prd-bsc-s37`, `prd-bsc-s38` | 6 | 4 | 2 | 0 | 0 | 0.0% |
 | `br-plan-11` | Piano Accompaniment Generation Engine | `prd-bsc-s39`, `prd-bsc-s40`, `prd-bsc-s41`, `prd-bsc-s42`, `prd-bsc-s43`, `prd-bsc-s44`, `prd-bsc-s45`, `prd-bsc-s46` | 7 | 6 | 1 | 0 | 0 | 0.0% |
-| `br-plan-12` | Ensemble Expansion Engine | `prd-bsc-s47`, `prd-bsc-s48`, `prd-bsc-s49`, `prd-bsc-s50`, `prd-bsc-s51`, `prd-bsc-s52`, `prd-bsc-s53` | 7 | 7 | 0 | 0 | 0 | 0.0% |
+| `br-plan-12` | Ensemble Expansion Engine | `prd-bsc-s47`, `prd-bsc-s48`, `prd-bsc-s49`, `prd-bsc-s50`, `prd-bsc-s51`, `prd-bsc-s52`, `prd-bsc-s53` | 7 | 6 | 0 | 1 | 0 | 14.3% |
 | `br-plan-06` | Visual Instruments & AI UI | `prd-bsc-s17`, `prd-bsc-s25`, `prd-bsc-s36`, `prd-bsc-s38`, `prd-bsc-s46`, `prd-bsc-s53` | 4 | 2 | 1 | 1 | 0 | 25.0% |
 | `br-plan-07` | Quality Assurance, CI & Community Tools | `prd-bsc-s11`, `prd-bsc-s18`, `prd-bsc-s19`, `prd-bsc-s20`, `prd-bsc-s21`, `prd-bsc-s26` | 3 | 0 | 0 | 3 | 0 | 100.0% |
-| **Total** | — | — | **59** | **28** | **8** | **23** | **0** | **39.0%** |
+| **Total** | — | — | **59** | **27** | **8** | **24** | **0** | **40.7%** |
 
 ---
 
@@ -204,7 +204,7 @@ Current implementation evidence scan found implementation files for the initial 
 | `br-plan-12.c03` | `br-plan-12` | Flute and Violin Melodic Support: altitude rules, bed/halo modes, background holds, and Fill Zone counter-melodies. | `prd-bsc-s47`, `prd-bsc-s50`, `prd-bsc-s52`, `prd-bsc-s53` | Planned | Add `src/lib/theory/orchestral-arranger.ts`. |
 | `br-plan-12.c04` | `br-plan-12` | Anatomical and Expression Realism: Flute breath rests, Violin CC 11 swells, delayed vibrato, and double-stop validation. | `prd-bsc-s50`, `prd-bsc-s51`, `prd-bsc-s52`, `prd-bsc-s53` | Planned | Add breath, bow, vibrato, and double-stop validators. |
 | `br-plan-12.c05` | `br-plan-12` | Conflict Resolution: scan timeline density, preserve melody, flatten Flute/Violin, remove Djembe fills as needed. | `prd-bsc-s47`, `prd-bsc-s51`, `prd-bsc-s52`, `prd-bsc-s53` | Planned | Add `src/lib/theory/ensemble-conflicts.ts`. |
-| `br-plan-12.c06` | `br-plan-12` | Ensemble Output Contract: handshake, event maps, yield decisions, conflict report, ABC layers, playback/MIDI/visual metadata. | `prd-bsc-s53` | Planned | Add exported TypeScript contract and contract tests. |
+| `br-plan-12.c06` | `br-plan-12` | Ensemble Output Contract: handshake, event maps, yield decisions, conflict report, ABC layers, playback/MIDI/visual metadata. | `prd-bsc-s53` | Implemented | `src/lib/theory/ensemble-output-contract.ts` exports the output contract and `src/lib/theory/__tests__/ensemble-output-contract.test.ts` covers handshake, event maps, yield decisions, conflict report, ABC layers, playback/MIDI events, visual activity metadata, and validation flags. |
 | `br-plan-12.c07` | `br-plan-12` | Validation & Tests: cover ordering, density, bass sync, Fill Zones, Djembe/Flute/Violin rules, hierarchy, playback sync. | `prd-bsc-s18`, `prd-bsc-s20`, `prd-bsc-s52`, `prd-bsc-s53` | Planned | Add ensemble expansion tests. |
 | `br-plan-06.c01` | `br-plan-06` | Instrument Renderers: SVG guitar fretboard and piano keyboard components. | `prd-bsc-s10`, `prd-bsc-s17`, `prd-bsc-s25` | Implemented | `src/components/instruments/GuitarFretboard.tsx`, `src/components/instruments/PianoKeyboard.tsx`, instrument tests. |
 | `br-plan-06.c02` | `br-plan-06` | Synchronized Instrument Highlighting: connect guitar/piano renderers to Music Sheet playback cursor events. | `prd-bsc-s17`, `prd-bsc-s38`, `prd-bsc-s46`, `prd-bsc-s53` | In Progress | Instrument components exist; shared cursor event integration depends on `br-plan-03.c03`. |
