@@ -6,6 +6,7 @@ import {
   resolveProgression,
 } from "./arranger-utils";
 import { CadenceRole, generateHarmonizationStage } from "./harmonizer";
+import { parseNoteDuration } from "./melody-analyzer";
 import {
   generatePianoCompingProfileMeasure,
   PianoCompingProfileId,
@@ -97,12 +98,60 @@ export interface PianoRightHandVoicingMeasure {
   abc: string;
 }
 
+export interface PianoMelodicGapEvent {
+  measureIndex: number;
+  startBeat: number;
+  endBeat: number;
+  durationBeats: number;
+  safe: boolean;
+  resumedBy: string | null;
+}
+
+export interface PianoGapFillEvent {
+  measureIndex: number;
+  beat: number;
+  role: "passing-fill";
+  notes: string[];
+  abc: string;
+  yieldsToMelodyAt: number | null;
+}
+
+export interface PianoGapFillMeasure {
+  measureIndex: number;
+  chord: string;
+  gap: PianoMelodicGapEvent | null;
+  events: PianoGapFillEvent[];
+  abc: string;
+}
+
+export type PianoPedalEventType = "pedal-down" | "pedal-flush" | "pedal-up";
+
+export interface PianoPedalEvent {
+  measureIndex: number;
+  beat: number;
+  chord: string;
+  type: PianoPedalEventType;
+  value: 0 | 127;
+  previousChord?: string;
+}
+
+export interface PianoPedalAutomation {
+  controller: {
+    midiControlChange: 64;
+    downValue: 127;
+    upValue: 0;
+  };
+  events: PianoPedalEvent[];
+}
+
 export interface PianoAccompaniment {
   sourceAnalysis: PianoSourceAnalysis;
   harmonicFramework: PianoHarmonicFrameworkMeasure[];
   leftHandBassMap: PianoLeftHandBassMeasure[];
   rightHandVoicingMap: PianoRightHandVoicingMeasure[];
   compingProfileMap: PianoCompingProfileMeasure[];
+  gapFillMap: PianoGapFillMeasure[];
+  pedalAutomation: PianoPedalAutomation;
   abc: string;
 }
 
@@ -138,6 +187,163 @@ function findStrongBeatTargets(abcString: string, beatCount: number): PianoSourc
     }
     return targets;
   });
+}
+
+interface MelodyTimelineEvent {
+  type: "note" | "rest";
+  note: string | null;
+  startBeat: number;
+  endBeat: number;
+}
+
+function extractMelodyTimelines(abcString: string): MelodyTimelineEvent[][] {
+  const body = abcString
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith("%") && !/^[A-Z]:/.test(line))
+    .join(" ");
+  const rawMeasures = body.split(/[|\]]/);
+  const measures: MelodyTimelineEvent[][] = [];
+  const tokenRegex = /([_^=]?[A-Ga-g][,']*|z)([0-9]*\/?[0-9]*)/g;
+
+  for (const rawMeasure of rawMeasures) {
+    const trimmed = rawMeasure.trim().replace(/^[:\s]+|[:\s]+$/g, "");
+    if (!trimmed || trimmed === ":" || trimmed === "::") continue;
+
+    const events: MelodyTimelineEvent[] = [];
+    let elapsedEighths = 0;
+    let match: RegExpExecArray | null;
+    tokenRegex.lastIndex = 0;
+
+    while ((match = tokenRegex.exec(trimmed)) !== null) {
+      const duration = parseNoteDuration(match[2]);
+      const startBeat = elapsedEighths / 2 + 1;
+      const endBeat = startBeat + duration / 2;
+      const type = match[1] === "z" ? "rest" : "note";
+      events.push({
+        type,
+        note: type === "note" ? normalizeNoteName(match[1]) : null,
+        startBeat,
+        endBeat,
+      });
+      elapsedEighths += duration;
+    }
+
+    measures.push(events);
+  }
+
+  return measures;
+}
+
+function detectMelodicGap(timeline: MelodyTimelineEvent[], measureIndex: number): PianoMelodicGapEvent | null {
+  const firstRestIndex = timeline.findIndex((event) => event.type === "rest");
+  const restGap = firstRestIndex >= 0
+    ? (() => {
+        const firstRest = timeline[firstRestIndex];
+        let endBeat = firstRest.endBeat;
+        for (const rest of timeline.slice(firstRestIndex + 1)) {
+          if (rest.type !== "rest" || rest.startBeat !== endBeat) break;
+          endBeat = rest.endBeat;
+        }
+        return { startBeat: firstRest.startBeat, endBeat };
+      })()
+    : null;
+  const heldNoteGap = timeline
+    .filter((event) => event.type === "note" && event.endBeat - (event.startBeat + 1) >= 2)
+    .map((event) => ({ startBeat: event.startBeat + 1, endBeat: event.endBeat }))[0] ?? null;
+  const gapWindow = [restGap, heldNoteGap]
+    .filter((gap): gap is { startBeat: number; endBeat: number } => gap !== null)
+    .sort((a, b) => a.startBeat - b.startBeat)[0];
+
+  if (!gapWindow) return null;
+
+  const resumedBy = timeline.find((event) => event.type === "note" && event.startBeat >= gapWindow.endBeat)?.note ?? null;
+  const durationBeats = gapWindow.endBeat - gapWindow.startBeat;
+
+  return {
+    measureIndex,
+    startBeat: gapWindow.startBeat,
+    endBeat: gapWindow.endBeat,
+    durationBeats,
+    safe: durationBeats >= 2,
+    resumedBy,
+  };
+}
+
+function buildGapFillMeasure(
+  chord: ChordInfo,
+  measureIndex: number,
+  timeline: MelodyTimelineEvent[],
+  beatCount: number
+): PianoGapFillMeasure {
+  const gap = detectMelodicGap(timeline, measureIndex);
+  const beatSlots = Array.from({ length: beatCount }, () => "z2");
+  const events: PianoGapFillEvent[] = [];
+
+  if (gap?.safe) {
+    const fillNotes = chord.notes.slice(1);
+    for (let beat = gap.startBeat; beat < gap.endBeat; beat += 1) {
+      const note = fillNotes[(beat - gap.startBeat) % fillNotes.length];
+      const abc = `${noteNameToAbc(note, ",")}2`;
+      beatSlots[Math.floor(beat) - 1] = abc;
+      events.push({
+        measureIndex,
+        beat,
+        role: "passing-fill",
+        notes: [note],
+        abc,
+        yieldsToMelodyAt: gap.resumedBy ? gap.endBeat : null,
+      });
+    }
+  }
+
+  return {
+    measureIndex,
+    chord: chord.chordName,
+    gap,
+    events,
+    abc: beatSlots.join(" "),
+  };
+}
+
+function buildPedalAutomation(chords: ChordInfo[], beatCount: number): PianoPedalAutomation {
+  const events: PianoPedalEvent[] = [];
+
+  chords.forEach((chord, measureIndex) => {
+    const previousChord = chords[measureIndex - 1]?.chordName;
+    if (measureIndex === 0) {
+      events.push({ measureIndex, beat: 1, chord: chord.chordName, type: "pedal-down", value: 127 });
+      return;
+    }
+
+    if (previousChord !== chord.chordName) {
+      events.push({
+        measureIndex,
+        beat: 1,
+        chord: chord.chordName,
+        type: "pedal-flush",
+        value: 0,
+        previousChord,
+      });
+      events.push({ measureIndex, beat: 1, chord: chord.chordName, type: "pedal-down", value: 127 });
+    }
+  });
+
+  const lastChord = chords.at(-1);
+  if (lastChord) {
+    events.push({
+      measureIndex: chords.length - 1,
+      beat: beatCount,
+      chord: lastChord.chordName,
+      type: "pedal-up",
+      value: 0,
+    });
+  }
+
+  return {
+    controller: { midiControlChange: 64, downValue: 127, upValue: 0 },
+    events,
+  };
 }
 
 function detectCadencePoints(abcString: string, beatCount: number): PianoCadencePoint[] {
@@ -327,6 +533,11 @@ export function generatePianoAccompaniment(
   const compingProfileMap = resolved.chords.map((chord, measureIndex) =>
     generatePianoCompingProfileMeasure(chord, measureIndex, compingProfile, beatCount)
   );
+  const melodyTimelines = extractMelodyTimelines(abcString);
+  const gapFillMap = resolved.chords.map((chord, measureIndex) =>
+    buildGapFillMeasure(chord, measureIndex, melodyTimelines[measureIndex] ?? [], beatCount)
+  );
+  const pedalAutomation = buildPedalAutomation(resolved.chords, beatCount);
   const compingVoiceName = compingProfile === "rock-rnb"
     ? "Rock/R&B Off-beats"
     : compingProfile === "classical-folk"
@@ -335,6 +546,9 @@ export function generatePianoAccompaniment(
   const compingLeftVoice = `V:PianoCompingLH clef=bass name="${compingVoiceName}"\n| ${compingProfileMap.map((measure) => measure.leftHandAbc).join(" | ")} |`;
   const compingRightVoice = compingProfileMap.some((measure) => measure.rightHandAbc.trim().length > 0)
     ? `\nV:PianoCompingRH clef=treble name="${compingVoiceName}"\n| ${compingProfileMap.map((measure) => measure.rightHandAbc).join(" | ")} |`
+    : "";
+  const gapFillVoice = gapFillMap.some((measure) => measure.events.length > 0)
+    ? `\nV:PianoGapFill clef=treble name="Safe Gap Fills"\n| ${gapFillMap.map((measure) => measure.abc).join(" | ")} |`
     : "";
 
   return {
@@ -348,6 +562,8 @@ export function generatePianoAccompaniment(
     leftHandBassMap,
     rightHandVoicingMap,
     compingProfileMap,
-    abc: `V:PianoLH clef=bass name="Layer 2 Piano Left Hand"\n| ${leftHandBassMap.map((measure) => measure.abc).join(" | ")} |\nV:PianoRH clef=treble name="Layer 2 Piano Right Hand"\n| ${rightHandVoicingMap.map((measure) => measure.abc).join(" | ")} |\n${compingLeftVoice}${compingRightVoice}`,
+    gapFillMap,
+    pedalAutomation,
+    abc: `V:PianoLH clef=bass name="Layer 2 Piano Left Hand"\n| ${leftHandBassMap.map((measure) => measure.abc).join(" | ")} |\nV:PianoRH clef=treble name="Layer 2 Piano Right Hand"\n| ${rightHandVoicingMap.map((measure) => measure.abc).join(" | ")} |\n${compingLeftVoice}${compingRightVoice}${gapFillVoice}`,
   };
 }

@@ -270,6 +270,68 @@ K:C
     });
     expect(accompaniment.abc).toContain("V:PianoCompingLH clef=bass name=\"Classical/Folk Alberti Bass\"");
   });
+
+  it("detects melody rests as safe gap-fill windows and yields before melody resumes", () => {
+    const gapMelodyAbc = `X:1
+T:Gap Melody
+M:4/4
+L:1/8
+K:Em
+| E2 z2 z2 B2 |`;
+    const accompaniment = generatePianoAccompaniment(gapMelodyAbc, {
+      progression: ["Em"],
+    });
+
+    expect(accompaniment.gapFillMap[0]).toMatchObject({
+      measureIndex: 0,
+      chord: "Em",
+      gap: { startBeat: 2, endBeat: 4, durationBeats: 2, safe: true, resumedBy: "B" },
+      events: [
+        { beat: 2, role: "passing-fill", notes: ["G"], yieldsToMelodyAt: 4 },
+        { beat: 3, role: "passing-fill", notes: ["B"], yieldsToMelodyAt: 4 },
+      ],
+      abc: "z2 G,2 B,2 z2",
+    });
+    expect(accompaniment.abc).toContain("V:PianoGapFill clef=treble name=\"Safe Gap Fills\"");
+  });
+
+  it("emits sustain pedal down and flush metadata at chord changes", () => {
+    const accompaniment = generatePianoAccompaniment(sampleAbc, {
+      progression: ["Em", "Bm", "Bm", "Em"],
+    });
+
+    expect(accompaniment.pedalAutomation).toMatchObject({
+      controller: { midiControlChange: 64, downValue: 127, upValue: 0 },
+      events: [
+        { measureIndex: 0, beat: 1, chord: "Em", type: "pedal-down", value: 127 },
+        { measureIndex: 1, beat: 1, chord: "Bm", type: "pedal-flush", value: 0, previousChord: "Em" },
+        { measureIndex: 1, beat: 1, chord: "Bm", type: "pedal-down", value: 127 },
+        { measureIndex: 3, beat: 1, chord: "Em", type: "pedal-flush", value: 0, previousChord: "Bm" },
+        { measureIndex: 3, beat: 1, chord: "Em", type: "pedal-down", value: 127 },
+        { measureIndex: 3, beat: 4, chord: "Em", type: "pedal-up", value: 0 },
+      ],
+    });
+  });
+
+  it("treats long held melody notes as fill windows after the attack", () => {
+    const heldMelodyAbc = `X:1
+T:Held Melody
+M:4/4
+L:1/8
+K:Em
+| E6 B2 |`;
+    const accompaniment = generatePianoAccompaniment(heldMelodyAbc, {
+      progression: ["Em"],
+    });
+
+    expect(accompaniment.gapFillMap[0]).toMatchObject({
+      gap: { startBeat: 2, endBeat: 4, durationBeats: 2, safe: true, resumedBy: "B" },
+      events: [
+        { beat: 2, role: "passing-fill", notes: ["G"], yieldsToMelodyAt: 4 },
+        { beat: 3, role: "passing-fill", notes: ["B"], yieldsToMelodyAt: 4 },
+      ],
+    });
+  });
 });
 
 describe("Piano arranger", () => {
