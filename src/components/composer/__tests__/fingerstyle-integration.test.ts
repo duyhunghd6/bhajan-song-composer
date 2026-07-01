@@ -68,4 +68,38 @@ describe("fingerstyle Composer integration", () => {
       ])
     );
   });
+
+  it("keeps strict PIMA output integration-ready without requiring Travis-only thumb clock events", () => {
+    const integration = buildFingerstyleComposerIntegration(sampleAbc, ["Em", "Bm", "G", "Em"], {
+      pickingProfile: "strict-pima",
+    });
+
+    expect(integration.selectedProfile).toMatchObject({
+      id: "strict-pima",
+      label: "Strict PIMA",
+    });
+    expect(integration.playability).toMatchObject({
+      status: "ready_for_integration",
+      valid: true,
+      failedConstraints: [],
+    });
+    expect(integration.handOverlayEvents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "fingerstyle-picking-0-1-pinch-1-0",
+          hand: "right",
+          finger: "a",
+          target: expect.objectContaining({ label: "pinch string 1 fret 0" }),
+          cursorSeconds: 0,
+        }),
+        expect.objectContaining({
+          id: "fingerstyle-picking-0-2-guide-tone-3-0",
+          hand: "right",
+          finger: "i",
+          target: expect.objectContaining({ label: "guide-tone string 3 fret 0" }),
+          cursorSeconds: 0.5,
+        }),
+      ])
+    );
+  });
 });

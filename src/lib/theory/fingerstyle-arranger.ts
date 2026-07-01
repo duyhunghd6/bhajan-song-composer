@@ -331,8 +331,8 @@ function failedConstraintsFor(
   if (!measure.validation.frettingPlayable) failures.push("fretting-assignments");
   if (!measure.validation.pickingPlayable) failures.push("picking-assignments");
   if (!compression.validation.strictPimaPicking && measure.profile.id === "strict-pima") failures.push("strict-pima");
-  if (!compression.validation.thumbClockContinuous) failures.push("thumb-clock");
-  if (!compression.validation.stringSlapsOnBackbeat) failures.push("string-slap");
+  if (measure.profile.id === "folk-travis" && !compression.validation.thumbClockContinuous) failures.push("thumb-clock");
+  if (measure.profile.id === "folk-travis" && !compression.validation.stringSlapsOnBackbeat) failures.push("string-slap");
 
   return failures;
 }
