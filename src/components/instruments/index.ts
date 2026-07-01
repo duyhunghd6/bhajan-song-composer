@@ -17,9 +17,10 @@ export type {
   PianoPedalIndicatorProps,
 } from "./PianoPedalIndicator";
 
-export { default as SvgHandsOverlay } from "./SvgHandsOverlay";
+export { buildSvgHandTransitionPathEvents, default as SvgHandsOverlay } from "./SvgHandsOverlay";
 export type {
   SvgHandFingeringEvent,
   SvgHandsOverlayProps,
   SvgHandTarget,
+  SvgHandTransitionPathEvent,
 } from "./SvgHandsOverlay";

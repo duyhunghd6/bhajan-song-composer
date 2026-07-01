@@ -50,6 +50,20 @@ describe("fingerstyle Composer integration", () => {
           finger: "p",
           target: expect.objectContaining({ label: "thumb-clock string 6 fret 0" }),
           cursorSeconds: 0,
+          measureIndex: 0,
+        }),
+      ])
+    );
+    expect(integration.transitionPathEvents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          instrument: "guitar",
+          hand: "right",
+          finger: "p",
+          fromMeasureIndex: 0,
+          toMeasureIndex: 1,
+          from: expect.objectContaining({ label: "thumb-clock string 6 fret 0" }),
+          to: expect.objectContaining({ label: "thumb-clock string 5 fret 2" }),
         }),
       ])
     );

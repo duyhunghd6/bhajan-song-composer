@@ -8,7 +8,7 @@ import GuitarFretboard, {
 } from "../GuitarFretboard";
 import PianoKeyboard, { buildPianoKeys, findPianoHighlight, normalizePianoNote } from "../PianoKeyboard";
 import PianoPedalIndicator from "../PianoPedalIndicator";
-import SvgHandsOverlay from "../SvgHandsOverlay";
+import SvgHandsOverlay, { buildSvgHandTransitionPathEvents } from "../SvgHandsOverlay";
 
 describe("GuitarFretboard helpers", () => {
   it("maps standard string numbers from low E on the left to high E on the right", () => {
@@ -57,6 +57,30 @@ describe("GuitarFretboard helpers", () => {
     expect(markup).toContain('opacity="0.5"');
     expect(markup).toContain('transform="translate(92 75)"');
   });
+
+  it("renders synchronized guitar transition paths above fret targets", () => {
+    const markup = renderToStaticMarkup(
+      <GuitarFretboard
+        title="Chord passing guitar"
+        transitionPathEvents={[
+          {
+            id: "left-1-c-to-g",
+            instrument: "guitar",
+            hand: "left",
+            finger: 1,
+            from: { x: 58, y: 75, label: "C shape" },
+            to: { x: 92, y: 117, label: "G shape" },
+            cursorSeconds: 2,
+            fromMeasureIndex: 0,
+            toMeasureIndex: 1,
+          },
+        ]}
+      />
+    );
+
+    expect(markup).toContain('aria-label="Chord passing guitar hands transition paths"');
+    expect(markup).toContain("left hand finger 1 moves from C shape in measure 1 to G shape in measure 2");
+  });
 });
 
 describe("SvgHandsOverlay", () => {
@@ -82,6 +106,59 @@ describe("SvgHandsOverlay", () => {
     expect(markup).toContain('transform="translate(142 96)"');
     expect(markup).toContain("transition:transform 180ms ease-out");
     expect(markup).toContain("right hand finger p on C at 2.5s");
+  });
+
+  it("traces measure-synced guitar transition paths for recurring fingers", () => {
+    const transitionPathEvents = buildSvgHandTransitionPathEvents([
+      {
+        id: "m1-left-1-c",
+        instrument: "guitar",
+        hand: "left",
+        finger: 1,
+        target: { x: 58, y: 75, label: "string 5 fret 1" },
+        cursorSeconds: 0,
+        measureIndex: 0,
+      },
+      {
+        id: "m2-left-1-g",
+        instrument: "guitar",
+        hand: "left",
+        finger: 1,
+        target: { x: 92, y: 117, label: "string 4 fret 2" },
+        cursorSeconds: 2,
+        measureIndex: 1,
+      },
+      {
+        id: "m2-left-2-e",
+        instrument: "guitar",
+        hand: "left",
+        finger: 2,
+        target: { x: 126, y: 159, label: "string 3 fret 3" },
+        cursorSeconds: 2,
+        measureIndex: 1,
+      },
+    ]);
+
+    expect(transitionPathEvents).toEqual([
+      expect.objectContaining({
+        id: "guitar-left-1-transition-m1-left-1-c-to-m2-left-1-g",
+        hand: "left",
+        finger: 1,
+        fromMeasureIndex: 0,
+        toMeasureIndex: 1,
+        from: expect.objectContaining({ label: "string 5 fret 1" }),
+        to: expect.objectContaining({ label: "string 4 fret 2" }),
+      }),
+    ]);
+
+    const markup = renderToStaticMarkup(
+      <SvgHandsOverlay title="Guitar hands" transitionPathEvents={transitionPathEvents} />
+    );
+
+    expect(markup).toContain('aria-label="Guitar hands transition paths"');
+    expect(markup).toContain("left hand finger 1 moves from string 5 fret 1 in measure 1 to string 4 fret 2 in measure 2");
+    expect(markup).toContain('d="M 58 75 C 75 75, 75 117, 92 117"');
+    expect(markup).toContain('stroke-dasharray="6 5"');
   });
 });
 

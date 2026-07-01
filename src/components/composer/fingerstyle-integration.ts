@@ -1,5 +1,9 @@
 import { getGuitarFretY, getGuitarStringX, type GuitarFretPosition } from "../instruments/GuitarFretboard";
-import type { SvgHandFingeringEvent } from "../instruments/SvgHandsOverlay";
+import {
+  buildSvgHandTransitionPathEvents,
+  type SvgHandFingeringEvent,
+  type SvgHandTransitionPathEvent,
+} from "../instruments/SvgHandsOverlay";
 import { generateFingerstyleArrangement, type FingerstyleArrangement } from "@/lib/theory/fingerstyle-arranger";
 import type { FingerstyleCompressionOptions } from "@/lib/theory/fingerstyle-compressor";
 import type { ComposerLayer } from "./LayerManager";
@@ -26,6 +30,7 @@ export interface FingerstyleComposerIntegration {
     positions: GuitarFretPosition[];
   };
   handOverlayEvents: SvgHandFingeringEvent[];
+  transitionPathEvents: SvgHandTransitionPathEvent[];
 }
 
 export const FINGERSTYLE_PROFILE_OPTIONS: FingerstyleComposerProfileOption[] = [
@@ -121,6 +126,8 @@ function buildHandOverlayEvents(arrangement: FingerstyleArrangement): SvgHandFin
         label: event.string === null ? event.technique : `${event.technique} string ${event.string} fret ${event.fret}`,
       },
       cursorSeconds: (event.measureIndex * beats + event.beat - 1) * secondsPerBeat,
+      measureIndex: event.measureIndex,
+      beat: event.beat,
     };
   });
 }
@@ -133,12 +140,15 @@ export function buildFingerstyleComposerIntegration(
   const arrangement = generateFingerstyleArrangement(abcString, progression, options);
   const selectedProfile = profileOptionFor(options.pickingProfile ?? arrangement.outputContract.profileMetadata.id);
 
+  const handOverlayEvents = buildHandOverlayEvents(arrangement);
+
   return {
     selectedProfile,
     arrangement,
     composerLayer: buildComposerLayer(arrangement, selectedProfile),
     playability: buildPlayability(arrangement),
     fretboard: { positions: buildFretboardPositions(arrangement) },
-    handOverlayEvents: buildHandOverlayEvents(arrangement),
+    handOverlayEvents,
+    transitionPathEvents: buildSvgHandTransitionPathEvents(handOverlayEvents),
   };
 }
