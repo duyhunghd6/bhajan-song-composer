@@ -372,6 +372,96 @@ K:C
     ]);
   });
 
+  it("surfaces playability failures and fallback suggestions through the output contract", () => {
+    const stretchedAbc = `X:1
+T:High D Over C Bass
+M:4/4
+L:1/8
+K:C
+| d2 E2 G2 A2 |`;
+    const arrangement = generateFingerstyleArrangement(stretchedAbc, ["C"]);
+
+    expect(arrangement.outputContract.playabilityReport).toMatchObject({
+      valid: false,
+      measures: [
+        expect.objectContaining({
+          measureIndex: 0,
+          simultaneousMelodyBassFeasible: false,
+          failedConstraints: expect.arrayContaining(["fret-span"]),
+        }),
+      ],
+    });
+    expect(arrangement.outputContract.fallbackSuggestions).toEqual([
+      expect.objectContaining({ measureIndex: 0, chord: "C", suggestedKeys: ["E", "A", "D"] }),
+    ]);
+  });
+
+  it("exports a complete fingerstyle output contract for Composer and visual integrations", () => {
+    const arrangement = generateFingerstyleArrangement(sampleAbc, ["Em", "Bm", "G", "Em"], {
+      pickingProfile: "folk-travis",
+    });
+
+    expect(arrangement.outputContract.sourceLayers.map((layer) => layer.id)).toEqual([
+      "melody",
+      "harmonization",
+      "accompaniment",
+      "bassline",
+      "rhythm-percussion",
+      "counter-melody",
+    ]);
+    expect(arrangement.outputContract.outerVoiceMap[0]).toMatchObject({
+      measureIndex: 0,
+      melodyRoute: expect.arrayContaining([expect.objectContaining({ beat: 1, string: 1 })]),
+      bassRoute: expect.arrayContaining([expect.objectContaining({ beat: 1, string: 6 })]),
+    });
+    expect(arrangement.outputContract.playabilityReport).toMatchObject({
+      valid: true,
+      measures: expect.arrayContaining([
+        expect.objectContaining({
+          measureIndex: 0,
+          simultaneousMelodyBassFeasible: true,
+          frettingFingerCount: 1,
+          pickingFingerCount: 1,
+          failedConstraints: [],
+        }),
+      ]),
+    });
+    expect(arrangement.outputContract.fallbackSuggestions).toEqual([]);
+    expect(arrangement.outputContract.innerVoiceReduction[0]).toMatchObject({
+      prunedTones: [expect.objectContaining({ role: "fifth" })],
+      guideTones: [expect.objectContaining({ role: "third", beat: 2 })],
+    });
+    expect(arrangement.outputContract.rhythmicEventMap).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ measureIndex: 0, beat: 1, technique: "thumb-clock", pickingFinger: "p" }),
+        expect.objectContaining({ measureIndex: 0, beat: 2, technique: "string-slap", role: "percussion" }),
+        expect.objectContaining({ measureIndex: 0, beat: 2.5, technique: "syncopation", role: "melody" }),
+      ])
+    );
+    expect(arrangement.outputContract.profileMetadata).toMatchObject({
+      id: "folk-travis",
+      posture: "anchored",
+      pickingAssignments: { 6: "p", 5: "p", 4: "p", 3: "i", 2: "m", 1: "a" },
+    });
+    expect(arrangement.outputContract.artifacts).toMatchObject({
+      finalAbc: arrangement.abc,
+      tablature: {
+        measures: expect.arrayContaining([
+          expect.objectContaining({
+            measureIndex: 0,
+            positions: expect.arrayContaining([expect.objectContaining({ beat: 1, string: 6, fret: 0 })]),
+          }),
+        ]),
+      },
+      fretboardHighlightEvents: expect.arrayContaining([
+        expect.objectContaining({ measureIndex: 0, beat: 1, string: 6, fret: 0 }),
+      ]),
+      handOverlayEvents: expect.arrayContaining([
+        expect.objectContaining({ measureIndex: 0, beat: 1, hand: "picking", finger: "p", technique: "thumb-clock" }),
+      ]),
+    });
+  });
+
   it("exposes a line-only helper for direct ABC output", () => {
     const line = generateFingerstyleLine(sampleAbc, ["Em", "Bm", "G", "Em"]);
 
