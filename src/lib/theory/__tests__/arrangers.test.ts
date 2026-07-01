@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { generateAccompanimentStage } from "../accompaniment-stage";
 import { generateFingerstyleArrangement, generateFingerstyleLine } from "../fingerstyle-arranger";
+import { generatePianoAccompaniment } from "../piano-accompaniment";
 import { generatePianoBassArrangement, generatePianoBassLine } from "../piano-arranger";
 
 const sampleAbc = `X:1
@@ -107,6 +108,62 @@ describe("Accompaniment stage", () => {
     expect(() => generateAccompanimentStage(sampleAbc, { progression: [] })).toThrow(
       "Accompaniment stage requires at least one harmonized chord"
     );
+  });
+});
+
+describe("Piano accompaniment contract", () => {
+  it("anchors harmonic framework bass events in C2-C3 while rejecting muddy low intervals", () => {
+    const accompaniment = generatePianoAccompaniment(sampleAbc, {
+      progression: ["Em", "Bm", "G", "Em"],
+      bassFoundation: "1-5-8",
+    });
+
+    expect(accompaniment.sourceAnalysis).toMatchObject({
+      key: "Em",
+      timeSignature: "4/4",
+      cadencePoints: [{ measureIndex: 3, beat: 4, type: "phrase-ending" }],
+    });
+    expect(accompaniment.harmonicFramework[0]).toMatchObject({
+      chord: "Em",
+      targetMelodyNote: "E",
+      targetBeat: 1,
+      melodyRole: "root",
+    });
+    expect(accompaniment.leftHandBassMap[0]).toMatchObject({
+      chord: "Em",
+      root: "E",
+      foundation: "1-5-8",
+      events: [
+        { note: "E", register: "C2-C3", role: "root" },
+        { note: "B", register: "C2-C3", role: "fifth" },
+        { note: "E", register: "C2-C3", role: "octave" },
+      ],
+      lowIntervalLimit: { valid: true, rejectedIntervals: [] },
+    });
+    expect(accompaniment.abc).toContain("V:PianoLH clef=bass");
+    expect(accompaniment.abc).toContain("E,,2 B,,2 E,2 B,,2");
+  });
+
+  it("uses melody-derived harmonization cadence roles when no progression is supplied", () => {
+    const accompaniment = generatePianoAccompaniment(sampleAbc);
+
+    expect(accompaniment.harmonicFramework.map((measure) => measure.chord)).toEqual(["Em", "Bm", "G", "Em"]);
+    expect(accompaniment.harmonicFramework[0]).toMatchObject({ cadenceRole: "opening-tonic" });
+    expect(accompaniment.harmonicFramework[3]).toMatchObject({ cadenceRole: "final-tonic-resolution" });
+  });
+
+  it("falls back to root-only bass anchors when a requested foundation would duplicate a missing chord tone", () => {
+    const accompaniment = generatePianoAccompaniment(sampleAbc, {
+      progression: ["Em"],
+      bassFoundation: "root",
+    });
+
+    expect(accompaniment.leftHandBassMap[0]).toMatchObject({
+      foundation: "root",
+      events: [{ note: "E", role: "root", register: "C2-C3" }],
+      lowIntervalLimit: { valid: true, rejectedIntervals: [] },
+      abc: "E,,2 E,,2 E,,2 E,,2",
+    });
   });
 });
 
