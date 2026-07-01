@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
+import PocHandoffChecklist from "@/components/mockups/PocHandoffChecklist";
 import { generateArrangementPipeline } from "@/lib/theory/arrangement-pipeline";
 
 const MusicSheetRenderer = dynamic(() => import("@/components/music-sheet/MusicSheetRenderer"), { ssr: false });
@@ -275,6 +276,15 @@ ${pipeline.finalAbc}`;
             </dl>
           </article>
         </section>
+
+        <PocHandoffChecklist
+          checks={[
+            { label: "Input sample rendered", passed: Boolean(sourceKey) },
+            { label: "Intermediate decisions rendered", passed: pipeline.harmonization.measures.length > 0 && pipeline.accompaniment.measures.length > 0 },
+            { label: "Final artifact rendered", passed: Boolean(previewAbc) },
+            { label: "Validation report rendered", passed: validationPassed },
+          ]}
+        />
       </div>
     </main>
   );

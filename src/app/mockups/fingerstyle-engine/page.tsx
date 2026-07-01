@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import GuitarFretboard from "@/components/instruments/GuitarFretboard";
+import PocHandoffChecklist from "@/components/mockups/PocHandoffChecklist";
 import { generateFingerstyleArrangement } from "@/lib/theory/fingerstyle-arranger";
 
 const MusicSheetRenderer = dynamic(() => import("@/components/music-sheet/MusicSheetRenderer"), { ssr: false });
@@ -355,6 +356,15 @@ ${arrangement.abc}`;
             />
           </div>
         )}
+
+        <PocHandoffChecklist
+          checks={[
+            { label: "Input sample rendered", passed: Boolean(song.abc) },
+            { label: "Intermediate decisions rendered", passed: compressionSteps.length > 0 },
+            { label: "Final artifact rendered", passed: Boolean(fullFingerstyleAbc) },
+            { label: "Validation report rendered", passed: Boolean(arrangement) },
+          ]}
+        />
 
       </div>
     </main>

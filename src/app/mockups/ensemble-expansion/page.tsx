@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
+import PocHandoffChecklist from "@/components/mockups/PocHandoffChecklist";
 import { generateAccompanimentStage } from "@/lib/theory/accompaniment-stage";
 import { generateEnsembleExpansionOutput } from "@/lib/theory/ensemble-output-contract";
 
@@ -305,6 +306,15 @@ ${output.abcLayers.combined}`;
             />
           </div>
         </section>
+
+        <PocHandoffChecklist
+          checks={[
+            { label: "Input sample rendered", passed: output.validation.handshakeReady },
+            { label: "Intermediate decisions rendered", passed: output.handshake.rhythmicDensityGrid.length > 0 && output.eventMaps.djembe.length > 0 },
+            { label: "Final artifact rendered", passed: Boolean(previewAbc) },
+            { label: "Validation report rendered", passed: validationPassed },
+          ]}
+        />
       </div>
     </main>
   );

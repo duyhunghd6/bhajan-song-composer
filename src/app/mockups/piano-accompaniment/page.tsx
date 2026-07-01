@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
+import PocHandoffChecklist from "@/components/mockups/PocHandoffChecklist";
 import { generatePianoAccompaniment } from "@/lib/theory/piano-accompaniment";
 
 const MusicSheetRenderer = dynamic(() => import("@/components/music-sheet/MusicSheetRenderer"), { ssr: false });
@@ -252,6 +253,15 @@ ${piano.grandStaffAbc}`;
             />
           </div>
         </section>
+
+        <PocHandoffChecklist
+          checks={[
+            { label: "Input sample rendered", passed: Boolean(SAMPLE_MELODY_ABC) },
+            { label: "Intermediate decisions rendered", passed: piano.leftHandBassMap.length > 0 && piano.rightHandVoicingMap.length > 0 },
+            { label: "Final artifact rendered", passed: Boolean(previewAbc) },
+            { label: "Validation report rendered", passed: validationPassed },
+          ]}
+        />
       </div>
     </main>
   );
