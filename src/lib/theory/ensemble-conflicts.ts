@@ -104,6 +104,20 @@ export function resolveEnsembleConflicts(input: EnsembleConflictResolutionInput)
       actions.push("flattened-violin-run");
     }
 
+    if (actions.includes("flattened-flute-run") || actions.includes("flattened-violin-run")) {
+      orchestral.yieldDecisions = orchestral.yieldDecisions.map((decision) => {
+        if (eventKey(decision) !== key) return decision;
+
+        return {
+          ...decision,
+          layer1Active: true,
+          fluteMode: actions.includes("flattened-flute-run") ? "background" : decision.fluteMode,
+          violinMode: actions.includes("flattened-violin-run") ? "background" : decision.violinMode,
+          reason: "Density overload during Layer 1 melody; Flute and Violin yields were flattened to sustained background tones",
+        };
+      });
+    }
+
     const remainingActiveCount = slice.activeLayerCount + activeCountAt(key, orchestral, djembeEventMap);
 
     if (remainingActiveCount > OVERLOAD_LAYER_LIMIT) {

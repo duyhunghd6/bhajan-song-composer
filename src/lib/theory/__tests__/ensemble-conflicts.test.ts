@@ -78,6 +78,58 @@ describe("Ensemble conflict resolution", () => {
     expect(resolved.djembe.eventMap).toEqual(djembe.eventMap);
   });
 
+  it("updates yield decisions when conflict resolution flattens melodic fills", () => {
+    const accompaniment = generateAccompanimentStage(sampleAbc, {
+      instrument: "piano",
+      progression: ["Em", "Bm"],
+      compingPattern: "arpeggio",
+    });
+    const handshake = generateEnsembleIntegrationHandshake(sampleAbc, { accompaniment });
+    const djembe = generateDjembeArrangement(sampleAbc, { accompaniment, handshake });
+    const orchestral = generateOrchestralSupport(sampleAbc, { accompaniment, handshake });
+    const fluteRun = {
+      ...orchestral.fluteSupportMap[0],
+      mode: "fill" as const,
+      source: "melodic-gap" as const,
+    };
+    const violinRun = {
+      ...orchestral.violinSupportMap[0],
+      mode: "fill" as const,
+      source: "melodic-gap" as const,
+    };
+
+    const resolved = resolveEnsembleConflicts({
+      handshake,
+      djembe,
+      orchestral: {
+        ...orchestral,
+        fluteSupportMap: [fluteRun],
+        violinSupportMap: [violinRun],
+        yieldDecisions: [{
+          measureIndex: 0,
+          beat: 1,
+          startMs: 0,
+          layer1Active: true,
+          fluteMode: "fill",
+          violinMode: "fill",
+          reason: "Melodic Fill Zone available; auxiliary instruments may answer the singer with short counter-melodies",
+        }],
+      },
+    });
+
+    expect(resolved.orchestral.yieldDecisions).toEqual([
+      {
+        measureIndex: 0,
+        beat: 1,
+        startMs: 0,
+        layer1Active: true,
+        fluteMode: "background",
+        violinMode: "background",
+        reason: "Density overload during Layer 1 melody; Flute and Violin yields were flattened to sustained background tones",
+      },
+    ]);
+  });
+
   it("removes Djembe fills only when overload remains after melodic runs are flattened", () => {
     const accompaniment = generateAccompanimentStage(sampleAbc, {
       instrument: "piano",
