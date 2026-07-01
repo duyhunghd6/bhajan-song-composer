@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { SongMetadata, SongMetadataSchema } from "@/lib/songs/schema";
 
 const DEFAULT_STORAGE_KEY = "bhajan-song-composer:song-form:draft";
@@ -97,6 +97,7 @@ export default function SongForm({
   const [metadata, setMetadata] = useState<SongMetadata>(initialMetadata);
   const [storageStatus, setStorageStatus] = useState("Metadata saves locally in this browser.");
   const [hasLoadedStorage, setHasLoadedStorage] = useState(false);
+  const isClearingRef = useRef(false);
 
   const validation = useMemo(() => SongMetadataSchema.safeParse(metadata), [metadata]);
   const yamlPreview = useMemo(() => metadataToYaml(metadata), [metadata]);
@@ -137,7 +138,11 @@ export default function SongForm({
     const timeoutId = window.setTimeout(() => {
       try {
         window.localStorage.setItem(storageKey, JSON.stringify(metadata));
-        setStorageStatus("Metadata draft saved locally in this browser.");
+        if (isClearingRef.current) {
+          isClearingRef.current = false;
+        } else {
+          setStorageStatus("Metadata draft saved locally in this browser.");
+        }
       } catch (err) {
         console.error("Error saving song metadata draft:", err);
         setStorageStatus("Local metadata saving is unavailable in this browser.");
@@ -242,6 +247,7 @@ export default function SongForm({
     if (typeof window === "undefined") return;
 
     try {
+      isClearingRef.current = true;
       window.localStorage.removeItem(storageKey);
       setMetadata(initialMetadata);
       setStorageStatus("Metadata draft cleared. The starter form has been restored.");

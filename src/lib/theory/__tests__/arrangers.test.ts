@@ -34,6 +34,15 @@ describe("Accompaniment stage", () => {
     expect(stage.abc).toContain("| E,,2 B,,2 G,2 B,,2 |");
   });
 
+  it("uses the harmonized progression when no progression is supplied", () => {
+    const stage = generateAccompanimentStage(sampleAbc);
+
+    expect(stage.layer).toEqual({ number: 2, name: "Accompaniment", instrument: "piano" });
+    expect(stage.measures).toHaveLength(4);
+    expect(stage.measures.every((measure) => measure.chord.length > 0)).toBe(true);
+    expect(stage.abc).toContain("V:Accompaniment clef=bass name=\"Layer 2 Piano Accompaniment\"");
+  });
+
   it("smooths piano bass movement by selecting chord inversions", () => {
     const stage = generateAccompanimentStage(sampleAbc, {
       instrument: "piano",
