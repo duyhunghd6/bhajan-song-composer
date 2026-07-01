@@ -4,7 +4,9 @@ import { useTransition } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { Song, SongVideo, SongAbcNotation } from "@/lib/songs/schema";
 import YouTubePlayer from "./YouTubePlayer";
-import AbcSheetViewer from "./AbcSheetViewer";
+import dynamic from "next/dynamic";
+
+const AbcSheetViewer = dynamic(() => import("./AbcSheetViewer"), { ssr: false });
 
 interface PlaybackControllerProps {
   song: Song;
