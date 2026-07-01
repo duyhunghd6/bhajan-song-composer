@@ -24,6 +24,7 @@ export default function AbcSheetViewer({ abcString, songTitle }: AbcSheetViewerP
       <MusicSheetRenderer
         abcString={abcString}
         title="Music Sheet Playback"
+        description={`Interactive notation playback for ${songTitle}.`}
         canvasId="abc-music-canvas"
         controls
         showLoopControls
