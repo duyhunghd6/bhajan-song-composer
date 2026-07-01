@@ -355,6 +355,34 @@ K:Em
       ],
     });
   });
+
+  it("exports a UI-ready piano output contract with grand-staff ABC, highlights, and fingering metadata", () => {
+    const accompaniment = generatePianoAccompaniment(sampleAbc, {
+      progression: ["Em"],
+    });
+
+    expect(accompaniment.grandStaffAbc).toContain("V:PianoLH clef=bass");
+    expect(accompaniment.grandStaffAbc).toContain("V:PianoRH clef=treble");
+    expect(accompaniment.abc).toBe(accompaniment.grandStaffAbc);
+    expect(accompaniment.pianoKeyHighlights).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ measureIndex: 0, beat: 1, hand: "left", note: "E2", midi: 40, finger: 5, role: "root" }),
+        expect.objectContaining({ measureIndex: 0, beat: 1, hand: "left", note: "E3", midi: 52, finger: 1, role: "octave" }),
+        expect.objectContaining({ measureIndex: 0, beat: 1, hand: "right", note: "G3", midi: 55, finger: 1, role: "third" }),
+      ])
+    );
+    expect(accompaniment.fingeringMetadata[0]).toMatchObject({
+      measureIndex: 0,
+      beat: 1,
+      hand: "left",
+      source: "left-hand-bass",
+      notes: [
+        { note: "E2", midi: 40, finger: 5, role: "root" },
+        { note: "B2", midi: 47, finger: 2, role: "fifth" },
+        { note: "E3", midi: 52, finger: 1, role: "octave" },
+      ],
+    });
+  });
 });
 
 describe("Piano arranger", () => {

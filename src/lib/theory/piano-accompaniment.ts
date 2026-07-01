@@ -150,6 +150,38 @@ export interface PianoPedalAutomation {
   events: PianoPedalEvent[];
 }
 
+export type PianoFingeringRole = PianoBassRole | PianoRightHandRole;
+
+export interface PianoKeyHighlight {
+  measureIndex: number;
+  beat: number;
+  hand: "left" | "right";
+  note: string;
+  midi: number;
+  abc: string;
+  finger: number;
+  role: PianoFingeringRole;
+  label: string;
+}
+
+export interface PianoFingeringNote {
+  note: string;
+  pitchClass: string;
+  midi: number;
+  abc: string;
+  finger: number;
+  role: PianoFingeringRole;
+}
+
+export interface PianoFingeringMetadata {
+  measureIndex: number;
+  beat: number;
+  hand: "left" | "right";
+  source: "left-hand-bass" | "right-hand-voicing";
+  chord: string;
+  notes: PianoFingeringNote[];
+}
+
 export interface PianoAccompaniment {
   sourceAnalysis: PianoSourceAnalysis;
   harmonicFramework: PianoHarmonicFrameworkMeasure[];
@@ -160,6 +192,9 @@ export interface PianoAccompaniment {
   physicalValidation: PianoPlayabilityReport;
   playbackEvents: PianoPlaybackEvent[];
   pedalAutomation: PianoPedalAutomation;
+  grandStaffAbc: string;
+  pianoKeyHighlights: PianoKeyHighlight[];
+  fingeringMetadata: PianoFingeringMetadata[];
   abc: string;
 }
 
@@ -497,6 +532,92 @@ function midiForBassEvent(event: PianoBassEvent): number {
   return baseOctave + pitchClass;
 }
 
+const MIDI_PITCH_CLASSES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+
+function noteWithOctave(midi: number): string {
+  const pitchClass = MIDI_PITCH_CLASSES[((midi % 12) + 12) % 12];
+  const octave = Math.floor(midi / 12) - 1;
+  return `${pitchClass}${octave}`;
+}
+
+function fingerForBassRole(role: PianoBassRole): number {
+  if (role === "root") return 5;
+  if (role === "fifth") return 2;
+  return 1;
+}
+
+function fingerForRightHandTone(index: number, toneCount: number): number {
+  if (toneCount === 1) return 2;
+  if (toneCount === 2) return index === 0 ? 1 : 3;
+  return [1, 2, 4, 5][index] ?? 5;
+}
+
+function buildPianoOutputContract(
+  leftHandBassMap: PianoLeftHandBassMeasure[],
+  rightHandVoicingMap: PianoRightHandVoicingMeasure[]
+): Pick<PianoAccompaniment, "pianoKeyHighlights" | "fingeringMetadata"> {
+  const fingeringMetadata: PianoFingeringMetadata[] = [];
+
+  leftHandBassMap.forEach((measure) => {
+    fingeringMetadata.push({
+      measureIndex: measure.measureIndex,
+      beat: 1,
+      hand: "left",
+      source: "left-hand-bass",
+      chord: measure.chord,
+      notes: measure.events.map((event) => {
+        const midi = midiForBassEvent(event);
+        const finger = fingerForBassRole(event.role);
+        return {
+          note: noteWithOctave(midi),
+          pitchClass: normalizeNoteName(event.note),
+          midi,
+          abc: event.abc,
+          finger,
+          role: event.role,
+        };
+      }),
+    });
+  });
+
+  rightHandVoicingMap.forEach((measure) => {
+    fingeringMetadata.push({
+      measureIndex: measure.measureIndex,
+      beat: 1,
+      hand: "right",
+      source: "right-hand-voicing",
+      chord: measure.chord,
+      notes: measure.tones.map((tone, index) => {
+        const finger = fingerForRightHandTone(index, measure.tones.length);
+        return {
+          note: noteWithOctave(tone.midi),
+          pitchClass: normalizeNoteName(tone.note),
+          midi: tone.midi,
+          abc: tone.abc,
+          finger,
+          role: tone.role,
+        };
+      }),
+    });
+  });
+
+  const pianoKeyHighlights = fingeringMetadata.flatMap((event) =>
+    event.notes.map((note) => ({
+      measureIndex: event.measureIndex,
+      beat: event.beat,
+      hand: event.hand,
+      note: note.note,
+      midi: note.midi,
+      abc: note.abc,
+      finger: note.finger,
+      role: note.role,
+      label: String(note.finger),
+    }))
+  );
+
+  return { pianoKeyHighlights, fingeringMetadata };
+}
+
 function buildPhysicalHandEvents(
   leftHandBassMap: PianoLeftHandBassMeasure[],
   rightHandVoicingMap: PianoRightHandVoicingMeasure[]
@@ -597,6 +718,8 @@ export function generatePianoAccompaniment(
   const gapFillVoice = gapFillMap.some((measure) => measure.events.length > 0)
     ? `\nV:PianoGapFill clef=treble name="Safe Gap Fills"\n| ${gapFillMap.map((measure) => measure.abc).join(" | ")} |`
     : "";
+  const grandStaffAbc = `V:PianoLH clef=bass name="Layer 2 Piano Left Hand"\n| ${leftHandBassMap.map((measure) => measure.abc).join(" | ")} |\nV:PianoRH clef=treble name="Layer 2 Piano Right Hand"\n| ${rightHandVoicingMap.map((measure) => measure.abc).join(" | ")} |\n${compingLeftVoice}${compingRightVoice}${gapFillVoice}`;
+  const outputContract = buildPianoOutputContract(leftHandBassMap, rightHandVoicingMap);
 
   return {
     sourceAnalysis: {
@@ -613,6 +736,9 @@ export function generatePianoAccompaniment(
     physicalValidation,
     playbackEvents: physicalValidation.playbackEvents,
     pedalAutomation,
-    abc: `V:PianoLH clef=bass name="Layer 2 Piano Left Hand"\n| ${leftHandBassMap.map((measure) => measure.abc).join(" | ")} |\nV:PianoRH clef=treble name="Layer 2 Piano Right Hand"\n| ${rightHandVoicingMap.map((measure) => measure.abc).join(" | ")} |\n${compingLeftVoice}${compingRightVoice}${gapFillVoice}`,
+    grandStaffAbc,
+    pianoKeyHighlights: outputContract.pianoKeyHighlights,
+    fingeringMetadata: outputContract.fingeringMetadata,
+    abc: grandStaffAbc,
   };
 }
