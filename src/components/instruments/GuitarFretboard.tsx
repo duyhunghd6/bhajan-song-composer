@@ -1,3 +1,5 @@
+import SvgHandsOverlay, { type SvgHandFingeringEvent } from "./SvgHandsOverlay";
+
 const DEFAULT_TUNING = ["E", "A", "D", "G", "B", "E"];
 const DEFAULT_STRING_COUNT = 6;
 const DEFAULT_FRET_COUNT = 4;
@@ -30,6 +32,7 @@ export interface GuitarFretboardProps {
   startFret?: number;
   fretCount?: number;
   capoFret?: number;
+  handOverlayEvents?: SvgHandFingeringEvent[];
   className?: string;
 }
 
@@ -110,6 +113,7 @@ export default function GuitarFretboard({
   startFret = 1,
   fretCount = DEFAULT_FRET_COUNT,
   capoFret,
+  handOverlayEvents = [],
   className = "",
 }: GuitarFretboardProps) {
   const stringCount = tuning.length || DEFAULT_STRING_COUNT;
@@ -269,6 +273,8 @@ export default function GuitarFretboard({
               </g>
             );
           })}
+
+          <SvgHandsOverlay title={`${title} hands`} events={handOverlayEvents} width={width} height={height} />
         </svg>
       </div>
     </section>

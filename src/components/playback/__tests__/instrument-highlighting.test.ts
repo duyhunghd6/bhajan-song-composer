@@ -25,6 +25,22 @@ describe("synchronized instrument highlighting", () => {
     expect(highlights.guitarPositions).toEqual([
       { string: 5, fret: 3, note: "C", tone: "melody" },
     ]);
+    expect(highlights.guitarHandOverlayEvents).toContainEqual({
+      id: "guitar-5-3-2.5",
+      instrument: "guitar",
+      hand: "right",
+      finger: "p",
+      target: { x: 92, y: 75, label: "C" },
+      cursorSeconds: 2.5,
+    });
+    expect(highlights.pianoHandOverlayEvents).toContainEqual({
+      id: "piano-C5-2.5",
+      instrument: "piano",
+      hand: "right",
+      finger: 1,
+      target: { x: 522, y: 80, label: "C5" },
+      cursorSeconds: 2.5,
+    });
     expect(highlights.statusText).toBe("Highlighting C5 at 2.5s");
   });
 });

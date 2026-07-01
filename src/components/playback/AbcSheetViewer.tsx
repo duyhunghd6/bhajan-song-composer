@@ -58,6 +58,7 @@ export default function AbcSheetViewer({ abcString, songTitle }: AbcSheetViewerP
             positions={instrumentHighlights.guitarPositions}
             openStrings={instrumentHighlights.guitarOpenStrings}
             startFret={instrumentHighlights.guitarStartFret}
+            handOverlayEvents={instrumentHighlights.guitarHandOverlayEvents}
           />
           <PianoKeyboard
             title="Synchronized piano"
@@ -65,6 +66,7 @@ export default function AbcSheetViewer({ abcString, songTitle }: AbcSheetViewerP
             startOctave={3}
             octaveCount={3}
             highlights={instrumentHighlights.pianoHighlights}
+            handOverlayEvents={instrumentHighlights.pianoHandOverlayEvents}
           />
         </div>
       </section>

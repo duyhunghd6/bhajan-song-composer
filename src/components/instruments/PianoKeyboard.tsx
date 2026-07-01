@@ -1,4 +1,5 @@
 import { normalizeAbcNote } from "@/lib/theory/melody-analyzer";
+import SvgHandsOverlay, { type SvgHandFingeringEvent } from "./SvgHandsOverlay";
 import { getNoteValue } from "@/lib/theory/scales";
 
 const WHITE_NOTES = ["C", "D", "E", "F", "G", "A", "B"];
@@ -51,6 +52,7 @@ export interface PianoKeyboardProps {
   startOctave?: number;
   octaveCount?: number;
   highlights?: PianoHighlightedNote[];
+  handOverlayEvents?: SvgHandFingeringEvent[];
   className?: string;
 }
 
@@ -139,6 +141,7 @@ export default function PianoKeyboard({
   startOctave = 3,
   octaveCount = 2,
   highlights = [],
+  handOverlayEvents = [],
   className = "",
 }: PianoKeyboardProps) {
   const keys = buildPianoKeys(startOctave, octaveCount);
@@ -253,6 +256,8 @@ export default function PianoKeyboard({
               </g>
             );
           })}
+
+          <SvgHandsOverlay title={`${title} hands`} events={handOverlayEvents} width={width} height={height} />
         </svg>
       </div>
     </section>

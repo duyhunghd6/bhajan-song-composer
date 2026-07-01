@@ -8,3 +8,10 @@ export type {
   PianoKeyboardProps,
   PianoKeyInfo,
 } from "./PianoKeyboard";
+
+export { default as SvgHandsOverlay } from "./SvgHandsOverlay";
+export type {
+  SvgHandFingeringEvent,
+  SvgHandsOverlayProps,
+  SvgHandTarget,
+} from "./SvgHandsOverlay";

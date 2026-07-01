@@ -1,11 +1,13 @@
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import {
+import GuitarFretboard, {
   describeGuitarPosition,
   getGuitarFretY,
   getGuitarStringX,
   getVisibleGuitarPositions,
 } from "../GuitarFretboard";
-import { buildPianoKeys, findPianoHighlight, normalizePianoNote } from "../PianoKeyboard";
+import PianoKeyboard, { buildPianoKeys, findPianoHighlight, normalizePianoNote } from "../PianoKeyboard";
+import SvgHandsOverlay from "../SvgHandsOverlay";
 
 describe("GuitarFretboard helpers", () => {
   it("maps standard string numbers from low E on the left to high E on the right", () => {
@@ -31,6 +33,54 @@ describe("GuitarFretboard helpers", () => {
     ];
 
     expect(getVisibleGuitarPositions(positions, 1, 4)).toEqual(positions.slice(0, 2));
+  });
+
+  it("renders synchronized SVG hand overlays above fret targets", () => {
+    const markup = renderToStaticMarkup(
+      <GuitarFretboard
+        title="Synchronized guitar"
+        handOverlayEvents={[
+          {
+            id: "cursor-c5",
+            instrument: "guitar",
+            hand: "right",
+            finger: "p",
+            target: { x: 92, y: 75, label: "C" },
+            cursorSeconds: 2.5,
+          },
+        ]}
+      />
+    );
+
+    expect(markup).toContain('aria-label="Synchronized guitar hands SVG hands overlay"');
+    expect(markup).toContain('opacity="0.5"');
+    expect(markup).toContain('transform="translate(92 75)"');
+  });
+});
+
+describe("SvgHandsOverlay", () => {
+  it("renders a semi-transparent active fingering event at the target coordinates", () => {
+    const markup = renderToStaticMarkup(
+      <SvgHandsOverlay
+        title="Guitar hands"
+        events={[
+          {
+            id: "cursor-c5",
+            instrument: "guitar",
+            hand: "right",
+            finger: "p",
+            target: { x: 142, y: 96, label: "C" },
+            cursorSeconds: 2.5,
+          },
+        ]}
+      />
+    );
+
+    expect(markup).toContain('aria-label="Guitar hands SVG hands overlay"');
+    expect(markup).toContain('opacity="0.5"');
+    expect(markup).toContain('transform="translate(142 96)"');
+    expect(markup).toContain("transition:transform 180ms ease-out");
+    expect(markup).toContain("right hand finger p on C at 2.5s");
   });
 });
 
@@ -65,5 +115,27 @@ describe("PianoKeyboard helpers", () => {
     expect(findPianoHighlight(c3, [{ note: "C3", finger: 1 }])?.finger).toBe(1);
     expect(findPianoHighlight(c4, [{ note: "C3", finger: 1 }])).toBeUndefined();
     expect(findPianoHighlight(fSharp3, [{ note: "Gb", finger: 2 }])?.finger).toBe(2);
+  });
+
+  it("renders synchronized SVG hand overlays above highlighted keys", () => {
+    const markup = renderToStaticMarkup(
+      <PianoKeyboard
+        title="Synchronized piano"
+        handOverlayEvents={[
+          {
+            id: "cursor-c5-piano",
+            instrument: "piano",
+            hand: "right",
+            finger: 1,
+            target: { x: 270, y: 72, label: "C5" },
+            cursorSeconds: 2.5,
+          },
+        ]}
+      />
+    );
+
+    expect(markup).toContain('aria-label="Synchronized piano hands SVG hands overlay"');
+    expect(markup).toContain('opacity="0.5"');
+    expect(markup).toContain('transform="translate(270 72)"');
   });
 });
