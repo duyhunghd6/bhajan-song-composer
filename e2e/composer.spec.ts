@@ -126,6 +126,25 @@ test.describe("composer workflow", () => {
     await expect(page.locator("#abc-editor-input")).toHaveValue(/Edited Bass/);
   });
 
+  test("generates fingerstyle output for Composer layers with visual inspection", async ({ page }) => {
+    await page.goto("/compose");
+
+    await page.getByLabel("Fingerstyle picking profile").selectOption("folk-travis");
+    await page.getByRole("button", { name: "Generate fingerstyle output" }).click();
+
+    await expect(page.getByRole("heading", { name: "Fingerstyle Composer integration" })).toBeVisible();
+    await expect(page.getByText("ready_for_integration")).toBeVisible();
+    await expect(page.getByText("Max fret span: 3 frets")).toBeVisible();
+    await expect(page.getByRole("img", { name: /Fingerstyle visual inspection guitar fretboard diagram/ })).toBeVisible();
+    await expect(page.getByRole("img", { name: /Fingerstyle visual inspection hands SVG hands overlay/ })).toBeVisible();
+
+    await page.getByRole("button", { name: "Accept Fingerstyle Guitar" }).click();
+
+    await expect(page.getByText("4 total layers", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("Active layer name")).toHaveValue("Fingerstyle Guitar (Folk / Travis Override)");
+    await expect(page.locator("#abc-editor-input")).toHaveValue(/T:Fingerstyle Guitar \(Folk \/ Travis Override\)/);
+  });
+
   test("keeps the ABCJS music sheet visible after editing in dark mode", async ({ page }) => {
     await page.emulateMedia({ colorScheme: "dark" });
     await page.goto("/compose?edit=happy-birthday");

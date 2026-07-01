@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import MusicSheetRenderer from "@/components/music-sheet/MusicSheetRenderer";
+import GuitarFretboard from "@/components/instruments/GuitarFretboard";
 import {
   buildArrangementLayerProposals,
   generateArrangementPipeline,
@@ -12,6 +13,12 @@ import type {
   ArrangementPipelineResult,
   ArrangementPipelineStageId,
 } from "@/lib/theory/arrangement-pipeline";
+import {
+  buildFingerstyleComposerIntegration,
+  FINGERSTYLE_PROFILE_OPTIONS,
+  type FingerstyleComposerIntegration,
+  type FingerstyleComposerProfileId,
+} from "./fingerstyle-integration";
 import AbcEditor from "./AbcEditor";
 import TheoryAssistant from "./TheoryAssistant";
 
@@ -323,6 +330,115 @@ function ArrangementPipelineGatePanel({
   );
 }
 
+function FingerstyleIntegrationPanel({
+  activeLayer,
+  selectedProfileId,
+  integration,
+  error,
+  onProfileChange,
+  onGenerate,
+  onAcceptLayer,
+}: {
+  activeLayer: ComposerLayer;
+  selectedProfileId: FingerstyleComposerProfileId;
+  integration: FingerstyleComposerIntegration | null;
+  error: string | null;
+  onProfileChange: (profileId: FingerstyleComposerProfileId) => void;
+  onGenerate: () => void;
+  onAcceptLayer: () => void;
+}) {
+  const canGenerate = activeLayer.role === "melody";
+
+  return (
+    <div className="rounded-2xl border border-amber-100 bg-amber-50/70 p-4 dark:border-amber-900/60 dark:bg-amber-950/20">
+      <div className="space-y-2">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-600 dark:text-amber-300">
+          Fingerstyle output
+        </p>
+        <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">
+          Fingerstyle Composer integration
+        </h3>
+        <p className="text-sm leading-6 text-zinc-600 dark:text-zinc-400">
+          Generate a solo-guitar layer from the active melody, inspect playability, then accept the result into
+          the Composer stack with synchronized fretboard and hand-overlay events.
+        </p>
+      </div>
+
+      <label className="mt-4 block space-y-2">
+        <span className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500 dark:text-zinc-400">
+          Fingerstyle picking profile
+        </span>
+        <select
+          aria-label="Fingerstyle picking profile"
+          value={selectedProfileId}
+          onChange={(event) => onProfileChange(event.target.value as FingerstyleComposerProfileId)}
+          className="w-full rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500 dark:border-amber-900/70 dark:bg-zinc-950 dark:text-zinc-100"
+        >
+          {FINGERSTYLE_PROFILE_OPTIONS.map((profile) => (
+            <option key={profile.id} value={profile.id}>
+              {profile.label}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          onClick={onGenerate}
+          disabled={!canGenerate}
+          className="rounded-xl bg-amber-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Generate fingerstyle output
+        </button>
+        {!canGenerate && (
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            Select a melody layer before generating fingerstyle output.
+          </p>
+        )}
+      </div>
+
+      {error && (
+        <p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/30 dark:text-rose-300">
+          {error}
+        </p>
+      )}
+
+      {integration && (
+        <div className="mt-4 space-y-4">
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-900/70 dark:bg-emerald-950/30 dark:text-emerald-300">
+            <p className="font-semibold">{integration.playability.status}</p>
+            <p className="mt-1 text-xs">
+              Max fret span: {integration.playability.maxFretSpan} frets · {integration.handOverlayEvents.length} visual events
+            </p>
+            {integration.playability.failedConstraints.length > 0 && (
+              <p className="mt-1 text-xs">
+                Review: {integration.playability.failedConstraints.join(", ")}
+              </p>
+            )}
+          </div>
+
+          <GuitarFretboard
+            title="Fingerstyle visual inspection"
+            subtitle={`${integration.selectedProfile.label} · synchronized fretboard and hand overlay`}
+            positions={integration.fretboard.positions}
+            handOverlayEvents={integration.handOverlayEvents.slice(0, 1)}
+            className="bg-white/90 dark:bg-zinc-950/70"
+          />
+
+          <button
+            type="button"
+            onClick={onAcceptLayer}
+            className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:bg-emerald-700"
+          >
+            Accept Fingerstyle Guitar
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export interface LayerManagerProps {
   initialLayers?: ComposerLayer[];
   storageKey?: string;
@@ -340,6 +456,9 @@ export default function LayerManager({
   const [pipelineResult, setPipelineResult] = useState<ArrangementPipelineResult | null>(null);
   const [pipelineError, setPipelineError] = useState<string | null>(null);
   const [dismissedPipelineLayerIds, setDismissedPipelineLayerIds] = useState<string[]>([]);
+  const [fingerstyleProfileId, setFingerstyleProfileId] = useState<FingerstyleComposerProfileId>("strict-pima");
+  const [fingerstyleIntegration, setFingerstyleIntegration] = useState<FingerstyleComposerIntegration | null>(null);
+  const [fingerstyleError, setFingerstyleError] = useState<string | null>(null);
 
   const layersKey = storageKey;
   const activeLayerKey = `${storageKey}:active-layer`;
@@ -407,9 +526,19 @@ export default function LayerManager({
     setDismissedPipelineLayerIds([]);
   };
 
+  const resetFingerstyleIntegration = () => {
+    setFingerstyleIntegration(null);
+    setFingerstyleError(null);
+  };
+
+  const resetGeneratedOutputs = () => {
+    resetPipelineResult();
+    resetFingerstyleIntegration();
+  };
+
   const selectLayer = (layerId: string) => {
     setActiveLayerId(layerId);
-    resetPipelineResult();
+    resetGeneratedOutputs();
   };
 
   const updateLayer = (layerId: string, updates: Partial<ComposerLayer>) => {
@@ -419,7 +548,7 @@ export default function LayerManager({
         (updates.role !== undefined && updates.role !== activeLayer.role));
 
     if (affectsActivePipeline) {
-      resetPipelineResult();
+      resetGeneratedOutputs();
     }
 
     setLayers((currentLayers) => {
@@ -456,7 +585,7 @@ export default function LayerManager({
 
     setLayers((currentLayers) => [...currentLayers, layer]);
     setActiveLayerId(id);
-    resetPipelineResult();
+    resetGeneratedOutputs();
   };
 
   const duplicateActiveLayer = () => {
@@ -470,7 +599,7 @@ export default function LayerManager({
 
     setLayers((currentLayers) => [...currentLayers, layer]);
     setActiveLayerId(id);
-    resetPipelineResult();
+    resetGeneratedOutputs();
   };
 
   const deleteActiveLayer = () => {
@@ -482,14 +611,14 @@ export default function LayerManager({
 
     setLayers(nextLayers);
     setActiveLayerId(nextActiveLayer.id);
-    resetPipelineResult();
+    resetGeneratedOutputs();
   };
 
   const resetLayers = () => {
     setLayers(initialLayers);
     setActiveLayerId(initialLayers[0]?.id || "melody");
     setStorageStatus("Layer stack reset to the starter arrangement.");
-    resetPipelineResult();
+    resetGeneratedOutputs();
   };
 
   const copyVisibleAbc = async () => {
@@ -535,6 +664,41 @@ export default function LayerManager({
     setDismissedPipelineLayerIds((currentIds) =>
       currentIds.includes(proposalId) ? currentIds : [...currentIds, proposalId]
     );
+  };
+
+  const changeFingerstyleProfile = (profileId: FingerstyleComposerProfileId) => {
+    setFingerstyleProfileId(profileId);
+    resetFingerstyleIntegration();
+  };
+
+  const generateFingerstyleOutput = () => {
+    if (activeLayer.role !== "melody") {
+      setFingerstyleError("Select a melody layer before generating fingerstyle output.");
+      return;
+    }
+
+    try {
+      setFingerstyleIntegration(
+        buildFingerstyleComposerIntegration(activeLayer.abc, undefined, { pickingProfile: fingerstyleProfileId })
+      );
+      setFingerstyleError(null);
+    } catch (err) {
+      console.error("Error generating fingerstyle output:", err);
+      setFingerstyleIntegration(null);
+      setFingerstyleError("Add a valid melody ABC layer before generating fingerstyle output.");
+    }
+  };
+
+  const acceptFingerstyleLayer = () => {
+    if (!fingerstyleIntegration) return;
+
+    const layer = fingerstyleIntegration.composerLayer;
+    setLayers((currentLayers) => [
+      ...currentLayers.filter((currentLayer) => currentLayer.id !== layer.id),
+      layer,
+    ]);
+    setActiveLayerId(layer.id);
+    resetFingerstyleIntegration();
   };
 
   return (
@@ -638,6 +802,16 @@ export default function LayerManager({
               onRunPipeline={runArrangementPipeline}
               onAcceptLayer={acceptPipelineLayer}
               onRejectLayer={rejectPipelineLayer}
+            />
+
+            <FingerstyleIntegrationPanel
+              activeLayer={activeLayer}
+              selectedProfileId={fingerstyleProfileId}
+              integration={fingerstyleIntegration}
+              error={fingerstyleError}
+              onProfileChange={changeFingerstyleProfile}
+              onGenerate={generateFingerstyleOutput}
+              onAcceptLayer={acceptFingerstyleLayer}
             />
           </div>
         </aside>
