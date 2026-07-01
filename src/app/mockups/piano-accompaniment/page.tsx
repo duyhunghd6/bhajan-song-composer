@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
+import PianoPedalIndicator from "@/components/instruments/PianoPedalIndicator";
 import PocHandoffChecklist from "@/components/mockups/PocHandoffChecklist";
 import { generatePianoAccompaniment } from "@/lib/theory/piano-accompaniment";
 
@@ -32,10 +33,6 @@ function statusPill(isReady: boolean, label: string) {
 
 function formatBeat(beat: number) {
   return Number.isInteger(beat) ? beat.toString() : beat.toFixed(1);
-}
-
-function formatPedalType(type: string) {
-  return type;
 }
 
 export default function PianoAccompanimentMockup() {
@@ -209,20 +206,13 @@ ${piano.grandStaffAbc}`;
         </section>
 
         <section className="grid gap-6 lg:grid-cols-3">
-          <article className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6 shadow-xl">
-            <h2 className="text-xl font-bold text-zinc-100">Pedal Automation</h2>
-            <p className="mt-1 text-sm text-zinc-400">Sustain is controlled with MIDI CC 64 and flushed at harmonic changes.</p>
-            <p className="mt-4 rounded-xl bg-zinc-950/70 px-4 py-3 font-mono text-xs text-emerald-300">
-              MIDI CC 64 · down {piano.pedalAutomation.controller.downValue} · up {piano.pedalAutomation.controller.upValue}
-            </p>
-            <ul className="mt-4 space-y-3">
-              {piano.pedalAutomation.events.map((event, index) => (
-                <li key={`${event.measureIndex}-${event.beat}-${event.type}-${index}`} className="rounded-xl bg-zinc-950/70 p-4 font-mono text-xs text-zinc-300">
-                  M{event.measureIndex + 1} beat {formatBeat(event.beat)} · {formatPedalType(event.type)} · {event.chord} · value {event.value}
-                </li>
-              ))}
-            </ul>
-          </article>
+          <PianoPedalIndicator
+            title="Pedal Animation Graphic"
+            pedalAutomation={piano.pedalAutomation}
+            currentMeasureIndex={1}
+            currentBeat={1}
+            className="border-zinc-800 bg-zinc-900/70 shadow-xl"
+          />
 
           <article className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6 shadow-xl lg:col-span-2">
             <h2 className="text-xl font-bold text-zinc-100">Piano Key Highlights</h2>

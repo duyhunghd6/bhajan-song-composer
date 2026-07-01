@@ -7,6 +7,7 @@ import GuitarFretboard, {
   getVisibleGuitarPositions,
 } from "../GuitarFretboard";
 import PianoKeyboard, { buildPianoKeys, findPianoHighlight, normalizePianoNote } from "../PianoKeyboard";
+import PianoPedalIndicator from "../PianoPedalIndicator";
 import SvgHandsOverlay from "../SvgHandsOverlay";
 
 describe("GuitarFretboard helpers", () => {
@@ -81,6 +82,52 @@ describe("SvgHandsOverlay", () => {
     expect(markup).toContain('transform="translate(142 96)"');
     expect(markup).toContain("transition:transform 180ms ease-out");
     expect(markup).toContain("right hand finger p on C at 2.5s");
+  });
+});
+
+describe("PianoPedalIndicator", () => {
+  it("renders the current pedal flush state from MIDI CC 64 events", () => {
+    const markup = renderToStaticMarkup(
+      <PianoPedalIndicator
+        title="Live sustain pedal"
+        currentMeasureIndex={1}
+        currentBeat={1}
+        pedalAutomation={{
+          controller: { midiControlChange: 64, downValue: 127, upValue: 0 },
+          events: [
+            { measureIndex: 0, beat: 1, chord: "Em", type: "pedal-down", value: 127 },
+            { measureIndex: 1, beat: 1, chord: "Bm", type: "pedal-flush", value: 0, previousChord: "Em" },
+            { measureIndex: 1, beat: 1.1, chord: "Bm", type: "pedal-down", value: 127 },
+          ],
+        }}
+      />
+    );
+
+    expect(markup).toContain('aria-label="Live sustain pedal pedal indicator panel"');
+    expect(markup).toContain("MIDI CC 64");
+    expect(markup).toContain("Pedal flush");
+    expect(markup).toContain("M2 beat 1 · pedal-flush · Bm · CC64 0");
+    expect(markup).toContain("changes from Em");
+  });
+
+  it("shows a held pedal between down and release events", () => {
+    const markup = renderToStaticMarkup(
+      <PianoPedalIndicator
+        currentMeasureIndex={0}
+        currentBeat={3}
+        pedalAutomation={{
+          controller: { midiControlChange: 64, downValue: 127, upValue: 0 },
+          events: [
+            { measureIndex: 0, beat: 1, chord: "Em", type: "pedal-down", value: 127 },
+            { measureIndex: 0, beat: 4, chord: "Em", type: "pedal-up", value: 0 },
+          ],
+        }}
+      />
+    );
+
+    expect(markup).toContain("Pedal hold");
+    expect(markup).toContain("CC64 value 127");
+    expect(markup).toContain("M1 beat 3");
   });
 });
 

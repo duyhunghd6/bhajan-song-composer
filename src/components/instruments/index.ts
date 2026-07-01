@@ -10,6 +10,13 @@ export type {
   PianoKeyInfo,
 } from "./PianoKeyboard";
 
+export { default as PianoPedalIndicator } from "./PianoPedalIndicator";
+export type {
+  ActivePianoPedalState,
+  PianoPedalDisplayState,
+  PianoPedalIndicatorProps,
+} from "./PianoPedalIndicator";
+
 export { default as SvgHandsOverlay } from "./SvgHandsOverlay";
 export type {
   SvgHandFingeringEvent,
