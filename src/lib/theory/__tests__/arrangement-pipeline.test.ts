@@ -34,6 +34,19 @@ describe("Arrangement pipeline orchestrator", () => {
     expect(pipeline.finalAbc).toContain("V:Drums perc name=\"Layer 3 Drum Guidance\"");
   });
 
+  it("exports the full-track ABC only after adding accompaniment, drums, bass, and counter-melody voices", () => {
+    const pipeline = generateArrangementPipeline(sampleAbc, {
+      accompaniment: { instrument: "piano", compingPattern: "arpeggio" },
+    });
+
+    expect(pipeline.validation.fullTrackReady).toBe(true);
+    expect(pipeline.finalAbc).toContain("V:Accompaniment clef=bass name=\"Layer 2 Piano Accompaniment\"");
+    expect(pipeline.finalAbc).toContain("V:Drums perc name=\"Layer 3 Drum Guidance\"");
+    expect(pipeline.finalAbc).toContain("V:Bass clef=bass name=\"Generated Bass Map\"");
+    expect(pipeline.finalAbc).toContain("V:CounterMelody name=\"Generated Counter-Melody\"");
+    expect(pipeline.finalAbc).toContain("% Source: full-track expansion melodic gap fills");
+  });
+
   it("locks downstream UI stage gates until every earlier stage is complete", () => {
     const gates = getArrangementPipelineStageGates(new Set(["melody"]));
 

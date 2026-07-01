@@ -179,6 +179,8 @@ function buildFullTrackAbc(melodyAbc: string, harmonization: HarmonizationStage,
     buildHarmonizationSummary(harmonization),
     accompaniment.abc.trim(),
     fullTrackExpansion.abc.trim(),
+    buildBassMapAbc(fullTrackExpansion),
+    buildCounterMelodyAbc(fullTrackExpansion),
   ].join("\n\n");
 }
 
