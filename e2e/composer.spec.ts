@@ -76,6 +76,24 @@ test.describe("composer workflow", () => {
     await expect(page.getByLabel("Active layer name")).toHaveValue("Melody");
   });
 
+  test("shows ordered arrangement pipeline gates before full-track generation", async ({ page }) => {
+    await page.goto("/compose");
+
+    await expect(page.getByRole("heading", { name: "Arrangement pipeline stage gates" })).toBeVisible();
+    await expect(page.getByTestId("pipeline-gate-melody")).toContainText("Complete");
+    await expect(page.getByTestId("pipeline-gate-harmonization")).toContainText("Available");
+    await expect(page.getByTestId("pipeline-gate-accompaniment")).toContainText("Locked");
+    await expect(page.getByTestId("pipeline-gate-full-track-expansion")).toContainText("Locked");
+    await expect(page.getByTestId("pipeline-gate-full-track")).toContainText("Locked");
+
+    await page.getByRole("button", { name: "Run ordered pipeline" }).click();
+
+    await expect(page.getByTestId("pipeline-gate-harmonization")).toContainText("Complete");
+    await expect(page.getByTestId("pipeline-gate-accompaniment")).toContainText("Complete");
+    await expect(page.getByTestId("pipeline-gate-full-track")).toContainText("Complete");
+    await expect(page.getByText("Full track ABC is ready after the ordered stage gates completed.")).toBeVisible();
+  });
+
   test("keeps the ABCJS music sheet visible after editing in dark mode", async ({ page }) => {
     await page.emulateMedia({ colorScheme: "dark" });
     await page.goto("/compose?edit=happy-birthday");

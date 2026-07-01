@@ -2,6 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import MusicSheetRenderer from "@/components/music-sheet/MusicSheetRenderer";
+import {
+  generateArrangementPipeline,
+  getArrangementPipelineStageGates,
+} from "@/lib/theory/arrangement-pipeline";
+import type { ArrangementPipelineResult, ArrangementPipelineStageId } from "@/lib/theory/arrangement-pipeline";
 import AbcEditor from "./AbcEditor";
 import TheoryAssistant from "./TheoryAssistant";
 
@@ -70,6 +75,13 @@ const roleLabels: Record<LayerRole, string> = {
   rhythm: "Rhythm",
   custom: "Custom",
 };
+
+const generatedPipelineStageIds: ArrangementPipelineStageId[] = [
+  "harmonization",
+  "accompaniment",
+  "full-track-expansion",
+  "full-track",
+];
 
 function createLayerId() {
   if (typeof window !== "undefined" && window.crypto?.randomUUID) {
@@ -150,6 +162,110 @@ function LayerStackPreview({ abc, visibleCount }: { abc: string; visibleCount: n
   );
 }
 
+function ArrangementPipelineGatePanel({
+  activeLayer,
+  pipeline,
+  pipelineError,
+  onRunPipeline,
+}: {
+  activeLayer: ComposerLayer;
+  pipeline: ArrangementPipelineResult | null;
+  pipelineError: string | null;
+  onRunPipeline: () => void;
+}) {
+  const completedStages = new Set<ArrangementPipelineStageId>([
+    "melody",
+    ...(pipeline ? generatedPipelineStageIds : []),
+  ]);
+  const gates = getArrangementPipelineStageGates(completedStages);
+  const canRunPipeline = activeLayer.role === "melody";
+
+  return (
+    <div className="rounded-2xl border border-indigo-100 bg-indigo-50/70 p-4 dark:border-indigo-900/60 dark:bg-indigo-950/20">
+      <div className="space-y-2">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-indigo-600 dark:text-indigo-300">
+          Ordered workflow
+        </p>
+        <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">
+          Arrangement pipeline stage gates
+        </h3>
+        <p className="text-sm leading-6 text-zinc-600 dark:text-zinc-400">
+          The UI only opens downstream stages after the melody establishes harmonization, then accompaniment,
+          then drums and additional instruments before the full track export.
+        </p>
+      </div>
+
+      <ol className="mt-4 space-y-2">
+        {gates.map((gate, index) => (
+          <li
+            key={gate.id}
+            data-testid={`pipeline-gate-${gate.id}`}
+            className="rounded-xl border border-white/70 bg-white/80 p-3 text-sm shadow-sm dark:border-zinc-800 dark:bg-zinc-900/80"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="font-bold text-zinc-900 dark:text-zinc-100">
+                  {index + 1}. {gate.label}
+                </p>
+                <p className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
+                  {gate.description}
+                </p>
+              </div>
+              <span
+                className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.12em] ${
+                  gate.state === "complete"
+                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                    : gate.state === "available"
+                      ? "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
+                      : "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"
+                }`}
+              >
+                {gate.state === "complete" ? "Complete" : gate.state === "available" ? "Available" : "Locked"}
+              </span>
+            </div>
+            {gate.blockedBy.length > 0 && (
+              <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+                Blocked by: {gate.blockedBy.join(", ")}
+              </p>
+            )}
+          </li>
+        ))}
+      </ol>
+
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          onClick={onRunPipeline}
+          disabled={!canRunPipeline}
+          className="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Run ordered pipeline
+        </button>
+        {!canRunPipeline && (
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            Select a melody layer before generating downstream stages.
+          </p>
+        )}
+      </div>
+
+      {pipelineError && (
+        <p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/30 dark:text-rose-300">
+          {pipelineError}
+        </p>
+      )}
+
+      {pipeline && (
+        <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-900/70 dark:bg-emerald-950/30 dark:text-emerald-300">
+          <p className="font-semibold">Full track ABC is ready after the ordered stage gates completed.</p>
+          <p className="mt-1 text-xs">
+            {pipeline.harmonization.progression.join(" | ")} · {pipeline.accompaniment.layer.instrument} · {pipeline.fullTrackExpansion.frequencyPlan.length} range lanes
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export interface LayerManagerProps {
   initialLayers?: ComposerLayer[];
   storageKey?: string;
@@ -164,6 +280,8 @@ export default function LayerManager({
   const [hasLoadedStorage, setHasLoadedStorage] = useState(false);
   const [storageStatus, setStorageStatus] = useState("Layer stack saves locally in this browser.");
   const [copied, setCopied] = useState(false);
+  const [pipelineResult, setPipelineResult] = useState<ArrangementPipelineResult | null>(null);
+  const [pipelineError, setPipelineError] = useState<string | null>(null);
 
   const layersKey = storageKey;
   const activeLayerKey = `${storageKey}:active-layer`;
@@ -216,7 +334,26 @@ export default function LayerManager({
   const visibleLayers = useMemo(() => layers.filter((layer) => layer.visible), [layers]);
   const visibleAbc = useMemo(() => combinedVisibleAbc(layers), [layers]);
 
+  const resetPipelineResult = () => {
+    setPipelineResult(null);
+    setPipelineError(null);
+  };
+
+  const selectLayer = (layerId: string) => {
+    setActiveLayerId(layerId);
+    resetPipelineResult();
+  };
+
   const updateLayer = (layerId: string, updates: Partial<ComposerLayer>) => {
+    const affectsActivePipeline =
+      layerId === activeLayer.id &&
+      ((updates.abc !== undefined && updates.abc !== activeLayer.abc) ||
+        (updates.role !== undefined && updates.role !== activeLayer.role));
+
+    if (affectsActivePipeline) {
+      resetPipelineResult();
+    }
+
     setLayers((currentLayers) => {
       let changed = false;
       const nextLayers = currentLayers.map((layer) => {
@@ -251,6 +388,7 @@ export default function LayerManager({
 
     setLayers((currentLayers) => [...currentLayers, layer]);
     setActiveLayerId(id);
+    resetPipelineResult();
   };
 
   const duplicateActiveLayer = () => {
@@ -264,6 +402,7 @@ export default function LayerManager({
 
     setLayers((currentLayers) => [...currentLayers, layer]);
     setActiveLayerId(id);
+    resetPipelineResult();
   };
 
   const deleteActiveLayer = () => {
@@ -275,12 +414,14 @@ export default function LayerManager({
 
     setLayers(nextLayers);
     setActiveLayerId(nextActiveLayer.id);
+    resetPipelineResult();
   };
 
   const resetLayers = () => {
     setLayers(initialLayers);
     setActiveLayerId(initialLayers[0]?.id || "melody");
     setStorageStatus("Layer stack reset to the starter arrangement.");
+    resetPipelineResult();
   };
 
   const copyVisibleAbc = async () => {
@@ -293,6 +434,22 @@ export default function LayerManager({
     } catch (err) {
       console.error("Error copying visible layer stack:", err);
       setCopied(false);
+    }
+  };
+
+  const runArrangementPipeline = () => {
+    if (activeLayer.role !== "melody") {
+      setPipelineError("Select a melody layer before generating downstream arrangement stages.");
+      return;
+    }
+
+    try {
+      setPipelineResult(generateArrangementPipeline(activeLayer.abc));
+      setPipelineError(null);
+    } catch (err) {
+      console.error("Error generating arrangement pipeline:", err);
+      setPipelineResult(null);
+      setPipelineError("Add a valid melody ABC layer before running the ordered arrangement pipeline.");
     }
   };
 
@@ -328,7 +485,7 @@ export default function LayerManager({
                   <div className="flex items-start gap-2">
                     <button
                       type="button"
-                      onClick={() => setActiveLayerId(layer.id)}
+                      onClick={() => selectLayer(layer.id)}
                       className="min-w-0 flex-1 text-left cursor-pointer"
                     >
                       <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-400 dark:text-zinc-500">
@@ -388,6 +545,13 @@ export default function LayerManager({
             </div>
 
             <p className="text-xs text-zinc-500 dark:text-zinc-400">{storageStatus}</p>
+
+            <ArrangementPipelineGatePanel
+              activeLayer={activeLayer}
+              pipeline={pipelineResult}
+              pipelineError={pipelineError}
+              onRunPipeline={runArrangementPipeline}
+            />
           </div>
         </aside>
 
