@@ -207,7 +207,7 @@ ${piano.grandStaffAbc}`;
 
         <section className="grid gap-6 lg:grid-cols-3">
           <PianoPedalIndicator
-            title="Pedal Animation Graphic"
+            title="Pedal Automation"
             pedalAutomation={piano.pedalAutomation}
             currentMeasureIndex={1}
             currentBeat={1}

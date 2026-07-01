@@ -7,6 +7,13 @@ const POC_PAGES = [
   "/mockups/ensemble-expansion",
 ];
 
+const HANDOFF_CHECKS = [
+  "Input sample rendered",
+  "Intermediate decisions rendered",
+  "Final artifact rendered",
+  "Validation report rendered",
+];
+
 test.describe("POC integration handoff checklist", () => {
   for (const href of POC_PAGES) {
     test(`${href} exposes a review-ready handoff checklist`, async ({ page }) => {
@@ -17,10 +24,11 @@ test.describe("POC integration handoff checklist", () => {
       await expect(handoff.getByText("Review-ready for Composer integration")).toBeVisible();
       await expect(handoff.getByText("Composer integration: unlocked")).toBeVisible();
 
-      await expect(handoff.getByText("Input sample rendered")).toBeVisible();
-      await expect(handoff.getByText("Intermediate decisions rendered")).toBeVisible();
-      await expect(handoff.getByText("Final artifact rendered")).toBeVisible();
-      await expect(handoff.getByText("Validation report rendered")).toBeVisible();
+      for (const label of HANDOFF_CHECKS) {
+        const row = handoff.getByRole("listitem").filter({ hasText: label });
+        await expect(row).toBeVisible();
+        await expect(row.getByText("pass", { exact: true })).toBeVisible();
+      }
     });
   }
 });
