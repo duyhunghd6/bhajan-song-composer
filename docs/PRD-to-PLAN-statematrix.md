@@ -40,16 +40,16 @@ plan_child_completion = (implemented_children + verified_children) / total_plan_
 plan_child_verification = verified_children / total_plan_children
 ```
 
-Current implementation evidence scan found implementation files for the initial catalogue, playback, composer, theory, instrument, testing, and validation work. Newly planned advanced arrangement engines and mockup gates remain Planned or In Progress until implementation artifacts exist.
+Current implementation evidence scan found implementation files for the initial catalogue, playback, composer, theory, instrument, testing, validation work, and the standalone mockup gate. Newly planned advanced arrangement engines and remaining mockup POC pages remain Planned or In Progress until implementation artifacts exist.
 
 | Metric | Formula | Value |
 |:---|:---|---:|
 | Total PLAN child items | `sum(children under br-plan-01..12)` | **59** |
-| Planned child items | `29 / 59` | **49.2%** |
+| Planned child items | `28 / 59` | **47.5%** |
 | In-progress child items | `8 / 59` | **13.6%** |
-| Implemented child items | `22 / 59` | **37.3%** |
+| Implemented child items | `23 / 59` | **39.0%** |
 | Verified child items | `0 / 59` | **0.0%** |
-| Child completion coverage | `(Implemented + Verified) / 59` | **37.3%** |
+| Child completion coverage | `(Implemented + Verified) / 59` | **39.0%** |
 
 ---
 
@@ -140,13 +140,13 @@ Current implementation evidence scan found implementation files for the initial 
 | `br-plan-04` | Composer Module | `prd-bsc-s3`, `prd-bsc-s7` | 5 | 0 | 0 | 5 | 0 | 100.0% |
 | `br-plan-05` | AI Theory Engine Core | `prd-bsc-s3`, `prd-bsc-s8`, `prd-bsc-s9`, `prd-bsc-s10`, `prd-bsc-s25` | 4 | 0 | 0 | 4 | 0 | 100.0% |
 | `br-plan-08` | Arrangement Pipeline: Melody → Full Track | `prd-bsc-s29`, `prd-bsc-s30`, `prd-bsc-s31`, `prd-bsc-s32` | 6 | 3 | 2 | 1 | 0 | 16.7% |
-| `br-plan-09` | Workflow Mockup / Proof-of-Concept Demo Pages | `prd-bsc-s54`, `prd-bsc-s55` | 7 | 7 | 0 | 0 | 0 | 0.0% |
+| `br-plan-09` | Workflow Mockup / Proof-of-Concept Demo Pages | `prd-bsc-s54`, `prd-bsc-s55` | 7 | 6 | 0 | 1 | 0 | 14.3% |
 | `br-plan-10` | Multi-Layer Fingerstyle Arrangement Engine | `prd-bsc-s33`, `prd-bsc-s34`, `prd-bsc-s35`, `prd-bsc-s36`, `prd-bsc-s37`, `prd-bsc-s38` | 6 | 4 | 2 | 0 | 0 | 0.0% |
 | `br-plan-11` | Piano Accompaniment Generation Engine | `prd-bsc-s39`, `prd-bsc-s40`, `prd-bsc-s41`, `prd-bsc-s42`, `prd-bsc-s43`, `prd-bsc-s44`, `prd-bsc-s45`, `prd-bsc-s46` | 7 | 6 | 1 | 0 | 0 | 0.0% |
 | `br-plan-12` | Ensemble Expansion Engine | `prd-bsc-s47`, `prd-bsc-s48`, `prd-bsc-s49`, `prd-bsc-s50`, `prd-bsc-s51`, `prd-bsc-s52`, `prd-bsc-s53` | 7 | 7 | 0 | 0 | 0 | 0.0% |
 | `br-plan-06` | Visual Instruments & AI UI | `prd-bsc-s17`, `prd-bsc-s25`, `prd-bsc-s36`, `prd-bsc-s38`, `prd-bsc-s46`, `prd-bsc-s53` | 4 | 2 | 1 | 1 | 0 | 25.0% |
 | `br-plan-07` | Quality Assurance, CI & Community Tools | `prd-bsc-s11`, `prd-bsc-s18`, `prd-bsc-s19`, `prd-bsc-s20`, `prd-bsc-s21`, `prd-bsc-s26` | 3 | 0 | 0 | 3 | 0 | 100.0% |
-| **Total** | — | — | **59** | **29** | **8** | **22** | **0** | **37.3%** |
+| **Total** | — | — | **59** | **28** | **8** | **23** | **0** | **39.0%** |
 
 ---
 
@@ -179,7 +179,7 @@ Current implementation evidence scan found implementation files for the initial 
 | `br-plan-08.c04` | `br-plan-08` | Full-Track Expansion Stage: generate drums/additional instruments, bass/kick alignment, ranges, counter-melodies, and fills. | `prd-bsc-s29`, `prd-bsc-s32` | Implemented | `src/lib/theory/full-track-expansion-stage.ts` exports Layer 3 drum/additional-instrument guidance with bass/kick alignment, frequency-range assignments, melodic-gap detection, counter-melody fill placement, and behavior tests. |
 | `br-plan-08.c05` | `br-plan-08` | Composer Integration: expose generated stages as editable first-class composition layers. | `prd-bsc-s29`, `prd-bsc-s31`, `prd-bsc-s32` | In Progress | Layer manager exists; stage-specific generated layer accept/reject flow remains to be added. |
 | `br-plan-08.c06` | `br-plan-08` | Validation & Tests: cover stage ordering, chord selection, voice leading, drum/bass alignment, range metadata, and counter-melody placement. | `prd-bsc-s18`, `prd-bsc-s20`, `prd-bsc-s29`, `prd-bsc-s30`, `prd-bsc-s31`, `prd-bsc-s32` | Planned | Add unit/E2E coverage for pipeline seams. |
-| `br-plan-09.c01` | `br-plan-09` | Mockup Gate: require standalone POC pages before major arrangement workflow integration. | `prd-bsc-s54`, `prd-bsc-s55` | Planned | Add gating documentation/UI state and enforce handoff checklist. |
+| `br-plan-09.c01` | `br-plan-09` | Mockup Gate: require standalone POC pages before major arrangement workflow integration. | `prd-bsc-s54`, `prd-bsc-s55` | Implemented | `src/app/mockups/page.tsx` documents the standalone POC gate UI state; `e2e/mockup-gate.spec.ts` verifies integration stays locked until all POC pages are review-ready. |
 | `br-plan-09.c02` | `br-plan-09` | Arrangement Pipeline POC: demo melody, key/scale, strong beats, chords, accompaniment, full-track decisions, preview, and validation. | `prd-bsc-s54`, `prd-bsc-s55` | Planned | Add `src/app/mockups/arrangement-pipeline/page.tsx`. |
 | `br-plan-09.c03` | `br-plan-09` | Fingerstyle Engine POC: demo upward construction, compression, string routing, pruning, playability, fallback, matrix, preview, and events. | `prd-bsc-s54`, `prd-bsc-s55` | Planned | Add `src/app/mockups/fingerstyle-engine/page.tsx`. |
 | `br-plan-09.c04` | `br-plan-09` | Piano Accompaniment POC: demo comping, bass, LIL, voice leading, gaps, validation, pedal, preview, and key highlights. | `prd-bsc-s54`, `prd-bsc-s55` | Planned | Add `src/app/mockups/piano-accompaniment/page.tsx`. |
