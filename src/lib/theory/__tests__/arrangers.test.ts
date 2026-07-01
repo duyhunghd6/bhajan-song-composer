@@ -39,7 +39,7 @@ describe("Accompaniment stage", () => {
 
     expect(stage.layer).toEqual({ number: 2, name: "Accompaniment", instrument: "piano" });
     expect(stage.measures).toHaveLength(4);
-    expect(stage.measures.every((measure) => measure.chord.length > 0)).toBe(true);
+    expect(stage.measures.map((measure) => measure.chord)).toEqual(["Em", "Bm", "G", "Em"]);
     expect(stage.abc).toContain("V:Accompaniment clef=bass name=\"Layer 2 Piano Accompaniment\"");
   });
 
@@ -59,6 +59,24 @@ describe("Accompaniment stage", () => {
         semitoneDistance: 0,
       },
       abc: "E,,2 G,,2 E,2 G,,2",
+    });
+  });
+
+  it("exposes stable tones and shortest upper-voice movement between chords", () => {
+    const stage = generateAccompanimentStage(sampleAbc, {
+      instrument: "piano",
+      progression: ["C", "G", "C", "G"],
+      compingPattern: "block",
+    });
+
+    expect(stage.measures[1].voiceLeading).toMatchObject({
+      previousBassNote: "C",
+      semitoneDistance: 1,
+      stableNotes: ["G"],
+      voiceMovements: [
+        { from: "C", to: "B", semitoneDistance: 1 },
+        { from: "E", to: "D", semitoneDistance: 2 },
+      ],
     });
   });
 

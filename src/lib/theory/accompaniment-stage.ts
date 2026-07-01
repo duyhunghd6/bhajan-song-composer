@@ -20,6 +20,12 @@ export interface AccompanimentOptions {
   compingPattern?: CompingPattern;
 }
 
+export interface VoiceMovement {
+  from: string;
+  to: string;
+  semitoneDistance: number;
+}
+
 export interface AccompanimentMeasure {
   measureIndex: number;
   chord: string;
@@ -29,6 +35,8 @@ export interface AccompanimentMeasure {
   voiceLeading: {
     previousBassNote: string | null;
     semitoneDistance: number;
+    stableNotes: string[];
+    voiceMovements: VoiceMovement[];
   };
   notes: string[];
   abc: string;
@@ -68,10 +76,36 @@ function chooseBassTone(chord: ChordInfo, previousBassNote: string | null) {
     bassNote: note,
     inversion: INVERSION_BY_INDEX[index] ?? "root",
     distance: semitoneDistance(previousBassNote, note),
+    chordToneIndex: index,
   }));
 
-  candidates.sort((a, b) => a.distance - b.distance);
+  candidates.sort((a, b) => a.distance - b.distance || a.chordToneIndex - b.chordToneIndex);
   return candidates[0];
+}
+
+function buildVoiceMovements(previousNotes: string[] | null, currentNotes: string[]) {
+  if (!previousNotes) {
+    return { stableNotes: [], voiceMovements: [] };
+  }
+
+  const stableNotes = previousNotes.filter((note) => currentNotes.includes(note));
+  const remainingCurrent = currentNotes.filter((note) => !stableNotes.includes(note));
+  const voiceMovements = previousNotes
+    .filter((note) => !stableNotes.includes(note))
+    .map((from) => {
+      const closest = remainingCurrent
+        .map((to) => ({ to, semitoneDistance: semitoneDistance(from, to) }))
+        .sort((a, b) => a.semitoneDistance - b.semitoneDistance)[0];
+
+      if (closest) {
+        remainingCurrent.splice(remainingCurrent.indexOf(closest.to), 1);
+        return { from, ...closest };
+      }
+
+      return { from, to: from, semitoneDistance: 0 };
+    });
+
+  return { stableNotes, voiceMovements };
 }
 
 function buildPianoTokens(chord: ChordInfo, bassNote: string, pattern: CompingPattern, beatCount: number): string[] {
@@ -163,9 +197,11 @@ export function generateAccompanimentStage(
 
   const beatCount = getBeatsPerMeasure(resolved.timeSignature);
   let previousBassNote: string | null = null;
+  let previousChordNotes: string[] | null = null;
 
   const measures = resolved.chords.map((chord, measureIndex) => {
     const selectedBass = chooseBassTone(chord, previousBassNote);
+    const upperVoiceLeading = buildVoiceMovements(previousChordNotes, chord.notes);
     const measure: AccompanimentMeasure = {
       measureIndex,
       chord: chord.chordName,
@@ -175,14 +211,15 @@ export function generateAccompanimentStage(
       voiceLeading: {
         previousBassNote,
         semitoneDistance: selectedBass.distance,
+        ...upperVoiceLeading,
       },
       notes: chord.notes,
       abc: buildMeasureAbc(instrument, chord, selectedBass.bassNote, compingPattern, beatCount),
       ...(instrument === "rhythm-guitar" ? { strums: buildStrumEvents(compingPattern, beatCount) } : {}),
     };
 
-
     previousBassNote = selectedBass.bassNote;
+    previousChordNotes = chord.notes;
     return measure;
   });
 
