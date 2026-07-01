@@ -19,7 +19,8 @@ const MOCKUP_GATES: MockupGate[] = [
   {
     title: "Arrangement Pipeline POC",
     unid: "br-plan-09.c02",
-    status: "not-ready",
+    href: "/mockups/arrangement-pipeline",
+    status: "review-ready",
     purpose:
       "Melody input, key/scale detection, strong-beat analysis, chords, accompaniment, full-track decisions, final preview, and validation.",
   },

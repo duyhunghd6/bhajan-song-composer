@@ -7,11 +7,14 @@ test.describe("mockup review gate", () => {
     await expect(page.getByRole("heading", { name: "Mockup Review Gate" })).toBeVisible();
     await expect(page.getByText("UNID: br-plan-09.c01")).toBeVisible();
     await expect(page.getByText("Integration locked", { exact: true })).toBeVisible();
-    await expect(page.getByText("2 of 4 standalone POC gates review-ready")).toBeVisible();
+    await expect(page.getByText("3 of 4 standalone POC gates review-ready")).toBeVisible();
 
     const arrangementGate = page.getByRole("listitem").filter({ hasText: "Arrangement Pipeline POC" });
-    await expect(arrangementGate.getByText("Required before integration")).toBeVisible();
-    await expect(arrangementGate.getByText("Not ready")).toBeVisible();
+    await expect(arrangementGate.getByText("Review-ready standalone POC")).toBeVisible();
+    await expect(arrangementGate.getByRole("link", { name: "Open standalone POC" })).toHaveAttribute(
+      "href",
+      "/mockups/arrangement-pipeline",
+    );
 
     const fingerstyleGate = page.getByRole("listitem").filter({ hasText: "Fingerstyle Engine POC" });
     await expect(fingerstyleGate.getByText("Review-ready standalone POC")).toBeVisible();
