@@ -1,5 +1,6 @@
 import { AccompanimentOptions, AccompanimentStage, generateAccompanimentStage } from "./accompaniment-stage";
-import { FullTrackExpansionStage, generateFullTrackExpansionStage } from "./full-track-expansion-stage";
+import { getBeatsPerMeasure, noteNameToAbc } from "./arranger-utils";
+import { FullTrackExpansionMeasure, FullTrackExpansionStage, generateFullTrackExpansionStage } from "./full-track-expansion-stage";
 import { generateHarmonizationStage, HarmonizationStage } from "./harmonizer";
 import { parseAbcHeader } from "./melody-analyzer";
 
@@ -99,6 +100,16 @@ export interface ArrangementPipelineOptions {
   };
 }
 
+export type ArrangementLayerProposalRole = "melody" | "harmony" | "bass" | "rhythm" | "custom";
+
+export interface ArrangementLayerProposal {
+  id: string;
+  name: string;
+  role: ArrangementLayerProposalRole;
+  abc: string;
+  visible: boolean;
+}
+
 export const ARRANGEMENT_PIPELINE_STAGE_DEFINITIONS: ArrangementPipelineStageDefinition[] = [
   {
     id: "melody",
@@ -169,6 +180,88 @@ function buildFullTrackAbc(melodyAbc: string, harmonization: HarmonizationStage,
     accompaniment.abc.trim(),
     fullTrackExpansion.abc.trim(),
   ].join("\n\n");
+}
+
+function buildBassMapAbc(stage: FullTrackExpansionStage): string {
+  const beatCount = getBeatsPerMeasure(stage.timeSignature);
+  const wholeMeasureDuration = beatCount * 2;
+  const measures = stage.measures.map((measure) => {
+    const firstBassEvent = measure.bassMap[0];
+    return firstBassEvent ? `${noteNameToAbc(firstBassEvent.note, ",,")}${wholeMeasureDuration}` : `z${wholeMeasureDuration}`;
+  });
+
+  return [
+    `V:Bass clef=bass name="Generated Bass Map"`,
+    `% Source: full-track expansion bass/kick alignment`,
+    `| ${measures.join(" | ")} |`,
+  ].join("\n");
+}
+
+function buildCounterMelodyMeasureAbc(measure: FullTrackExpansionMeasure, beatCount: number): string {
+  if (measure.counterMelodies.length === 0) return `z${beatCount * 2}`;
+
+  const eventsByBeat = new Map(measure.counterMelodies.map((event) => [event.beat, event]));
+  const tokens = Array.from({ length: beatCount }, (_, index) => {
+    const beat = index + 1;
+    const event = eventsByBeat.get(beat);
+    if (!event) return "z2";
+
+    const notes = event.notes.map((note) => noteNameToAbc(note, "'")).join("");
+    return `[${notes}]2`;
+  });
+
+  return tokens.join(" ");
+}
+
+function buildCounterMelodyAbc(stage: FullTrackExpansionStage): string {
+  const beatCount = getBeatsPerMeasure(stage.timeSignature);
+  const measures = stage.measures.map((measure) => buildCounterMelodyMeasureAbc(measure, beatCount));
+
+  return [
+    `V:CounterMelody name="Generated Counter-Melody"`,
+    `% Source: full-track expansion melodic gap fills`,
+    `| ${measures.join(" | ")} |`,
+  ].join("\n");
+}
+
+export function buildArrangementLayerProposals(pipeline: ArrangementPipelineResult): ArrangementLayerProposal[] {
+  return [
+    {
+      id: "pipeline-harmonization",
+      name: "Generated Harmonization",
+      role: "harmony",
+      visible: true,
+      abc: buildHarmonizationSummary(pipeline.harmonization),
+    },
+    {
+      id: "pipeline-accompaniment",
+      name: "Generated Accompaniment",
+      role: "harmony",
+      visible: true,
+      abc: pipeline.accompaniment.abc.trim(),
+    },
+    {
+      id: "pipeline-drums",
+      name: "Generated Drum Guidance",
+      role: "rhythm",
+      visible: true,
+      abc: pipeline.fullTrackExpansion.abc.trim(),
+    },
+    {
+      id: "pipeline-bass",
+      name: "Generated Bass Map",
+      role: "bass",
+      visible: true,
+      abc: buildBassMapAbc(pipeline.fullTrackExpansion),
+    },
+    {
+      id: "pipeline-counter-melody",
+      name: "Generated Counter-Melody",
+      role: "custom",
+      visible: true,
+      abc: buildCounterMelodyAbc(pipeline.fullTrackExpansion),
+    },
+  ];
 }
 
 export function generateArrangementPipeline(

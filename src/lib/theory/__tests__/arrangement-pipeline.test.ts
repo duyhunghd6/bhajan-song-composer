@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ARRANGEMENT_PIPELINE_STAGE_IDS,
+  buildArrangementLayerProposals,
   generateArrangementPipeline,
   getArrangementPipelineStageGates,
 } from "../arrangement-pipeline";
@@ -48,5 +49,27 @@ describe("Arrangement pipeline orchestrator", () => {
       "accompaniment",
       "full-track-expansion",
     ]);
+  });
+
+  it("adapts generated pipeline outputs into editable Composer layer proposals", () => {
+    const pipeline = generateArrangementPipeline(sampleAbc, {
+      accompaniment: { instrument: "piano", compingPattern: "arpeggio" },
+    });
+
+    const proposals = buildArrangementLayerProposals(pipeline);
+
+    expect(proposals.map((proposal) => [proposal.id, proposal.role, proposal.name])).toEqual([
+      ["pipeline-harmonization", "harmony", "Generated Harmonization"],
+      ["pipeline-accompaniment", "harmony", "Generated Accompaniment"],
+      ["pipeline-drums", "rhythm", "Generated Drum Guidance"],
+      ["pipeline-bass", "bass", "Generated Bass Map"],
+      ["pipeline-counter-melody", "custom", "Generated Counter-Melody"],
+    ]);
+    expect(proposals.every((proposal) => proposal.visible)).toBe(true);
+    expect(proposals.find((proposal) => proposal.id === "pipeline-harmonization")?.abc).toContain("% Chord progression:");
+    expect(proposals.find((proposal) => proposal.id === "pipeline-accompaniment")?.abc).toContain("V:Accompaniment");
+    expect(proposals.find((proposal) => proposal.id === "pipeline-drums")?.abc).toContain("V:Drums");
+    expect(proposals.find((proposal) => proposal.id === "pipeline-bass")?.abc).toContain("V:Bass clef=bass");
+    expect(proposals.find((proposal) => proposal.id === "pipeline-counter-melody")?.abc).toContain("V:CounterMelody");
   });
 });

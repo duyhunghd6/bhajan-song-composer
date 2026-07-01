@@ -94,6 +94,38 @@ test.describe("composer workflow", () => {
     await expect(page.getByText("Full track ABC is ready after the ordered stage gates completed.")).toBeVisible();
   });
 
+  test("accepts and rejects generated pipeline outputs as editable Composer layers", async ({ page }) => {
+    await page.goto("/compose");
+
+    await page.getByRole("button", { name: "Run ordered pipeline" }).click();
+    await expect(page.getByRole("heading", { name: "Generated Composer layers" })).toBeVisible();
+
+    await expect(page.getByTestId("pipeline-layer-pipeline-harmonization")).toContainText("Generated Harmonization");
+    await expect(page.getByTestId("pipeline-layer-pipeline-accompaniment")).toContainText("Generated Accompaniment");
+    await expect(page.getByTestId("pipeline-layer-pipeline-drums")).toContainText("Generated Drum Guidance");
+    await expect(page.getByTestId("pipeline-layer-pipeline-bass")).toContainText("Generated Bass Map");
+    await expect(page.getByTestId("pipeline-layer-pipeline-counter-melody")).toContainText("Generated Counter-Melody");
+
+    await page.getByRole("button", { name: "Reject Generated Counter-Melody" }).click();
+    await expect(page.getByTestId("pipeline-layer-pipeline-counter-melody")).toHaveCount(0);
+
+    for (const name of [
+      "Generated Harmonization",
+      "Generated Accompaniment",
+      "Generated Drum Guidance",
+      "Generated Bass Map",
+    ]) {
+      await page.getByRole("button", { name: `Accept ${name}` }).click();
+    }
+
+    await expect(page.getByText("7 total layers", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("Active layer name")).toHaveValue("Generated Bass Map");
+    await expect(page.locator("#abc-editor-input")).toHaveValue(/V:Bass clef=bass/);
+
+    await page.locator("#abc-editor-input").fill("V:Bass clef=bass name=\"Edited Bass\"\n| E,,8 |");
+    await expect(page.locator("#abc-editor-input")).toHaveValue(/Edited Bass/);
+  });
+
   test("keeps the ABCJS music sheet visible after editing in dark mode", async ({ page }) => {
     await page.emulateMedia({ colorScheme: "dark" });
     await page.goto("/compose?edit=happy-birthday");

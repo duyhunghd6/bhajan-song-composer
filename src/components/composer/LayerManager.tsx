@@ -3,10 +3,15 @@
 import { useEffect, useMemo, useState } from "react";
 import MusicSheetRenderer from "@/components/music-sheet/MusicSheetRenderer";
 import {
+  buildArrangementLayerProposals,
   generateArrangementPipeline,
   getArrangementPipelineStageGates,
 } from "@/lib/theory/arrangement-pipeline";
-import type { ArrangementPipelineResult, ArrangementPipelineStageId } from "@/lib/theory/arrangement-pipeline";
+import type {
+  ArrangementLayerProposal,
+  ArrangementPipelineResult,
+  ArrangementPipelineStageId,
+} from "@/lib/theory/arrangement-pipeline";
 import AbcEditor from "./AbcEditor";
 import TheoryAssistant from "./TheoryAssistant";
 
@@ -166,12 +171,18 @@ function ArrangementPipelineGatePanel({
   activeLayer,
   pipeline,
   pipelineError,
+  layerProposals,
   onRunPipeline,
+  onAcceptLayer,
+  onRejectLayer,
 }: {
   activeLayer: ComposerLayer;
   pipeline: ArrangementPipelineResult | null;
   pipelineError: string | null;
+  layerProposals: ArrangementLayerProposal[];
   onRunPipeline: () => void;
+  onAcceptLayer: (proposal: ArrangementLayerProposal) => void;
+  onRejectLayer: (proposalId: string) => void;
 }) {
   const completedStages = new Set<ArrangementPipelineStageId>([
     "melody",
@@ -262,6 +273,52 @@ function ArrangementPipelineGatePanel({
           </p>
         </div>
       )}
+
+      {layerProposals.length > 0 && (
+        <div className="mt-4 rounded-xl border border-amber-200 bg-white/90 p-3 dark:border-amber-900/60 dark:bg-zinc-900/80">
+          <h4 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
+            Generated Composer layers
+          </h4>
+          <p className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
+            Accept a generated stage into the editable layer stack, or reject it to keep the current arrangement unchanged.
+          </p>
+
+          <div className="mt-3 space-y-2">
+            {layerProposals.map((proposal) => (
+              <div
+                key={proposal.id}
+                data-testid={`pipeline-layer-${proposal.id}`}
+                className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-sm dark:border-zinc-800 dark:bg-zinc-950/50"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-semibold text-zinc-900 dark:text-zinc-100">{proposal.name}</p>
+                    <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                      {roleLabels[proposal.role]} · editable ABC layer
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onAcceptLayer(proposal)}
+                      className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white transition-all hover:bg-emerald-700"
+                    >
+                      Accept {proposal.name}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onRejectLayer(proposal.id)}
+                      className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-bold text-zinc-600 transition-all hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                    >
+                      Reject {proposal.name}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -282,6 +339,7 @@ export default function LayerManager({
   const [copied, setCopied] = useState(false);
   const [pipelineResult, setPipelineResult] = useState<ArrangementPipelineResult | null>(null);
   const [pipelineError, setPipelineError] = useState<string | null>(null);
+  const [dismissedPipelineLayerIds, setDismissedPipelineLayerIds] = useState<string[]>([]);
 
   const layersKey = storageKey;
   const activeLayerKey = `${storageKey}:active-layer`;
@@ -333,10 +391,20 @@ export default function LayerManager({
   const activeLayer = layers.find((layer) => layer.id === activeLayerId) ?? layers[0];
   const visibleLayers = useMemo(() => layers.filter((layer) => layer.visible), [layers]);
   const visibleAbc = useMemo(() => combinedVisibleAbc(layers), [layers]);
+  const pipelineLayerProposals = useMemo(() => {
+    if (!pipelineResult) return [];
+
+    return buildArrangementLayerProposals(pipelineResult).filter(
+      (proposal) =>
+        !dismissedPipelineLayerIds.includes(proposal.id) &&
+        !layers.some((layer) => layer.id === proposal.id)
+    );
+  }, [dismissedPipelineLayerIds, layers, pipelineResult]);
 
   const resetPipelineResult = () => {
     setPipelineResult(null);
     setPipelineError(null);
+    setDismissedPipelineLayerIds([]);
   };
 
   const selectLayer = (layerId: string) => {
@@ -446,11 +514,27 @@ export default function LayerManager({
     try {
       setPipelineResult(generateArrangementPipeline(activeLayer.abc));
       setPipelineError(null);
+      setDismissedPipelineLayerIds([]);
     } catch (err) {
       console.error("Error generating arrangement pipeline:", err);
       setPipelineResult(null);
+      setDismissedPipelineLayerIds([]);
       setPipelineError("Add a valid melody ABC layer before running the ordered arrangement pipeline.");
     }
+  };
+
+  const acceptPipelineLayer = (proposal: ArrangementLayerProposal) => {
+    const layer: ComposerLayer = { ...proposal };
+
+    setLayers((currentLayers) => [...currentLayers, layer]);
+    setActiveLayerId(layer.id);
+    setDismissedPipelineLayerIds((currentIds) => [...currentIds, proposal.id]);
+  };
+
+  const rejectPipelineLayer = (proposalId: string) => {
+    setDismissedPipelineLayerIds((currentIds) =>
+      currentIds.includes(proposalId) ? currentIds : [...currentIds, proposalId]
+    );
   };
 
   return (
@@ -550,7 +634,10 @@ export default function LayerManager({
               activeLayer={activeLayer}
               pipeline={pipelineResult}
               pipelineError={pipelineError}
+              layerProposals={pipelineLayerProposals}
               onRunPipeline={runArrangementPipeline}
+              onAcceptLayer={acceptPipelineLayer}
+              onRejectLayer={rejectPipelineLayer}
             />
           </div>
         </aside>
