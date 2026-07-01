@@ -279,24 +279,30 @@ function extractMelodyTimelines(abcString: string): MelodyTimelineEvent[][] {
 }
 
 function detectMelodicGap(timeline: MelodyTimelineEvent[], measureIndex: number): PianoMelodicGapEvent | null {
-  const firstRestIndex = timeline.findIndex((event) => event.type === "rest");
-  const restGap = firstRestIndex >= 0
-    ? (() => {
-        const firstRest = timeline[firstRestIndex];
-        let endBeat = firstRest.endBeat;
-        for (const rest of timeline.slice(firstRestIndex + 1)) {
-          if (rest.type !== "rest" || rest.startBeat !== endBeat) break;
-          endBeat = rest.endBeat;
-        }
-        return { startBeat: firstRest.startBeat, endBeat };
-      })()
-    : null;
-  const heldNoteGap = timeline
+  const restGaps: Array<{ startBeat: number; endBeat: number }> = [];
+
+  for (let index = 0; index < timeline.length; index += 1) {
+    const event = timeline[index];
+    if (event.type !== "rest") continue;
+
+    let endBeat = event.endBeat;
+    let lastRestIndex = index;
+    for (const rest of timeline.slice(index + 1)) {
+      if (rest.type !== "rest" || rest.startBeat !== endBeat) break;
+      endBeat = rest.endBeat;
+      lastRestIndex += 1;
+    }
+
+    restGaps.push({ startBeat: event.startBeat, endBeat });
+    index = lastRestIndex;
+  }
+
+  const heldNoteGaps = timeline
     .filter((event) => event.type === "note" && event.endBeat - (event.startBeat + 1) >= 2)
-    .map((event) => ({ startBeat: event.startBeat + 1, endBeat: event.endBeat }))[0] ?? null;
-  const gapWindow = [restGap, heldNoteGap]
-    .filter((gap): gap is { startBeat: number; endBeat: number } => gap !== null)
-    .sort((a, b) => a.startBeat - b.startBeat)[0];
+    .map((event) => ({ startBeat: event.startBeat + 1, endBeat: event.endBeat }));
+  const candidates = [...restGaps, ...heldNoteGaps]
+    .sort((a, b) => a.startBeat - b.startBeat);
+  const gapWindow = candidates.find((gap) => gap.endBeat - gap.startBeat >= 2) ?? candidates[0];
 
   if (!gapWindow) return null;
 

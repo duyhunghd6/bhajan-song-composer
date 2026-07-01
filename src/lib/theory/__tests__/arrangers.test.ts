@@ -295,6 +295,27 @@ K:Em
     expect(accompaniment.abc).toContain("V:PianoGapFill clef=treble name=\"Safe Gap Fills\"");
   });
 
+  it("ignores short melody breaks and fills the first safe gap later in the measure", () => {
+    const gapMelodyAbc = `X:1
+T:Later Gap Melody
+M:4/4
+L:1/8
+K:Em
+| E z B2 z2 z2 |`;
+    const accompaniment = generatePianoAccompaniment(gapMelodyAbc, {
+      progression: ["Em"],
+    });
+
+    expect(accompaniment.gapFillMap[0]).toMatchObject({
+      gap: { startBeat: 3, endBeat: 5, durationBeats: 2, safe: true, resumedBy: null },
+      events: [
+        { beat: 3, role: "passing-fill", notes: ["G"], yieldsToMelodyAt: null },
+        { beat: 4, role: "passing-fill", notes: ["B"], yieldsToMelodyAt: null },
+      ],
+      abc: "z2 z2 G,2 B,2",
+    });
+  });
+
   it("emits sustain pedal down and flush metadata at chord changes", () => {
     const accompaniment = generatePianoAccompaniment(sampleAbc, {
       progression: ["Em", "Bm", "Bm", "Em"],
