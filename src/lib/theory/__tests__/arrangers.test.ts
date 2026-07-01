@@ -208,6 +208,60 @@ describe("Guitar fingerstyle arranger", () => {
     expect(arrangement.abc).toContain("V:Guitar clef=treble-8");
   });
 
+  it("builds inspectable upward construction source layers before guitar reduction", () => {
+    const arrangement = generateFingerstyleArrangement(sampleAbc, ["Em", "Bm", "G", "Em"]);
+
+    expect(arrangement.upwardConstruction.layers.map((layer) => layer.id)).toEqual([
+      "melody",
+      "harmonization",
+      "accompaniment",
+      "bassline",
+      "rhythm-percussion",
+      "counter-melody",
+    ]);
+    expect(arrangement.upwardConstruction.layers[0]).toMatchObject({
+      id: "melody",
+      layer: { number: 1, name: "Melody", instrument: "voice" },
+      measures: expect.arrayContaining([{ measureIndex: 0, notes: ["E", "E", "G", "A"] }]),
+    });
+    expect(arrangement.upwardConstruction.layers[1]).toMatchObject({
+      id: "harmonization",
+      progression: ["Em", "Bm", "G", "Em"],
+      measures: expect.arrayContaining([{ measureIndex: 0, chord: "Em", cadenceRole: "opening-tonic" }]),
+    });
+    expect(arrangement.upwardConstruction.layers[2]).toMatchObject({
+      id: "accompaniment",
+      layer: { number: 2, name: "Accompaniment", instrument: "piano" },
+      measures: expect.arrayContaining([expect.objectContaining({ measureIndex: 0, chord: "Em", bassNote: "E" })]),
+    });
+    expect(arrangement.upwardConstruction.layers[3]).toMatchObject({
+      id: "bassline",
+      measures: expect.arrayContaining([{ measureIndex: 0, chord: "Em", bassMap: [{ beat: 1, note: "E" }] }]),
+    });
+    expect(arrangement.upwardConstruction.layers[4]).toMatchObject({
+      id: "rhythm-percussion",
+      measures: expect.arrayContaining([
+        expect.objectContaining({ measureIndex: 0, chord: "Em", drums: { kickBeats: [1, 3], snareBeats: [2, 4], bassKickAlignment: [{ beat: 1, bassNote: "E", kick: true }] } }),
+      ]),
+    });
+    expect(arrangement.upwardConstruction.layers[5]).toMatchObject({
+      id: "counter-melody",
+      measures: expect.arrayContaining([
+        expect.objectContaining({
+          counterMelodies: expect.arrayContaining([expect.objectContaining({ source: "melody-sustain" })]),
+        }),
+      ]),
+    });
+    expect(arrangement.upwardConstruction.validation).toEqual({
+      melodyReady: true,
+      harmonizationReady: true,
+      accompanimentReady: true,
+      basslineReady: true,
+      rhythmPercussionReady: true,
+      counterMelodyUsesMelodicGaps: true,
+    });
+  });
+
   it("exposes a line-only helper for direct ABC output", () => {
     const line = generateFingerstyleLine(sampleAbc, ["Em", "Bm", "G", "Em"]);
 
