@@ -35,7 +35,8 @@ const MOCKUP_GATES: MockupGate[] = [
   {
     title: "Piano Accompaniment POC",
     unid: "br-plan-09.c04",
-    status: "not-ready",
+    href: "/mockups/piano-accompaniment",
+    status: "review-ready",
     purpose:
       "Comping profile, bass anchoring, Low Interval Limit, right-hand voice leading, gap fills, validation, pedal automation, preview, and key highlights.",
   },
