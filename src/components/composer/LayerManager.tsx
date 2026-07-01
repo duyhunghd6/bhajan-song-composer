@@ -21,6 +21,7 @@ import {
 } from "./fingerstyle-integration";
 import AbcEditor from "./AbcEditor";
 import TheoryAssistant from "./TheoryAssistant";
+import type { TheoryAssistantLayerProposal } from "./theory-assistant-layer";
 
 const LAYERS_STORAGE_KEY = "bhajan-song-composer:composer:layers";
 const ROLE_OPTIONS = ["melody", "harmony", "bass", "rhythm", "custom"] as const;
@@ -660,6 +661,17 @@ export default function LayerManager({
     setDismissedPipelineLayerIds((currentIds) => [...currentIds, proposal.id]);
   };
 
+  const acceptTheoryAssistantLayer = (proposal: TheoryAssistantLayerProposal) => {
+    const layer: ComposerLayer = { ...proposal };
+
+    setLayers((currentLayers) => [
+      ...currentLayers.filter((currentLayer) => currentLayer.id !== layer.id),
+      layer,
+    ]);
+    setActiveLayerId(layer.id);
+    resetGeneratedOutputs();
+  };
+
   const rejectPipelineLayer = (proposalId: string) => {
     setDismissedPipelineLayerIds((currentIds) =>
       currentIds.includes(proposalId) ? currentIds : [...currentIds, proposalId]
@@ -878,7 +890,7 @@ export default function LayerManager({
               storageKey={`${layersKey}:${activeLayer.id}:draft`}
               onChange={updateActiveLayerAbc}
             />
-            <TheoryAssistant abc={activeLayer.abc} onAcceptArrangement={updateActiveLayerAbc} />
+            <TheoryAssistant abc={activeLayer.abc} onAcceptArrangement={acceptTheoryAssistantLayer} />
           </div>
         </div>
       </section>

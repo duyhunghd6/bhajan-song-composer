@@ -76,6 +76,23 @@ test.describe("composer workflow", () => {
     await expect(page.getByLabel("Active layer name")).toHaveValue("Melody");
   });
 
+  test("accepts constrained Theory Assistant suggestions as a separate Composer layer", async ({ page }) => {
+    await page.goto("/compose");
+
+    await page.locator("#theory-assistant-capo").selectOption("2");
+    await page.locator("#theory-assistant-skill-level").selectOption("intermediate");
+    await page.getByRole("button", { name: "Accept as Composer layer" }).click();
+
+    await expect(page.getByText("4 total layers", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("Active layer name")).toHaveValue("Theory Assistant Arrangement (Intermediate)");
+    await expect(page.locator("#abc-editor-input")).toHaveValue(/practice arrangement layer/);
+    await expect(page.locator("#abc-editor-input")).toHaveValue(/capo 2/);
+    await expect(page.locator("#abc-editor-input")).not.toHaveValue(/T:Melody Layer/);
+    await expect(page.locator("#theory-assistant-accepted-message")).toContainText(
+      "Arrangement layer was accepted into the Composer stack."
+    );
+  });
+
   test("shows ordered arrangement pipeline gates before full-track generation", async ({ page }) => {
     await page.goto("/compose");
 
