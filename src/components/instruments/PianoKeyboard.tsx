@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import { normalizeAbcNote } from "@/lib/theory/melody-analyzer";
 import SvgHandsOverlay, { type SvgHandFingeringEvent } from "./SvgHandsOverlay";
 import { getNoteValue } from "@/lib/theory/scales";
@@ -18,6 +21,7 @@ const BLACK_KEY_HEIGHT = 92;
 const LABEL_AREA_HEIGHT = 34;
 
 type PianoHand = "left" | "right";
+export type PianoHandMode = "left" | "right" | "combined";
 
 type PianoKeyColor = "white" | "black";
 
@@ -53,6 +57,8 @@ export interface PianoKeyboardProps {
   octaveCount?: number;
   highlights?: PianoHighlightedNote[];
   handOverlayEvents?: SvgHandFingeringEvent[];
+  handMode?: PianoHandMode;
+  onHandModeChange?: (handMode: PianoHandMode) => void;
   className?: string;
 }
 
@@ -127,6 +133,55 @@ export function findPianoHighlight(
   });
 }
 
+function handMatchesMode(hand: PianoHand | undefined, handMode: PianoHandMode): boolean {
+  return handMode === "combined" || hand === undefined || hand === handMode;
+}
+
+function getVisibleHighlights(
+  highlights: PianoHighlightedNote[],
+  handMode: PianoHandMode
+): PianoHighlightedNote[] {
+  return highlights.filter((highlight) => handMatchesMode(highlight.hand, handMode));
+}
+
+function getVisibleHandEvents(
+  events: SvgHandFingeringEvent[],
+  handMode: PianoHandMode
+): SvgHandFingeringEvent[] {
+  if (handMode === "combined") return events;
+  return events.filter((event) => event.hand === handMode);
+}
+
+function getWhiteHighlightClass(highlight: PianoHighlightedNote): string {
+  if (highlight.hand === "left") {
+    return "fill-sky-200 stroke-sky-500 dark:fill-sky-500/40 dark:stroke-sky-300";
+  }
+
+  if (highlight.hand === "right") {
+    return "fill-amber-200 stroke-amber-500 dark:fill-amber-500/40 dark:stroke-amber-300";
+  }
+
+  return "fill-emerald-200 stroke-emerald-500 dark:fill-emerald-500/40 dark:stroke-emerald-300";
+}
+
+function getBlackHighlightClass(highlight: PianoHighlightedNote): string {
+  if (highlight.hand === "left") {
+    return "fill-sky-500 stroke-sky-700 dark:stroke-sky-300";
+  }
+
+  if (highlight.hand === "right") {
+    return "fill-amber-500 stroke-amber-700 dark:stroke-amber-300";
+  }
+
+  return "fill-emerald-500 stroke-emerald-700 dark:stroke-emerald-300";
+}
+
+function getHighlightLabelClass(highlight: PianoHighlightedNote): string {
+  if (highlight.hand === "left") return "fill-sky-950 text-[12px] font-bold dark:fill-sky-100";
+  if (highlight.hand === "right") return "fill-amber-950 text-[12px] font-bold dark:fill-amber-100";
+  return "fill-emerald-950 text-[12px] font-bold dark:fill-emerald-100";
+}
+
 function getHighlightLabel(highlight: PianoHighlightedNote): string {
   if (highlight.label) return highlight.label;
   if (highlight.finger) return String(highlight.finger);
@@ -142,13 +197,27 @@ export default function PianoKeyboard({
   octaveCount = 2,
   highlights = [],
   handOverlayEvents = [],
+  handMode,
+  onHandModeChange,
   className = "",
 }: PianoKeyboardProps) {
+  const [uncontrolledHandMode, setUncontrolledHandMode] = useState<PianoHandMode>(handMode ?? "combined");
+  const activeHandMode = handMode ?? uncontrolledHandMode;
   const keys = buildPianoKeys(startOctave, octaveCount);
+  const visibleHighlights = getVisibleHighlights(highlights, activeHandMode);
+  const visibleHandEvents = getVisibleHandEvents(handOverlayEvents, activeHandMode);
   const whiteKeys = keys.filter((key) => key.color === "white");
   const blackKeys = keys.filter((key) => key.color === "black");
   const width = whiteKeys.length * WHITE_KEY_WIDTH;
   const height = WHITE_KEY_HEIGHT + LABEL_AREA_HEIGHT;
+
+  function updateHandMode(nextHandMode: PianoHandMode) {
+    if (handMode === undefined) {
+      setUncontrolledHandMode(nextHandMode);
+    }
+
+    onHandModeChange?.(nextHandMode);
+  }
 
   return (
     <section
@@ -157,6 +226,33 @@ export default function PianoKeyboard({
       <div className="mb-4 space-y-1">
         <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">{title}</h3>
         {subtitle && <p className="text-sm text-zinc-500 dark:text-zinc-400">{subtitle}</p>}
+      </div>
+
+      <div className="mb-4 flex flex-wrap gap-2" aria-label="Piano hand display mode">
+        {[
+          ["left", "Left Hand Only"],
+          ["right", "Right Hand Only"],
+          ["combined", "Combined Hands-Together"],
+        ].map(([mode, label]) => {
+          const nextHandMode = mode as PianoHandMode;
+          const selected = nextHandMode === activeHandMode;
+
+          return (
+            <button
+              key={nextHandMode}
+              type="button"
+              aria-pressed={selected}
+              onClick={() => updateHandMode(nextHandMode)}
+              className={`rounded-full px-3 py-1 text-xs font-bold transition ${
+                selected
+                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-950"
+                  : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"
+              }`}
+            >
+              {label}
+            </button>
+          );
+        })}
       </div>
 
       <div className="overflow-x-auto">
@@ -176,7 +272,7 @@ export default function PianoKeyboard({
           />
 
           {whiteKeys.map((key) => {
-            const highlight = findPianoHighlight(key, highlights);
+            const highlight = findPianoHighlight(key, visibleHighlights);
 
             return (
               <g key={key.id}>
@@ -193,7 +289,7 @@ export default function PianoKeyboard({
                   rx="8"
                   className={
                     highlight
-                      ? "fill-amber-200 stroke-amber-500 dark:fill-amber-500/40 dark:stroke-amber-300"
+                      ? getWhiteHighlightClass(highlight)
                       : "fill-white stroke-zinc-300 dark:fill-zinc-100 dark:stroke-zinc-400"
                   }
                   strokeWidth="1.5"
@@ -211,7 +307,7 @@ export default function PianoKeyboard({
                     x={key.x + key.width / 2}
                     y={WHITE_KEY_HEIGHT - 12}
                     textAnchor="middle"
-                    className="fill-amber-900 text-[12px] font-bold dark:fill-amber-100"
+                    className={getHighlightLabelClass(highlight)}
                   >
                     {getHighlightLabel(highlight)}
                   </text>
@@ -221,7 +317,7 @@ export default function PianoKeyboard({
           })}
 
           {blackKeys.map((key) => {
-            const highlight = findPianoHighlight(key, highlights);
+            const highlight = findPianoHighlight(key, visibleHighlights);
 
             return (
               <g key={key.id}>
@@ -238,7 +334,7 @@ export default function PianoKeyboard({
                   rx="6"
                   className={
                     highlight
-                      ? "fill-rose-500 stroke-rose-700 dark:stroke-rose-300"
+                      ? getBlackHighlightClass(highlight)
                       : "fill-zinc-900 stroke-zinc-950 dark:fill-zinc-700 dark:stroke-zinc-500"
                   }
                   strokeWidth="1.5"
@@ -257,7 +353,7 @@ export default function PianoKeyboard({
             );
           })}
 
-          <SvgHandsOverlay title={`${title} hands`} events={handOverlayEvents} width={width} height={height} />
+          <SvgHandsOverlay title={`${title} hands`} events={visibleHandEvents} width={width} height={height} />
         </svg>
       </div>
     </section>

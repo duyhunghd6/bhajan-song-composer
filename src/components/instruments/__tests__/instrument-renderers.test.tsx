@@ -138,4 +138,43 @@ describe("PianoKeyboard helpers", () => {
     expect(markup).toContain('opacity="0.5"');
     expect(markup).toContain('transform="translate(270 72)"');
   });
+
+  it("renders split-hand piano switches and filters the visible hand", () => {
+    const markup = renderToStaticMarkup(
+      <PianoKeyboard
+        title="Split hands piano"
+        handMode="left"
+        highlights={[
+          { note: "C3", hand: "left", finger: 5 },
+          { note: "G4", hand: "right", finger: 1 },
+        ]}
+        handOverlayEvents={[
+          {
+            id: "left-c3",
+            instrument: "piano",
+            hand: "left",
+            finger: 5,
+            target: { x: 18, y: 88, label: "C3" },
+            cursorSeconds: 1,
+          },
+          {
+            id: "right-g4",
+            instrument: "piano",
+            hand: "right",
+            finger: 1,
+            target: { x: 414, y: 88, label: "G4" },
+            cursorSeconds: 1,
+          },
+        ]}
+      />
+    );
+
+    expect(markup).toContain("Left Hand Only");
+    expect(markup).toContain("Right Hand Only");
+    expect(markup).toContain("Combined Hands-Together");
+    expect(markup).toContain("left hand finger 5 on C3 at 1.0s");
+    expect(markup).not.toContain("right hand finger 1 on G4 at 1.0s");
+    expect(markup).toContain("fill-sky-200");
+    expect(markup).not.toContain("fill-amber-200");
+  });
 });

@@ -4,6 +4,7 @@ export type { GuitarFretboardProps, GuitarFretPosition } from "./GuitarFretboard
 export { default as PianoKeyboard } from "./PianoKeyboard";
 export type {
   NormalizedPianoNote,
+  PianoHandMode,
   PianoHighlightedNote,
   PianoKeyboardProps,
   PianoKeyInfo,
