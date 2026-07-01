@@ -150,6 +150,18 @@ export interface PianoPedalAutomation {
   events: PianoPedalEvent[];
 }
 
+export interface PianoPedalEventMetadata {
+  measureIndex: number;
+  beat: number;
+  chord: string;
+  controller: "sustain";
+  midiControlChange: 64;
+  state: "down" | "flush" | "up";
+  value: 0 | 127;
+  previousChord?: string;
+  label: "Pedal Down" | "Pedal Flush" | "Pedal Up";
+}
+
 export type PianoFingeringRole = PianoBassRole | PianoRightHandRole;
 
 export interface PianoKeyHighlight {
@@ -192,6 +204,7 @@ export interface PianoAccompaniment {
   physicalValidation: PianoPlayabilityReport;
   playbackEvents: PianoPlaybackEvent[];
   pedalAutomation: PianoPedalAutomation;
+  pedalEventMetadata: PianoPedalEventMetadata[];
   grandStaffAbc: string;
   pianoKeyHighlights: PianoKeyHighlight[];
   fingeringMetadata: PianoFingeringMetadata[];
@@ -393,6 +406,29 @@ function buildPedalAutomation(chords: ChordInfo[], beatCount: number): PianoPeda
     controller: { midiControlChange: 64, downValue: 127, upValue: 0 },
     events,
   };
+}
+
+function buildPedalEventMetadata(pedalAutomation: PianoPedalAutomation): PianoPedalEventMetadata[] {
+  return pedalAutomation.events.map((event) => {
+    const state = event.type.replace("pedal-", "") as PianoPedalEventMetadata["state"];
+    const label = event.type === "pedal-down"
+      ? "Pedal Down"
+      : event.type === "pedal-flush"
+        ? "Pedal Flush"
+        : "Pedal Up";
+
+    return {
+      measureIndex: event.measureIndex,
+      beat: event.beat,
+      chord: event.chord,
+      controller: "sustain",
+      midiControlChange: pedalAutomation.controller.midiControlChange,
+      state,
+      value: event.value,
+      ...(event.previousChord ? { previousChord: event.previousChord } : {}),
+      label,
+    };
+  });
 }
 
 function detectCadencePoints(abcString: string, beatCount: number): PianoCadencePoint[] {
@@ -711,6 +747,7 @@ export function generatePianoAccompaniment(
     buildGapFillMeasure(chord, measureIndex, melodyTimelines[measureIndex] ?? [], beatCount)
   );
   const pedalAutomation = buildPedalAutomation(resolved.chords, beatCount);
+  const pedalEventMetadata = buildPedalEventMetadata(pedalAutomation);
   const physicalValidation = validatePianoPlayability(buildPhysicalHandEvents(leftHandBassMap, rightHandVoicingMap));
   const compingVoiceName = compingProfile === "rock-rnb"
     ? "Rock/R&B Off-beats"
@@ -742,6 +779,7 @@ export function generatePianoAccompaniment(
     physicalValidation,
     playbackEvents: physicalValidation.playbackEvents,
     pedalAutomation,
+    pedalEventMetadata,
     grandStaffAbc,
     pianoKeyHighlights: outputContract.pianoKeyHighlights,
     fingeringMetadata: outputContract.fingeringMetadata,

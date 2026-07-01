@@ -334,6 +334,21 @@ K:Em
     });
   });
 
+  it("exports UI-ready pedal event metadata synchronized with sustain automation", () => {
+    const accompaniment = generatePianoAccompaniment(sampleAbc, {
+      progression: ["Em", "Bm", "Bm", "Em"],
+    });
+
+    expect(accompaniment.pedalEventMetadata).toEqual([
+      { measureIndex: 0, beat: 1, chord: "Em", controller: "sustain", midiControlChange: 64, state: "down", value: 127, label: "Pedal Down" },
+      { measureIndex: 1, beat: 1, chord: "Bm", controller: "sustain", midiControlChange: 64, state: "flush", value: 0, previousChord: "Em", label: "Pedal Flush" },
+      { measureIndex: 1, beat: 1, chord: "Bm", controller: "sustain", midiControlChange: 64, state: "down", value: 127, label: "Pedal Down" },
+      { measureIndex: 3, beat: 1, chord: "Em", controller: "sustain", midiControlChange: 64, state: "flush", value: 0, previousChord: "Bm", label: "Pedal Flush" },
+      { measureIndex: 3, beat: 1, chord: "Em", controller: "sustain", midiControlChange: 64, state: "down", value: 127, label: "Pedal Down" },
+      { measureIndex: 3, beat: 4, chord: "Em", controller: "sustain", midiControlChange: 64, state: "up", value: 0, label: "Pedal Up" },
+    ]);
+  });
+
   it("exposes physical validation and playback events synchronized with grand-staff ABC", () => {
     const accompaniment = generatePianoAccompaniment(sampleAbc, {
       progression: ["Em"],
