@@ -7,6 +7,9 @@ import {
   resolveLoopSeek,
   type MusicSheetLoopMode,
 } from "./playback";
+import { buildMusicSheetPlaybackCursorEvent } from "./playback-cursor";
+import type { MusicSheetPlaybackCursorEvent } from "./playback-cursor";
+export type { MusicSheetPlaybackCursorEvent } from "./playback-cursor";
 
 type ProgressUnit = "seconds" | "beats" | "percent";
 
@@ -78,13 +81,6 @@ interface SynthType {
   getIsRunning?: () => boolean;
 }
 
-export type MusicSheetPlaybackCursorEvent = {
-  cursorSeconds: number;
-  startChar?: number;
-  endChar?: number;
-  abcEvent: NoteTimingEvent;
-};
-
 export interface MusicSheetRendererProps {
   abcString: string;
   title?: string;
@@ -147,19 +143,17 @@ export default function MusicSheetRenderer({
     (event: NoteTimingEvent | null) => {
       clearActiveNoteHighlight();
 
-      if (!event?.elements) return;
+      if (!event) return;
+
+      onPlaybackCursor?.(buildMusicSheetPlaybackCursorEvent(event));
+
+      if (!event.elements) return;
 
       const elements = event.elements.flat().filter(Boolean);
       elements.forEach((element) => {
         element.classList.add("abcjs-note-active");
       });
       activeNoteElementsRef.current = elements;
-      onPlaybackCursor?.({
-        abcEvent: event,
-        cursorSeconds: event.milliseconds / 1000,
-        startChar: event.startChar,
-        endChar: event.endChar,
-      });
     },
     [clearActiveNoteHighlight, onPlaybackCursor]
   );
