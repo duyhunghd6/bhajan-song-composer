@@ -1,6 +1,6 @@
 # PRD to PLAN State Matrix
 
-<!-- beads-id: br-rtm-prd-plan-01 | satisfies: prd-bsc -->
+<!-- beads-id: doc-rtm | satisfies: prd-bsc -->
 
 > Source PRD: [`docs/PRD.md`](./PRD.md)  
 > Source PLAN: [`docs/PLAN.md`](./PLAN.md)  
@@ -24,7 +24,7 @@ Current counts from metadata:
 
 | Metric | Formula | Value |
 |:---|:---|---:|
-| PRD document root coverage | `prd-bsc` satisfied by `br-plan-00` | Covered |
+| PRD document root coverage | `prd-bsc` satisfied by `br-plan` | Covered |
 | All PRD section coverage | `49 covered / 56 PRD IDs` | **87.5%** |
 | Actionable/in-scope PRD coverage | `48 covered / 48 actionable child sections` | **100.0%** |
 | Unlinked non-actionable/context sections | `7 unlinked / 56 PRD IDs` | **12.5%** |
@@ -46,10 +46,10 @@ Current implementation evidence scan found implementation files for the initial 
 |:---|:---|---:|
 | Total PLAN child items | `sum(children under br-plan-01..12)` | **59** |
 | Planned child items | `29 / 59` | **49.2%** |
-| In-progress child items | `9 / 59` | **15.3%** |
-| Implemented child items | `21 / 59` | **35.6%** |
+| In-progress child items | `8 / 59` | **13.6%** |
+| Implemented child items | `22 / 59` | **37.3%** |
 | Verified child items | `0 / 59` | **0.0%** |
-| Child completion coverage | `(Implemented + Verified) / 59` | **35.6%** |
+| Child completion coverage | `(Implemented + Verified) / 59` | **37.3%** |
 
 ---
 
@@ -71,7 +71,7 @@ Current implementation evidence scan found implementation files for the initial 
 
 | PRD ID | PRD area | Section type | Satisfied by PLAN ID(s) | Trace status | Notes |
 |:---|:---|:---|:---|:---|:---|
-| `prd-bsc` | Product Requirements Document | Root | `br-plan-00`, `br-rtm-prd-plan-01` | Covered | PLAN declares whole-document alignment; this RTM tracks the relationship. |
+| `prd-bsc` | Product Requirements Document | Root | `br-plan`, `doc-rtm` | Covered | PLAN declares whole-document alignment; this RTM tracks the relationship. |
 | `prd-bsc-s1` | Problem Statement | Context | — | Unlinked | Narrative/context section; not counted as actionable gap. |
 | `prd-bsc-s2` | Solution | Actionable | `br-plan-01` | Covered | Project architecture and initialization support the solution. |
 | `prd-bsc-s3` | Three Core Modules | Actionable | `br-plan-02`, `br-plan-03`, `br-plan-04`, `br-plan-05` | Covered | Data, playback, composer, and AI theory module plans trace to the three core modules. |
@@ -139,14 +139,14 @@ Current implementation evidence scan found implementation files for the initial 
 | `br-plan-03` | Playback Module | `prd-bsc-s3`, `prd-bsc-s6`, `prd-bsc-s14`, `prd-bsc-s15` | 4 | 0 | 2 | 2 | 0 | 50.0% |
 | `br-plan-04` | Composer Module | `prd-bsc-s3`, `prd-bsc-s7` | 5 | 0 | 0 | 5 | 0 | 100.0% |
 | `br-plan-05` | AI Theory Engine Core | `prd-bsc-s3`, `prd-bsc-s8`, `prd-bsc-s9`, `prd-bsc-s10`, `prd-bsc-s25` | 4 | 0 | 0 | 4 | 0 | 100.0% |
-| `br-plan-08` | Arrangement Pipeline: Melody → Full Track | `prd-bsc-s29`, `prd-bsc-s30`, `prd-bsc-s31`, `prd-bsc-s32` | 6 | 3 | 3 | 0 | 0 | 0.0% |
+| `br-plan-08` | Arrangement Pipeline: Melody → Full Track | `prd-bsc-s29`, `prd-bsc-s30`, `prd-bsc-s31`, `prd-bsc-s32` | 6 | 3 | 2 | 1 | 0 | 16.7% |
 | `br-plan-09` | Workflow Mockup / Proof-of-Concept Demo Pages | `prd-bsc-s54`, `prd-bsc-s55` | 7 | 7 | 0 | 0 | 0 | 0.0% |
 | `br-plan-10` | Multi-Layer Fingerstyle Arrangement Engine | `prd-bsc-s33`, `prd-bsc-s34`, `prd-bsc-s35`, `prd-bsc-s36`, `prd-bsc-s37`, `prd-bsc-s38` | 6 | 4 | 2 | 0 | 0 | 0.0% |
 | `br-plan-11` | Piano Accompaniment Generation Engine | `prd-bsc-s39`, `prd-bsc-s40`, `prd-bsc-s41`, `prd-bsc-s42`, `prd-bsc-s43`, `prd-bsc-s44`, `prd-bsc-s45`, `prd-bsc-s46` | 7 | 6 | 1 | 0 | 0 | 0.0% |
 | `br-plan-12` | Ensemble Expansion Engine | `prd-bsc-s47`, `prd-bsc-s48`, `prd-bsc-s49`, `prd-bsc-s50`, `prd-bsc-s51`, `prd-bsc-s52`, `prd-bsc-s53` | 7 | 7 | 0 | 0 | 0 | 0.0% |
 | `br-plan-06` | Visual Instruments & AI UI | `prd-bsc-s17`, `prd-bsc-s25`, `prd-bsc-s36`, `prd-bsc-s38`, `prd-bsc-s46`, `prd-bsc-s53` | 4 | 2 | 1 | 1 | 0 | 25.0% |
 | `br-plan-07` | Quality Assurance, CI & Community Tools | `prd-bsc-s11`, `prd-bsc-s18`, `prd-bsc-s19`, `prd-bsc-s20`, `prd-bsc-s21`, `prd-bsc-s26` | 3 | 0 | 0 | 3 | 0 | 100.0% |
-| **Total** | — | — | **59** | **29** | **9** | **21** | **0** | **35.6%** |
+| **Total** | — | — | **59** | **29** | **8** | **22** | **0** | **37.3%** |
 
 ---
 
@@ -174,7 +174,7 @@ Current implementation evidence scan found implementation files for the initial 
 | `br-plan-05.c03` | `br-plan-05` | Auto-Harmonizer: align strong-beat melody notes with diatonic triads. | `prd-bsc-s8`, `prd-bsc-s9`, `prd-bsc-s10`, `prd-bsc-s20` | Implemented | `src/lib/theory/harmonizer.ts`, harmonizer tests. |
 | `br-plan-05.c04` | `br-plan-05` | Arrangers: generate piano bass-clef patterns and guitar fingerstyle arrangements. | `prd-bsc-s8`, `prd-bsc-s9`, `prd-bsc-s10`, `prd-bsc-s17` | Implemented | `src/lib/theory/piano-arranger.ts`, `src/lib/theory/fingerstyle-arranger.ts`, arranger tests. |
 | `br-plan-08.c01` | `br-plan-08` | Pipeline Orchestrator: enforce Melody → Harmonization → Accompaniment → Drums & Additional Instruments → Full Track ordering. | `prd-bsc-s29` | Planned | Add explicit pipeline orchestration module and UI stage gate. |
-| `br-plan-08.c02` | `br-plan-08` | Harmonization Stage: identify key/scale, strong beats, diatonic/functional chords, and cadence roles. | `prd-bsc-s29`, `prd-bsc-s30` | In Progress | `melody-analyzer.ts` and `harmonizer.ts` exist; add functional/cadence annotations. |
+| `br-plan-08.c02` | `br-plan-08` | Harmonization Stage: identify key/scale, strong beats, diatonic/functional chords, and cadence roles. | `prd-bsc-s29`, `prd-bsc-s30` | Implemented | `src/lib/theory/harmonizer.ts` exports harmonization stage metadata with key/scale, strong-beat, diatonic/functional chord, and cadence-role annotations; harmonizer tests cover the contract. |
 | `br-plan-08.c03` | `br-plan-08` | Accompaniment Stage: generate Layer 2 piano/rhythm-guitar accompaniment with bass extraction, inversions, comping, and voice leading. | `prd-bsc-s29`, `prd-bsc-s31` | In Progress | Basic arrangers exist; advanced accompaniment modules are still planned in `br-plan-11`. |
 | `br-plan-08.c04` | `br-plan-08` | Full-Track Expansion Stage: generate drums/additional instruments, bass/kick alignment, ranges, counter-melodies, and fills. | `prd-bsc-s29`, `prd-bsc-s32` | Planned | Implement via `br-plan-12` ensemble expansion artifacts. |
 | `br-plan-08.c05` | `br-plan-08` | Composer Integration: expose generated stages as editable first-class composition layers. | `prd-bsc-s29`, `prd-bsc-s31`, `prd-bsc-s32` | In Progress | Layer manager exists; stage-specific generated layer accept/reject flow remains to be added. |

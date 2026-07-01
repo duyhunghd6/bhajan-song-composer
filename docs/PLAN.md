@@ -1,6 +1,6 @@
 # Implementation Plan: Bhajan Song Composer
 
-<!-- beads-id: br-plan-00 | satisfies: prd-bsc -->
+<!-- beads-id: br-plan | satisfies: prd-bsc -->
 
 This document outlines the step-by-step implementation plan for the Bhajan Song Composer, acting as a technical translation of the Product Requirements Document.
 
