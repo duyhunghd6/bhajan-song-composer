@@ -31,6 +31,8 @@ This document outlines the step-by-step implementation plan for the Bhajan Song 
 - **Metadata Editor (`SongForm.tsx`)**: Build form inputs bound to the YAML frontmatter schema to assist contributors.
 - **Interactive Notation Editor (`AbcEditor.tsx`)**: Develop the core editor with live SVG preview, undo/redo capabilities, and localStorage caching for WIP compositions.
 - **Layer Management (`LayerManager.tsx`)**: Implement the UI and state management allowing composers to switch between, edit, and layer multiple ABC tracks simultaneously.
+- **Workstation Coordinator (`ComposerWorkstation.tsx`)**: Coordinate composer workspace state to load a specific song's metadata and layers if a query parameter is passed (e.g. `/compose?edit={slug}`).
+- **Song Edit Selection Page (`app/edit/page.tsx` & `SongEditList.tsx`)**: Implement a dedicated `/edit` page displaying the full list of catalogue songs. Support live text search by song name, and display the key tone and resource icons (Video, Backing Track, Melody, Guitar, Piano) for each song. Provide an "Edit" button to open that song at `/compose?edit={slug}`.
 
 ## 5. AI Theory Engine Core
 <!-- beads-id: br-plan-05 | satisfies: prd-bsc-s3, prd-bsc-s8, prd-bsc-s9, prd-bsc-s10, prd-bsc-s25 -->

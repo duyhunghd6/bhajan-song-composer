@@ -22,8 +22,10 @@ describe("Song Loader Integration", () => {
   it("loads all actual songs fully including content", async () => {
     const songs = await loadAllSongs();
     expect(songs.length).toBeGreaterThanOrEqual(1);
-    expect(songs[0].meta.title).toBe("Namostute");
-    expect(songs[0].lyrics).toContain("Namostute Namostute");
-    expect(songs[0].abcNotations).toHaveLength(2);
+    const namostute = songs.find((s) => s.meta.slug === "namostute");
+    expect(namostute).toBeDefined();
+    expect(namostute!.meta.title).toBe("Namostute");
+    expect(namostute!.lyrics).toContain("Namostute Namostute");
+    expect(namostute!.abcNotations).toHaveLength(2);
   });
 });

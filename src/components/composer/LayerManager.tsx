@@ -9,9 +9,9 @@ const ACTIVE_LAYER_STORAGE_KEY = "bhajan-song-composer:composer:active-layer";
 
 const ROLE_OPTIONS = ["melody", "harmony", "bass", "rhythm", "custom"] as const;
 
-type LayerRole = (typeof ROLE_OPTIONS)[number];
+export type LayerRole = (typeof ROLE_OPTIONS)[number];
 
-type ComposerLayer = {
+export type ComposerLayer = {
   id: string;
   name: string;
   role: LayerRole;
@@ -216,25 +216,36 @@ function LayerStackPreview({ abc, visibleCount }: { abc: string; visibleCount: n
   );
 }
 
-export default function LayerManager() {
-  const [layers, setLayers] = useState<ComposerLayer[]>(DEFAULT_LAYERS);
-  const [activeLayerId, setActiveLayerId] = useState(DEFAULT_LAYERS[0].id);
+export interface LayerManagerProps {
+  initialLayers?: ComposerLayer[];
+  storageKey?: string;
+}
+
+export default function LayerManager({
+  initialLayers = DEFAULT_LAYERS,
+  storageKey = LAYERS_STORAGE_KEY,
+}: LayerManagerProps) {
+  const [layers, setLayers] = useState<ComposerLayer[]>(initialLayers);
+  const [activeLayerId, setActiveLayerId] = useState(initialLayers[0]?.id || "melody");
   const [hasLoadedStorage, setHasLoadedStorage] = useState(false);
   const [storageStatus, setStorageStatus] = useState("Layer stack saves locally in this browser.");
   const [copied, setCopied] = useState(false);
+
+  const layersKey = storageKey;
+  const activeLayerKey = `${storageKey}:active-layer`;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
 
     const timeoutId = window.setTimeout(() => {
       try {
-        const savedLayers = safeParseLayers(window.localStorage.getItem(LAYERS_STORAGE_KEY));
-        const nextLayers = savedLayers ?? DEFAULT_LAYERS;
-        const savedActiveLayerId = window.localStorage.getItem(ACTIVE_LAYER_STORAGE_KEY);
+        const savedLayers = safeParseLayers(window.localStorage.getItem(layersKey));
+        const nextLayers = savedLayers ?? initialLayers;
+        const savedActiveLayerId = window.localStorage.getItem(activeLayerKey);
         const nextActiveLayerId =
           savedActiveLayerId && nextLayers.some((layer) => layer.id === savedActiveLayerId)
             ? savedActiveLayerId
-            : nextLayers[0].id;
+            : nextLayers[0]?.id || "melody";
 
         setLayers(nextLayers);
         setActiveLayerId(nextActiveLayerId);
@@ -248,15 +259,15 @@ export default function LayerManager() {
     }, 0);
 
     return () => window.clearTimeout(timeoutId);
-  }, []);
+  }, [initialLayers, layersKey, activeLayerKey]);
 
   useEffect(() => {
     if (!hasLoadedStorage || typeof window === "undefined") return;
 
     const timeoutId = window.setTimeout(() => {
       try {
-        window.localStorage.setItem(LAYERS_STORAGE_KEY, JSON.stringify(layers));
-        window.localStorage.setItem(ACTIVE_LAYER_STORAGE_KEY, activeLayerId);
+        window.localStorage.setItem(layersKey, JSON.stringify(layers));
+        window.localStorage.setItem(activeLayerKey, activeLayerId);
         setStorageStatus("Layer stack saved locally in this browser.");
       } catch (err) {
         console.error("Error saving composer layers:", err);
@@ -265,7 +276,7 @@ export default function LayerManager() {
     }, 0);
 
     return () => window.clearTimeout(timeoutId);
-  }, [activeLayerId, hasLoadedStorage, layers]);
+  }, [activeLayerId, hasLoadedStorage, layers, layersKey, activeLayerKey]);
 
   const activeLayer = layers.find((layer) => layer.id === activeLayerId) ?? layers[0];
   const visibleLayers = useMemo(() => layers.filter((layer) => layer.visible), [layers]);
@@ -333,8 +344,8 @@ export default function LayerManager() {
   };
 
   const resetLayers = () => {
-    setLayers(DEFAULT_LAYERS);
-    setActiveLayerId(DEFAULT_LAYERS[0].id);
+    setLayers(initialLayers);
+    setActiveLayerId(initialLayers[0]?.id || "melody");
     setStorageStatus("Layer stack reset to the starter arrangement.");
   };
 
@@ -505,7 +516,7 @@ export default function LayerManager() {
               title={`Editing: ${activeLayer.name}`}
               initialAbc={activeLayer.abc}
               value={activeLayer.abc}
-              storageKey={`${LAYERS_STORAGE_KEY}:${activeLayer.id}:draft`}
+              storageKey={`${layersKey}:${activeLayer.id}:draft`}
               onChange={updateActiveLayerAbc}
             />
             <TheoryAssistant abc={activeLayer.abc} onAcceptArrangement={updateActiveLayerAbc} />

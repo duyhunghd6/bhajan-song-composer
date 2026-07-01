@@ -127,6 +127,7 @@ The ABC notation content is stored in separate `.abc` files alongside the Markdo
 25. As a **composer**, I want to transpose the entire song to a different key with a single action, so that I can adapt songs for different vocal ranges.
 26. As a **composer**, I want undo/redo functionality in the ABC notation editor, so that I can experiment without fear of losing work.
 27. As a **composer**, I want to save work-in-progress compositions to browser localStorage, so that I don't lose unsaved work if I accidentally close the tab.
+28. As a **composer**, I want to browse all catalogue songs in a separate `/edit` page with live search, viewing their key signature and resource indicators (Video, Backing Track, Melody, Guitar, Piano), so that I can easily find and click 'Edit' to load any song into the composer workstation at `/compose?edit={slug}`.
 
 ### AI Theory Assistant Module
 <!-- beads-id: prd-bsc-s8 -->
@@ -136,33 +137,33 @@ The ABC notation content is stored in separate `.abc` files alongside the Markdo
 
 _The most common scenario: a user has a melody-only ABC sheet (treble clef / G clef only, no bass clef / F clef) and wants to generate piano accompaniment or guitar fingerstyle arrangements._
 
-28. As a **practitioner with only a melody sheet**, I want to load my treble-clef-only ABC notation into the AI assistant, so that it can analyze the melody and generate accompaniment parts I'm missing.
-29. As a **practitioner**, I want the AI assistant to **auto-detect the key and scale/raga** from my melody ABC notation (by analyzing the key signature, accidentals, and note patterns), so that I don't need to manually specify the key.
-30. As a **practitioner**, I want the AI assistant to **auto-harmonize my melody** by analyzing which notes fall on strong beats and assigning appropriate chords to each measure, so that I get a complete chord progression without needing music theory knowledge.
-31. As a **piano player (accompaniment)**, I want the AI assistant to generate a **bass clef (left hand) part** from my melody-only sheet — producing root notes, root-fifth patterns, or Alberti bass patterns that match the auto-detected chord progression — so that I can play piano accompaniment with both hands while someone else sings.
-32. As a **piano player (solo)**, I want the AI assistant to generate a **grand staff arrangement** (treble + bass clef) where the right hand carries the original melody and the left hand plays a bass/chord accompaniment pattern, so that I can perform the song as a complete piano piece.
-33. As a **guitar player (accompaniment)**, I want the AI assistant to suggest guitar chord voicings (with visual fretboard diagrams) derived from the auto-harmonized chord progression, so that I can strum along while someone sings the melody.
-34. As a **guitar player (fingerstyle)**, I want the AI assistant to generate a **combined fingerstyle arrangement** where the thumb plays bass notes (from the chord roots), the fingers play the melody on treble strings, and chord tones fill the gaps between melody notes — so that I can perform the entire song solo on one guitar.
-35. As a **practitioner**, I want each generated arrangement to be output as a **separate ABC notation layer** (e.g., `namostute.piano-accompaniment.abc`, `namostute.fingerstyle.abc`) that I can view in the Playback module or edit in the Composer, so that AI-generated arrangements are first-class song content.
+29. As a **practitioner with only a melody sheet**, I want to load my treble-clef-only ABC notation into the AI assistant, so that it can analyze the melody and generate accompaniment parts I'm missing.
+30. As a **practitioner**, I want the AI assistant to **auto-detect the key and scale/raga** from my melody ABC notation (by analyzing the key signature, accidentals, and note patterns), so that I don't need to manually specify the key.
+31. As a **practitioner**, I want the AI assistant to **auto-harmonize my melody** by analyzing which notes fall on strong beats and assigning appropriate chords to each measure, so that I get a complete chord progression without needing music theory knowledge.
+32. As a **piano player (accompaniment)**, I want the AI assistant to generate a **bass clef (left hand) part** from my melody-only sheet — producing root notes, root-fifth patterns, or Alberti bass patterns that match the auto-detected chord progression — so that I can play piano accompaniment with both hands while someone else sings.
+33. As a **piano player (solo)**, I want the AI assistant to generate a **grand staff arrangement** (treble + bass clef) where the right hand carries the original melody and the left hand plays a bass/chord accompaniment pattern, so that I can perform the song as a complete piano piece.
+34. As a **guitar player (accompaniment)**, I want the AI assistant to suggest guitar chord voicings (with visual fretboard diagrams) derived from the auto-harmonized chord progression, so that I can strum along while someone sings the melody.
+35. As a **guitar player (fingerstyle)**, I want the AI assistant to generate a **combined fingerstyle arrangement** where the thumb plays bass notes (from the chord roots), the fingers play the melody on treble strings, and chord tones fill the gaps between melody notes — so that I can perform the entire song solo on one guitar.
+36. As a **practitioner**, I want each generated arrangement to be output as a **separate ABC notation layer** (e.g., `namostute.piano-accompaniment.abc`, `namostute.fingerstyle.abc`) that I can view in the Playback module or edit in the Composer, so that AI-generated arrangements are first-class song content.
 
 #### Chord & Voicing Suggestions
 <!-- beads-id: prd-bsc-s10 -->
 
-36. As a **practitioner learning music theory**, I want the AI assistant to suggest a chord progression based on the song's key and raga, so that I can understand the harmonic structure.
-37. As a **practitioner**, I want the chord suggestions to be rendered as interactive visual diagrams (guitar fretboard with finger positions, piano keyboard with highlighted keys), so that I can learn the voicings visually.
-38. As a **practitioner**, I want to see the ABC notation for each suggested arrangement (guitar accompaniment, guitar fingerstyle, piano accompaniment, piano solo), so that I can read and practice from standard notation.
-39. As a **composer**, I want to accept AI-suggested chord progressions and arrangements directly into my composition layers, so that I can use them as a starting point for my own arrangement.
-40. As a **practitioner**, I want the AI assistant to explain the music theory behind its suggestions (e.g., "Using the natural minor scale of Em, the iv-VII-III-VI progression creates a characteristic Indian devotional mood"), so that I can learn music theory in context.
-41. As a **practitioner**, I want to specify constraints for the AI suggestions (e.g., "only open chords", "capo on 2nd fret", "left hand octave bass pattern"), so that the suggestions match my skill level and instrument setup.
-42. As a **practitioner**, I want to override individual chords in the auto-harmonized progression (e.g., change one chord from Am to Am7), so that I can fine-tune the arrangement to my taste while keeping the rest of the AI-generated output.
+37. As a **practitioner learning music theory**, I want the AI assistant to suggest a chord progression based on the song's key and raga, so that I can understand the harmonic structure.
+38. As a **practitioner**, I want the chord suggestions to be rendered as interactive visual diagrams (guitar fretboard with finger positions, piano keyboard with highlighted keys), so that I can learn the voicings visually.
+39. As a **practitioner**, I want to see the ABC notation for each suggested arrangement (guitar accompaniment, guitar fingerstyle, piano accompaniment, piano solo), so that I can read and practice from standard notation.
+40. As a **composer**, I want to accept AI-suggested chord progressions and arrangements directly into my composition layers, so that I can use them as a starting point for my own arrangement.
+41. As a **practitioner**, I want the AI assistant to explain the music theory behind its suggestions (e.g., "Using the natural minor scale of Em, the iv-VII-III-VI progression creates a characteristic Indian devotional mood"), so that I can learn music theory in context.
+42. As a **practitioner**, I want to specify constraints for the AI suggestions (e.g., "only open chords", "capo on 2nd fret", "left hand octave bass pattern"), so that the suggestions match my skill level and instrument setup.
+43. As a **practitioner**, I want to override individual chords in the auto-harmonized progression (e.g., change one chord from Am to Am7), so that I can fine-tune the arrangement to my taste while keeping the rest of the AI-generated output.
 
 ### Community & Open Source
 <!-- beads-id: prd-bsc-s11 -->
 
-43. As a **contributor**, I want clear documentation on how to add a new song to the catalogue (file format, naming conventions, PR process), so that I can contribute without needing deep technical knowledge.
-44. As a **contributor**, I want a song data validation tool that checks my Markdown+YAML+ABC files for correctness before I submit a PR, so that I can fix errors locally.
-45. As a **maintainer**, I want automated CI checks that validate new song submissions for correct YAML schema, valid ABC notation, and required fields, so that I can review PRs efficiently.
-46. As a **user**, I want the application to be deployed as a static site (or SSG), so that hosting costs remain zero or minimal for the open-source project.
+44. As a **contributor**, I want clear documentation on how to add a new song to the catalogue (file format, naming conventions, PR process), so that I can contribute without needing deep technical knowledge.
+45. As a **contributor**, I want a song data validation tool that checks my Markdown+YAML+ABC files for correctness before I submit a PR, so that I can fix errors locally.
+46. As a **maintainer**, I want automated CI checks that validate new song submissions for correct YAML schema, valid ABC notation, and required fields, so that I can review PRs efficiently.
+47. As a **user**, I want the application to be deployed as a static site (or SSG), so that hosting costs remain zero or minimal for the open-source project.
 
 ---
 
