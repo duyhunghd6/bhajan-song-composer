@@ -74,6 +74,7 @@ export default function AbcEditor({
         if (savedDraft) {
           setHistory({ past: [], present: savedDraft, future: [] });
           setStorageStatus("Loaded a saved draft from this browser.");
+          onChange?.(savedDraft);
         }
       } catch (err) {
         console.error("Error loading ABC editor draft:", err);
@@ -84,11 +85,7 @@ export default function AbcEditor({
     }, 0);
 
     return () => window.clearTimeout(timeoutId);
-  }, [storageKey]);
-
-  useEffect(() => {
-    onChange?.(history.present);
-  }, [history.present, onChange]);
+  }, [storageKey, onChange]);
 
   useEffect(() => {
     if (!hasLoadedStorage || typeof window === "undefined") return;
@@ -116,33 +113,40 @@ export default function AbcEditor({
         future: [],
       };
     });
-  }, []);
+    onChange?.(nextText);
+  }, [onChange]);
 
   const undo = useCallback(() => {
+    if (history.past.length === 0) return;
+
+    const previous = history.past[history.past.length - 1];
     setHistory((current) => {
       if (current.past.length === 0) return current;
 
-      const previous = current.past[current.past.length - 1];
       return {
         past: current.past.slice(0, -1),
         present: previous,
         future: [current.present, ...current.future].slice(0, MAX_HISTORY),
       };
     });
-  }, []);
+    onChange?.(previous);
+  }, [history.past, onChange]);
 
   const redo = useCallback(() => {
+    if (history.future.length === 0) return;
+
+    const next = history.future[0];
     setHistory((current) => {
       if (current.future.length === 0) return current;
 
-      const next = current.future[0];
       return {
         past: [...current.past, current.present].slice(-MAX_HISTORY),
         present: next,
         future: current.future.slice(1),
       };
     });
-  }, []);
+    onChange?.(next);
+  }, [history.future, onChange]);
 
   const resetToSample = () => {
     commitText(initialAbc);
