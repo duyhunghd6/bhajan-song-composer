@@ -101,12 +101,15 @@ This document outlines the step-by-step implementation plan for the Bhajan Song 
 
 - **Instrument Renderers (`GuitarFretboard.tsx`, `PianoKeyboard.tsx`)**: Build the SVG interactive components showing finger positions and highlighted keys, adapting logic from the existing `music-theory` project.
 - **Synchronized Instrument Highlighting**: Connect Guitar and Piano renderers to Music Sheet playback cursor events so currently playing ABC notes/chords highlight the matching guitar fret/string or piano key in real time.
-- **Animated Hand Overlay (`SvgHandOverlay.tsx`)**: Implement a reusable SVG hand image/overlay at approximately 50% opacity for Guitar and Piano views. The overlay must animate hand position and individual finger movement according to the active note/fingering event from playback, not a free-running decorative animation.
+- **Animated Hands Overlay (`SvgHandsOverlay.tsx`)**: Implement reusable SVG hands image overlays at approximately 50% opacity for Guitar and Piano views. The overlays must animate hand positions and individual finger movements according to the active note/fingering event from playback, not a free-running decorative animation.
+  - **Guitar Transition Path Animator**: Implement path-tracing animations between sequential chord shapes (chord passing) and finger-to-string coordinate targets for fingerstyle patterns, synced to the specific measure.
+  - **Piano Split-Hands Visualization**: Build support for separate left-hand and right-hand overlays (with color-coded markers), and implement UI switches to toggle Left Hand Only, Right Hand Only, or Combined Hands-Together modes.
+  - **Pedal Animation Graphic**: Create a pedal indicator panel rendering pedal down/hold/flush states in real-time, bound to MIDI CC 64 events and measures.
 - **Theory Assistant UI (`TheoryAssistant.tsx`)**: Create the side panel for users to specify constraints (capo, skill level) and review/accept auto-harmonized arrangements into their Composer layers.
 
 ## 7. Quality Assurance, CI & Community Tools
 <!-- beads-id: br-plan-07 | satisfies: prd-bsc-s11, prd-bsc-s18, prd-bsc-s19, prd-bsc-s20, prd-bsc-s21, prd-bsc-s26 -->
 
 - **Unit Testing**: Configure Vitest and write assertion suites for the Theory Engine (manual mode) and the Song Loader.
-- **E2E Testing**: Setup Playwright to assert Playback Module UI toggles and Composer workflow scenarios, including shared Music Sheet rendering in both Playback and Composer, tempo/speed changes, loop controls, note highlighting, and synchronized Guitar/Piano highlight + SVG hand overlay behavior.
+- **E2E Testing**: Setup Playwright to assert Playback Module UI toggles and Composer workflow scenarios, including shared Music Sheet rendering in both Playback and Composer, tempo/speed changes, loop controls, note highlighting, and synchronized Guitar/Piano highlight + SVG hands overlay behavior.
 - **Validation Pipeline**: Build an automated script and an API endpoint (`api/validate/route.ts`) to ensure submitted Pull Requests contain valid YAML schemas and parseable ABC notation.

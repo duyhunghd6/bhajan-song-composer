@@ -4,7 +4,15 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Song, SongMetadata } from "@/lib/songs/schema";
 import SongForm from "./SongForm";
-import LayerManager, { ComposerLayer } from "./LayerManager";
+import LayerManager, { type ComposerLayer } from "./LayerManager";
+
+const COMPOSER_LAYER_ROLES: ComposerLayer["role"][] = ["melody", "harmony", "bass", "rhythm"];
+
+function toComposerLayerRole(type: string): ComposerLayer["role"] {
+  return COMPOSER_LAYER_ROLES.includes(type as ComposerLayer["role"])
+    ? (type as ComposerLayer["role"])
+    : "custom";
+}
 
 interface ComposerWorkstationProps {
   songs: Song[];
@@ -23,9 +31,7 @@ export default function ComposerWorkstation({ songs }: ComposerWorkstationProps)
     ? initialSong.abcNotations.map((notation, index) => ({
         id: notation.type,
         name: notation.label || notation.type,
-        role: ["melody", "harmony", "bass", "rhythm"].includes(notation.type)
-          ? (notation.type as any)
-          : "custom",
+        role: toComposerLayerRole(notation.type),
         abc: notation.content,
         visible: notation.default ?? (index === 0),
       }))

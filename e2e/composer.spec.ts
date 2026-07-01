@@ -75,4 +75,32 @@ test.describe("composer workflow", () => {
     await expect(page.getByText("3 total layers", { exact: true })).toBeVisible();
     await expect(page.getByLabel("Active layer name")).toHaveValue("Melody");
   });
+
+  test("keeps the ABCJS music sheet visible after editing in dark mode", async ({ page }) => {
+    await page.emulateMedia({ colorScheme: "dark" });
+    await page.goto("/compose?edit=happy-birthday");
+
+    await expect(page.getByRole("heading", { name: "Editing: Happy Birthday" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Music Sheet (ABCJS rendering)" })).toBeVisible();
+
+    const abcEditor = page.locator("#abc-editor-input");
+    await abcEditor.fill(`${await abcEditor.inputValue()}\n% e2e edit`);
+
+    const preview = page.locator("#abc-editor-preview");
+    await expect(preview.locator("svg")).toBeVisible();
+    await expect(preview.locator(".abcjs-top-line").first()).toBeVisible();
+    await expect(page.locator("#abc-editor-render-error")).toHaveCount(0);
+
+    await expect
+      .poll(async () =>
+        preview.evaluate((element) => {
+          const staffLine = element.querySelector(".abcjs-top-line");
+          return {
+            previewColor: getComputedStyle(element).color,
+            staffFill: staffLine ? getComputedStyle(staffLine).fill : null,
+          };
+        })
+      )
+      .toEqual({ previewColor: "rgb(0, 0, 0)", staffFill: "rgb(0, 0, 0)" });
+  });
 });

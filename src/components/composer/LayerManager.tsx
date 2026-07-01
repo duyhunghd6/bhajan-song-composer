@@ -5,8 +5,6 @@ import AbcEditor from "./AbcEditor";
 import TheoryAssistant from "./TheoryAssistant";
 
 const LAYERS_STORAGE_KEY = "bhajan-song-composer:composer:layers";
-const ACTIVE_LAYER_STORAGE_KEY = "bhajan-song-composer:composer:active-layer";
-
 const ROLE_OPTIONS = ["melody", "harmony", "bass", "rhythm", "custom"] as const;
 
 export type LayerRole = (typeof ROLE_OPTIONS)[number];
@@ -207,7 +205,8 @@ function LayerStackPreview({ abc, visibleCount }: { abc: string; visibleCount: n
             <div
               ref={previewRef}
               id="layer-stack-preview"
-              className="w-full min-w-[520px] dark:invert dark:hue-rotate-180"
+              // ABCJS emits SVG marks with currentColor in places; force black before dark-mode inversion so the staff remains visible on dark backgrounds.
+              className="w-full min-w-[520px] text-black dark:invert dark:hue-rotate-180"
             />
           </div>
         )}

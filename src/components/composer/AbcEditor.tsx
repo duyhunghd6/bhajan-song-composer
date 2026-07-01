@@ -282,8 +282,9 @@ export default function AbcEditor({
         </div>
       </div>
 
-      <div className="grid gap-0 lg:grid-cols-2">
-        <div className="border-b lg:border-b-0 lg:border-r border-zinc-100 dark:border-zinc-800 p-5 space-y-3">
+      {/* Agentic coding directive: keep ABC source stacked above the ABCJS music sheet; do not place them on the same row because the workflow needs vertical spacing. */}
+      <div className="grid gap-8">
+        <div className="border-b border-zinc-100 dark:border-zinc-800 p-5 space-y-3">
           <div className="flex items-center justify-between gap-3">
             <label
               htmlFor="abc-editor-input"
@@ -310,7 +311,7 @@ export default function AbcEditor({
         <div className="p-5 space-y-3">
           <div className="flex items-center justify-between gap-3">
             <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-              Live SVG preview
+              Music Sheet (ABCJS rendering)
             </h3>
             {renderError ? (
               <span className="text-[11px] font-semibold text-rose-600 dark:text-rose-400">
@@ -341,7 +342,8 @@ export default function AbcEditor({
             <div
               ref={previewRef}
               id="abc-editor-preview"
-              className="w-full min-w-[520px] dark:invert dark:hue-rotate-180"
+              // ABCJS emits SVG marks with currentColor in places; force black before dark-mode inversion so the staff remains visible on dark backgrounds after edits.
+              className="w-full min-w-[520px] text-black dark:invert dark:hue-rotate-180"
             />
           </div>
         </div>

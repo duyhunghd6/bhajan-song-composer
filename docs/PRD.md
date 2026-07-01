@@ -359,7 +359,10 @@ The ABC notation content is stored in separate `.abc` files alongside the Markdo
 13. As a **practitioner**, I want the currently playing note to be highlighted on the music sheet during MIDI playback, so that I can follow along visually.
 14. As a **practitioner**, I want the same reusable Music Sheet renderer to be used in both Playback and Composer screens, so that ABC rendering, playback, tempo, loop behavior, and note highlighting remain consistent everywhere.
 15. As a **guitar or piano learner**, I want optional synchronized instrument highlighting during ABC playback, so that the matching guitar fret/string or piano key lights up at the same time as the note on the staff.
-16. As a **guitar or piano learner**, I want the instrument view to show a semi-transparent SVG hand overlay (about 50% opacity) with animated finger movements, so that I can see not only which note is playing but also how the hand and fingers should move to play it.
+16. As a **guitar or piano learner**, I want the instrument view to show a semi-transparent animated SVG hands overlay (about 50% opacity) with animated finger movements, so that I can see not only which note is playing but also how the hands and fingers should move to play it.
+16a. As a **guitar learner**, I want the animated fretboard hands overlay to show how my fingers should move step-by-step from one chord shape to the next (chord progression/transition paths) and string-by-string for fingerstyle, synchronized to the specific measure in the Music Staff replay.
+16b. As a **piano learner**, I want to see visual guides showing how the left hand and right hand fingers should move (with color-coded highlighting for LH vs RH), including options to isolate left-hand-only, right-hand-only, or both combined, synchronized to the specific measure using the animated SVG hands overlay.
+16c. As a **piano learner**, I want a visual pedal movement indicator showing exactly when to press, hold, and release the sustain pedal in sync with the music sheet playback.
 17. As a **practitioner**, I want to share a direct URL to a specific song (with the selected video type or sheet type), so that I can share resources with other practitioners.
 18. As a **practitioner**, I want the song page to be SEO-optimized with proper meta tags, so that searching for "{song name} bhajan" on Google surfaces the page.
 19. As a **practitioner**, I want the app to be fully responsive and work well on mobile devices, so that I can use it during group meditation sessions from my phone.
@@ -424,7 +427,7 @@ _The most common scenario: a user has a melody-only ABC sheet (treble clef / G c
 57. As a **classical / polyphonic guitarist**, I want a Strict PIMA profile with thumb, index, middle, and ring assigned to fixed string groups, so that generated fingerings support resonance and independent voices.
 58. As a **folk / groove guitarist**, I want a Travis Override profile with thumb-driven bass and flexible index/middle treble-string assignment, so that generated fingerings support rhythmic stability and palm-muted bass.
 59. As a **composer**, I want to toggle between Strict PIMA and Folk / Travis output profiles, so that I can choose whether the generated arrangement prioritizes polyphony or groove.
-60. As a **learner**, I want the visual guitar and SVG hand overlay to show thumb-clock, pinch, syncopation, and string-slap events, so that I can understand how to physically perform the generated fingerstyle matrix.
+60. As a **learner**, I want the visual guitar and animated SVG hands overlay to show thumb-clock, pinch, syncopation, and string-slap events, so that I can understand how to physically perform the generated fingerstyle matrix.
 
 ### Piano Accompaniment Generation Engine
 <!-- beads-id: prd-bsc-s45 -->
@@ -613,7 +616,7 @@ src/
     instruments/
       GuitarFretboard.tsx       # Visual guitar chord diagram + playback note highlight target
       PianoKeyboard.tsx         # Visual piano keyboard diagram + playback note highlight target
-      SvgHandOverlay.tsx        # 50% opacity animated SVG hand/finger overlay for instrument playback
+      SvgHandsOverlay.tsx       # 50% opacity animated SVG hands overlay for instrument playback
     ai/
       TheoryAssistant.tsx       # AI suggestion panel UI
       ChordSuggestions.tsx      # Chord progression display
@@ -658,7 +661,10 @@ The AI Theory Assistant provides **visual chord diagrams** as the primary output
   - **Accompaniment**: Left hand shows chord pattern; Right hand shows melody cues
   - **Solo**: Left hand shows bass pattern + chord; Right hand shows full melody + harmony
 
-- **Animated SVG Hand Overlay**: Guitar and piano instrument views must support a reusable SVG hand overlay at approximately 50% opacity. The overlay should animate hand position and individual finger movement as playback advances, matching the note/fingering event emitted by the Music Sheet renderer. Animation timing must follow the actual ABCJS playback cursor events rather than an unrelated CSS loop.
+- **Animated SVG Hands Overlay**: Guitar and piano instrument views must support reusable SVG hands overlays at approximately 50% opacity. The overlay should animate hand positions and individual finger movements as playback advances, matching the note/fingering event emitted by the Music Sheet renderer. Animation timing must follow the actual ABCJS playback cursor events rather than an unrelated CSS loop.
+  - **Guitar Transition / Path Guidance**: Animate step-by-step finger movement trajectories when moving from one chord shape to the next (chord passing) and string-by-string targets for fingerstyle patterns, mapped to the specific measure in the Music Staff replay.
+  - **Piano Hand Separation**: Show distinct left-hand and right-hand overlay states (e.g., color-coded or clearly separated overlays) with interactive settings to display: Left Hand Only, Right Hand Only, or Combined Hands-Together, synchronized with playback measures.
+  - **Piano Pedal Animation**: Integrate a dynamic sustain pedal indicator/movement graphic showing when to press, hold, and flush (release/depress) the pedal, mapped to the exact MIDI CC 64 events and measures from the sheet.
 
 - **ABC Notation Layer**: Each suggested arrangement is also available as downloadable ABC notation that can be imported into the Composer as a new layer.
 
@@ -743,7 +749,7 @@ Tests should verify **external behavior and user-visible outcomes**, not impleme
    - Guide tones are placed on weak beats or melody-rest spaces rather than crowding the primary melody
    - Travis-picking thumb-clock events occur on quarter-note pulses, and string-slap snare events occur on beats 2 and 4
    - Strict PIMA profile assigns thumb/index/middle/ring to the expected string groups, while Folk / Travis profile allows index/middle sharing across treble strings
-   - The generated visual-event stream can drive fretboard highlighting and SVG hand overlay animation for thumb clock, pinch, syncopation, and string slap events
+   - The generated visual-event stream can drive fretboard highlighting and animated SVG hands overlay animations for thumb clock, pinch, syncopation, and string slap events
 
 5. **Piano Accompaniment Generation Engine** — Given a melody-only ABC notation, chord progression, and selected comping profile, assert that:
    - Harmonic deduction maps strong-beat melody notes and cadence points to chords where the melody acts as root, 3rd, 5th, or 7th
