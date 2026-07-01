@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import MusicSheetRenderer from "@/components/music-sheet/MusicSheetRenderer";
 import AbcEditor from "./AbcEditor";
 import TheoryAssistant from "./TheoryAssistant";
 
@@ -15,14 +16,6 @@ export type ComposerLayer = {
   role: LayerRole;
   abc: string;
   visible: boolean;
-};
-
-type AbcJsModule = {
-  renderAbc: (
-    target: string | HTMLElement,
-    abcString: string,
-    options?: Record<string, unknown>
-  ) => unknown[];
 };
 
 const DEFAULT_LAYERS: ComposerLayer[] = [
@@ -121,48 +114,6 @@ function combinedVisibleAbc(layers: ComposerLayer[]) {
 }
 
 function LayerStackPreview({ abc, visibleCount }: { abc: string; visibleCount: number }) {
-  const previewRef = useRef<HTMLDivElement>(null);
-  const [abcjsModule, setAbcjsModule] = useState<AbcJsModule | null>(null);
-  const [renderError, setRenderError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    import("abcjs")
-      .then((mod) => {
-        setAbcjsModule((mod.default ?? mod) as AbcJsModule);
-      })
-      .catch((err) => {
-        console.error("Error loading layer stack renderer:", err);
-        setRenderError("Could not load the ABC notation renderer.");
-      });
-  }, []);
-
-  useEffect(() => {
-    if (!abcjsModule || !previewRef.current) return;
-
-    let nextError: string | null = null;
-    const previewNode = previewRef.current;
-
-    try {
-      previewNode.innerHTML = "";
-      const rendered = abcjsModule.renderAbc(previewNode, abc, {
-        responsive: "resize",
-        add_classes: true,
-      });
-
-      if (!rendered || rendered.length === 0) {
-        nextError = "Visible layers could not be rendered together.";
-      }
-    } catch (err) {
-      console.error("Error rendering visible layer stack:", err);
-      nextError = "Visible layers could not be rendered together.";
-    }
-
-    const timeoutId = window.setTimeout(() => setRenderError(nextError), 0);
-    return () => window.clearTimeout(timeoutId);
-  }, [abc, abcjsModule]);
-
   return (
     <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-100 dark:border-zinc-800 p-5">
@@ -174,41 +125,25 @@ function LayerStackPreview({ abc, visibleCount }: { abc: string; visibleCount: n
             Render the {visibleCount} visible ABC {visibleCount === 1 ? "track" : "tracks"} as a combined arrangement reference.
           </p>
         </div>
-        {renderError ? (
-          <span className="text-[11px] font-semibold text-rose-600 dark:text-rose-400">
-            Needs attention
-          </span>
-        ) : (
-          <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
-            Stack preview
-          </span>
-        )}
+        <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+          Stack preview
+        </span>
       </div>
 
       <div className="p-5 space-y-3">
-        {renderError && (
-          <div className="rounded-xl border border-rose-200 dark:border-rose-900/70 bg-rose-50 dark:bg-rose-950/30 px-4 py-3 text-sm text-rose-700 dark:text-rose-300">
-            {renderError}
-          </div>
-        )}
         {visibleCount === 0 ? (
           <div className="rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800 px-4 py-10 text-center text-sm text-zinc-500 dark:text-zinc-400">
             Turn on at least one layer to render the stack preview.
           </div>
         ) : (
-          <div className="min-h-[260px] overflow-x-auto rounded-xl border border-zinc-100 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-950/50 p-4">
-            {!abcjsModule && !renderError && (
-              <div className="flex items-center justify-center py-12 text-sm text-zinc-400 dark:text-zinc-600">
-                Loading Music Notation Renderer...
-              </div>
-            )}
-            <div
-              ref={previewRef}
-              id="layer-stack-preview"
-              // ABCJS emits SVG marks with currentColor in places; force black before dark-mode inversion so the staff remains visible on dark backgrounds.
-              className="w-full min-w-[520px] text-black dark:invert dark:hue-rotate-180"
-            />
-          </div>
+          <MusicSheetRenderer
+            abcString={abc}
+            title="Visible Layer Music Sheet"
+            canvasId="layer-stack-preview"
+            controls={false}
+            showLoopControls={false}
+            minWidthClassName="min-w-[520px]"
+          />
         )}
       </div>
     </div>

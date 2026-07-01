@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { KeyboardEvent } from "react";
+import MusicSheetRenderer from "@/components/music-sheet/MusicSheetRenderer";
 
 const DEFAULT_STORAGE_KEY = "bhajan-song-composer:abc-editor:draft";
 const MAX_HISTORY = 100;
@@ -20,14 +21,6 @@ type EditorHistory = {
   future: string[];
 };
 
-type AbcJsModule = {
-  renderAbc: (
-    target: string | HTMLElement,
-    abcString: string,
-    options?: Record<string, unknown>
-  ) => unknown[];
-};
-
 interface AbcEditorProps {
   initialAbc?: string;
   storageKey?: string;
@@ -43,14 +36,11 @@ export default function AbcEditor({
   value,
   onChange,
 }: AbcEditorProps) {
-  const previewRef = useRef<HTMLDivElement>(null);
-  const [abcjsModule, setAbcjsModule] = useState<AbcJsModule | null>(null);
   const [history, setHistory] = useState<EditorHistory>({
     past: [],
     present: value ?? initialAbc,
     future: [],
   });
-  const [renderError, setRenderError] = useState<string | null>(null);
   const [storageStatus, setStorageStatus] = useState("Draft saves locally in this browser.");
   const [hasLoadedStorage, setHasLoadedStorage] = useState(false);
 
@@ -78,19 +68,6 @@ export default function AbcEditor({
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    import("abcjs")
-      .then((mod) => {
-        setAbcjsModule((mod.default ?? mod) as AbcJsModule);
-      })
-      .catch((err) => {
-        console.error("Error loading ABC notation renderer:", err);
-        setRenderError("Could not load the ABC notation renderer.");
-      });
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
     const timeoutId = window.setTimeout(() => {
       try {
         const savedDraft = window.localStorage.getItem(storageKey);
@@ -108,33 +85,6 @@ export default function AbcEditor({
 
     return () => window.clearTimeout(timeoutId);
   }, [storageKey]);
-
-  useEffect(() => {
-    if (!abcjsModule || !previewRef.current) return;
-
-    let nextError: string | null = null;
-
-    try {
-      previewRef.current.innerHTML = "";
-      const rendered = abcjsModule.renderAbc(previewRef.current, history.present, {
-        responsive: "resize",
-        add_classes: true,
-      });
-
-      if (!rendered || rendered.length === 0) {
-        nextError = "ABC notation could not be rendered. Check the header and note syntax.";
-      }
-    } catch (err) {
-      console.error("Error rendering ABC notation preview:", err);
-      nextError = "ABC notation could not be rendered. Check the header and note syntax.";
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      setRenderError(nextError);
-    }, 0);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [abcjsModule, history.present]);
 
   useEffect(() => {
     onChange?.(history.present);
@@ -313,39 +263,19 @@ export default function AbcEditor({
             <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
               Music Sheet (ABCJS rendering)
             </h3>
-            {renderError ? (
-              <span className="text-[11px] font-semibold text-rose-600 dark:text-rose-400">
-                Needs attention
-              </span>
-            ) : (
-              <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
-                Rendering
-              </span>
-            )}
+            <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+              Rendering
+            </span>
           </div>
 
-          {renderError && (
-            <div
-              id="abc-editor-render-error"
-              className="rounded-xl border border-rose-200 dark:border-rose-900/70 bg-rose-50 dark:bg-rose-950/30 px-4 py-3 text-sm text-rose-700 dark:text-rose-300"
-            >
-              {renderError}
-            </div>
-          )}
-
-          <div className="min-h-[420px] overflow-x-auto rounded-xl border border-zinc-100 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-950/50 p-4">
-            {!abcjsModule && !renderError && (
-              <div className="flex items-center justify-center py-12 text-sm text-zinc-400 dark:text-zinc-600">
-                Loading Music Notation Renderer...
-              </div>
-            )}
-            <div
-              ref={previewRef}
-              id="abc-editor-preview"
-              // ABCJS emits SVG marks with currentColor in places; force black before dark-mode inversion so the staff remains visible on dark backgrounds after edits.
-              className="w-full min-w-[520px] text-black dark:invert dark:hue-rotate-180"
-            />
-          </div>
+          <MusicSheetRenderer
+            abcString={history.present}
+            title="Editor Music Sheet Preview"
+            canvasId="abc-editor-preview"
+            controls={false}
+            showLoopControls={false}
+            minWidthClassName="min-w-[520px]"
+          />
         </div>
       </div>
     </section>
