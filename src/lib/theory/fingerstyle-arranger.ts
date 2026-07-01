@@ -6,6 +6,7 @@ import {
   noteNameToAbc,
   resolveProgression,
 } from "./arranger-utils";
+import { FingerstyleDownwardCompression, compressFingerstyleArrangement } from "./fingerstyle-compressor";
 import { FullTrackExpansionStage, generateFullTrackExpansionStage } from "./full-track-expansion-stage";
 import { CadenceRole, generateHarmonizationStage } from "./harmonizer";
 
@@ -106,6 +107,7 @@ export interface FingerstyleArrangement {
   key: string;
   timeSignature: string;
   upwardConstruction: FingerstyleUpwardConstructionContext;
+  downwardCompression: FingerstyleDownwardCompression;
   measures: FingerstyleMeasure[];
   abc: string;
 }
@@ -238,6 +240,7 @@ export function generateFingerstyleArrangement(
     key: resolved.key,
     timeSignature: resolved.timeSignature,
     upwardConstruction: buildUpwardConstructionContext(abcString, resolvedProgression, melodyMeasures),
+    downwardCompression: compressFingerstyleArrangement(resolved.chords, melodyMeasures),
     measures,
     abc: `V:Guitar clef=treble-8\n| ${measures.map((measure) => measure.abc).join(" | ")} |`,
   };

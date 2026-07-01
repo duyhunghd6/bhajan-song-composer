@@ -262,6 +262,63 @@ describe("Guitar fingerstyle arranger", () => {
     });
   });
 
+  it("compresses source layers into routed outer voices and weak-beat guide tones", () => {
+    const arrangement = generateFingerstyleArrangement(sampleAbc, ["Em", "Bm", "G", "Em"]);
+
+    expect(arrangement.downwardCompression.outerVoiceMap[0]).toMatchObject({
+      measureIndex: 0,
+      chord: "Em",
+      melodyRoute: expect.arrayContaining([expect.objectContaining({ beat: 1, note: "E", string: 1 })]),
+      bassRoute: expect.arrayContaining([expect.objectContaining({ beat: 1, note: "E", string: 6 })]),
+      beatOnePairing: { valid: true, fretStretch: 0, maxFretStretch: 5 },
+    });
+    expect(arrangement.downwardCompression.innerVoiceReduction[0]).toMatchObject({
+      measureIndex: 0,
+      prunedTones: [expect.objectContaining({ note: "B", role: "fifth" })],
+      guideTones: [expect.objectContaining({ note: "G", role: "third", beat: 2 })],
+    });
+    expect(arrangement.downwardCompression.fallbackSuggestions).toEqual([]);
+  });
+
+  it("routes Beat 1 melody to an available treble open string before declaring fallback", () => {
+    const highStretchAbc = `X:1
+T:Open B Melody
+M:4/4
+L:1/8
+K:Em
+| B2 E2 G2 A2 |`;
+    const arrangement = generateFingerstyleArrangement(highStretchAbc, ["Em"]);
+
+    expect(arrangement.downwardCompression.outerVoiceMap[0]).toMatchObject({
+      melodyRoute: expect.arrayContaining([expect.objectContaining({ beat: 1, note: "B", string: 2, fret: 0 })]),
+      beatOnePairing: { valid: true, fretStretch: 0, maxFretStretch: 5 },
+    });
+    expect(arrangement.downwardCompression.fallbackSuggestions).toEqual([]);
+  });
+
+  it("proposes open-string transposition fallbacks when high-register Beat 1 pairings exceed the fret span", () => {
+    const stretchedAbc = `X:1
+T:High D Over C Bass
+M:4/4
+L:1/8
+K:C
+| d2 E2 G2 A2 |`;
+    const arrangement = generateFingerstyleArrangement(stretchedAbc, ["C"]);
+
+    expect(arrangement.downwardCompression.outerVoiceMap[0]).toMatchObject({
+      melodyRoute: expect.arrayContaining([expect.objectContaining({ beat: 1, note: "D", string: 1, fret: 10 })]),
+      bassRoute: expect.arrayContaining([expect.objectContaining({ beat: 1, note: "C", string: 5, fret: 3 })]),
+      beatOnePairing: { valid: false, fretStretch: 7, maxFretStretch: 5 },
+    });
+    expect(arrangement.downwardCompression.fallbackSuggestions).toEqual([
+      expect.objectContaining({
+        measureIndex: 0,
+        chord: "C",
+        suggestedKeys: ["E", "A", "D"],
+      }),
+    ]);
+  });
+
   it("exposes a line-only helper for direct ABC output", () => {
     const line = generateFingerstyleLine(sampleAbc, ["Em", "Bm", "G", "Em"]);
 
