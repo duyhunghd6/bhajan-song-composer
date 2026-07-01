@@ -6,10 +6,12 @@ import {
   resolveProgression,
 } from "./arranger-utils";
 import { CadenceRole, generateHarmonizationStage } from "./harmonizer";
+import { getNoteValue } from "./scales";
 
 export type PianoBassFoundation = "root" | "octave" | "open-fifth" | "1-5-8";
 export type PianoMelodyRole = "root" | "third" | "fifth" | "seventh" | "non-chord-tone";
 export type PianoBassRole = "root" | "fifth" | "octave";
+export type PianoRightHandRole = "root" | "third" | "fifth" | "seventh";
 
 export interface PianoAccompanimentOptions {
   progression?: string[];
@@ -65,10 +67,35 @@ export interface PianoLeftHandBassMeasure {
   abc: string;
 }
 
+export interface PianoRightHandTone {
+  note: string;
+  abc: string;
+  midi: number;
+  register: "C3-C5";
+  role: PianoRightHandRole;
+  retainedFromPrevious: boolean;
+  semitoneMovement: number | null;
+  masksMelody: boolean;
+}
+
+export interface PianoRightHandVoicingMeasure {
+  measureIndex: number;
+  chord: string;
+  targetMelodyNote: string | null;
+  inversion: "root" | "first" | "second" | "third";
+  guideTones: string[];
+  tones: PianoRightHandTone[];
+  commonTones: string[];
+  totalSemitoneMovement: number;
+  melodyMaskingAvoided: boolean;
+  abc: string;
+}
+
 export interface PianoAccompaniment {
   sourceAnalysis: PianoSourceAnalysis;
   harmonicFramework: PianoHarmonicFrameworkMeasure[];
   leftHandBassMap: PianoLeftHandBassMeasure[];
+  rightHandVoicingMap: PianoRightHandVoicingMeasure[];
   abc: string;
 }
 
@@ -148,6 +175,92 @@ function validateLowIntervalLimit(events: PianoBassEvent[]): PianoLowIntervalLim
   return { valid: rejectedIntervals.length === 0, rejectedIntervals };
 }
 
+function semitoneDistance(fromNote: string, toNote: string): number {
+  const from = getNoteValue(normalizeNoteName(fromNote));
+  const to = getNoteValue(normalizeNoteName(toNote));
+
+  if (from === undefined || to === undefined) return 0;
+
+  const clockwise = Math.abs(to - from);
+  return Math.min(clockwise, 12 - clockwise);
+}
+
+function rightHandRole(index: number): PianoRightHandRole {
+  if (index === 1) return "third";
+  if (index === 2) return "fifth";
+  if (index === 3) return "seventh";
+  return "root";
+}
+
+function inversionNameFor(firstRole: PianoRightHandRole): PianoRightHandVoicingMeasure["inversion"] {
+  if (firstRole === "third") return "first";
+  if (firstRole === "fifth") return "second";
+  if (firstRole === "seventh") return "third";
+  return "root";
+}
+
+function buildRightHandVoicing(
+  chord: ChordInfo,
+  framework: PianoHarmonicFrameworkMeasure,
+  previousTones: PianoRightHandTone[] | null
+): PianoRightHandVoicingMeasure {
+  const targetMelodyNote = framework.targetMelodyNote;
+  const target = targetMelodyNote ? normalizeNoteName(targetMelodyNote) : null;
+  const guideToneIndexes = chord.notes.length > 3 ? [1, 3] : [1];
+  const previousNotes = previousTones?.map((tone) => tone.note) ?? [];
+  const chordTones = chord.notes
+    .map((note, index) => ({ note, index, role: rightHandRole(index) }))
+    .filter((tone) => normalizeNoteName(tone.note) !== target);
+  const commonTone = chordTones.find((tone) => previousNotes.includes(tone.note));
+  let selectedIndexes = chordTones.filter((tone) => guideToneIndexes.includes(tone.index) || tone.role === "fifth");
+
+  if (commonTone && !selectedIndexes.some((tone) => tone.note === commonTone.note)) {
+    const replacementIndex = selectedIndexes.reduce((maxIndex, tone, index) => {
+      const currentDistance = Math.min(...previousNotes.map((previous) => semitoneDistance(previous, tone.note)));
+      const maxDistance = Math.min(...previousNotes.map((previous) => semitoneDistance(previous, selectedIndexes[maxIndex].note)));
+      return currentDistance > maxDistance ? index : maxIndex;
+    }, 0);
+    selectedIndexes = [
+      ...selectedIndexes.slice(0, replacementIndex),
+      commonTone,
+      ...selectedIndexes.slice(replacementIndex + 1),
+    ];
+  }
+
+  const tones = selectedIndexes.map((tone): PianoRightHandTone => {
+    const retainedFromPrevious = previousNotes.includes(tone.note);
+    const semitoneMovement = previousTones
+      ? retainedFromPrevious
+        ? 0
+        : Math.min(...previousNotes.map((previous) => semitoneDistance(previous, tone.note)))
+      : null;
+
+    return {
+      note: tone.note,
+      abc: noteNameToAbc(tone.note, ","),
+      midi: 48 + (getNoteValue(normalizeNoteName(tone.note)) ?? 0),
+      register: "C3-C5",
+      role: tone.role,
+      retainedFromPrevious,
+      semitoneMovement,
+      masksMelody: target !== null && normalizeNoteName(tone.note) === target,
+    };
+  });
+
+  return {
+    measureIndex: framework.measureIndex,
+    chord: chord.chordName,
+    targetMelodyNote,
+    inversion: inversionNameFor(tones[0]?.role ?? "root"),
+    guideTones: tones.filter((tone) => tone.role === "third" || tone.role === "seventh").map((tone) => tone.note),
+    tones,
+    commonTones: tones.filter((tone) => tone.retainedFromPrevious).map((tone) => tone.note),
+    totalSemitoneMovement: tones.reduce((sum, tone) => sum + (tone.semitoneMovement ?? 0), 0),
+    melodyMaskingAvoided: tones.every((tone) => !tone.masksMelody),
+    abc: `[${tones.map((tone) => tone.abc).join("")}]4`,
+  };
+}
+
 function buildMeasurePattern(events: PianoBassEvent[], beatCount: number): string {
   const root = events.find((event) => event.role === "root") ?? events[0];
   const fifth = events.find((event) => event.role === "fifth") ?? root;
@@ -197,6 +310,13 @@ export function generatePianoAccompaniment(
     };
   });
 
+  let previousRightHandTones: PianoRightHandTone[] | null = null;
+  const rightHandVoicingMap = resolved.chords.map((chord, measureIndex) => {
+    const voicing = buildRightHandVoicing(chord, harmonicFramework[measureIndex], previousRightHandTones);
+    previousRightHandTones = voicing.tones;
+    return voicing;
+  });
+
   return {
     sourceAnalysis: {
       key: resolved.key,
@@ -206,6 +326,7 @@ export function generatePianoAccompaniment(
     },
     harmonicFramework,
     leftHandBassMap,
-    abc: `V:PianoLH clef=bass name="Layer 2 Piano Left Hand"\n| ${leftHandBassMap.map((measure) => measure.abc).join(" | ")} |`,
+    rightHandVoicingMap,
+    abc: `V:PianoLH clef=bass name="Layer 2 Piano Left Hand"\n| ${leftHandBassMap.map((measure) => measure.abc).join(" | ")} |\nV:PianoRH clef=treble name="Layer 2 Piano Right Hand"\n| ${rightHandVoicingMap.map((measure) => measure.abc).join(" | ")} |`,
   };
 }

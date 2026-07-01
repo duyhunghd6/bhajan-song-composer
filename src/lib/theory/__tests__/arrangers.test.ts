@@ -165,6 +165,47 @@ describe("Piano accompaniment contract", () => {
       abc: "E,,2 E,,2 E,,2 E,,2",
     });
   });
+
+  it("places right-hand guide tones below the melody to avoid masking", () => {
+    const accompaniment = generatePianoAccompaniment(sampleAbc, {
+      progression: ["Em"],
+    });
+
+    expect(accompaniment.rightHandVoicingMap[0]).toMatchObject({
+      chord: "Em",
+      targetMelodyNote: "E",
+      guideTones: ["G"],
+      melodyMaskingAvoided: true,
+      tones: [
+        expect.objectContaining({ note: "G", role: "third", register: "C3-C5", masksMelody: false }),
+        expect.objectContaining({ note: "B", role: "fifth", register: "C3-C5", masksMelody: false }),
+      ],
+    });
+    expect(accompaniment.rightHandVoicingMap[0].abc).toBe("[G,B,]4");
+    expect(accompaniment.abc).toContain("V:PianoRH clef=treble");
+  });
+
+  it("retains common tones and chooses shortest-path right-hand movement", () => {
+    const neutralMelodyAbc = `X:1
+T:Neutral Melody
+M:4/4
+L:1/8
+K:C
+| A2 E2 G2 A2 | A2 E2 G2 A2 |`;
+    const accompaniment = generatePianoAccompaniment(neutralMelodyAbc, {
+      progression: ["C", "G"],
+    });
+
+    expect(accompaniment.rightHandVoicingMap[1]).toMatchObject({
+      chord: "G",
+      commonTones: ["G"],
+      totalSemitoneMovement: 2,
+      tones: expect.arrayContaining([
+        expect.objectContaining({ note: "G", retainedFromPrevious: true, semitoneMovement: 0 }),
+        expect.objectContaining({ note: "D", semitoneMovement: 2 }),
+      ]),
+    });
+  });
 });
 
 describe("Piano arranger", () => {

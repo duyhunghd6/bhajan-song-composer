@@ -15,6 +15,7 @@ interface PlaybackCursorLike {
   cursorSeconds: number;
   startChar?: number;
   endChar?: number;
+  abcEvent?: { milliseconds: number };
 }
 
 interface ParsedAbcNote {
