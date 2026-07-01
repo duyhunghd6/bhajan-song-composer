@@ -41,7 +41,8 @@ const MOCKUP_GATES: MockupGate[] = [
   {
     title: "Ensemble Expansion POC",
     unid: "br-plan-09.c05",
-    status: "not-ready",
+    href: "/mockups/ensemble-expansion",
+    status: "review-ready",
     purpose:
       "Integration handshake, density grid, bass map, melodic gaps, Djembe, Flute/Violin yield states, conflicts, preview, and layer activity.",
   },
