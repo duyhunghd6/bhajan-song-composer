@@ -1,6 +1,15 @@
 import { MelodyNoteEvent } from "./arranger-utils";
 import { ChordInfo } from "./chords";
+import { frettingFingerForFret, isFretPlayable, MAX_FRET_STRETCH, FrettingFinger } from "./guitar-playability";
 import { normalizeAbcNote } from "./melody-analyzer";
+import {
+  FingerstylePickingProfile,
+  FingerstylePickingProfileId,
+  FingerstylePhysicalTechnique,
+  PickingFinger,
+  pickingProfileFor,
+  strictPimaFingerForString,
+} from "./picking-profiles";
 import { getNoteValue } from "./scales";
 
 export type GuitarStringNumber = 1 | 2 | 3 | 4 | 5 | 6;
@@ -52,19 +61,53 @@ export interface FingerstyleFallbackSuggestion {
   suggestedKeys: string[];
 }
 
+export type FingerstylePhysicalRole = RoutedFingerstyleEvent["role"] | "percussion";
+
+export interface FingerstylePhysicalHandEvent {
+  note: string | null;
+  string: GuitarStringNumber | null;
+  fret: number;
+  beat: number;
+  role: FingerstylePhysicalRole;
+  pickingFinger: PickingFinger;
+  frettingFinger: FrettingFinger | null;
+  technique: FingerstylePhysicalTechnique;
+}
+
+export interface FingerstylePhysicalHandMeasure {
+  measureIndex: number;
+  chord: string;
+  profile: FingerstylePickingProfile;
+  events: FingerstylePhysicalHandEvent[];
+  validation: {
+    frettingPlayable: boolean;
+    pickingPlayable: boolean;
+    strictPima: boolean;
+  };
+}
+
+export interface FingerstyleCompressionOptions {
+  pickingProfile?: FingerstylePickingProfileId;
+}
+
 export interface FingerstyleDownwardCompression {
   outerVoiceMap: FingerstyleOuterVoiceMeasure[];
   innerVoiceReduction: FingerstyleInnerVoiceMeasure[];
+  physicalHandMapping: FingerstylePhysicalHandMeasure[];
   fallbackSuggestions: FingerstyleFallbackSuggestion[];
   validation: {
     melodyRoutedToTrebleStrings: boolean;
     bassRoutedToBassStrings: boolean;
     beatOnePairingsPlayable: boolean;
     guideTonesPlacedOnWeakBeats: boolean;
+    frettingAssignmentsPlayable: boolean;
+    pickingAssignmentsPlayable: boolean;
+    strictPimaPicking: boolean;
+    thumbClockContinuous: boolean;
+    stringSlapsOnBackbeat: boolean;
   };
 }
 
-const MAX_FRET_STRETCH = 5;
 const TREBLE_STRINGS: GuitarStringNumber[] = [1, 2, 3];
 const BASS_STRINGS: GuitarStringNumber[] = [6, 5, 4];
 const OPEN_STRING_VALUES: Record<GuitarStringNumber, number> = {
@@ -144,10 +187,101 @@ function buildFallbackSuggestion(
   };
 }
 
+function physicalEvent(
+  event: RoutedFingerstyleEvent,
+  technique: FingerstylePhysicalTechnique,
+  pickingFinger = strictPimaFingerForString(event.string),
+  beat = event.beat
+): FingerstylePhysicalHandEvent {
+  return {
+    note: event.note,
+    string: event.string,
+    fret: event.fret,
+    beat,
+    role: event.role,
+    pickingFinger,
+    frettingFinger: frettingFingerForFret(event.fret),
+    technique,
+  };
+}
+
+function stringSlapEvent(beat: number): FingerstylePhysicalHandEvent {
+  return {
+    note: null,
+    string: 6,
+    fret: 0,
+    beat,
+    role: "percussion",
+    pickingFinger: "p",
+    frettingFinger: null,
+    technique: "string-slap",
+  };
+}
+
+function isStrictPimaEvent(event: FingerstylePhysicalHandEvent): boolean {
+  return event.string === null || event.pickingFinger === strictPimaFingerForString(event.string);
+}
+
+function buildStrictPimaEvents(
+  outerMeasure: FingerstyleOuterVoiceMeasure,
+  innerMeasure: FingerstyleInnerVoiceMeasure | undefined
+): FingerstylePhysicalHandEvent[] {
+  return [
+    ...outerMeasure.bassRoute.map((event) => physicalEvent(event, "thumb-clock")),
+    ...outerMeasure.melodyRoute.map((event) =>
+      physicalEvent(event, event.beat === 1 && outerMeasure.bassRoute.some((bass) => bass.beat === event.beat) ? "pinch" : "guide-tone")
+    ),
+    ...(innerMeasure?.guideTones ?? []).map((event) => physicalEvent(event, "guide-tone")),
+  ];
+}
+
+function buildFolkTravisEvents(outerMeasure: FingerstyleOuterVoiceMeasure): FingerstylePhysicalHandEvent[] {
+  const bassAnchor = outerMeasure.bassRoute[0];
+  const thumbClock = [1, 2, 3, 4].map((beat) => physicalEvent(bassAnchor, "thumb-clock", "p", beat));
+  const syncopatedMelody = outerMeasure.melodyRoute.slice(1).map((event, index) =>
+    physicalEvent(event, "syncopation", index % 2 === 0 ? "i" : "m", event.beat + 0.5)
+  );
+
+  return [...thumbClock, stringSlapEvent(2), stringSlapEvent(4), ...syncopatedMelody];
+}
+
+function sortPhysicalEvents(events: FingerstylePhysicalHandEvent[]): FingerstylePhysicalHandEvent[] {
+  return events.sort((left, right) => left.beat - right.beat || (left.string ?? 9) - (right.string ?? 9));
+}
+
+function buildPhysicalHandMapping(
+  outerVoiceMap: FingerstyleOuterVoiceMeasure[],
+  innerVoiceReduction: FingerstyleInnerVoiceMeasure[],
+  profileId: FingerstylePickingProfileId
+): FingerstylePhysicalHandMeasure[] {
+  const profile = pickingProfileFor(profileId);
+
+  return outerVoiceMap.map((outerMeasure) => {
+    const innerMeasure = innerVoiceReduction[outerMeasure.measureIndex];
+    const events = sortPhysicalEvents(
+      profileId === "folk-travis" ? buildFolkTravisEvents(outerMeasure) : buildStrictPimaEvents(outerMeasure, innerMeasure)
+    );
+
+    return {
+      measureIndex: outerMeasure.measureIndex,
+      chord: outerMeasure.chord,
+      profile,
+      events,
+      validation: {
+        frettingPlayable: events.every((event) => isFretPlayable(event.fret)),
+        pickingPlayable: profileId === "folk-travis" || events.every((event) => isStrictPimaEvent(event)),
+        strictPima: profileId === "strict-pima" && events.every((event) => isStrictPimaEvent(event)),
+      },
+    };
+  });
+}
+
 export function compressFingerstyleArrangement(
   chords: ChordInfo[],
-  melodyMeasures: MelodyNoteEvent[][]
+  melodyMeasures: MelodyNoteEvent[][],
+  options: FingerstyleCompressionOptions = {}
 ): FingerstyleDownwardCompression {
+  const pickingProfile = options.pickingProfile ?? "strict-pima";
   const outerVoiceMap = chords.map((chord, measureIndex): FingerstyleOuterVoiceMeasure => {
     const melody = melodyMeasures[measureIndex] ?? [];
     const melodyRoute = melody.map((event, eventIndex): RoutedFingerstyleEvent => ({
@@ -198,10 +332,12 @@ export function compressFingerstyleArrangement(
   const fallbackSuggestions = outerVoiceMap
     .map((measure) => buildFallbackSuggestion(measure.measureIndex, measure.chord, measure.beatOnePairing))
     .filter((suggestion): suggestion is FingerstyleFallbackSuggestion => suggestion !== null);
+  const physicalHandMapping = buildPhysicalHandMapping(outerVoiceMap, innerVoiceReduction, pickingProfile);
 
   return {
     outerVoiceMap,
     innerVoiceReduction,
+    physicalHandMapping,
     fallbackSuggestions,
     validation: {
       melodyRoutedToTrebleStrings: outerVoiceMap.every((measure) =>
@@ -213,6 +349,19 @@ export function compressFingerstyleArrangement(
       beatOnePairingsPlayable: fallbackSuggestions.length === 0,
       guideTonesPlacedOnWeakBeats: innerVoiceReduction.every((measure) =>
         measure.guideTones.every((event) => event.beat === 2 || event.beat === 4)
+      ),
+      frettingAssignmentsPlayable: physicalHandMapping.every((measure) => measure.validation.frettingPlayable),
+      pickingAssignmentsPlayable: physicalHandMapping.every((measure) => measure.validation.pickingPlayable),
+      strictPimaPicking: physicalHandMapping.every((measure) => measure.validation.strictPima),
+      thumbClockContinuous: physicalHandMapping.every((measure) =>
+        [1, 2, 3, 4].every((beat) =>
+          measure.events.some((event) => event.beat === beat && event.technique === "thumb-clock")
+        )
+      ),
+      stringSlapsOnBackbeat: pickingProfile === "strict-pima" || physicalHandMapping.every((measure) =>
+        [2, 4].every((beat) =>
+          measure.events.some((event) => event.beat === beat && event.technique === "string-slap")
+        )
       ),
     },
   };

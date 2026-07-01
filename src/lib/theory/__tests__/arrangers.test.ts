@@ -280,6 +280,59 @@ describe("Guitar fingerstyle arranger", () => {
     expect(arrangement.downwardCompression.fallbackSuggestions).toEqual([]);
   });
 
+  it("maps routed notes onto strict PIMA picking and playable fretting assignments", () => {
+    const arrangement = generateFingerstyleArrangement(sampleAbc, ["Em", "Bm", "G", "Em"]);
+
+    expect(arrangement.downwardCompression.physicalHandMapping[0]).toMatchObject({
+      measureIndex: 0,
+      chord: "Em",
+      profile: { id: "strict-pima", posture: "floating" },
+      events: expect.arrayContaining([
+        expect.objectContaining({ beat: 1, role: "bass", string: 6, pickingFinger: "p", frettingFinger: null }),
+        expect.objectContaining({ beat: 1, role: "melody", string: 1, pickingFinger: "a", frettingFinger: null }),
+        expect.objectContaining({ beat: 2, role: "third", string: 3, pickingFinger: "i", frettingFinger: null }),
+      ]),
+      validation: {
+        frettingPlayable: true,
+        pickingPlayable: true,
+        strictPima: true,
+      },
+    });
+    expect(arrangement.downwardCompression.validation).toMatchObject({
+      frettingAssignmentsPlayable: true,
+      pickingAssignmentsPlayable: true,
+      strictPimaPicking: true,
+    });
+  });
+
+  it("can render a Folk/Travis hand map with thumb clock, syncopation, and string slaps", () => {
+    const arrangement = generateFingerstyleArrangement(sampleAbc, ["Em", "Bm", "G", "Em"], {
+      pickingProfile: "folk-travis",
+    });
+
+    expect(arrangement.downwardCompression.physicalHandMapping[0]).toMatchObject({
+      measureIndex: 0,
+      chord: "Em",
+      profile: { id: "folk-travis", posture: "anchored" },
+      events: expect.arrayContaining([
+        expect.objectContaining({ beat: 1, role: "bass", pickingFinger: "p", technique: "thumb-clock" }),
+        expect.objectContaining({ beat: 2, role: "bass", pickingFinger: "p", technique: "thumb-clock" }),
+        expect.objectContaining({ beat: 2, role: "percussion", pickingFinger: "p", technique: "string-slap" }),
+        expect.objectContaining({ beat: 2.5, role: "melody", pickingFinger: "i", technique: "syncopation" }),
+        expect.objectContaining({ beat: 4, role: "percussion", pickingFinger: "p", technique: "string-slap" }),
+      ]),
+      validation: {
+        frettingPlayable: true,
+        pickingPlayable: true,
+        strictPima: false,
+      },
+    });
+    expect(arrangement.downwardCompression.validation).toMatchObject({
+      thumbClockContinuous: true,
+      stringSlapsOnBackbeat: true,
+    });
+  });
+
   it("routes Beat 1 melody to an available treble open string before declaring fallback", () => {
     const highStretchAbc = `X:1
 T:Open B Melody
