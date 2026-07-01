@@ -6,6 +6,11 @@ import {
   resolveProgression,
 } from "./arranger-utils";
 import { CadenceRole, generateHarmonizationStage } from "./harmonizer";
+import {
+  generatePianoCompingProfileMeasure,
+  PianoCompingProfileId,
+  PianoCompingProfileMeasure,
+} from "./piano-comping-profiles";
 import { getNoteValue } from "./scales";
 
 export type PianoBassFoundation = "root" | "octave" | "open-fifth" | "1-5-8";
@@ -16,6 +21,7 @@ export type PianoRightHandRole = "root" | "third" | "fifth" | "seventh";
 export interface PianoAccompanimentOptions {
   progression?: string[];
   bassFoundation?: PianoBassFoundation;
+  compingProfile?: PianoCompingProfileId;
 }
 
 export interface PianoCadencePoint {
@@ -96,6 +102,7 @@ export interface PianoAccompaniment {
   harmonicFramework: PianoHarmonicFrameworkMeasure[];
   leftHandBassMap: PianoLeftHandBassMeasure[];
   rightHandVoicingMap: PianoRightHandVoicingMeasure[];
+  compingProfileMap: PianoCompingProfileMeasure[];
   abc: string;
 }
 
@@ -316,6 +323,19 @@ export function generatePianoAccompaniment(
     previousRightHandTones = voicing.tones;
     return voicing;
   });
+  const compingProfile = options.compingProfile ?? "pop-ballad";
+  const compingProfileMap = resolved.chords.map((chord, measureIndex) =>
+    generatePianoCompingProfileMeasure(chord, measureIndex, compingProfile, beatCount)
+  );
+  const compingVoiceName = compingProfile === "rock-rnb"
+    ? "Rock/R&B Off-beats"
+    : compingProfile === "classical-folk"
+      ? "Classical/Folk Alberti Bass"
+      : "Pop/Ballad 1-5-10";
+  const compingLeftVoice = `V:PianoCompingLH clef=bass name="${compingVoiceName}"\n| ${compingProfileMap.map((measure) => measure.leftHandAbc).join(" | ")} |`;
+  const compingRightVoice = compingProfileMap.some((measure) => measure.rightHandAbc.trim().length > 0)
+    ? `\nV:PianoCompingRH clef=treble name="${compingVoiceName}"\n| ${compingProfileMap.map((measure) => measure.rightHandAbc).join(" | ")} |`
+    : "";
 
   return {
     sourceAnalysis: {
@@ -327,6 +347,7 @@ export function generatePianoAccompaniment(
     harmonicFramework,
     leftHandBassMap,
     rightHandVoicingMap,
-    abc: `V:PianoLH clef=bass name="Layer 2 Piano Left Hand"\n| ${leftHandBassMap.map((measure) => measure.abc).join(" | ")} |\nV:PianoRH clef=treble name="Layer 2 Piano Right Hand"\n| ${rightHandVoicingMap.map((measure) => measure.abc).join(" | ")} |`,
+    compingProfileMap,
+    abc: `V:PianoLH clef=bass name="Layer 2 Piano Left Hand"\n| ${leftHandBassMap.map((measure) => measure.abc).join(" | ")} |\nV:PianoRH clef=treble name="Layer 2 Piano Right Hand"\n| ${rightHandVoicingMap.map((measure) => measure.abc).join(" | ")} |\n${compingLeftVoice}${compingRightVoice}`,
   };
 }

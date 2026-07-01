@@ -206,6 +206,70 @@ K:C
       ]),
     });
   });
+
+  it("generates a Pop/Ballad 1-5-10 arpeggiation comping profile", () => {
+    const accompaniment = generatePianoAccompaniment(sampleAbc, {
+      progression: ["Em"],
+      compingProfile: "pop-ballad",
+    });
+
+    expect(accompaniment.compingProfileMap[0]).toMatchObject({
+      profileId: "pop-ballad",
+      style: "Pop/Ballad",
+      rhythmicFeel: "1-5-10 arpeggiation",
+      leftHandAbc: "E,,2 B,,2 G,2 B,,2",
+      events: [
+        { beat: 1, hand: "left", role: "root", notes: ["E"] },
+        { beat: 2, hand: "left", role: "fifth", notes: ["B"] },
+        { beat: 3, hand: "left", role: "tenth", notes: ["G"] },
+        { beat: 4, hand: "left", role: "fifth", notes: ["B"] },
+      ],
+    });
+    expect(accompaniment.abc).toContain("V:PianoCompingLH clef=bass name=\"Pop/Ballad 1-5-10\"");
+  });
+
+  it("generates a Rock/R&B staccato octave and syncopated off-beat comping profile", () => {
+    const accompaniment = generatePianoAccompaniment(sampleAbc, {
+      progression: ["Em"],
+      compingProfile: "rock-rnb",
+    });
+
+    expect(accompaniment.compingProfileMap[0]).toMatchObject({
+      profileId: "rock-rnb",
+      style: "Rock/R&B",
+      rhythmicFeel: "staccato octave off-beat comping",
+      leftHandAbc: "[E,,E,]1 z1 [E,,E,]1 z1",
+      rightHandAbc: "z1 [G,B,]1 z1 [G,B,]1",
+      events: [
+        { beat: 1, hand: "left", role: "octave", notes: ["E", "E"], articulation: "staccato" },
+        { beat: 2, hand: "right", role: "off-beat-chord", notes: ["G", "B"], articulation: "syncopated" },
+        { beat: 3, hand: "left", role: "octave", notes: ["E", "E"], articulation: "staccato" },
+        { beat: 4, hand: "right", role: "off-beat-chord", notes: ["G", "B"], articulation: "syncopated" },
+      ],
+    });
+    expect(accompaniment.abc).toContain("V:PianoCompingRH clef=treble name=\"Rock/R&B Off-beats\"");
+  });
+
+  it("generates a Classical/Folk Alberti-bass comping profile", () => {
+    const accompaniment = generatePianoAccompaniment(sampleAbc, {
+      progression: ["Em"],
+      compingProfile: "classical-folk",
+    });
+
+    expect(accompaniment.compingProfileMap[0]).toMatchObject({
+      profileId: "classical-folk",
+      style: "Classical/Folk",
+      rhythmicFeel: "Alberti bass",
+      leftHandAbc: "E,,2 B,,2 G,2 B,,2",
+      events: [
+        { beat: 1, hand: "left", role: "root", notes: ["E"], articulation: "legato" },
+        { beat: 2, hand: "left", role: "fifth", notes: ["B"], articulation: "legato" },
+        { beat: 3, hand: "left", role: "alberti-third", notes: ["G"], articulation: "legato" },
+        { beat: 4, hand: "left", role: "fifth", notes: ["B"], articulation: "legato" },
+      ],
+    });
+    expect(accompaniment.abc).toContain("V:PianoCompingLH clef=bass name=\"Classical/Folk Alberti Bass\"");
+  });
 });
 
 describe("Piano arranger", () => {
