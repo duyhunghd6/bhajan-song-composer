@@ -78,6 +78,15 @@ export interface EnsembleMidiControlEvent extends ViolinExpressionEvent {
   layer: 3;
 }
 
+export interface EnsemblePlaybackSyncGroup {
+  measureIndex: number;
+  beat: number;
+  startMs: number;
+  instruments: EnsemblePlaybackInstrument[];
+  events: EnsemblePlaybackEvent[];
+  visualActivity: EnsembleVisualActivityEvent[];
+}
+
 export interface EnsembleExpansionValidation {
   handshakeReady: boolean;
   eventMapsReady: boolean;
@@ -85,6 +94,19 @@ export interface EnsembleExpansionValidation {
   playbackEventsReady: boolean;
   midiControlEventsReady: boolean;
   visualActivityReady: boolean;
+  layerHierarchyReady: boolean;
+  playbackSyncGroupsReady: boolean;
+}
+
+export interface EnsembleLayerHierarchyEntry {
+  layer: 1 | 2 | 3;
+  role: "primary-melody" | "accompaniment-foundation" | "ensemble-support";
+  instruments: string[];
+  priority: 1 | 2 | 3;
+  conflictPolicy:
+    | "preserve-primary-melody"
+    | "preserve-rhythmic-and-harmonic-foundation"
+    | "flatten-melodic-runs-before-removing-percussion-fills";
 }
 
 export interface EnsembleExpansionOutput {
@@ -95,8 +117,10 @@ export interface EnsembleExpansionOutput {
   eventMaps: EnsembleEventMaps;
   yieldDecisions: OrchestralSupportArrangement["yieldDecisions"];
   conflictReport: EnsembleConflictReportEntry[];
+  layerHierarchy: EnsembleLayerHierarchyEntry[];
   abcLayers: EnsembleAbcLayers;
   playbackEvents: EnsemblePlaybackEvent[];
+  playbackSyncGroups: EnsemblePlaybackSyncGroup[];
   midiControlEvents: EnsembleMidiControlEvent[];
   visualActivity: EnsembleVisualActivityEvent[];
   validation: EnsembleExpansionValidation;
@@ -262,8 +286,65 @@ function buildMidiControlEvents(orchestral: OrchestralSupportArrangement): Ensem
   }));
 }
 
+function buildPlaybackSyncGroups(
+  playbackEvents: EnsemblePlaybackEvent[],
+  visualActivity: EnsembleVisualActivityEvent[]
+): EnsemblePlaybackSyncGroup[] {
+  const groupedEvents = playbackEvents.reduce((groups, event) => {
+    const key = `${event.measureIndex}:${event.startMs}`;
+    const events = groups.get(key) ?? [];
+    events.push(event);
+    groups.set(key, events);
+    return groups;
+  }, new Map<string, EnsemblePlaybackEvent[]>());
+
+  return Array.from(groupedEvents.values())
+    .map((events) => {
+      const first = events[0];
+      const activity = visualActivity.filter((event) =>
+        event.measureIndex === first.measureIndex && event.startMs === first.startMs
+      );
+
+      return {
+        measureIndex: first.measureIndex,
+        beat: first.beat,
+        startMs: first.startMs,
+        instruments: events.map((event) => event.instrument),
+        events,
+        visualActivity: activity,
+      };
+    })
+    .sort((a, b) => a.measureIndex - b.measureIndex || a.startMs - b.startMs);
+}
+
+function buildLayerHierarchy(accompaniment: AccompanimentStage): EnsembleLayerHierarchyEntry[] {
+  return [
+    {
+      layer: 1,
+      role: "primary-melody",
+      instruments: ["voice"],
+      priority: 1,
+      conflictPolicy: "preserve-primary-melody",
+    },
+    {
+      layer: 2,
+      role: "accompaniment-foundation",
+      instruments: [accompaniment.layer.instrument],
+      priority: 2,
+      conflictPolicy: "preserve-rhythmic-and-harmonic-foundation",
+    },
+    {
+      layer: 3,
+      role: "ensemble-support",
+      instruments: ["djembe", "flute", "violin"],
+      priority: 3,
+      conflictPolicy: "flatten-melodic-runs-before-removing-percussion-fills",
+    },
+  ];
+}
+
 function validateOutput(
-  output: Pick<EnsembleExpansionOutput, "handshake" | "eventMaps" | "abcLayers" | "playbackEvents" | "midiControlEvents" | "visualActivity">
+  output: Pick<EnsembleExpansionOutput, "handshake" | "eventMaps" | "abcLayers" | "playbackEvents" | "playbackSyncGroups" | "midiControlEvents" | "visualActivity" | "layerHierarchy">
 ): EnsembleExpansionValidation {
   return {
     handshakeReady: output.handshake.layerPrerequisites.layer1Melody && output.handshake.layerPrerequisites.layer2Foundation,
@@ -272,6 +353,8 @@ function validateOutput(
     playbackEventsReady: output.playbackEvents.length > 0,
     midiControlEventsReady: output.midiControlEvents.length > 0,
     visualActivityReady: output.visualActivity.length > 0,
+    layerHierarchyReady: output.layerHierarchy.length === 3,
+    playbackSyncGroupsReady: output.playbackSyncGroups.length > 0,
   };
 }
 
@@ -301,6 +384,8 @@ export function generateEnsembleExpansionOutput(
   const playbackEvents = buildPlaybackEvents(djembe, orchestral);
   const midiControlEvents = buildMidiControlEvents(orchestral);
   const visualActivity = buildVisualActivity(handshake, djembe, orchestral);
+  const playbackSyncGroups = buildPlaybackSyncGroups(playbackEvents, visualActivity);
+  const layerHierarchy = buildLayerHierarchy(accompaniment);
   const output = {
     handshake,
     djembe,
@@ -309,8 +394,10 @@ export function generateEnsembleExpansionOutput(
     eventMaps,
     yieldDecisions: orchestral.yieldDecisions,
     conflictReport: conflicts.report,
+    layerHierarchy,
     abcLayers,
     playbackEvents,
+    playbackSyncGroups,
     midiControlEvents,
     visualActivity,
   };
