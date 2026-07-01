@@ -147,7 +147,7 @@ export interface FingerstyleRhythmicEvent {
 export interface FingerstyleProfileMetadata {
   id: FingerstyleDownwardCompression["physicalHandMapping"][number]["profile"]["id"];
   posture: FingerstyleDownwardCompression["physicalHandMapping"][number]["profile"]["posture"];
-  pickingAssignments: Record<GuitarStringNumber, FingerstylePhysicalHandEvent["pickingFinger"]>;
+  pickingAssignments: Record<GuitarStringNumber, FingerstylePhysicalHandEvent["pickingFinger"][]>;
 }
 
 export interface FingerstyleTablaturePosition {
@@ -377,18 +377,28 @@ function buildRhythmicEventMap(compression: FingerstyleDownwardCompression): Fin
 
 function buildProfileMetadata(compression: FingerstyleDownwardCompression): FingerstyleProfileMetadata {
   const profile = compression.physicalHandMapping[0]?.profile ?? { id: "strict-pima", posture: "floating" };
+  const pickingAssignments: FingerstyleProfileMetadata["pickingAssignments"] = profile.id === "folk-travis"
+    ? {
+      6: ["p"],
+      5: ["p"],
+      4: ["p"],
+      3: ["i", "m"],
+      2: ["i", "m"],
+      1: ["i", "m"],
+    }
+    : {
+      6: ["p"],
+      5: ["p"],
+      4: ["p"],
+      3: ["i"],
+      2: ["m"],
+      1: ["a"],
+    };
 
   return {
     id: profile.id,
     posture: profile.posture,
-    pickingAssignments: {
-      6: "p",
-      5: "p",
-      4: "p",
-      3: "i",
-      2: "m",
-      1: "a",
-    },
+    pickingAssignments,
   };
 }
 

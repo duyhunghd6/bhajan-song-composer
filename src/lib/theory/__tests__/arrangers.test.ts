@@ -680,7 +680,14 @@ K:C
     expect(arrangement.outputContract.profileMetadata).toMatchObject({
       id: "folk-travis",
       posture: "anchored",
-      pickingAssignments: { 6: "p", 5: "p", 4: "p", 3: "i", 2: "m", 1: "a" },
+      pickingAssignments: {
+        6: ["p"],
+        5: ["p"],
+        4: ["p"],
+        3: ["i", "m"],
+        2: ["i", "m"],
+        1: ["i", "m"],
+      },
     });
     expect(arrangement.outputContract.artifacts).toMatchObject({
       finalAbc: arrangement.abc,
