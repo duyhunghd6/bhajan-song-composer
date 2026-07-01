@@ -313,6 +313,29 @@ K:Em
     });
   });
 
+  it("exposes physical validation and playback events synchronized with grand-staff ABC", () => {
+    const accompaniment = generatePianoAccompaniment(sampleAbc, {
+      progression: ["Em"],
+    });
+
+    expect(accompaniment.physicalValidation.valid).toBe(true);
+    expect(accompaniment.physicalValidation.measures).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ measureIndex: 0, beat: 1, hand: "left", spanSemitones: 12, rolled: false, collisionKeys: [] }),
+        expect.objectContaining({ measureIndex: 0, beat: 1, hand: "right", spanSemitones: 4, rolled: false, collisionKeys: [] }),
+      ])
+    );
+    expect(accompaniment.playbackEvents).toBe(accompaniment.physicalValidation.playbackEvents);
+    expect(accompaniment.playbackEvents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ measureIndex: 0, beat: 1, hand: "left", articulation: "block", midi: [40, 47, 52], abc: "E,,2 B,,2 E,2 B,,2" }),
+        expect.objectContaining({ measureIndex: 0, beat: 1, hand: "right", articulation: "block", midi: [55, 59], abc: "[G,B,]4" }),
+      ])
+    );
+    expect(accompaniment.abc).toContain("E,,2 B,,2 E,2 B,,2");
+    expect(accompaniment.abc).toContain("[G,B,]4");
+  });
+
   it("treats long held melody notes as fill windows after the attack", () => {
     const heldMelodyAbc = `X:1
 T:Held Melody

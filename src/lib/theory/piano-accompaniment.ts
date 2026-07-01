@@ -12,6 +12,12 @@ import {
   PianoCompingProfileId,
   PianoCompingProfileMeasure,
 } from "./piano-comping-profiles";
+import {
+  PianoHandEvent,
+  PianoPlaybackEvent,
+  PianoPlayabilityReport,
+  validatePianoPlayability,
+} from "./piano-playability";
 import { getNoteValue } from "./scales";
 
 export type PianoBassFoundation = "root" | "octave" | "open-fifth" | "1-5-8";
@@ -151,6 +157,8 @@ export interface PianoAccompaniment {
   rightHandVoicingMap: PianoRightHandVoicingMeasure[];
   compingProfileMap: PianoCompingProfileMeasure[];
   gapFillMap: PianoGapFillMeasure[];
+  physicalValidation: PianoPlayabilityReport;
+  playbackEvents: PianoPlaybackEvent[];
   pedalAutomation: PianoPedalAutomation;
   abc: string;
 }
@@ -483,6 +491,44 @@ function buildMeasurePattern(events: PianoBassEvent[], beatCount: number): strin
   return Array.from({ length: beatCount }, (_, index) => `${pattern[index % pattern.length].abc}2`).join(" ");
 }
 
+function midiForBassEvent(event: PianoBassEvent): number {
+  const pitchClass = getNoteValue(normalizeNoteName(event.note)) ?? 0;
+  const baseOctave = event.role === "octave" ? 48 : 36;
+  return baseOctave + pitchClass;
+}
+
+function buildPhysicalHandEvents(
+  leftHandBassMap: PianoLeftHandBassMeasure[],
+  rightHandVoicingMap: PianoRightHandVoicingMeasure[]
+): PianoHandEvent[] {
+  const leftHandEvents = leftHandBassMap.map((measure): PianoHandEvent => ({
+    measureIndex: measure.measureIndex,
+    beat: 1,
+    hand: "left",
+    notes: measure.events.map((event) => ({
+      note: event.note,
+      midi: midiForBassEvent(event),
+      abc: event.abc,
+    })),
+    abc: measure.abc,
+  }));
+  const rightHandEvents = rightHandVoicingMap.map((measure): PianoHandEvent => ({
+    measureIndex: measure.measureIndex,
+    beat: 1,
+    hand: "right",
+    notes: measure.tones.map((tone) => ({
+      note: tone.note,
+      midi: tone.midi,
+      abc: tone.abc,
+    })),
+    abc: measure.abc,
+  }));
+
+  return [...leftHandEvents, ...rightHandEvents].sort((a, b) =>
+    a.measureIndex - b.measureIndex || a.beat - b.beat || a.hand.localeCompare(b.hand)
+  );
+}
+
 export function generatePianoAccompaniment(
   abcString: string,
   options: PianoAccompanimentOptions = {}
@@ -538,6 +584,7 @@ export function generatePianoAccompaniment(
     buildGapFillMeasure(chord, measureIndex, melodyTimelines[measureIndex] ?? [], beatCount)
   );
   const pedalAutomation = buildPedalAutomation(resolved.chords, beatCount);
+  const physicalValidation = validatePianoPlayability(buildPhysicalHandEvents(leftHandBassMap, rightHandVoicingMap));
   const compingVoiceName = compingProfile === "rock-rnb"
     ? "Rock/R&B Off-beats"
     : compingProfile === "classical-folk"
@@ -563,6 +610,8 @@ export function generatePianoAccompaniment(
     rightHandVoicingMap,
     compingProfileMap,
     gapFillMap,
+    physicalValidation,
+    playbackEvents: physicalValidation.playbackEvents,
     pedalAutomation,
     abc: `V:PianoLH clef=bass name="Layer 2 Piano Left Hand"\n| ${leftHandBassMap.map((measure) => measure.abc).join(" | ")} |\nV:PianoRH clef=treble name="Layer 2 Piano Right Hand"\n| ${rightHandVoicingMap.map((measure) => measure.abc).join(" | ")} |\n${compingLeftVoice}${compingRightVoice}${gapFillVoice}`,
   };
