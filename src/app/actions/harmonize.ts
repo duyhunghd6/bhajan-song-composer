@@ -3,9 +3,14 @@
 import fs from "fs/promises";
 import path from "path";
 
-export interface HarmonizeResult {
-  abc: string;
+export interface HarmonizationOption {
+  progression_name: string;
   explanation: string;
+  abc: string;
+}
+
+export interface HarmonizeResult {
+  options: HarmonizationOption[];
 }
 
 export async function harmonizeMelody(abcString: string, metadata: { key: string; scale: string; timeSignature: string }): Promise<HarmonizeResult> {
@@ -23,7 +28,12 @@ export async function harmonizeMelody(abcString: string, metadata: { key: string
     const systemPrompt = `You are an expert music theory assistant specialized in Indian classical, devotional, and Western functional harmony.`;
     
     const userPrompt = `
-Task: Analyze the provided ABC notation melody. Identify notes falling on structurally strong beats. Using diatonic functional harmony and the provided key/raga, suggest a coherent chord progression.
+Task: Analyze the provided ABC notation melody. Identify notes falling on structurally strong beats. 
+You MUST provide 5 distinctly different harmonic progressions (e.g., Basic Diatonic, Jazz Reharmonization, Minor Substitution, etc.).
+
+CRITICAL INSTRUCTIONS:
+1. If the input ABC already contains chords (e.g., "G", "D7"), you MUST REPLACE them with your newly generated chords for each option! Do NOT just return the original chords. Every option MUST have its own unique progression of inline chords injected into the ABC string.
+2. DO NOT REMOVE the lyrics (w: lines) or any other existing structural elements. Ensure the ABC formatting remains perfectly valid.
 
 Metadata:
 - Key: ${metadata.key}
@@ -54,20 +64,36 @@ ${abcString}
             type: "function",
             function: {
               name: "apply_harmonization",
-              description: "Applies the suggested chord progression to the ABC notation and provides an explanation.",
+              description: "Applies 5 different suggested chord progressions to the ABC notation.",
               parameters: {
                 type: "object",
                 properties: {
-                  abc: {
-                    type: "string",
-                    description: "The original ABC notation intact, but with inline chord annotations injected on strong beats."
-                  },
-                  explanation: {
-                    type: "string",
-                    description: "A 2-sentence theoretical explanation for the harmonic choices."
+                  options: {
+                    type: "array",
+                    description: "Exactly 5 different harmonic progression options, from basic diatonic to more advanced/jazz variations.",
+                    minItems: 5,
+                    maxItems: 5,
+                    items: {
+                      type: "object",
+                      properties: {
+                        progression_name: {
+                          type: "string",
+                          description: "A short descriptive name for this progression style (e.g., 'Basic Diatonic', 'Jazz Reharmonization')."
+                        },
+                        explanation: {
+                          type: "string",
+                          description: "A 2-sentence theoretical explanation for the harmonic choices in this specific option."
+                        },
+                        abc: {
+                          type: "string",
+                          description: "The original ABC notation intact, but with inline chord annotations injected on strong beats corresponding to this progression."
+                        }
+                      },
+                      required: ["progression_name", "explanation", "abc"]
+                    }
                   }
                 },
-                required: ["abc", "explanation"]
+                required: ["options"]
               }
             }
           }

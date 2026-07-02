@@ -5,7 +5,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import PocHandoffChecklist from "@/components/mockups/PocHandoffChecklist";
 import { generateArrangementPipeline } from "@/lib/theory/arrangement-pipeline";
-import { harmonizeMelody } from "@/app/actions/harmonize";
+import { harmonizeMelody, type HarmonizationOption } from "@/app/actions/harmonize";
 
 const AbcjsPlaybackController = dynamic(() => import("@/components/music-sheet/AbcjsPlaybackController"), { ssr: false });
 
@@ -34,7 +34,8 @@ function statusPill(isReady: boolean, label: string) {
 export default function ArrangementPipelineMockup() {
   const [melodyAbc, setMelodyAbc] = useState(SAMPLE_MELODY_ABC);
   const [isHarmonizing, setIsHarmonizing] = useState(false);
-  const [llmExplanation, setLlmExplanation] = useState("");
+  const [aiSuggestions, setAiSuggestions] = useState<HarmonizationOption[]>([]);
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState<number | null>(null);
 
   const pipeline = useMemo(
     () =>
@@ -147,8 +148,8 @@ ${pipeline.finalAbc}`;
                       scale: pipeline.harmonization.scale,
                       timeSignature: pipeline.harmonization.timeSignature
                     });
-                    setMelodyAbc(result.abc);
-                    setLlmExplanation(result.explanation);
+                    setAiSuggestions(result.options);
+                    setSelectedSuggestionIndex(null);
                   } catch (err) {
                     console.error(err);
                     alert("Failed to harmonize using AI.");
@@ -159,14 +160,39 @@ ${pipeline.finalAbc}`;
                 disabled={isHarmonizing}
                 className="inline-flex items-center rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm font-semibold text-amber-400 transition hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {isHarmonizing ? "Harmonizing..." : "✨ Suggest AI Harmonization"}
+                {isHarmonizing ? "Generating Options..." : "✨ Suggest AI Harmonization"}
               </button>
             </div>
             
-            {llmExplanation && (
-              <div className="mt-5 rounded-xl border border-sky-400/20 bg-sky-500/10 p-4">
-                <p className="text-sm font-semibold text-sky-300">AI Theory Assistant Explanation</p>
-                <p className="mt-1 text-sm text-zinc-300">{llmExplanation}</p>
+            {aiSuggestions.length > 0 && (
+              <div className="mt-4 space-y-3">
+                <h3 className="text-sm font-bold text-zinc-100">AI Suggested Progressions</h3>
+                <div className="grid gap-3 sm:grid-cols-1">
+                  {aiSuggestions.map((option, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => {
+                        setSelectedSuggestionIndex(idx);
+                        setMelodyAbc(option.abc);
+                      }}
+                      className={`text-left rounded-xl border p-4 transition-all focus:outline-none focus:ring-2 focus:ring-amber-500/50 ${
+                        selectedSuggestionIndex === idx
+                          ? "border-amber-400 bg-amber-500/10 shadow-sm"
+                          : "border-zinc-800 bg-zinc-950/40 hover:border-amber-300/50 hover:bg-zinc-900"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <h4 className="text-sm font-bold text-zinc-100">Option {idx + 1}: {option.progression_name}</h4>
+                        {selectedSuggestionIndex === idx && (
+                          <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-bold text-white">Active</span>
+                        )}
+                      </div>
+                      <p className="mt-1 text-xs leading-5 text-zinc-400">
+                        {option.explanation}
+                      </p>
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 

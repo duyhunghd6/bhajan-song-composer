@@ -7,12 +7,12 @@ import PianoKeyboard from "@/components/instruments/PianoKeyboard";
 import GuitarFretboard from "@/components/instruments/GuitarFretboard";
 import PianoPedalIndicator from "@/components/instruments/PianoPedalIndicator";
 import { buildArrangementLayerProposals, generateArrangementPipeline } from "@/lib/theory/arrangement-pipeline";
-import { harmonizeMelody } from "@/app/actions/harmonize";
+import { harmonizeMelody, type HarmonizationOption } from "@/app/actions/harmonize";
 import { buildFingerstyleComposerIntegration, FINGERSTYLE_PROFILE_OPTIONS, type FingerstyleComposerProfileId } from "./fingerstyle-integration";
 import AbcEditor, { DEFAULT_ABC } from "./AbcEditor";
 import TheoryAssistant from "./TheoryAssistant";
 import type { ComposerStepId } from "./composer-steps";
-import type { TheoryAssistantArrangementSuggestion, TheoryAssistantLayerProposal } from "./theory-assistant-layer";
+import { buildTheoryAssistantLayerProposal, type TheoryAssistantArrangementSuggestion, type TheoryAssistantLayerProposal } from "./theory-assistant-layer";
 
 interface ComposerStepWorkspaceProps {
   slug: string;
@@ -60,8 +60,19 @@ function ComposerNotationPreviewLayout({ source, preview }: ComposerNotationPrev
 export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: ComposerStepWorkspaceProps) {
   const [melodyAbc, setMelodyAbc] = useState(initialMelodyAbc ?? DEFAULT_ABC);
   const [isHarmonizing, setIsHarmonizing] = useState(false);
-  const [llmExplanation, setLlmExplanation] = useState("");
+  // --- AI HARMONIZATION STATE ---
+  // aiSuggestions: Stores the 5 options returned by the LLM Harmonization action.
+  const [aiSuggestions, setAiSuggestions] = useState<HarmonizationOption[]>([]);
+  // selectedSuggestionIndex: Tracks which of the 5 options is currently being previewed by the user.
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState<number | null>(null);
+  
+  // --- LAYER ARCHITECTURE STATE ---
+  // acceptedHarmony: Stores the isolated chord progression as a separate ABC layer (e.g. V:Chords).
+  // This is used to render the separate piano/guitar highlights and the dedicated ABCJS chord staff.
   const [acceptedHarmony, setAcceptedHarmony] = useState<TheoryAssistantLayerProposal | null>(null);
+  // layerVisibility: Toggles to independently show/hide the melody staff and the chord staff in the preview.
+  const [layerVisibility, setLayerVisibility] = useState({ melody: true, harmony: true });
+  // currentSuggestion: Tracks the theory assistant's real-time localized analysis of the active chords.
   const [currentSuggestion, setCurrentSuggestion] = useState<TheoryAssistantArrangementSuggestion | null>(null);
   const [engine, setEngine] = useState<"piano" | "fingerstyle">("piano");
   const [profileId, setProfileId] = useState<FingerstyleComposerProfileId>("strict-pima");
@@ -92,7 +103,24 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
   }
 
   if (step === "harmony") {
-    const harmonyPreviewAbc = acceptedHarmony ? `${melodyAbc.trimEnd()}\n\n${acceptedHarmony.abc}` : melodyAbc;
+    // --- PREVIEW RENDERER LOGIC ---
+    // Dynamically assembles the ABC notation string based on the active Layer Visibility toggles.
+    // If melody is disabled but harmony is enabled, we extract the structural headers (K:, M:, etc.) 
+    // from the melody string so the chord layer remains syntactically valid in ABCJS.
+    let harmonyPreviewAbc = "";
+    if (layerVisibility.melody && layerVisibility.harmony && acceptedHarmony) {
+      harmonyPreviewAbc = `${melodyAbc.trimEnd()}\n\n${acceptedHarmony.abc}`;
+    } else if (layerVisibility.melody) {
+      harmonyPreviewAbc = melodyAbc;
+    } else if (layerVisibility.harmony && acceptedHarmony) {
+      // Extract header from melodyAbc to make the chord track valid on its own
+      const headerLines = melodyAbc.split('\n').filter(line => /^[A-Z]:/.test(line));
+      harmonyPreviewAbc = `${headerLines.join('\n')}\n\n${acceptedHarmony.abc}`;
+    } else {
+      // If both are hidden, just show an empty score with headers
+      const headerLines = melodyAbc.split('\n').filter(line => /^[A-Z]:/.test(line));
+      harmonyPreviewAbc = headerLines.join('\n');
+    }
 
     return (
       <div className="space-y-6">
@@ -120,8 +148,8 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
                           scale: pipeline.harmonization.scale,
                           timeSignature: pipeline.harmonization.timeSignature
                         });
-                        setMelodyAbc(result.abc);
-                        setLlmExplanation(result.explanation);
+                        setAiSuggestions(result.options);
+                        setSelectedSuggestionIndex(null);
                       } catch (err) {
                         console.error(err);
                         alert("Failed to harmonize using AI.");
@@ -131,13 +159,48 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
                     }}
                     className="rounded-xl border border-sky-400/30 bg-sky-500/10 px-3 py-2 text-xs font-bold text-sky-600 transition hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-50 dark:text-sky-400"
                   >
-                    {isHarmonizing ? "Harmonizing..." : "✨ Suggest AI Harmonization"}
+                    {isHarmonizing ? "Generating Options..." : "✨ Suggest AI Harmonization"}
                   </button>
                 </div>
-                {llmExplanation && (
-                  <div className="mt-4 rounded-xl border border-sky-400/20 bg-sky-500/10 p-3">
-                    <p className="text-xs font-semibold text-sky-700 dark:text-sky-300">AI Theory Assistant Explanation</p>
-                    <p className="mt-1 text-xs text-sky-800 dark:text-sky-200">{llmExplanation}</p>
+                
+                {aiSuggestions.length > 0 && (
+                  <div className="mt-4 space-y-3">
+                    <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">AI Suggested Progressions</h3>
+                    <div className="grid gap-3 sm:grid-cols-1">
+                      {aiSuggestions.map((option, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => {
+                            setSelectedSuggestionIndex(idx);
+                            setMelodyAbc(option.abc);
+                            
+                            // Automatically accept it as a harmony layer to generate the separate V:Chords staff
+                            try {
+                              const proposal = buildTheoryAssistantLayerProposal(option.abc, { skillLevel: "intermediate", capoFret: 0 });
+                              proposal.name = `AI Option: ${option.progression_name}`;
+                              setAcceptedHarmony(proposal);
+                            } catch (e) {
+                              console.error("Failed to build layer proposal for AI option", e);
+                            }
+                          }}
+                          className={`text-left rounded-xl border p-4 transition-all focus:outline-none focus:ring-2 focus:ring-amber-500/50 ${
+                            selectedSuggestionIndex === idx
+                              ? "border-amber-400 bg-amber-500/10 shadow-sm"
+                              : "border-zinc-200 bg-white hover:border-amber-300/50 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950/40 dark:hover:bg-zinc-900"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <h4 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">Option {idx + 1}: {option.progression_name}</h4>
+                            {selectedSuggestionIndex === idx && (
+                              <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-bold text-white">Active</span>
+                            )}
+                          </div>
+                          <p className="mt-1 text-xs leading-5 text-zinc-600 dark:text-zinc-400">
+                            {option.explanation}
+                          </p>
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
               </section>
@@ -146,6 +209,30 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
           )}
           preview={(
             <>
+              <section className="mb-6 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950/60">
+                <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Layer Visibility</h2>
+                <div className="mt-3 flex gap-6">
+                  <label className="flex items-center gap-2 text-sm font-semibold text-zinc-800 dark:text-zinc-200 cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      className="rounded border-zinc-300 text-amber-500 focus:ring-amber-500"
+                      checked={layerVisibility.melody} 
+                      onChange={e => setLayerVisibility(v => ({ ...v, melody: e.target.checked }))} 
+                    /> 
+                    Melody Layer
+                  </label>
+                  <label className="flex items-center gap-2 text-sm font-semibold text-zinc-800 dark:text-zinc-200 cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      className="rounded border-zinc-300 text-amber-500 focus:ring-amber-500"
+                      checked={layerVisibility.harmony} 
+                      onChange={e => setLayerVisibility(v => ({ ...v, harmony: e.target.checked }))} 
+                    /> 
+                    Harmonic Chord Progression Layer
+                  </label>
+                </div>
+              </section>
+
               <div>
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Harmonization Preview</h3>
