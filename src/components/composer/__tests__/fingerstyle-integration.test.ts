@@ -10,7 +10,7 @@ K:Em
 |: E2 E2 G2 A2 | B4 B2 A2 | G2 A2 B2 G2 | E8 :|`;
 
 describe("fingerstyle Composer integration", () => {
-  it("builds a Composer layer, playability inspection, and synchronized visual events for the selected profile", () => {
+  it("builds a Composer layer, playability inspection, and synchronized visual markers for the selected profile", () => {
     const integration = buildFingerstyleComposerIntegration(sampleAbc, ["Em", "Bm", "G", "Em"], {
       pickingProfile: "folk-travis",
     });
@@ -41,29 +41,24 @@ describe("fingerstyle Composer integration", () => {
         expect.objectContaining({ string: 1, fret: 0, note: "E", tone: "melody" }),
       ])
     );
-    expect(integration.handOverlayEvents).toEqual(
+    expect(integration.noteMarkers).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           id: "fingerstyle-picking-0-1-thumb-clock-6-0",
-          instrument: "guitar",
           hand: "right",
-          finger: "p",
-          target: expect.objectContaining({ label: "thumb-clock string 6 fret 0" }),
-          cursorSeconds: 0,
+          fingerNumber: 1,
+          noteLabel: "string 6 fret 0",
+          techniqueLabel: "thumb-clock (p)",
           measureIndex: 0,
+          beat: 1,
         }),
-      ])
-    );
-    expect(integration.transitionPathEvents).toEqual(
-      expect.arrayContaining([
         expect.objectContaining({
-          instrument: "guitar",
-          hand: "right",
-          finger: "p",
-          fromMeasureIndex: 0,
-          toMeasureIndex: 1,
-          from: expect.objectContaining({ label: "thumb-clock string 6 fret 0" }),
-          to: expect.objectContaining({ label: "thumb-clock string 5 fret 2" }),
+          id: "fingerstyle-fretting-1-1-thumb-clock-5-2",
+          hand: "left",
+          fingerNumber: 1,
+          noteLabel: "string 5 fret 2",
+          measureIndex: 1,
+          beat: 1,
         }),
       ])
     );
@@ -83,21 +78,21 @@ describe("fingerstyle Composer integration", () => {
       valid: true,
       failedConstraints: [],
     });
-    expect(integration.handOverlayEvents).toEqual(
+    expect(integration.noteMarkers).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           id: "fingerstyle-picking-0-1-pinch-1-0",
           hand: "right",
-          finger: "a",
-          target: expect.objectContaining({ label: "pinch string 1 fret 0" }),
-          cursorSeconds: 0,
+          fingerNumber: 4,
+          techniqueLabel: "pinch (a)",
+          noteLabel: "string 1 fret 0",
         }),
         expect.objectContaining({
           id: "fingerstyle-picking-0-2-guide-tone-3-0",
           hand: "right",
-          finger: "i",
-          target: expect.objectContaining({ label: "guide-tone string 3 fret 0" }),
-          cursorSeconds: 0.5,
+          fingerNumber: 2,
+          techniqueLabel: "guide-tone (i)",
+          noteLabel: "string 3 fret 0",
         }),
       ])
     );

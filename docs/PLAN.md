@@ -70,8 +70,8 @@ This document outlines the step-by-step implementation plan for the Bhajan Song 
 - **Upward Construction Context**: Reuse the core arrangement pipeline to build inspectable melody, harmonization, accompaniment, rhythm/percussion, bassline, and optional counter-melody source layers before any guitar reduction begins.
 - **Downward Compression Algorithm**: Implement `fingerstyle-compressor.ts` to route melody to strings 1-3, route root bass notes to strings 4-6, validate Beat 1 melody/bass pairings, prune non-essential 5ths before 3rds/7ths, place guide tones on weak beats or melody rests, and propose transposition fallbacks when fret-stretch limits exceed 4-5 frets.
 - **Physical Hand Mapping**: Implement `guitar-playability.ts` and `picking-profiles.ts` for fretting-finger count, picking-finger count, Strict PIMA mapping, Folk / Travis Override mapping, thumb-clock bass events, synchronous pinch events, off-beat syncopation, and string-slap snare simulation on beats 2 and 4.
-- **Fingerstyle Output Contract**: Expose a structured intermediate result containing source layers, outer voice map, playability report, fallback suggestions, inner voice reduction, rhythmic event map, profile metadata, final ABC layer, tablature/string-position metadata, fretboard-highlight events, and SVG hand-overlay animation events.
-- **Composer and Visual Integration**: Let composers choose Strict PIMA vs. Folk / Travis profiles, inspect playability failures, accept the generated fingerstyle layer into the Composer, and drive synchronized guitar fretboard and SVG hand-overlay events during playback.
+- **Fingerstyle Output Contract**: Expose a structured intermediate result containing source layers, outer voice map, playability report, fallback suggestions, inner voice reduction, rhythmic event map, profile metadata, final ABC layer, tablature/string-position metadata, fretboard-highlight events, and numbered note-marker events.
+- **Composer and Visual Integration**: Let composers choose Strict PIMA vs. Folk / Travis profiles, inspect playability failures, accept the generated fingerstyle layer into the Composer, and drive synchronized guitar fretboard and numbered note-marker events during playback.
 - **Validation & Tests**: Add behavior-focused coverage for layer ordering, string routing, fret-stretch failures, transposition fallback suggestions, guide-tone pruning, weak-beat placement, Travis thumb-clock timing, string-slap events, profile-specific picking assignments, and visual event streams.
 
 ## 5D. Piano Accompaniment Generation Engine
@@ -101,15 +101,15 @@ This document outlines the step-by-step implementation plan for the Bhajan Song 
 
 - **Instrument Renderers (`GuitarFretboard.tsx`, `PianoKeyboard.tsx`)**: Build the SVG interactive components showing finger positions and highlighted keys, adapting logic from the existing `music-theory` project.
 - **Synchronized Instrument Highlighting**: Connect Guitar and Piano renderers to Music Sheet playback cursor events so currently playing ABC notes/chords highlight the matching guitar fret/string or piano key in real time.
-- **Animated Hands Overlay (`SvgHandsOverlay.tsx`)**: Implement reusable SVG hands image overlays at approximately 50% opacity for Guitar and Piano views. The overlays must animate hand positions and individual finger movements according to the active note/fingering event from playback, not a free-running decorative animation.
-  - **Guitar Transition Path Animator**: Implement path-tracing animations between sequential chord shapes (chord passing) and finger-to-string coordinate targets for fingerstyle patterns, synced to the specific measure.
-  - **Piano Split-Hands Visualization**: Build support for separate left-hand and right-hand overlays (with color-coded markers), and implement UI switches to toggle Left Hand Only, Right Hand Only, or Combined Hands-Together modes.
-  - **Pedal Animation Graphic**: Create a pedal indicator panel rendering pedal down/hold/flush states in real-time, bound to MIDI CC 64 events and measures.
+- **Numbered Note Markers (`InstrumentNoteMarkers.tsx`)**: Implement reusable numbered note markers for Guitar and Piano views. Markers render `(1)` through `(5)` on active fret/string or key targets, using blue for left hand and yellow for right hand, and follow playback note/fingering events.
+  - **Guitar Fingering Marker Mapper**: Map chord-shape and fingerstyle events to string/fret marker coordinates, with technique labels synced to the specific measure.
+  - **Piano Split-Hand Markers**: Build support for separate left-hand and right-hand markers, and implement UI switches to toggle Left Hand Only, Right Hand Only, or Combined Hands-Together modes.
+  - **Pedal Indicator Graphic**: Create a pedal indicator panel rendering pedal down/hold/flush states in real-time, bound to MIDI CC 64 events and measures.
 - **Theory Assistant UI (`TheoryAssistant.tsx`)**: Create the side panel for users to specify constraints (capo, skill level) and review/accept auto-harmonized arrangements into their Composer layers.
 
 ## 7. Quality Assurance, CI & Community Tools
 <!-- beads-id: br-plan-07 | satisfies: prd-bsc-s11, prd-bsc-s18, prd-bsc-s19, prd-bsc-s20, prd-bsc-s21, prd-bsc-s26 -->
 
 - **Unit Testing**: Configure Vitest and write assertion suites for the Theory Engine (manual mode) and the Song Loader.
-- **E2E Testing**: Setup Playwright to assert Playback Module UI toggles and Composer workflow scenarios, including shared Music Sheet rendering in both Playback and Composer, tempo/speed changes, loop controls, note highlighting, and synchronized Guitar/Piano highlight + SVG hands overlay behavior.
+- **E2E Testing**: Setup Playwright to assert Playback Module UI toggles and Composer workflow scenarios, including shared Music Sheet rendering in both Playback and Composer, tempo/speed changes, loop controls, note highlighting, and synchronized Guitar/Piano highlight + numbered note-marker behavior.
 - **Validation Pipeline**: Build an automated script and an API endpoint (`api/validate/route.ts`) to ensure submitted Pull Requests contain valid YAML schemas and parseable ABC notation.

@@ -1,9 +1,5 @@
 import { getGuitarFretY, getGuitarStringX, type GuitarFretPosition } from "../instruments/GuitarFretboard";
-import {
-  buildSvgHandTransitionPathEvents,
-  type SvgHandFingeringEvent,
-  type SvgHandTransitionPathEvent,
-} from "../instruments/SvgHandsOverlay";
+import type { InstrumentNoteMarker } from "../instruments/InstrumentNoteMarkers";
 import { generateFingerstyleArrangement, type FingerstyleArrangement } from "@/lib/theory/fingerstyle-arranger";
 import type { FingerstyleCompressionOptions } from "@/lib/theory/fingerstyle-compressor";
 import type { ComposerLayer } from "./LayerManager";
@@ -29,8 +25,7 @@ export interface FingerstyleComposerIntegration {
   fretboard: {
     positions: GuitarFretPosition[];
   };
-  handOverlayEvents: SvgHandFingeringEvent[];
-  transitionPathEvents: SvgHandTransitionPathEvent[];
+  noteMarkers: InstrumentNoteMarker[];
 }
 
 export const FINGERSTYLE_PROFILE_OPTIONS: FingerstyleComposerProfileOption[] = [
@@ -48,12 +43,6 @@ export const FINGERSTYLE_PROFILE_OPTIONS: FingerstyleComposerProfileOption[] = [
 
 function profileOptionFor(profileId: FingerstyleComposerProfileId): FingerstyleComposerProfileOption {
   return FINGERSTYLE_PROFILE_OPTIONS.find((profile) => profile.id === profileId) ?? FINGERSTYLE_PROFILE_OPTIONS[0];
-}
-
-function beatsPerMeasure(timeSignature: string): number {
-  const [beats] = timeSignature.split("/");
-  const parsed = Number(beats);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 4;
 }
 
 function toneForRole(role: string): GuitarFretPosition["tone"] {
@@ -107,25 +96,21 @@ function buildFretboardPositions(arrangement: FingerstyleArrangement): GuitarFre
   }));
 }
 
-function buildHandOverlayEvents(arrangement: FingerstyleArrangement): SvgHandFingeringEvent[] {
-  const beats = beatsPerMeasure(arrangement.timeSignature);
-  const secondsPerBeat = 0.5;
-
-  return arrangement.outputContract.artifacts.handOverlayEvents.map((event) => {
+function buildNoteMarkers(arrangement: FingerstyleArrangement): InstrumentNoteMarker[] {
+  return arrangement.outputContract.artifacts.noteMarkerEvents.map((event) => {
     const targetString = event.string ?? 3;
     const targetFret = event.fret === 0 ? 0 : Math.max(1, event.fret);
 
     return {
-      id: `fingerstyle-${event.hand}-${event.measureIndex}-${event.beat}-${event.technique}-${event.string ?? "body"}-${event.fret}`,
-      instrument: "guitar",
-      hand: event.hand === "picking" ? "right" : "left",
-      finger: event.finger,
-      target: {
-        x: getGuitarStringX(targetString),
-        y: getGuitarFretY(targetFret),
-        label: event.string === null ? event.technique : `${event.technique} string ${event.string} fret ${event.fret}`,
-      },
-      cursorSeconds: (event.measureIndex * beats + event.beat - 1) * secondsPerBeat,
+      id: `fingerstyle-${event.sourceHand}-${event.measureIndex}-${event.beat}-${event.technique}-${event.string ?? "body"}-${event.fret}`,
+      hand: event.hand,
+      fingerNumber: event.fingerNumber,
+      x: getGuitarStringX(targetString),
+      y: getGuitarFretY(targetFret),
+      noteLabel: event.string === null ? event.technique : `string ${event.string} fret ${event.fret}`,
+      techniqueLabel: event.musicalFingering
+        ? `${event.technique} (${event.musicalFingering})`
+        : event.technique,
       measureIndex: event.measureIndex,
       beat: event.beat,
     };
@@ -140,7 +125,7 @@ export function buildFingerstyleComposerIntegration(
   const arrangement = generateFingerstyleArrangement(abcString, progression, options);
   const selectedProfile = profileOptionFor(options.pickingProfile ?? arrangement.outputContract.profileMetadata.id);
 
-  const handOverlayEvents = buildHandOverlayEvents(arrangement);
+  const noteMarkers = buildNoteMarkers(arrangement);
 
   return {
     selectedProfile,
@@ -148,7 +133,6 @@ export function buildFingerstyleComposerIntegration(
     composerLayer: buildComposerLayer(arrangement, selectedProfile),
     playability: buildPlayability(arrangement),
     fretboard: { positions: buildFretboardPositions(arrangement) },
-    handOverlayEvents,
-    transitionPathEvents: buildSvgHandTransitionPathEvents(handOverlayEvents),
+    noteMarkers,
   };
 }

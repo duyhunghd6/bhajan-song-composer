@@ -1,4 +1,4 @@
-import type { SvgHandFingeringEvent } from "@/components/instruments/SvgHandsOverlay";
+import type { InstrumentNoteMarker } from "@/components/instruments/InstrumentNoteMarkers";
 import {
   getGuitarFretY,
   getGuitarStringX,
@@ -29,15 +29,15 @@ export interface SynchronizedInstrumentHighlights {
   guitarPositions: GuitarFretPosition[];
   guitarOpenStrings: number[];
   guitarStartFret: number;
-  guitarHandOverlayEvents: SvgHandFingeringEvent[];
-  pianoHandOverlayEvents: SvgHandFingeringEvent[];
+  guitarNoteMarkers: InstrumentNoteMarker[];
+  pianoNoteMarkers: InstrumentNoteMarker[];
   statusText: string;
 }
 
 const EMPTY_STATUS = "Start playback or click a note to highlight matching keys and frets.";
 const SYNCHRONIZED_PIANO_START_OCTAVE = 3;
 const SYNCHRONIZED_PIANO_OCTAVE_COUNT = 3;
-const PIANO_HAND_TARGET_Y = 80;
+const PIANO_MARKER_TARGET_Y = 80;
 
 const FIRST_POSITION_GUITAR_NOTES: Record<string, GuitarFretPosition> = {
   C: { string: 5, fret: 3, note: "C", tone: "melody" },
@@ -121,34 +121,36 @@ function getGuitarStartFret(positions: GuitarFretPosition[]): number {
   return Math.max(1, Math.min(minFret, 4));
 }
 
-function getGuitarHandFinger(position: GuitarFretPosition): string {
-  if (position.finger) return String(position.finger);
-  return position.string >= 4 ? "p" : "i";
+function clampFingerNumber(value: number): InstrumentNoteMarker["fingerNumber"] {
+  if (value <= 1) return 1;
+  if (value >= 5) return 5;
+  return value as InstrumentNoteMarker["fingerNumber"];
 }
 
-function buildGuitarHandOverlayEvents(
+function buildGuitarNoteMarkers(
   positions: GuitarFretPosition[],
   cursor: PlaybackCursorLike,
   startFret: number
-): SvgHandFingeringEvent[] {
-  return positions.map((position) => ({
-    id: `guitar-${position.string}-${position.fret}-${cursor.cursorSeconds.toFixed(1)}`,
-    instrument: "guitar",
-    hand: "right",
-    finger: getGuitarHandFinger(position),
-    target: {
+): InstrumentNoteMarker[] {
+  return positions.map((position) => {
+    const isFretted = position.fret > 0;
+    const fingerNumber = typeof position.finger === "number" ? position.finger : isFretted ? position.fret : 1;
+
+    return {
+      id: `guitar-${position.string}-${position.fret}-${cursor.cursorSeconds.toFixed(1)}`,
+      hand: isFretted ? "left" : "right",
+      fingerNumber: clampFingerNumber(fingerNumber),
       x: getGuitarStringX(position.string),
       y: position.fret === 0 ? 28 : getGuitarFretY(position.fret, startFret),
-      label: position.note,
-    },
-    cursorSeconds: cursor.cursorSeconds,
-  }));
+      noteLabel: position.note,
+    };
+  });
 }
 
-function buildPianoHandOverlayEvents(
+function buildPianoNoteMarkers(
   highlights: PianoHighlightedNote[],
   cursor: PlaybackCursorLike
-): SvgHandFingeringEvent[] {
+): InstrumentNoteMarker[] {
   const keys = buildPianoKeys(SYNCHRONIZED_PIANO_START_OCTAVE, SYNCHRONIZED_PIANO_OCTAVE_COUNT);
 
   return highlights.flatMap((highlight, index) => {
@@ -156,20 +158,16 @@ function buildPianoHandOverlayEvents(
     if (!key) return [];
 
     const hand = highlight.hand ?? (key.octave < 4 ? "left" : "right");
-    const finger = highlight.finger ?? (hand === "left" ? 5 : 1);
+    const fingerNumber = typeof highlight.finger === "number" ? highlight.finger : hand === "left" ? 5 : 1;
 
     return [
       {
         id: `piano-${key.note}-${cursor.cursorSeconds.toFixed(1)}`,
-        instrument: "piano",
         hand,
-        finger,
-        target: {
-          x: key.x + key.width / 2,
-          y: Math.min(PIANO_HAND_TARGET_Y + index * 8, key.height - 12),
-          label: key.note,
-        },
-        cursorSeconds: cursor.cursorSeconds,
+        fingerNumber: clampFingerNumber(fingerNumber),
+        x: key.x + key.width / 2,
+        y: Math.min(PIANO_MARKER_TARGET_Y + index * 8, key.height - 12),
+        noteLabel: key.note,
       },
     ];
   });
@@ -186,8 +184,8 @@ export function buildSynchronizedInstrumentHighlights(
       guitarPositions: [],
       guitarOpenStrings: [],
       guitarStartFret: 1,
-      guitarHandOverlayEvents: [],
-      pianoHandOverlayEvents: [],
+      guitarNoteMarkers: [],
+      pianoNoteMarkers: [],
       statusText: EMPTY_STATUS,
     };
   }
@@ -209,8 +207,8 @@ export function buildSynchronizedInstrumentHighlights(
     guitarPositions,
     guitarOpenStrings,
     guitarStartFret,
-    guitarHandOverlayEvents: buildGuitarHandOverlayEvents(guitarPositions, cursor, guitarStartFret),
-    pianoHandOverlayEvents: buildPianoHandOverlayEvents(pianoHighlights, cursor),
+    guitarNoteMarkers: buildGuitarNoteMarkers(guitarPositions, cursor, guitarStartFret),
+    pianoNoteMarkers: buildPianoNoteMarkers(pianoHighlights, cursor),
     statusText: `Highlighting ${noteNames} at ${cursor.cursorSeconds.toFixed(1)}s`,
   };
 }

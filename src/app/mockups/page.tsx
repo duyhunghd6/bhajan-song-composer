@@ -48,6 +48,14 @@ const MOCKUP_GATES: MockupGate[] = [
     purpose:
       "Integration handshake, density grid, bass map, melodic gaps, Djembe, Flute/Violin yield states, conflicts, preview, and layer activity.",
   },
+  {
+    title: "Visual Instrument & Note Markers POC",
+    unid: "br-plan-09.c06",
+    href: "/mockups/visual-instruments",
+    status: "review-ready",
+    purpose:
+      "Synchronized guitar/piano highlights and numbered blue/yellow note markers driven by Music Sheet playback cursor events.",
+  },
 ];
 
 export default function MockupsPage() {

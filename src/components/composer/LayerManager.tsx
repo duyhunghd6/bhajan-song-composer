@@ -361,7 +361,7 @@ function FingerstyleIntegrationPanel({
         </h3>
         <p className="text-sm leading-6 text-zinc-600 dark:text-zinc-400">
           Generate a solo-guitar layer from the active melody, inspect playability, then accept the result into
-          the Composer stack with synchronized fretboard and hand-overlay events.
+          the Composer stack with synchronized fretboard and numbered note-marker events.
         </p>
       </div>
 
@@ -410,7 +410,7 @@ function FingerstyleIntegrationPanel({
           <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-900/70 dark:bg-emerald-950/30 dark:text-emerald-300">
             <p className="font-semibold">{integration.playability.status}</p>
             <p className="mt-1 text-xs">
-              Max fret span: {integration.playability.maxFretSpan} frets · {integration.handOverlayEvents.length} visual events
+              Max fret span: {integration.playability.maxFretSpan} frets · {integration.noteMarkers.length} marker events
             </p>
             {integration.playability.failedConstraints.length > 0 && (
               <p className="mt-1 text-xs">
@@ -421,9 +421,9 @@ function FingerstyleIntegrationPanel({
 
           <GuitarFretboard
             title="Fingerstyle visual inspection"
-            subtitle={`${integration.selectedProfile.label} · synchronized fretboard and hand overlay`}
+            subtitle={`${integration.selectedProfile.label} · synchronized fretboard and note markers`}
             positions={integration.fretboard.positions}
-            handOverlayEvents={integration.handOverlayEvents.slice(0, 1)}
+            noteMarkers={integration.noteMarkers.slice(0, 1)}
             className="bg-white/90 dark:bg-zinc-950/70"
           />
 

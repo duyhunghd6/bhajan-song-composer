@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { normalizeAbcNote } from "@/lib/theory/melody-analyzer";
-import SvgHandsOverlay, { type SvgHandFingeringEvent } from "./SvgHandsOverlay";
+import InstrumentNoteMarkers, { type InstrumentNoteMarker } from "./InstrumentNoteMarkers";
 import { getNoteValue } from "@/lib/theory/scales";
 
 const WHITE_NOTES = ["C", "D", "E", "F", "G", "A", "B"];
@@ -56,7 +56,7 @@ export interface PianoKeyboardProps {
   startOctave?: number;
   octaveCount?: number;
   highlights?: PianoHighlightedNote[];
-  handOverlayEvents?: SvgHandFingeringEvent[];
+  noteMarkers?: InstrumentNoteMarker[];
   handMode?: PianoHandMode;
   onHandModeChange?: (handMode: PianoHandMode) => void;
   className?: string;
@@ -144,12 +144,12 @@ function getVisibleHighlights(
   return highlights.filter((highlight) => handMatchesMode(highlight.hand, handMode));
 }
 
-function getVisibleHandEvents(
-  events: SvgHandFingeringEvent[],
+function getVisibleNoteMarkers(
+  markers: InstrumentNoteMarker[],
   handMode: PianoHandMode
-): SvgHandFingeringEvent[] {
-  if (handMode === "combined") return events;
-  return events.filter((event) => event.hand === handMode);
+): InstrumentNoteMarker[] {
+  if (handMode === "combined") return markers;
+  return markers.filter((marker) => marker.hand === handMode);
 }
 
 function getWhiteHighlightClass(highlight: PianoHighlightedNote): string {
@@ -196,7 +196,7 @@ export default function PianoKeyboard({
   startOctave = 3,
   octaveCount = 2,
   highlights = [],
-  handOverlayEvents = [],
+  noteMarkers = [],
   handMode,
   onHandModeChange,
   className = "",
@@ -205,7 +205,7 @@ export default function PianoKeyboard({
   const activeHandMode = handMode ?? uncontrolledHandMode;
   const keys = buildPianoKeys(startOctave, octaveCount);
   const visibleHighlights = getVisibleHighlights(highlights, activeHandMode);
-  const visibleHandEvents = getVisibleHandEvents(handOverlayEvents, activeHandMode);
+  const visibleNoteMarkers = getVisibleNoteMarkers(noteMarkers, activeHandMode);
   const whiteKeys = keys.filter((key) => key.color === "white");
   const blackKeys = keys.filter((key) => key.color === "black");
   const width = whiteKeys.length * WHITE_KEY_WIDTH;
@@ -256,12 +256,13 @@ export default function PianoKeyboard({
       </div>
 
       <div className="overflow-x-auto">
-        <svg
-          role="img"
-          aria-label={`${title} piano keyboard diagram`}
-          viewBox={`0 0 ${width} ${height}`}
-          className="min-w-[520px] text-zinc-900 dark:text-zinc-100"
-        >
+        <div className="relative min-w-[520px]" style={{ width: `${width}px` }}>
+          <svg
+            role="img"
+            aria-label={`${title} piano keyboard diagram`}
+            viewBox={`0 0 ${width} ${height}`}
+            className="block h-auto w-full text-zinc-900 dark:text-zinc-100"
+          >
           <rect
             x="0"
             y="0"
@@ -353,8 +354,9 @@ export default function PianoKeyboard({
             );
           })}
 
-          <SvgHandsOverlay title={`${title} hands`} events={visibleHandEvents} width={width} height={height} />
-        </svg>
+          </svg>
+          <InstrumentNoteMarkers title={`${title} fingering`} markers={visibleNoteMarkers} width={width} height={height} />
+        </div>
       </div>
     </section>
   );

@@ -1,4 +1,4 @@
-import SvgHandsOverlay, { type SvgHandFingeringEvent, type SvgHandTransitionPathEvent } from "./SvgHandsOverlay";
+import InstrumentNoteMarkers, { type InstrumentNoteMarker } from "./InstrumentNoteMarkers";
 
 const DEFAULT_TUNING = ["E", "A", "D", "G", "B", "E"];
 const DEFAULT_STRING_COUNT = 6;
@@ -32,8 +32,7 @@ export interface GuitarFretboardProps {
   startFret?: number;
   fretCount?: number;
   capoFret?: number;
-  handOverlayEvents?: SvgHandFingeringEvent[];
-  transitionPathEvents?: SvgHandTransitionPathEvent[];
+  noteMarkers?: InstrumentNoteMarker[];
   className?: string;
 }
 
@@ -114,8 +113,7 @@ export default function GuitarFretboard({
   startFret = 1,
   fretCount = DEFAULT_FRET_COUNT,
   capoFret,
-  handOverlayEvents = [],
-  transitionPathEvents = [],
+  noteMarkers = [],
   className = "",
 }: GuitarFretboardProps) {
   const stringCount = tuning.length || DEFAULT_STRING_COUNT;
@@ -276,10 +274,9 @@ export default function GuitarFretboard({
             );
           })}
 
-          <SvgHandsOverlay
-            title={`${title} hands`}
-            events={handOverlayEvents}
-            transitionPathEvents={transitionPathEvents}
+          <InstrumentNoteMarkers
+            title={`${title} fingering`}
+            markers={noteMarkers}
             width={width}
             height={height}
           />

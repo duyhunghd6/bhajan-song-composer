@@ -1,6 +1,13 @@
 export { default as GuitarFretboard } from "./GuitarFretboard";
 export type { GuitarFretboardProps, GuitarFretPosition } from "./GuitarFretboard";
 
+export { default as InstrumentNoteMarkers } from "./InstrumentNoteMarkers";
+export type {
+  InstrumentMarkerHand,
+  InstrumentNoteMarker,
+  InstrumentNoteMarkersProps,
+} from "./InstrumentNoteMarkers";
+
 export { default as PianoKeyboard } from "./PianoKeyboard";
 export type {
   NormalizedPianoNote,
@@ -16,11 +23,3 @@ export type {
   PianoPedalDisplayState,
   PianoPedalIndicatorProps,
 } from "./PianoPedalIndicator";
-
-export { buildSvgHandTransitionPathEvents, default as SvgHandsOverlay } from "./SvgHandsOverlay";
-export type {
-  SvgHandFingeringEvent,
-  SvgHandsOverlayProps,
-  SvgHandTarget,
-  SvgHandTransitionPathEvent,
-} from "./SvgHandsOverlay";

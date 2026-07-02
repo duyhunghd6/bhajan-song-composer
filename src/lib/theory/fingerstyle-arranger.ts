@@ -168,23 +168,17 @@ export type FingerstyleFretboardHighlightEvent = FingerstyleTablaturePosition & 
   measureIndex: number;
 };
 
-export type FingerstyleHandOverlayEvent = {
+export interface FingerstyleNoteMarkerEvent {
   measureIndex: number;
   beat: number;
-  hand: "picking";
-  finger: FingerstylePhysicalHandEvent["pickingFinger"];
+  hand: "left" | "right";
+  sourceHand: "fretting" | "picking";
+  fingerNumber: 1 | 2 | 3 | 4 | 5;
+  musicalFingering?: string;
   technique: FingerstylePhysicalHandEvent["technique"];
   string: GuitarStringNumber | null;
   fret: number;
-} | {
-  measureIndex: number;
-  beat: number;
-  hand: "fretting";
-  finger: NonNullable<FingerstylePhysicalHandEvent["frettingFinger"]>;
-  technique: FingerstylePhysicalHandEvent["technique"];
-  string: GuitarStringNumber | null;
-  fret: number;
-};
+}
 
 export interface FingerstyleGeneratedArtifacts {
   finalAbc: string;
@@ -192,7 +186,7 @@ export interface FingerstyleGeneratedArtifacts {
     measures: FingerstyleTablatureMeasure[];
   };
   fretboardHighlightEvents: FingerstyleFretboardHighlightEvent[];
-  handOverlayEvents: FingerstyleHandOverlayEvent[];
+  noteMarkerEvents: FingerstyleNoteMarkerEvent[];
 }
 
 export interface FingerstyleOutputContract {
@@ -421,13 +415,21 @@ function buildGeneratedArtifacts(compression: FingerstyleDownwardCompression, fi
   const fretboardHighlightEvents = tablatureMeasures.flatMap((measure) =>
     measure.positions.map((position) => ({ ...position, measureIndex: measure.measureIndex }))
   );
-  const handOverlayEvents = compression.physicalHandMapping.flatMap((measure): FingerstyleHandOverlayEvent[] =>
+  const noteMarkerEvents = compression.physicalHandMapping.flatMap((measure): FingerstyleNoteMarkerEvent[] =>
     measure.events.flatMap((event) => {
-      const pickingEvent: FingerstyleHandOverlayEvent = {
+      const pickingFingerNumbers: Record<FingerstylePhysicalHandEvent["pickingFinger"], 1 | 2 | 3 | 4> = {
+        p: 1,
+        i: 2,
+        m: 3,
+        a: 4,
+      };
+      const pickingEvent: FingerstyleNoteMarkerEvent = {
         measureIndex: measure.measureIndex,
         beat: event.beat,
-        hand: "picking",
-        finger: event.pickingFinger,
+        hand: "right",
+        sourceHand: "picking",
+        fingerNumber: pickingFingerNumbers[event.pickingFinger],
+        musicalFingering: event.pickingFinger,
         technique: event.technique,
         string: event.string,
         fret: event.fret,
@@ -440,8 +442,9 @@ function buildGeneratedArtifacts(compression: FingerstyleDownwardCompression, fi
         {
           measureIndex: measure.measureIndex,
           beat: event.beat,
-          hand: "fretting",
-          finger: event.frettingFinger,
+          hand: "left",
+          sourceHand: "fretting",
+          fingerNumber: event.frettingFinger,
           technique: event.technique,
           string: event.string,
           fret: event.fret,
@@ -454,7 +457,7 @@ function buildGeneratedArtifacts(compression: FingerstyleDownwardCompression, fi
     finalAbc,
     tablature: { measures: tablatureMeasures },
     fretboardHighlightEvents,
-    handOverlayEvents,
+    noteMarkerEvents,
   };
 }
 

@@ -97,7 +97,7 @@ The playback screen is optimized for double-medium split playback: users can wat
 |  |                     Visual Instrument Highlight Panel                      |  |
 |  |  [Layout Toggles: Guitar Fretboard Mode / Piano Keyboard Mode]             |  |
 |  |                                                                            |  |
-|  |  [50% Opacity Animated SVG Hands Overlay showing physical fingerings]       |  |
+|  |  [Numbered Note Markers: blue left hand / yellow right hand]              |  |
 |  |  [Sustain Pedal Indicator: Up / Down] (For Piano mode)                     |  |
 |  +----------------------------------------------------------------------------+  |
 +----------------------------------------------------------------------------------+
@@ -251,7 +251,7 @@ sequenceDiagram
     Note over Inst: Synchronized highlighting triggers
     Music->>Inst: Broadcast active pitch event
     Inst->>User: Highlight Keys (Piano) / Frets (Guitar)
-    Inst->>User: Show 50% opacity animated SVG hands moving fingers
+    Inst->>User: Show numbered note markers (blue LH / yellow RH)
     Inst->>User: Update Sustain Pedal Up/Down indicator
 ```
 
@@ -324,8 +324,8 @@ sequenceDiagram
         UI->>Comp: Re-run compression in Dm
     end
 
-    Comp->>Fret: Output playability map & SVG finger positions
-    Fret->>User: Render fretboard with highlighted fret notes & fingers
+    Comp->>Fret: Output playability map & numbered marker positions
+    Fret->>User: Render fretboard with highlighted fret notes & numbered markers
     User->>UI: Click "Accept as Composer Layer"
 ```
 

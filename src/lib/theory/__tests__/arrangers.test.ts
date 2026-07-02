@@ -717,8 +717,16 @@ K:C
       fretboardHighlightEvents: expect.arrayContaining([
         expect.objectContaining({ measureIndex: 0, beat: 1, string: 6, fret: 0 }),
       ]),
-      handOverlayEvents: expect.arrayContaining([
-        expect.objectContaining({ measureIndex: 0, beat: 1, hand: "picking", finger: "p", technique: "thumb-clock" }),
+      noteMarkerEvents: expect.arrayContaining([
+        expect.objectContaining({
+          measureIndex: 0,
+          beat: 1,
+          hand: "right",
+          sourceHand: "picking",
+          fingerNumber: 1,
+          musicalFingering: "p",
+          technique: "thumb-clock",
+        }),
       ]),
     });
   });
