@@ -1,0 +1,73 @@
+import { useState, useEffect, useCallback } from "react";
+import type { HarmonizationOption } from "@/lib/theory/harmonization-candidates";
+import type { AccompanimentOption } from "@/lib/theory/accompaniment-candidates";
+import type { PianoAccompaniment } from "@/lib/theory/piano-accompaniment";
+import type { FingerstyleComposerIntegration } from "./fingerstyle-integration";
+import type { TheoryAssistantLayerProposal } from "./theory-assistant-layer";
+
+export interface WorkspaceState {
+  aiSuggestions: HarmonizationOption[];
+  selectedCandidateId: string | null;
+  acceptedHarmony: TheoryAssistantLayerProposal | null;
+  aiAccompanimentSuggestions: AccompanimentOption[];
+  selectedAccompanimentIndex: number | null;
+  pianoAccompanimentData: PianoAccompaniment | null;
+  guitarAccompanimentData: FingerstyleComposerIntegration | null;
+  generatedAccompaniment: string | null;
+}
+
+const DEFAULT_STATE: WorkspaceState = {
+  aiSuggestions: [],
+  selectedCandidateId: null,
+  acceptedHarmony: null,
+  aiAccompanimentSuggestions: [],
+  selectedAccompanimentIndex: null,
+  pianoAccompanimentData: null,
+  guitarAccompanimentData: null,
+  generatedAccompaniment: null,
+};
+
+export function useWorkspaceState(slug: string) {
+  const storageKey = `bhajan-song-composer:compose:${slug}:workspace`;
+
+  const [state, setState] = useState<WorkspaceState>(DEFAULT_STATE);
+  const [isHydrated, setIsHydrated] = useState(false);
+
+  // Load from local storage on mount
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(storageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        setState({
+          ...DEFAULT_STATE,
+          ...parsed,
+        });
+      }
+    } catch (e) {
+      console.error("Failed to load workspace state", e);
+    } finally {
+      setIsHydrated(true);
+    }
+  }, [storageKey]);
+
+  // Save to local storage whenever state changes, but ONLY if hydrated
+  useEffect(() => {
+    if (!isHydrated) return;
+    try {
+      window.localStorage.setItem(storageKey, JSON.stringify(state));
+    } catch (e) {
+      console.error("Failed to save workspace state", e);
+    }
+  }, [state, isHydrated, storageKey]);
+
+  const updateState = useCallback((updates: Partial<WorkspaceState>) => {
+    setState((prev) => ({ ...prev, ...updates }));
+  }, []);
+
+  return {
+    state,
+    updateState,
+    isHydrated,
+  };
+}

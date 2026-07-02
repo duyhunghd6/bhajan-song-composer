@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useEffect } from "react";
+import { useWorkspaceState } from "./useWorkspaceState";
 import type { ReactNode } from "react";
 import AbcjsPlaybackController from "@/components/music-sheet/AbcjsPlaybackController";
 import PianoKeyboard from "@/components/instruments/PianoKeyboard";
@@ -113,98 +114,33 @@ function ComposerNotationPreviewLayout({ source, preview }: ComposerNotationPrev
 export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: ComposerStepWorkspaceProps) {
   const [melodyAbc, setMelodyAbc] = useState(initialMelodyAbc ?? DEFAULT_ABC);
   const [isHarmonizing, setIsHarmonizing] = useState(false);
-  // --- AI HARMONIZATION STATE ---
-  // aiSuggestions: Stores the 5 options returned by the LLM Harmonization action.
-  const [aiSuggestions, setAiSuggestions] = useState<HarmonizationOption[]>([]);
-  // selectedCandidateId: Tracks which validated candidate is currently being previewed by the user.
-  const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
-
-  // --- AI ACCOMPANIMENT STATE ---
+    const { state: ws, updateState } = useWorkspaceState(slug);
   const [isGeneratingAccompaniment, setIsGeneratingAccompaniment] = useState(false);
-  const [aiAccompanimentSuggestions, setAiAccompanimentSuggestions] = useState<AccompanimentOption[]>([]);
-  const [selectedAccompanimentIndex, setSelectedAccompanimentIndex] = useState<number | null>(null);
-  const [pianoAccompanimentData, setPianoAccompanimentData] = useState<PianoAccompaniment | null>(null);
-  const [guitarAccompanimentData, setGuitarAccompanimentData] = useState<FingerstyleComposerIntegration | null>(null);
-  
-  // --- LAYER ARCHITECTURE STATE ---
-  // acceptedHarmony: Stores the isolated chord progression as a separate ABC layer (e.g. V:Chords).
-  // This is used to render the separate piano/guitar highlights and the dedicated ABCJS chord staff.
-  const [acceptedHarmony, setAcceptedHarmony] = useState<TheoryAssistantLayerProposal | null>(null);
-  // layerVisibility: Toggles to independently show/hide the melody staff and the chord staff in the preview.
   const [layerVisibility, setLayerVisibility] = useState({ melody: true, harmony: true });
-  // currentSuggestion: Tracks the theory assistant's real-time localized analysis of the active chords.
   const [currentSuggestion, setCurrentSuggestion] = useState<TheoryAssistantArrangementSuggestion | null>(null);
-  const [generatedAccompaniment, setGeneratedAccompaniment] = useState<string | null>(null);
   const [ensembleEnabled, setEnsembleEnabled] = useState({ djembe: true, flute: true, violin: false });
   const [copyStatus, setCopyStatus] = useState("Copy Markdown");
 
   // Derive the active ABC to use across steps. If a harmony option is selected, use it; otherwise fallback to the pure melody.
   const activeHarmonyOption = useMemo(() => {
-    if (!aiSuggestions || !selectedCandidateId) return null;
-    return aiSuggestions.find((opt, idx) => harmonizationOptionId(opt, idx) === selectedCandidateId) || null;
-  }, [aiSuggestions, selectedCandidateId]);
+    if (!ws.aiSuggestions || !ws.selectedCandidateId) return null;
+    return ws.aiSuggestions.find((opt, idx) => harmonizationOptionId(opt, idx) === ws.selectedCandidateId) || null;
+  }, [ws.aiSuggestions, ws.selectedCandidateId]);
 
   const activeAbc = activeHarmonyOption ? harmonizationOptionAbc(activeHarmonyOption) : melodyAbc;
 
-  // --- LOCAL STORAGE HYDRATION & PERSISTENCE ---
-  const storageKey = `bhajan-song-composer:compose:${slug}:workspace`;
-  const [isHydrated, setIsHydrated] = useState(false);
-  
+    // --- LOCAL STORAGE HYDRATION (Melody only, workspace is handled by useWorkspaceState) ---
   useEffect(() => {
     try {
-      const saved = window.localStorage.getItem(storageKey);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.aiSuggestions) setAiSuggestions(parsed.aiSuggestions);
-        if (parsed.selectedCandidateId !== undefined) setSelectedCandidateId(parsed.selectedCandidateId);
-        if (parsed.acceptedHarmony) setAcceptedHarmony(parsed.acceptedHarmony);
-        if (parsed.aiAccompanimentSuggestions) setAiAccompanimentSuggestions(parsed.aiAccompanimentSuggestions);
-        if (parsed.selectedAccompanimentIndex !== undefined) setSelectedAccompanimentIndex(parsed.selectedAccompanimentIndex);
-        if (parsed.pianoAccompanimentData !== undefined) setPianoAccompanimentData(parsed.pianoAccompanimentData);
-        if (parsed.guitarAccompanimentData !== undefined) setGuitarAccompanimentData(parsed.guitarAccompanimentData);
-        if (parsed.generatedAccompaniment !== undefined) setGeneratedAccompaniment(parsed.generatedAccompaniment);
-      }
-      
       const savedMelody = window.localStorage.getItem(`bhajan-song-composer:compose:${slug}:melody`);
-      if (savedMelody && !savedMelody.includes("T:Untitled Bhajan")) {
+      const isDefault = savedMelody === DEFAULT_ABC || (savedMelody && savedMelody.includes("T:New Bhajan Arrangement"));
+      if (savedMelody && !isDefault) {
         setMelodyAbc(savedMelody);
       }
     } catch (e) {
-      console.error("Failed to restore workspace state from localStorage", e);
-    } finally {
-      setIsHydrated(true);
+      console.error("Failed to restore melody state from localStorage", e);
     }
-  }, [slug, storageKey]);
-
-  useEffect(() => {
-    if (!isHydrated) return;
-    try {
-      const stateToSave = {
-        aiSuggestions,
-        selectedCandidateId,
-        acceptedHarmony,
-        aiAccompanimentSuggestions,
-        selectedAccompanimentIndex,
-        pianoAccompanimentData,
-        guitarAccompanimentData,
-        generatedAccompaniment,
-      };
-      window.localStorage.setItem(storageKey, JSON.stringify(stateToSave));
-    } catch (e) {
-      console.error("Failed to save workspace state to localStorage", e);
-    }
-  }, [
-    isHydrated,
-    storageKey,
-    aiSuggestions,
-    selectedCandidateId,
-    acceptedHarmony,
-    aiAccompanimentSuggestions,
-    selectedAccompanimentIndex,
-    pianoAccompanimentData,
-    guitarAccompanimentData,
-    generatedAccompaniment
-  ]);
+  }, [slug]);
 
   const pipeline = useMemo(() => {
     try {
@@ -234,14 +170,14 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
     // If melody is disabled but harmony is enabled, we extract the structural headers (K:, M:, etc.) 
     // from the melody string so the chord layer remains syntactically valid in ABCJS.
     let harmonyPreviewAbc = "";
-    if (layerVisibility.melody && layerVisibility.harmony && acceptedHarmony) {
-      harmonyPreviewAbc = `${activeAbc.trimEnd()}\n\n${acceptedHarmony.abc}`;
+    if (layerVisibility.melody && layerVisibility.harmony && ws.acceptedHarmony) {
+      harmonyPreviewAbc = `${activeAbc.trimEnd()}\n\n${ws.acceptedHarmony.abc}`;
     } else if (layerVisibility.melody) {
       harmonyPreviewAbc = activeAbc;
-    } else if (layerVisibility.harmony && acceptedHarmony) {
+    } else if (layerVisibility.harmony && ws.acceptedHarmony) {
       // Extract header from activeAbc to make the chord track valid on its own
       const headerLines = activeAbc.split('\n').filter(line => /^[A-Z]:/.test(line));
-      harmonyPreviewAbc = `${headerLines.join('\n')}\n\n${acceptedHarmony.abc}`;
+      harmonyPreviewAbc = `${headerLines.join('\n')}\n\n${ws.acceptedHarmony.abc}`;
     } else {
       // If both are hidden, just show an empty score with headers
       const headerLines = activeAbc.split('\n').filter(line => /^[A-Z]:/.test(line));
@@ -274,8 +210,8 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
                           scale: pipeline.harmonization.scale,
                           timeSignature: pipeline.harmonization.timeSignature
                         });
-                        setAiSuggestions(result.options);
-                        setSelectedCandidateId(null);
+                        updateState({ aiSuggestions: result.options });
+                        updateState({ selectedCandidateId: null });
                       } catch (err) {
                         console.error(err);
                         alert("Failed to harmonize using AI.");
@@ -292,9 +228,7 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
                       type="button"
                       onClick={() => {
                         setMelodyAbc(initialMelodyAbc);
-                        setAiSuggestions([]);
-                        setSelectedCandidateId(null);
-                        setAcceptedHarmony(null);
+                        updateState({ aiSuggestions: [], selectedCandidateId: null, acceptedHarmony: null });
                       }}
                       className="rounded-xl border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-xs font-bold text-rose-600 transition hover:bg-rose-500/20 dark:text-rose-400"
                     >
@@ -303,27 +237,27 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
                   )}
                 </div>
                 
-                {aiSuggestions.length > 0 && (
+                {ws.aiSuggestions.length > 0 && (
                   <div className="mt-4 space-y-3">
                     <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">AI Suggested Progressions</h3>
                     <div className="grid gap-3 sm:grid-cols-1">
-                      {aiSuggestions.map((option, idx) => {
+                      {ws.aiSuggestions.map((option, idx) => {
                         const candidateId = harmonizationOptionId(option, idx);
                         const candidateLabel = harmonizationOptionLabel(option);
                         const candidateAbc = harmonizationOptionAbc(option);
-                        const isSelected = selectedCandidateId === candidateId;
+                        const isSelected = ws.selectedCandidateId === candidateId;
 
                         return (
                           <button
                             key={candidateId}
                             onClick={() => {
-                              setSelectedCandidateId(candidateId);
+                              updateState({ selectedCandidateId: candidateId });
 
                               // Automatically accept it as a harmony layer to generate the separate V:Chords staff
                               try {
                                 const proposal = buildTheoryAssistantLayerProposal(candidateAbc, { skillLevel: "intermediate", capoFret: 0 });
                                 proposal.name = `AI Option: ${candidateLabel}`;
-                                setAcceptedHarmony(proposal);
+                                updateState({ acceptedHarmony: proposal });
                               } catch (e) {
                                 console.error("Failed to build layer proposal for AI option", e);
                               }
@@ -378,7 +312,7 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
                   </div>
                 )}
               </section>
-              <TheoryAssistant abc={activeAbc} onAcceptArrangement={setAcceptedHarmony} onAnalysisChange={setCurrentSuggestion} />
+              <TheoryAssistant abc={activeAbc} onAcceptArrangement={(val) => updateState({ acceptedHarmony: val })} onAnalysisChange={setCurrentSuggestion} />
             </>
           )}
           preview={(
@@ -450,7 +384,7 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
               <section className="h-full rounded-2xl border border-dashed border-zinc-300 bg-white/70 p-4 dark:border-zinc-700 dark:bg-zinc-950/50">
                 <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Chord Track Editor (Ghosted Melody below)</h2>
                 <pre className="mt-3 max-h-[min(54vh,640px)] overflow-auto whitespace-pre-wrap rounded-xl bg-zinc-50 p-3 text-xs leading-5 text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
-                  {`% Ghosted melody context\n${activeAbc}\n\n% Chord Track Editor\n${acceptedHarmony ? acceptedHarmony.abc : "% Accept an arrangement from the Theory Assistant to see the chord track here."}`}
+                  {`% Ghosted melody context\n${activeAbc}\n\n% Chord Track Editor\n${ws.acceptedHarmony ? ws.acceptedHarmony.abc : "% Accept an arrangement from the Theory Assistant to see the chord track here."}`}
                 </pre>
               </section>
             </div>
@@ -470,7 +404,7 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
       // Extract body lines (skip empty lines)
       const bodyLines = baseAbc.split('\n').filter(line => !/^[A-Z]:/.test(line) && line.trim() !== '');
 
-      if (!generatedAccompaniment) {
+      if (!ws.generatedAccompaniment) {
         // Default loading phase: Melody ABC but with hidden chord progression
         return [
           ...headerLines,
@@ -480,7 +414,7 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
       }
 
       // Strip headers from generated accompaniment to prevent creating a second tune
-      let accompanimentBody = generatedAccompaniment.replace(/^[A-Z]:.*(\r?\n|$)/gm, (match) => {
+      let accompanimentBody = ws.generatedAccompaniment.replace(/^[A-Z]:.*(\r?\n|$)/gm, (match) => {
         if (match.startsWith('V:')) return match; // Keep voice declarations
         return '';
       });
@@ -501,7 +435,7 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
         ...bodyLines,
         accompanimentBody
       ].join('\n');
-    }, [generatedAccompaniment, pipeline?.accompaniment.abc, activeAbc]);
+    }, [ws.generatedAccompaniment, pipeline?.accompaniment.abc, activeAbc]);
 
     return (
       <ComposerNotationPreviewLayout
@@ -522,8 +456,8 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
                           scale: pipeline.harmonization.scale,
                           timeSignature: pipeline.harmonization.timeSignature
                         });
-                        setAiAccompanimentSuggestions(result.options);
-                        setSelectedAccompanimentIndex(null);
+                        updateState({ aiAccompanimentSuggestions: result.options });
+                        updateState({ selectedAccompanimentIndex: null });
                       } catch (err) {
                         console.error(err);
                         alert("Failed to generate accompaniment options.");
@@ -535,15 +469,15 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
                   >
                     {isGeneratingAccompaniment ? "Generating Options..." : "✨ Suggest AI Accompaniment"}
                   </button>
-                  {aiAccompanimentSuggestions.length > 0 && (
+                  {ws.aiAccompanimentSuggestions.length > 0 && (
                     <button
                       type="button"
                       onClick={() => {
-                        setAiAccompanimentSuggestions([]);
-                        setSelectedAccompanimentIndex(null);
-                        setPianoAccompanimentData(null);
-                        setGuitarAccompanimentData(null);
-                        setGeneratedAccompaniment(null);
+                        updateState({ aiAccompanimentSuggestions: [] });
+                        updateState({ selectedAccompanimentIndex: null });
+                        updateState({ pianoAccompanimentData: null });
+                        updateState({ guitarAccompanimentData: null });
+                        updateState({ generatedAccompaniment: null });
                       }}
                       className="rounded-xl border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-xs font-bold text-rose-600 transition hover:bg-rose-500/20 dark:text-rose-400"
                     >
@@ -555,14 +489,7 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
                       type="button"
                       onClick={() => {
                         setMelodyAbc(initialMelodyAbc);
-                        setAiSuggestions([]);
-                        setSelectedCandidateId(null);
-                        setAcceptedHarmony(null);
-                        setAiAccompanimentSuggestions([]);
-                        setSelectedAccompanimentIndex(null);
-                        setPianoAccompanimentData(null);
-                        setGuitarAccompanimentData(null);
-                        setGeneratedAccompaniment(null);
+                        updateState({ aiSuggestions: [], selectedCandidateId: null, acceptedHarmony: null, aiAccompanimentSuggestions: [], selectedAccompanimentIndex: null, pianoAccompanimentData: null, guitarAccompanimentData: null, generatedAccompaniment: null });
                       }}
                       className="rounded-xl border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-xs font-bold text-rose-600 transition hover:bg-rose-500/20 dark:text-rose-400"
                     >
@@ -571,33 +498,33 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
                   )}
                 </div>
               
-              {aiAccompanimentSuggestions.length > 0 && (
+              {ws.aiAccompanimentSuggestions.length > 0 && (
                 <div className="mt-4 space-y-3">
                   <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">AI Suggested Accompaniments</h3>
                   <div className="grid gap-3 sm:grid-cols-1">
-                    {aiAccompanimentSuggestions.map((option, idx) => (
+                    {ws.aiAccompanimentSuggestions.map((option, idx) => (
                       <button
                         key={option.id}
                         onClick={() => {
-                          setSelectedAccompanimentIndex(idx);
+                          updateState({ selectedAccompanimentIndex: idx });
                           // Apply Rule Engine to generate ABC
                           if (option.instrument === "guitar") {
                             const integration = buildFingerstyleComposerIntegration(activeAbc, undefined, { pickingProfile: option.style as FingerstyleComposerProfileId });
-                            setGeneratedAccompaniment(integration.composerLayer.abc);
-                            setGuitarAccompanimentData(integration);
-                            setPianoAccompanimentData(null);
+                            updateState({ generatedAccompaniment: integration.composerLayer.abc });
+                            updateState({ guitarAccompanimentData: integration });
+                            updateState({ pianoAccompanimentData: null });
                           } else {
                             const pianoStyles = ["pop-ballad", "rock-rnb", "classical-folk"];
                             const compingProfile = pianoStyles.includes(option.style) ? option.style as any : "pop-ballad";
                             
                             const accompaniment = generatePianoAccompaniment(activeAbc, { compingProfile });
-                            setGeneratedAccompaniment(accompaniment.abc);
-                            setPianoAccompanimentData(accompaniment);
-                            setGuitarAccompanimentData(null);
+                            updateState({ generatedAccompaniment: accompaniment.abc });
+                            updateState({ pianoAccompanimentData: accompaniment });
+                            updateState({ guitarAccompanimentData: null });
                           }
                         }}
                         className={`text-left rounded-xl border p-4 transition-all focus:outline-none focus:ring-2 focus:ring-amber-500/50 ${
-                          selectedAccompanimentIndex === idx
+                          ws.selectedAccompanimentIndex === idx
                             ? "border-amber-400 bg-amber-500/10 shadow-sm"
                             : "border-zinc-200 bg-white hover:border-amber-300/50 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950/40 dark:hover:bg-zinc-900"
                         }`}
@@ -606,7 +533,7 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
                           <h4 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
                             {option.label} ({option.instrument})
                           </h4>
-                          {selectedAccompanimentIndex === idx && (
+                          {ws.selectedAccompanimentIndex === idx && (
                             <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-bold text-white">Active</span>
                           )}
                         </div>
@@ -620,39 +547,39 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
               )}
             </section>
             
-            {pianoAccompanimentData && (
+            {ws.pianoAccompanimentData && (
               <section className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950/50">
                 <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 mb-4">Virtual Piano (Voicing & Comping)</h2>
                 <div className="space-y-4">
                   <PianoPedalIndicator 
                     title="Sustain Pedal Indicator" 
-                    pedalAutomation={pianoAccompanimentData.pedalAutomation} 
+                    pedalAutomation={ws.pianoAccompanimentData.pedalAutomation} 
                   />
                   <div className="overflow-x-auto pb-2">
                     <PianoKeyboard 
                       title="Piano Accompaniment Keys" 
                       startOctave={2} 
                       octaveCount={4} 
-                      highlights={pianoAccompanimentData.pianoKeyHighlights} 
+                      highlights={ws.pianoAccompanimentData.pianoKeyHighlights} 
                     />
                   </div>
                 </div>
               </section>
             )}
 
-            {guitarAccompanimentData && (
+            {ws.guitarAccompanimentData && (
               <section className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950/50">
                 <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 mb-4">Virtual Guitar (Fingerstyle)</h2>
                 <div className="overflow-x-auto pb-2">
                   <GuitarFretboard 
                     title="Fingerstyle Fretboard Preview" 
-                    positions={guitarAccompanimentData.fretboard.positions} 
+                    positions={ws.guitarAccompanimentData.fretboard.positions} 
                   />
                 </div>
               </section>
             )}
 
-            {generatedAccompaniment && !pianoAccompanimentData && !guitarAccompanimentData && (
+            {ws.generatedAccompaniment && !ws.pianoAccompanimentData && !ws.guitarAccompanimentData && (
               <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/70 dark:bg-amber-950/30">
                 <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Playability Validation Report</h2>
                 <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">⚠️ Max span exceeded in m.4. Converted to arpeggio when required.</p>
