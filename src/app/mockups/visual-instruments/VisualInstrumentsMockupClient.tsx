@@ -17,10 +17,10 @@ import PianoKeyboard, {
 import PianoPedalIndicator from "@/components/instruments/PianoPedalIndicator";
 import type { InstrumentNoteMarker } from "@/components/instruments/InstrumentNoteMarkers";
 import { buildSynchronizedInstrumentHighlights } from "@/components/playback/instrument-highlighting";
-import type { MusicSheetPlaybackCursorEvent } from "@/components/music-sheet/MusicSheetRenderer";
+import type { MusicSheetPlaybackCursorEvent } from "@/components/music-sheet/AbcjsPlaybackController";
 import type { PianoPedalAutomation } from "@/lib/theory/piano-accompaniment";
 
-const MusicSheetRenderer = dynamic(() => import("@/components/music-sheet/MusicSheetRenderer"), { ssr: false });
+const AbcjsPlaybackController = dynamic(() => import("@/components/music-sheet/AbcjsPlaybackController"), { ssr: false });
 
 export type VisualInstrumentVariant = "instrument-sync" | "note-markers" | "teacher-mode";
 
@@ -401,7 +401,7 @@ export default function VisualInstrumentsMockupClient() {
         {activeVariant === "instrument-sync" ? (
           <div className="space-y-8">
             <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-              <MusicSheetRenderer
+              <AbcjsPlaybackController
                 abcString={SAMPLE_MELODY_ABC}
                 title="Music Staff Playback Cursor"
                 description="The cursor callback powers the visible guitar and piano state below. Clicking notes also moves the cursor."
@@ -445,7 +445,7 @@ export default function VisualInstrumentsMockupClient() {
         {activeVariant === "note-markers" ? (
           <div className="space-y-8">
             <section className="grid gap-6 lg:grid-cols-[1fr_24rem]">
-              <MusicSheetRenderer
+              <AbcjsPlaybackController
                 abcString={SAMPLE_MELODY_ABC}
                 title="Playback Driver for Note Markers"
                 description="This staff now drives the active marker frame. Press Play or click notes to update guitar and piano markers."
@@ -516,7 +516,7 @@ export default function VisualInstrumentsMockupClient() {
           <div className="space-y-8">
             <section className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
               <div className="space-y-6">
-                <MusicSheetRenderer
+                <AbcjsPlaybackController
                   abcString={SAMPLE_MELODY_ABC}
                   title="Practice Staff"
                   description="Teacher mode keeps the notation visible while explaining what each marker means."

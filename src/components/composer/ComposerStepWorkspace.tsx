@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import MusicSheetRenderer from "@/components/music-sheet/MusicSheetRenderer";
+import AbcjsPlaybackController from "@/components/music-sheet/AbcjsPlaybackController";
 import PianoPedalIndicator from "@/components/instruments/PianoPedalIndicator";
 import { buildArrangementLayerProposals, generateArrangementPipeline } from "@/lib/theory/arrangement-pipeline";
 import { buildFingerstyleComposerIntegration, FINGERSTYLE_PROFILE_OPTIONS, type FingerstyleComposerProfileId } from "./fingerstyle-integration";
@@ -13,17 +13,17 @@ import type { TheoryAssistantLayerProposal } from "./theory-assistant-layer";
 interface ComposerStepWorkspaceProps {
   slug: string;
   step: ComposerStepId;
+  initialMelodyAbc?: string;
 }
 
-const SAMPLE_HARMONY_ABC = `% Ghosted melody context\n${DEFAULT_ABC}\n\n% Chord Track Editor\n| "Em" E2 E2 "D" G2 A2 | "C" B4 "B7" B2 A2 |`;
-
-export default function ComposerStepWorkspace({ slug, step }: ComposerStepWorkspaceProps) {
-  const [melodyAbc, setMelodyAbc] = useState(DEFAULT_ABC);
+export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: ComposerStepWorkspaceProps) {
+  const [melodyAbc, setMelodyAbc] = useState(initialMelodyAbc ?? DEFAULT_ABC);
   const [acceptedHarmony, setAcceptedHarmony] = useState<TheoryAssistantLayerProposal | null>(null);
   const [engine, setEngine] = useState<"piano" | "fingerstyle">("piano");
   const [profileId, setProfileId] = useState<FingerstyleComposerProfileId>("strict-pima");
   const [generatedAccompaniment, setGeneratedAccompaniment] = useState<string | null>(null);
   const [ensembleEnabled, setEnsembleEnabled] = useState({ djembe: true, flute: true, violin: false });
+  const [copyStatus, setCopyStatus] = useState("Copy Markdown");
 
   const pipeline = useMemo(() => {
     try {
@@ -39,7 +39,7 @@ export default function ComposerStepWorkspace({ slug, step }: ComposerStepWorksp
         <AbcEditor
           title="ABC Notation Editor"
           value={melodyAbc}
-          initialAbc={DEFAULT_ABC}
+          initialAbc={initialMelodyAbc ?? DEFAULT_ABC}
           storageKey={`bhajan-song-composer:compose:${slug}:melody`}
           onChange={setMelodyAbc}
         />
@@ -69,8 +69,15 @@ export default function ComposerStepWorkspace({ slug, step }: ComposerStepWorksp
         )}
         <section className="rounded-2xl border border-dashed border-zinc-300 bg-white/70 p-4 dark:border-zinc-700 dark:bg-zinc-950/50">
           <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Chord Track Editor (Ghosted Melody below)</h2>
-          <pre className="mt-3 whitespace-pre-wrap text-xs leading-5 text-zinc-500 dark:text-zinc-400">{SAMPLE_HARMONY_ABC}</pre>
+          <pre className="mt-3 whitespace-pre-wrap text-xs leading-5 text-zinc-500 dark:text-zinc-400">
+            {`% Ghosted melody context\n${melodyAbc}\n\n% Chord Track Editor\n${acceptedHarmony ? acceptedHarmony.abc : "% Accept an arrangement from the Theory Assistant to see the chord track here."}`}
+          </pre>
         </section>
+        <AbcjsPlaybackController
+          abcString={acceptedHarmony ? `${melodyAbc.trimEnd()}\n\n${acceptedHarmony.abc}` : melodyAbc}
+          title="Harmonization Preview"
+          canvasId="composer-harmony-preview"
+        />
       </div>
     );
   }
@@ -114,12 +121,10 @@ export default function ComposerStepWorkspace({ slug, step }: ComposerStepWorksp
           <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Playability Validation Report</h2>
           <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">⚠️ Max span exceeded in m.4. Converted to arpeggio when required.</p>
         </section>
-        <MusicSheetRenderer
+        <AbcjsPlaybackController
           abcString={generatedAccompaniment ?? pipeline?.accompaniment.abc ?? melodyAbc}
           title="Resulting ABC Staff Preview"
           canvasId="composer-accompaniment-preview"
-          controls={false}
-          showLoopControls={false}
         />
       </div>
     );
@@ -147,18 +152,29 @@ export default function ComposerStepWorkspace({ slug, step }: ComposerStepWorksp
           <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Conflict Resolution Hierarchy Log</h2>
           <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">Flute yielded in m.8 due to active melody; Djembe follows bass/kick alignment.</p>
         </section>
-        <MusicSheetRenderer
+        <AbcjsPlaybackController
           abcString={pipeline?.finalAbc ?? (proposals.map((proposal) => proposal.abc).join("\n\n") || melodyAbc)}
           title="Multi-track ABCJS Render (Full Score View)"
           canvasId="composer-ensemble-preview"
-          controls={false}
-          showLoopControls={false}
         />
       </div>
     );
   }
 
   const markdown = `---\ntitle: "${slug}"\nslug: "${slug}"\nabcNotations:\n  - type: "melody"\n    label: "Melody Music Sheet"\n---\n\n## Lyrics\n\nDraft lyrics...\n\n## ABC\n\n\`\`\`abc\n${melodyAbc}\n\`\`\``;
+
+  const handleCopyMarkdown = () => {
+    navigator.clipboard.writeText(markdown)
+      .then(() => {
+        setCopyStatus("Copied!");
+        setTimeout(() => setCopyStatus("Copy Markdown"), 2000);
+      })
+      .catch((err) => {
+        console.error("Failed to copy:", err);
+        setCopyStatus("Failed to copy");
+        setTimeout(() => setCopyStatus("Copy Markdown"), 2000);
+      });
+  };
 
   return (
     <div className="space-y-5">
@@ -179,7 +195,7 @@ export default function ComposerStepWorkspace({ slug, step }: ComposerStepWorksp
         <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Raw Markdown Output File Preview</h2>
         <textarea readOnly value={markdown} className="mt-3 min-h-72 w-full rounded-xl border border-zinc-200 bg-zinc-50 p-3 font-mono text-xs text-zinc-800 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200" />
         <div className="mt-3 flex flex-wrap gap-2">
-          <button type="button" className="rounded-xl border border-zinc-200 px-3 py-2 text-xs font-bold text-zinc-700 dark:border-zinc-800 dark:text-zinc-200">Copy Markdown</button>
+          <button type="button" onClick={handleCopyMarkdown} className="rounded-xl border border-zinc-200 px-3 py-2 text-xs font-bold text-zinc-700 dark:border-zinc-800 dark:text-zinc-200">{copyStatus}</button>
           <button type="button" className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white">Submit as PR</button>
         </div>
       </section>

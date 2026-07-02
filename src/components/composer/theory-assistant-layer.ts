@@ -175,12 +175,21 @@ function buildArrangementBlock(
   const uniqueChords = uniq(progression);
   const capoText = capoFret === 0 ? "no capo" : `capo ${capoFret}`;
 
+  const beatCountStr = timeSignature.split("/")[0];
+  const beatCount = beatCountStr ? parseInt(beatCountStr, 10) : 4;
+  // Use z with duration depending on beats per measure.
+  // We assume L:1/8 is common, so beat is usually 2 units (e.g. quarter note = 2 eighths).
+  // This is an approximation for the preview chord track.
+  const chordTrackTokens = progression.map(chord => `"${chord}" z${beatCount * 2}`);
+
   return [
     `% --- Theory Assistant: ${THEORY_ASSISTANT_SKILL_LAYER_LABELS[skillLevel]} ---`,
     `% Key: ${key} · Meter: ${timeSignature} · ${capoText}`,
     `% Chord progression: ${progression.join(" | ")}`,
     `% Chords to practice: ${uniqueChords.join(", ")}`,
     `%%text Theory Assistant (${skillLevel}, ${capoText}): ${progression.join(" | ")}`,
+    `V:Chords name="Suggested Chords"`,
+    `| ${chordTrackTokens.join(" | ")} |`
   ].join("\n");
 }
 

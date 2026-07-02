@@ -7,7 +7,7 @@ import PianoPedalIndicator from "@/components/instruments/PianoPedalIndicator";
 import PocHandoffChecklist from "@/components/mockups/PocHandoffChecklist";
 import { generatePianoAccompaniment } from "@/lib/theory/piano-accompaniment";
 
-const MusicSheetRenderer = dynamic(() => import("@/components/music-sheet/MusicSheetRenderer"), { ssr: false });
+const AbcjsPlaybackController = dynamic(() => import("@/components/music-sheet/AbcjsPlaybackController"), { ssr: false });
 
 const SAMPLE_MELODY_ABC = `X:1
 T:Namostute Piano Accompaniment Study
@@ -233,7 +233,7 @@ ${piano.grandStaffAbc}`;
           <h2 className="text-xl font-bold text-zinc-100">Grand Staff Preview</h2>
           <p className="mt-1 text-sm text-zinc-400">Combined left hand, right hand, comping, gap-fill, playback, and MIDI metadata are available as a reviewable artifact.</p>
           <div className="mt-5 overflow-hidden rounded-2xl border border-zinc-800 bg-white text-zinc-950">
-            <MusicSheetRenderer
+            <AbcjsPlaybackController
               abcString={previewAbc}
               title="Layer 2 Piano Accompaniment Preview"
               description="ABCJS playback preview of the generated piano accompaniment artifact."

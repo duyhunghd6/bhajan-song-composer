@@ -85,9 +85,9 @@ The playback screen is optimized for double-medium split playback: users can wat
 |  +-------------------------------------+  +-----------------------------------+  |
 |                                                                                  |
 |  +----------------------------------------------------------------------------+  |
-|  |                      ABCJS Music Sheet Render Panel                        |  |
+|  |         Universal ABCJS Playback Controller (Reusable Component)           |  |
 |  |  [Sheet Selector: Melody / Backing / Piano]                                |  |
-|  |  [Controls: Play, Pause, Tempo-Scale, Loop-Range]                           |  |
+|  |  [Controls: Play, Stop, BPM Control, Measure X->Y Select, Loop]            |  |
 |  |                                                                            |  |
 |  |  ======================== STAFF RENDER AREA =============================  |  |
 |  |  [Note Highlighting Cursor synchronizes with MIDI Playback]                |  |
@@ -107,25 +107,35 @@ The playback screen is optimized for double-medium split playback: users can wat
 
 To prevent UI clutter and to empower **Agentic AI Coding**, the Composer Workstation is **strictly split into 5 smaller, dedicated child-UIs** using Next.js subroutes (`/compose/[slug]/[step]`). 
 
-A monolithic screen containing all these features would be an anti-pattern. By decoupling the pipeline into distinct routes, each UI is small, state is localized, and AI agents can reason about one workflow at a time. The 20% width Sidebar remains consistent across all routes, showing step progress and layer status.
+A monolithic screen containing all these features would be an anti-pattern. By decoupling the pipeline into distinct routes, each UI is small, state is localized, and AI agents can reason about one workflow at a time. The Workstation uses a compact checkpoint strip for Layers & Navigation so step progress remains visible without consuming the left side of the canvas.
 
 #### 2.2.1 Step 1: Melody Input (`/compose/[slug]/melody`)
 Focus: Inputting the foundational Treble Clef ABC notation.
 
 ```
-+-----------------------+----------------------------------------------------------+
-|  SIDEBAR (20%)        |  MAIN WORKSPACE CANVAS: STEP 1 - MELODY (80%)            |
-|                       |                                                          |
-|  [✓] Metadata         |  +----------------------------------------------------+  |
-|  [▶] 1. Melody        |  | ABC Notation Editor (Text Area)                    |  |
-|  [ ] 2. Harmony       |  | X:1 ... K:C ... C D E F | G A B c |                |  |
-|  [ ] 3. Accompaniment |  +----------------------------------------------------+  |
-|  [ ] 4. Ensemble      |  +----------------------------------------------------+  |
-|  [ ] 5. Review        |  | Live ABCJS Render Preview                          |  |
-|                       |  | ===================== STAFF ====================== |  |
-|  [Track States]       |  +----------------------------------------------------+  |
-|                       |  [ Back ]                            [ Save & Next ]     |
-+-----------------------+----------------------------------------------------------+
++----------------------------------------------------------------------------------+
+| COMPACT CHECKPOINTS: [✓] Metadata  [▶] Melody  [ ] Harmony  [ ] Accomp  [ ] Review|
++----------------------------------------------------------------------------------+
+| MAIN WORKSPACE CANVAS: STEP 1 - MELODY                                           |
+|                                                                                  |
+| QHD / very wide viewport:                                                        |
+|  +--------------------------------------+  +------------------------------------+ |
+|  | ABC Notation Editor (Text Area)      |  | Music Staff Playback              | |
+|  | X:1 ... K:C ... C D E F | G A B c | |  | [Play/Stop, BPM, Measure Loop]    | |
+|  |                                      |  | ===== bounded STAFF viewport ==== | |
+|  |                                      |  | internal scroll if score is tall  | |
+|  +--------------------------------------+  +------------------------------------+ |
+|                                                                                  |
+| Laptop / tablet / narrow viewport:                                               |
+|  +----------------------------------------------------------------------------+  |
+|  | ABC Notation Editor (top)                                                |  |
+|  +----------------------------------------------------------------------------+  |
+|  +----------------------------------------------------------------------------+  |
+|  | Music Staff Playback (bottom, bounded width/height + internal scroll)    |  |
+|  +----------------------------------------------------------------------------+  |
+|                                                                                  |
+| [ Back ]                                                        [ Save & Next ]  |
++----------------------------------------------------------------------------------+
 ```
 
 #### 2.2.2 Step 2: Harmonization (`/compose/[slug]/harmony`)
@@ -219,6 +229,20 @@ Focus: Reviewing the final multi-layer arrangement and exporting to markdown for
 |                       |  [ Back ]      [ Copy Markdown ]   [ Submit as PR ]      |
 +-----------------------+----------------------------------------------------------+
 ```
+
+### 2.3 Reusable Shared Components
+
+#### 2.3.1 Universal ABCJS Playback Controller
+To maintain consistency across the Playback Hub, Composer Workstation, and Mockup Gates, the music rendering and playback controls must be abstracted into a single, highly reusable React component (e.g., `<AbcjsPlaybackController />`).
+
+**Features & Capabilities:**
+- **Rendering Engine:** Uses `abcjs` to render raw ABC notation into responsive SVG staves.
+- **Playback Controls:** 
+  - **Start / Stop:** Toggle MIDI synthesis and audio playback.
+  - **BPM Control:** Slider or input to speed up or slow down the tempo.
+  - **Measurement Selection:** UI inputs to select a specific measure range (from Measure X to Measure Y).
+  - **Looping:** Toggle to continuously loop the selected measurement range.
+- **Portability:** Any page requiring music display or playback (Song Detail Page, Step 1 Melody Editor, Mockups, etc.) simply imports and mounts this component, passing the ABC string and playback constraints as props.
 
 ---
 
@@ -333,14 +357,19 @@ sequenceDiagram
 
 ## 4. Layout States and Responsiveness Guidelines
 
-1. **Desktop View (>= 1024px)**: 
-   - Grid layout is strictly `20% / 80%` column split for the Workstation child-UIs.
-   - The Layer Stack Preview displays horizontally below the two columns.
-2. **Tablet View (768px - 1023px)**:
-   - Grid changes to `30% / 70%` column split to prevent the sidebar from being too compressed.
-   - Textareas in the ABC Editor scale down font sizes to `text-xs` for clarity.
-3. **Mobile View (< 768px)**:
+1. **Desktop View (>= 1024px)**:
+   - Workstation child-UIs use a compact top checkpoint strip for Layers & Navigation instead of a persistent 20% sidebar, keeping the main canvas readable.
+   - The checkpoint strip shows one-line progress for Metadata plus the five composer steps, highlighting complete, current, and pending states.
+   - Standard desktop and laptop widths keep the ABC Editor stacked above the Music Staff Playback when horizontal space would make either panel cramped.
+2. **Very Wide / QHD View (extra-wide canvas, e.g. >= 1536px)**:
+   - Step 1 Melody may split the main canvas into two readable panels: ABC Notation Editor on the left and Music Staff Playback on the right.
+   - The Music Staff Playback must use a bounded width and height, with internal scrolling when needed, so abcjs does not stretch the first line too wide to read.
+   - ABCJS render options should prefer wrapped staff systems, typically around four measures per line, so the user can read at least the first page or first half-page comfortably.
+3. **Tablet View (768px - 1023px)**:
+   - Composer content stays as a single-column flow: ABC source on top, Music Staff Playback below.
+   - Textareas in the ABC Editor scale down font sizes to `text-xs` for clarity where needed.
+4. **Mobile View (< 768px)**:
    - The grid collapses into a single vertical stack.
-   - The Sidebar transforms into a slide-over/drawer or a collapsible accordion block at the top of the screen labeled "Layers & Navigation".
+   - Layers & Navigation remains a compact checkpoint block at the top rather than a sidebar or tall drawer.
    - Input fields and textareas occupy `100%` viewport width.
-   - Fretboard and Keyboard SVGs enable horizontal scrolling (`overflow-x-auto`) to keep key grids readable.
+   - Music staff, Fretboard, and Keyboard SVGs enable horizontal scrolling (`overflow-x-auto`) to keep notation and key grids readable.

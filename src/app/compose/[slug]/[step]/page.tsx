@@ -34,6 +34,10 @@ export default async function ComposeStepPage({ params }: PageProps) {
     notFound();
   }
 
+  const songs = await loadAllSongs();
+  const song = songs.find((s) => s.meta.slug.toLowerCase() === slug.toLowerCase());
+  const initialMelodyAbc = song?.abcNotations.find((n) => n.type === "melody")?.content;
+
   return (
     <main className="min-h-screen bg-zinc-50 px-4 py-12 transition-colors duration-300 dark:bg-zinc-950 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl space-y-8">
@@ -54,7 +58,7 @@ export default async function ComposeStepPage({ params }: PageProps) {
         </nav>
 
         <ComposerStepShell slug={slug} currentStep={step}>
-          <ComposerStepWorkspace slug={slug} step={step} />
+          <ComposerStepWorkspace slug={slug} step={step} initialMelodyAbc={initialMelodyAbc} />
         </ComposerStepShell>
       </div>
     </main>

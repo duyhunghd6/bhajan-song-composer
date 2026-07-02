@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import MusicSheetRenderer from "@/components/music-sheet/MusicSheetRenderer";
+import AbcjsPlaybackController from "@/components/music-sheet/AbcjsPlaybackController";
 import GuitarFretboard from "@/components/instruments/GuitarFretboard";
 import {
   buildArrangementLayerProposals,
@@ -161,7 +161,7 @@ function LayerStackPreview({ abc, visibleCount }: { abc: string; visibleCount: n
             Turn on at least one layer to render the stack preview.
           </div>
         ) : (
-          <MusicSheetRenderer
+          <AbcjsPlaybackController
             abcString={abc}
             title="Visible Layer Music Sheet"
             canvasId="layer-stack-preview"

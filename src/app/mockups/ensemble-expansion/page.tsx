@@ -7,7 +7,7 @@ import PocHandoffChecklist from "@/components/mockups/PocHandoffChecklist";
 import { generateAccompanimentStage } from "@/lib/theory/accompaniment-stage";
 import { generateEnsembleExpansionOutput } from "@/lib/theory/ensemble-output-contract";
 
-const MusicSheetRenderer = dynamic(() => import("@/components/music-sheet/MusicSheetRenderer"), { ssr: false });
+const AbcjsPlaybackController = dynamic(() => import("@/components/music-sheet/AbcjsPlaybackController"), { ssr: false });
 
 const SAMPLE_MELODY_ABC = `X:1
 T:Namostute Ensemble Expansion Study
@@ -297,7 +297,7 @@ ${output.abcLayers.combined}`;
           </div>
 
           <div className="mt-6">
-            <MusicSheetRenderer
+            <AbcjsPlaybackController
               abcString={previewAbc}
               title="Layer 3 Ensemble Notation"
               description="Playable preview of generated Djembe, Flute, and Violin ensemble layers"

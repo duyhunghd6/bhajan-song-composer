@@ -2,9 +2,9 @@
 
 import { useMemo, useState } from "react";
 import { GuitarFretboard, PianoKeyboard, PianoPedalIndicator } from "@/components/instruments";
-import MusicSheetRenderer, {
+import AbcjsPlaybackController, {
   type MusicSheetPlaybackCursorEvent,
-} from "@/components/music-sheet/MusicSheetRenderer";
+} from "@/components/music-sheet/AbcjsPlaybackController";
 import { buildSynchronizedInstrumentHighlights } from "./instrument-highlighting";
 
 interface AbcSheetViewerProps {
@@ -21,7 +21,7 @@ export default function AbcSheetViewer({ abcString, songTitle }: AbcSheetViewerP
 
   return (
     <div className="space-y-4">
-      <MusicSheetRenderer
+      <AbcjsPlaybackController
         abcString={abcString}
         title="Music Sheet Playback"
         description={`Interactive notation playback for ${songTitle}.`}

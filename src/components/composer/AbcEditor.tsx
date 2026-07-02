@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { KeyboardEvent } from "react";
-import MusicSheetRenderer from "@/components/music-sheet/MusicSheetRenderer";
+import AbcjsPlaybackController from "@/components/music-sheet/AbcjsPlaybackController";
 
 const DEFAULT_STORAGE_KEY = "bhajan-song-composer:abc-editor:draft";
 const MAX_HISTORY = 100;
@@ -46,6 +46,19 @@ export default function AbcEditor({
 
   const canUndo = history.past.length > 0;
   const canRedo = history.future.length > 0;
+  const previewRenderOptions = useMemo(
+    () => ({
+      staffwidth: 720,
+      wrap: {
+        minSpacing: 1.7,
+        maxSpacing: 2.5,
+        preferredMeasuresPerLine: 4,
+        lastLineLimit: 0.6,
+      },
+      paddingright: 32,
+    }),
+    []
+  );
 
   useEffect(() => {
     if (value === undefined) return;
@@ -236,9 +249,8 @@ export default function AbcEditor({
         </div>
       </div>
 
-      {/* Agentic coding directive: keep ABC source stacked above the ABCJS music sheet; do not place them on the same row because the workflow needs vertical spacing. */}
-      <div className="grid gap-8">
-        <div className="border-b border-zinc-100 dark:border-zinc-800 p-5 space-y-3">
+      <div className="abc-editor-responsive-grid">
+        <div className="abc-editor-source-panel min-w-0 space-y-3 border-b border-zinc-100 p-5 dark:border-zinc-800">
           <div className="flex items-center justify-between gap-3">
             <label
               htmlFor="abc-editor-input"
@@ -256,29 +268,29 @@ export default function AbcEditor({
             onChange={(event) => commitText(event.target.value)}
             onKeyDown={handleKeyDown}
             spellCheck={false}
-            className="min-h-[420px] w-full resize-y rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-950/70 p-4 font-mono text-sm leading-6 text-zinc-900 dark:text-zinc-100 shadow-inner focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent placeholder:text-zinc-400"
+            className="abc-editor-textarea min-h-[420px] w-full resize-y rounded-xl border border-zinc-200 bg-zinc-50/70 p-4 font-mono text-sm leading-6 text-zinc-900 shadow-inner placeholder:text-zinc-400 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950/70 dark:text-zinc-100"
             placeholder="X:1&#10;T:My Bhajan&#10;M:4/4&#10;K:C&#10;C D E F | G A B c |"
           />
           <p className="text-xs text-zinc-500 dark:text-zinc-400">{storageStatus}</p>
         </div>
 
-        <div className="p-5 space-y-3">
+        <div className="min-w-0 space-y-3 p-5">
           <div className="flex items-center justify-between gap-3">
             <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
               Music Sheet (ABCJS rendering)
             </h3>
             <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
-              Rendering
+              Bounded preview
             </span>
           </div>
 
-          <MusicSheetRenderer
+          <AbcjsPlaybackController
             abcString={history.present}
             title="Editor Music Sheet Preview"
             canvasId="abc-editor-preview"
-            controls={false}
-            showLoopControls={false}
-            minWidthClassName="min-w-[520px]"
+            minWidthClassName="min-w-[520px] max-w-[760px]"
+            sheetViewportClassName="max-h-[min(72vh,780px)] overflow-auto p-4"
+            renderOptions={previewRenderOptions}
           />
         </div>
       </div>

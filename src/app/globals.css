@@ -24,3 +24,24 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+.abc-editor-responsive-grid {
+  display: grid;
+  gap: 0;
+}
+
+@media (min-width: 1536px) {
+  .abc-editor-responsive-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .abc-editor-source-panel {
+    border-right-width: 1px;
+    border-bottom-width: 0;
+  }
+
+  .abc-editor-textarea {
+    height: min(68vh, 760px);
+    min-height: 560px;
+  }
+}
