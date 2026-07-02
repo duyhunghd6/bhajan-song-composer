@@ -3,7 +3,7 @@ title: "Happy Birthday"
 slug: "happy-birthday"
 language: "english"
 category: "celebration"
-key: "C"
+key: "G"
 timeSignature: "3/4"
 videos:
   - type: "full-performance"

@@ -147,8 +147,8 @@ export function analyzeMelody(abcString: string): MelodyAnalysis {
     const trimmed = line.trim();
     if (!trimmed) return false;
     if (trimmed.startsWith("%")) return false; // Comments
-    // Headers are single uppercase character followed by colon
-    if (/^[A-Z]:/.test(trimmed)) return false;
+    // Headers are single character (upper or lower, like w:) followed by colon
+    if (/^[A-Za-z]:/.test(trimmed)) return false;
     return true;
   });
 
