@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useId, useRef, useState } from "react";
 import {
   getSheetDurationSeconds,
   normalizeLoopRange,
@@ -121,6 +121,8 @@ export default function AbcjsPlaybackController({
   const [isPlaying, setIsPlaying] = useState(false);
   const isPlayingRef = useRef(false);
   const [tempo, setTempo] = useState(120);
+  const [overrideKey, setOverrideKey] = useState<string>("");
+  const [overrideMeter, setOverrideMeter] = useState<string>("");
   const [renderError, setRenderError] = useState<string | null>(null);
   const [durationSeconds, setDurationSeconds] = useState(0);
   const [currentSeconds, setCurrentSeconds] = useState(0);
@@ -133,6 +135,19 @@ export default function AbcjsPlaybackController({
   const timingCallbacksRef = useRef<TimingCallbacksType | null>(null);
   const activeNoteElementsRef = useRef<HTMLElement[]>([]);
   const suppressNextEndedRef = useRef(false);
+
+  const finalAbcString = useMemo(() => {
+    let result = abcString;
+    if (overrideKey) result = result.replace(/^\s*K:\s*(.+)$/m, `K: ${overrideKey}`);
+    if (overrideMeter) result = result.replace(/^\s*M:\s*(.+)$/m, `M: ${overrideMeter}`);
+    return result;
+  }, [abcString, overrideKey, overrideMeter]);
+
+  const keyMatch = finalAbcString.match(/^\s*K:\s*(.+)$/m);
+  const parsedKey = keyMatch ? keyMatch[1].trim() : "C";
+
+  const meterMatch = finalAbcString.match(/^\s*M:\s*(.+)$/m);
+  const parsedMeter = meterMatch ? meterMatch[1].trim() : "4/4";
 
   const secondsPerMeasure = millisecondsPerMeasure / 1000;
   const totalMeasures = Math.max(1, Math.ceil(durationSeconds / secondsPerMeasure));
@@ -405,7 +420,7 @@ export default function AbcjsPlaybackController({
       timingCallbacksRef.current = null;
       canvas.innerHTML = "";
 
-      const visualObj = abcjsModule.renderAbc(canvas, abcString, {
+      const visualObj = abcjsModule.renderAbc(canvas, finalAbcString, {
         responsive: "resize",
         add_classes: true,
         ...renderOptions,
@@ -495,7 +510,7 @@ export default function AbcjsPlaybackController({
       stopRenderedPlayback();
       timingCallbacksRef.current = null;
     };
-  }, [abcjsModule, abcString, clearActiveNoteHighlight, handleNoteClick, highlightTimingEvent, loopEndMeasure, loopMode, loopStartMeasure, onPlaybackCursor, playFromTimingEvent, renderOptions, setPlaybackState, tempo]);
+  }, [abcjsModule, finalAbcString, clearActiveNoteHighlight, handleNoteClick, highlightTimingEvent, loopEndMeasure, loopMode, loopStartMeasure, onPlaybackCursor, playFromTimingEvent, renderOptions, setPlaybackState, tempo]);
 
   return (
     <div aria-label={description ?? title} className="w-full bg-zinc-950 rounded-xl shadow-md overflow-hidden flex flex-col border border-zinc-800">
@@ -547,30 +562,55 @@ export default function AbcjsPlaybackController({
             </span>
           </div>
 
-          {/* Center: BPM */}
-          {controls && (
-            <div className="flex items-center gap-6">
-              <div className="flex items-center gap-2 bg-[#121212] rounded-lg px-2 py-1 border border-zinc-800">
-                <span className="text-[10px] font-semibold opacity-60 uppercase tracking-widest mr-1">BPM</span>
-                <button
-                  onClick={() => { const t = Math.max(60, tempo - 5); setTempo(t); stopSynth(); }}
-                  className="px-1.5 hover:text-white hover:bg-zinc-700 rounded transition-colors cursor-pointer"
-                >
-                  −
-                </button>
-                <span className="w-7 text-center text-[11px] font-mono">{tempo}</span>
-                <button
-                  onClick={() => { const t = Math.min(200, tempo + 5); setTempo(t); stopSynth(); }}
-                  className="px-1.5 hover:text-white hover:bg-zinc-700 rounded transition-colors cursor-pointer"
-                >
-                  +
-                </button>
-              </div>
-            </div>
-          )}
+          {/* Center: Empty to maintain space */}
+          <div className="hidden md:block flex-1" />
 
-          {/* Right: Loop range sliders (condensed) */}
-          <div className="flex items-center gap-3 min-w-[140px] justify-end">
+          {/* Right: Metadata dropdowns, BPM, & Loop range sliders */}
+          <div className="flex items-center gap-4 justify-end">
+            {controls && (
+              <div className="flex flex-wrap items-center gap-3 text-[10px] font-mono bg-black/20 px-2.5 py-1 rounded border border-white/5" title="Sheet Metadata Overrides">
+                <label className="flex items-center gap-1.5 opacity-80">
+                  KEY: 
+                  <select 
+                    value={overrideKey || parsedKey}
+                    onChange={(e) => { setOverrideKey(e.target.value); stopSynth(); }}
+                    className="bg-[#121212] text-amber-500 font-semibold border border-zinc-800 rounded px-1 py-0.5 outline-none cursor-pointer"
+                  >
+                    {["C", "G", "D", "A", "E", "B", "F#", "F", "Bb", "Eb", "Ab", "Db", "Gb", "Am", "Em", "Bm", "F#m", "C#m", "G#m", "Dm", "Gm", "Cm", "Fm", "Bbm", "Ebm"].map(k => (
+                      <option key={k} value={k}>{k}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex items-center gap-1.5 opacity-80">
+                  SIG: 
+                  <select 
+                    value={overrideMeter || parsedMeter}
+                    onChange={(e) => { setOverrideMeter(e.target.value); stopSynth(); }}
+                    className="bg-[#121212] text-amber-500 font-semibold border border-zinc-800 rounded px-1 py-0.5 outline-none cursor-pointer"
+                  >
+                    {["4/4", "3/4", "2/4", "6/8", "9/8", "12/8", "C", "C|"].map(m => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                </label>
+                <div className="flex items-center gap-1.5 border-l border-zinc-800 pl-3 ml-1">
+                  <span className="opacity-80">BPM:</span>
+                  <button
+                    onClick={() => { const t = Math.max(60, tempo - 5); setTempo(t); stopSynth(); }}
+                    className="px-1 text-zinc-400 hover:text-white rounded transition-colors cursor-pointer"
+                  >
+                    −
+                  </button>
+                  <strong className="text-amber-500 font-semibold min-w-[20px] text-center">{tempo}</strong>
+                  <button
+                    onClick={() => { const t = Math.min(200, tempo + 5); setTempo(t); stopSynth(); }}
+                    className="px-1 text-zinc-400 hover:text-white rounded transition-colors cursor-pointer"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+            )}
             {showLoopControls && loopMode === 'range' && (
               <div className="flex items-center gap-2 text-[10px] font-mono">
                 <span className="opacity-50 uppercase tracking-widest">Measure</span>
