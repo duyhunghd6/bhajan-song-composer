@@ -129,8 +129,26 @@ export default function TheoryAssistant({ abc, onAcceptArrangement, onAnalysisCh
                 Starts on <strong>{primaryChord}</strong> and follows the strong-beat melody tones
                 detected in {suggestion.timeSignature}.
               </p>
-            </div>
+              {/* Piano/Guitar review hidden to reduce clutter on the harmonic step as requested
+              <PianoKeyboard
+                title="Piano review"
+                subtitle={`First-chord voicing for ${primaryChord}`}
+                highlights={suggestion.pianoHighlights}
+                className="bg-white/90 dark:bg-zinc-900/90"
+              />
 
+              <GuitarFretboard
+                title="Guitar review"
+                subtitle={`${primaryChord} shape${capoFret > 0 ? ` with capo ${capoFret}` : ""}`}
+                positions={suggestion.guitarPositions}
+                openStrings={suggestion.guitarOpenStrings}
+                mutedStrings={suggestion.guitarMutedStrings}
+                startFret={suggestion.guitarStartFret}
+                capoFret={capoFret || undefined}
+                className="bg-white/90 dark:bg-zinc-900/90"
+              />
+              */}
+            </div>
 
             <button
               id="theory-assistant-accept"

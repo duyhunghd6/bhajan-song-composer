@@ -283,28 +283,6 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
           </div>
         </section>
 
-        {currentSuggestion && (
-          <section className="w-full space-y-6">
-            <PianoKeyboard
-              title="Piano review"
-              subtitle={`First-chord voicing for ${currentSuggestion.progression[0] ?? "—"}`}
-              highlights={currentSuggestion.pianoHighlights}
-              startOctave={3}
-              octaveCount={2}
-              className="w-full"
-            />
-            <GuitarFretboard
-              title="Guitar review"
-              subtitle={`${currentSuggestion.progression[0] ?? "—"} shape${currentSuggestion.capoFret > 0 ? ` with capo ${currentSuggestion.capoFret}` : ""}`}
-              positions={currentSuggestion.guitarPositions}
-              openStrings={currentSuggestion.guitarOpenStrings}
-              mutedStrings={currentSuggestion.guitarMutedStrings}
-              startFret={currentSuggestion.guitarStartFret}
-              capoFret={currentSuggestion.capoFret || undefined}
-              className="w-full"
-            />
-          </section>
-        )}
       </div>
     );
   }
