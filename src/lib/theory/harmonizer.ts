@@ -153,12 +153,36 @@ export function generateHarmonizationStage(abcString: string): HarmonizationStag
   const chords = getDiatonicChords(root, mode);
 
   const measures = analysis.measures.map((measure, index) => {
-    const chord = chooseChordForMeasure(
-      chords,
-      measure,
-      index === 0,
-      index === analysis.measures.length - 1
-    );
+    let chord: ChordInfo;
+
+    if (measure.existingChords && measure.existingChords.length > 0) {
+      // If the melody sheet already specifies a chord (e.g., "G" or "D7"), respect it
+      // rather than overriding it with the AI auto-harmonization progression.
+      const existingName = measure.existingChords[0];
+      const matched = chords.find((c) => c.chordName === existingName);
+      if (matched) {
+        // Use the matching diatonic chord
+        chord = matched;
+      } else {
+        // Fallback for non-diatonic or borrowed chords (e.g., "D7" in G Major)
+        // Extract the root note from the chord name for basic representation
+        const rootMatch = existingName.match(/^[A-G][#b]?/);
+        const rootNote = rootMatch ? rootMatch[0] : "C";
+        chord = {
+          degree: 1, // Fallback degree
+          chordName: existingName,
+          notes: [rootNote],
+        };
+      }
+    } else {
+      // No existing chord found, use AI auto-harmonization based on strong beats
+      chord = chooseChordForMeasure(
+        chords,
+        measure,
+        index === 0,
+        index === analysis.measures.length - 1
+      );
+    }
 
     return {
       measureIndex: measure.measureIndex,

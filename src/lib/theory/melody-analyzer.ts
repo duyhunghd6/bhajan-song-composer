@@ -8,6 +8,7 @@ export interface AbcHeader {
 export interface MeasureInfo {
   measureIndex: number;
   strongBeatNotes: string[];
+  existingChords?: string[];
 }
 
 export interface MelodyAnalysis {
@@ -165,6 +166,15 @@ export function analyzeMelody(abcString: string): MelodyAnalysis {
     const trimmed = rawMeasure.trim().replace(/^[:\s]+|[:\s]+$/g, "");
     if (!trimmed || trimmed === ":" || trimmed === "::") continue;
 
+    const existingChords: string[] = [];
+    // In ABC notation, chords are enclosed in double quotes, e.g., "G" or "D7"
+    // We extract these so the Harmonizer can respect existing harmonic decisions.
+    const chordRegex = /"([^"]+)"/g;
+    let chordMatch;
+    while ((chordMatch = chordRegex.exec(trimmed)) !== null) {
+      existingChords.push(chordMatch[1]);
+    }
+
     let currentBeat = 0;
     const strongBeatNotes: string[] = [];
     let match;
@@ -192,10 +202,11 @@ export function analyzeMelody(abcString: string): MelodyAnalysis {
       currentBeat += duration;
     }
 
-    if (strongBeatNotes.length > 0) {
+    if (strongBeatNotes.length > 0 || existingChords.length > 0) {
       measures.push({
         measureIndex: measureIdx++,
         strongBeatNotes,
+        existingChords,
       });
     }
   }
