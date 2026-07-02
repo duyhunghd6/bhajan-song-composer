@@ -176,8 +176,10 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
             <div className="border-b border-zinc-100 p-5 dark:border-zinc-800 min-[1536px]:border-r min-[1536px]:border-b-0">
               <section className="h-full rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 dark:border-emerald-900/70 dark:bg-emerald-950/30 dark:text-emerald-300">
                 <h2 className="mb-2 text-lg font-bold text-emerald-900 dark:text-emerald-100">Composer Layer Note</h2>
-                {acceptedHarmony ? (
-                  <p>{acceptedHarmony.name} accepted as the harmony layer.</p>
+                {currentSuggestion ? (
+                  <pre className="mt-3 whitespace-pre-wrap rounded-xl bg-white/60 p-3 text-xs leading-5 text-emerald-900 dark:bg-zinc-900/50 dark:text-emerald-200">
+                    {currentSuggestion.abcBlock}
+                  </pre>
                 ) : (
                   <p>Accept an arrangement from the Theory Assistant to see the composer layer note.</p>
                 )}

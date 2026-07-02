@@ -131,14 +131,6 @@ export default function TheoryAssistant({ abc, onAcceptArrangement, onAnalysisCh
               </p>
             </div>
 
-            <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950/70">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500 dark:text-zinc-400">
-                Composer layer note
-              </p>
-              <pre className="mt-3 whitespace-pre-wrap rounded-xl bg-white p-3 text-xs leading-5 text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
-                {suggestion.abcBlock}
-              </pre>
-            </div>
 
             <button
               id="theory-assistant-accept"
