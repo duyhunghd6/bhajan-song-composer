@@ -51,6 +51,15 @@ Before generating piano backing, guitar accompaniment, drums, or additional inst
   2. **Analyze strong beats**: Prioritize notes falling on structurally strong beats, especially beats 1 and 3 in 4/4 time. If the melody places C and E on strong beats, the underlying chord is likely C Major (Tonic) or A Minor (Submediant).
   3. **Establish chord functions**: Use tonic (home), subdominant (away), and dominant (tension) chords to create a progression that supports the melody's emotional contour and cadence points.
 
+- **LLM Prompt Strategy for AI Harmonization**:
+  To execute this step using the configured LLM, the system will use a specialized system prompt.
+  - **Role**: "You are an expert music theory assistant specialized in Indian classical, devotional, and Western functional harmony."
+  - **Input Context**: The song's metadata (key, scale, raga, time signature) and the raw ABC notation of the melody layer.
+  - **Task Directive**: "Analyze the provided ABC notation melody. Identify notes falling on structurally strong beats (like beat 1 and 3 in 4/4). Using diatonic functional harmony and the provided key/raga, suggest a coherent chord progression."
+  - **Output Constraints**: 
+    1. Return the original ABC notation intact, but with inline chord annotations (e.g., `"Am" A2 C2`) injected precisely before the corresponding notes.
+    2. Provide a 2-sentence theoretical explanation for the harmonic choices (e.g., explaining a specific cadence or modal borrowed chord) below the notation block.
+
 #### Step 2: Layer 2 — The Accompaniment (Piano / Rhythm Guitar)
 <!-- beads-id: prd-bsc-s31 -->
 

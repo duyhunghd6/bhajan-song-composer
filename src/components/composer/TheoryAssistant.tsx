@@ -1,11 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { GuitarFretboard, PianoKeyboard } from "@/components/instruments";
+import { useEffect, useMemo, useState } from "react";
 import {
   analyzeTheoryAssistantArrangement,
   buildTheoryAssistantLayerProposal,
   THEORY_ASSISTANT_SKILL_DESCRIPTIONS,
+  type TheoryAssistantArrangementSuggestion,
   type TheoryAssistantLayerProposal,
   type TheoryAssistantSkillLevel,
 } from "./theory-assistant-layer";
@@ -13,9 +13,10 @@ import {
 interface TheoryAssistantProps {
   abc: string;
   onAcceptArrangement: (proposal: TheoryAssistantLayerProposal) => void;
+  onAnalysisChange?: (suggestion: TheoryAssistantArrangementSuggestion | null) => void;
 }
 
-export default function TheoryAssistant({ abc, onAcceptArrangement }: TheoryAssistantProps) {
+export default function TheoryAssistant({ abc, onAcceptArrangement, onAnalysisChange }: TheoryAssistantProps) {
   const [skillLevel, setSkillLevel] = useState<TheoryAssistantSkillLevel>("beginner");
   const [capoFret, setCapoFret] = useState(0);
   const [acceptedMessage, setAcceptedMessage] = useState<string | null>(null);
@@ -34,6 +35,10 @@ export default function TheoryAssistant({ abc, onAcceptArrangement }: TheoryAssi
 
   const suggestion = analysis.suggestion;
   const primaryChord = suggestion?.progression[0] ?? "—";
+
+  useEffect(() => {
+    onAnalysisChange?.(suggestion);
+  }, [suggestion, onAnalysisChange]);
 
   const acceptArrangement = () => {
     if (!suggestion) return;
@@ -125,24 +130,6 @@ export default function TheoryAssistant({ abc, onAcceptArrangement }: TheoryAssi
                 detected in {suggestion.timeSignature}.
               </p>
             </div>
-
-            <PianoKeyboard
-              title="Piano review"
-              subtitle={`First-chord voicing for ${primaryChord}`}
-              highlights={suggestion.pianoHighlights}
-              className="bg-white/90 dark:bg-zinc-900/90"
-            />
-
-            <GuitarFretboard
-              title="Guitar review"
-              subtitle={`${primaryChord} shape${capoFret > 0 ? ` with capo ${capoFret}` : ""}`}
-              positions={suggestion.guitarPositions}
-              openStrings={suggestion.guitarOpenStrings}
-              mutedStrings={suggestion.guitarMutedStrings}
-              startFret={suggestion.guitarStartFret}
-              capoFret={capoFret || undefined}
-              className="bg-white/90 dark:bg-zinc-900/90"
-            />
 
             <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950/70">
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500 dark:text-zinc-400">

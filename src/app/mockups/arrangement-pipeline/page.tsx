@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import PocHandoffChecklist from "@/components/mockups/PocHandoffChecklist";
 import { generateArrangementPipeline } from "@/lib/theory/arrangement-pipeline";
+import { harmonizeMelody } from "@/app/actions/harmonize";
 
 const AbcjsPlaybackController = dynamic(() => import("@/components/music-sheet/AbcjsPlaybackController"), { ssr: false });
 
@@ -31,9 +32,13 @@ function statusPill(isReady: boolean, label: string) {
 }
 
 export default function ArrangementPipelineMockup() {
+  const [melodyAbc, setMelodyAbc] = useState(SAMPLE_MELODY_ABC);
+  const [isHarmonizing, setIsHarmonizing] = useState(false);
+  const [llmExplanation, setLlmExplanation] = useState("");
+
   const pipeline = useMemo(
     () =>
-      generateArrangementPipeline(SAMPLE_MELODY_ABC, {
+      generateArrangementPipeline(melodyAbc, {
         accompaniment: {
           instrument: "piano",
           compingPattern: "arpeggio",
@@ -43,7 +48,7 @@ export default function ArrangementPipelineMockup() {
   );
 
   const validationPassed = Object.values(pipeline.validation).every(Boolean);
-  const sourceKey = SAMPLE_MELODY_ABC.match(/^K:(.+)$/m)?.[1].trim() ?? pipeline.harmonization.key;
+  const sourceKey = melodyAbc.match(/^K:(.+)$/m)?.[1].trim() ?? pipeline.harmonization.key;
   const previewAbc = `X:302
 T:Arrangement Pipeline Full-Track Preview
 M:${pipeline.harmonization.timeSignature}
@@ -126,10 +131,45 @@ ${pipeline.finalAbc}`;
           </article>
 
           <article className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6 shadow-xl lg:col-span-2">
-            <h2 className="text-xl font-bold text-zinc-100">Strong Beats & Chord Decisions</h2>
-            <p className="mt-1 text-sm text-zinc-400">
-              Harmonization scores each measure from strong-beat melody tones, functional chord fit, and cadence role.
-            </p>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-bold text-zinc-100">Strong Beats & Chord Decisions</h2>
+                <p className="mt-1 text-sm text-zinc-400">
+                  Harmonization scores each measure from strong-beat melody tones, functional chord fit, and cadence role.
+                </p>
+              </div>
+              <button
+                onClick={async () => {
+                  setIsHarmonizing(true);
+                  try {
+                    const result = await harmonizeMelody(melodyAbc, {
+                      key: pipeline.harmonization.key,
+                      scale: pipeline.harmonization.scale,
+                      timeSignature: pipeline.harmonization.timeSignature
+                    });
+                    setMelodyAbc(result.abc);
+                    setLlmExplanation(result.explanation);
+                  } catch (err) {
+                    console.error(err);
+                    alert("Failed to harmonize using AI.");
+                  } finally {
+                    setIsHarmonizing(false);
+                  }
+                }}
+                disabled={isHarmonizing}
+                className="inline-flex items-center rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm font-semibold text-amber-400 transition hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isHarmonizing ? "Harmonizing..." : "✨ Suggest AI Harmonization"}
+              </button>
+            </div>
+            
+            {llmExplanation && (
+              <div className="mt-5 rounded-xl border border-sky-400/20 bg-sky-500/10 p-4">
+                <p className="text-sm font-semibold text-sky-300">AI Theory Assistant Explanation</p>
+                <p className="mt-1 text-sm text-zinc-300">{llmExplanation}</p>
+              </div>
+            )}
+
             <div className="mt-5 overflow-x-auto">
               <table className="w-full min-w-[760px] border-collapse text-left text-xs">
                 <thead className="border-b border-zinc-800 text-zinc-500">

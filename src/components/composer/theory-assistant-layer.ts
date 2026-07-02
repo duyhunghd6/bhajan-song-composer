@@ -20,6 +20,7 @@ export interface TheoryAssistantArrangementSuggestion {
   guitarMutedStrings: number[];
   guitarStartFret: number;
   abcBlock: string;
+  capoFret: number;
 }
 
 export interface TheoryAssistantLayerProposal {
@@ -222,6 +223,7 @@ export function analyzeTheoryAssistantArrangement(
       header.key,
       header.timeSignature
     ),
+    capoFret: constraints.capoFret,
   };
 }
 

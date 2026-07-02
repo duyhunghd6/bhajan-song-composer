@@ -139,26 +139,42 @@ Focus: Inputting the foundational Treble Clef ABC notation.
 ```
 
 #### 2.2.2 Step 2: Harmonization (`/compose/[slug]/harmony`)
-Focus: AI Theory Assistant generating chord progressions.
+Focus: AI Theory Assistant generating chord progressions and refining them with a real-time preview and virtual instruments.
 
 ```
-+-----------------------+----------------------------------------------------------+
-|  SIDEBAR (20%)        |  MAIN WORKSPACE CANVAS: STEP 2 - HARMONIZATION (80%)     |
-|                       |                                                          |
-|  [✓] 1. Melody        |  +----------------------------------------------------+  |
-|  [▶] 2. Harmony       |  | AI Analysis Settings: [Detect Key] [Set Raga]      |  |
-|  [ ] 3. Accompaniment |  | [ Generate Chord Progression ]                     |  |
-|                       |  +----------------------------------------------------+  |
-|  [Track States]       |  +----------------------------------------------------+  |
-|  Melody (Background)  |  | AI Theory Explanation Box                          |  |
-|                       |  | "Using the natural minor scale, the iv-VII..."     |  |
-|                       |  +----------------------------------------------------+  |
-|                       |  +----------------------------------------------------+  |
-|                       |  | Chord Track Editor (Ghosted Melody below)          |  |
-|                       |  | [ Am ]   [ G ]   [ F ]   [ E7 ]                    |  |
-|                       |  +----------------------------------------------------+  |
-|                       |  [ Back ]                            [ Save & Next ]     |
-+-----------------------+----------------------------------------------------------+
++----------------------------------------------------------------------------------+
+| COMPACT CHECKPOINTS: [✓] Metadata  [✓] Melody  [▶] Harmony  [ ] Accomp  [ ] Review|
++----------------------------------------------------------------------------------+
+| MAIN WORKSPACE CANVAS: STEP 2 - HARMONIZATION                                    |
+|                                                                                  |
+| STACK 1: AI Analysis & Preview (Two-column grid)                                 |
+|  +------------------------------------+  +------------------------------------+  |
+|  | AI Analysis Settings               |  | Harmonization Preview              |  |
+|  | [Detect Key] [Set Raga]            |  | [Music Staff Playback]             |  |
+|  | [✨ Suggest AI Harmonization]      |  |                                    |  |
+|  |                                    |  +------------------------------------+  |
+|  | Theory Assistant                   |  | Current ABCNotation of the Song    |  |
+|  | [Accept Arrangement]               |  | X:1 ... C D E F | G A B c |        |  |
+|  +------------------------------------+  +------------------------------------+  |
+|                                                                                  |
+| STACK 2: Composer Notes & Editing (Two-column grid)                              |
+|  +------------------------------------+  +------------------------------------+  |
+|  | Composer Layer Note                |  | Chord Track Editor                 |  |
+|  | "Pop Progression accepted as the   |  | (Ghosted Melody below)             |  |
+|  | harmony layer."                    |  | [ Am ]   [ G ]   [ F ]   [ E7 ]    |  |
+|  +------------------------------------+  +------------------------------------+  |
+|                                                                                  |
+| STACK 3: Virtual Instruments (Full width)                                        |
+|  +----------------------------------------------------------------------------+  |
+|  | Piano Voicing Keyboard                                                     |  |
+|  | [============= KEYS & NOTE HIGHLIGHTING ===============]                     |  |
+|  +----------------------------------------------------------------------------+  |
+|  | Guitar Fretboard preview                                                   |  |
+|  | [============== FRETS & STRING MARKERS ===============]                     |  |
+|  +----------------------------------------------------------------------------+  |
+|                                                                                  |
+| [ Back ]                                                        [ Save & Next ]  |
++----------------------------------------------------------------------------------+
 ```
 *(Note: Ghosted Background Layers allow the user to see the Melody notes faintly behind the active Chord track).*
 

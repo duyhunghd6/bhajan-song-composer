@@ -40,6 +40,7 @@ implement-*.log
 
 # env files (can opt-in for committing if needed)
 .env*
+ai-config.json
 
 # vercel
 .vercel

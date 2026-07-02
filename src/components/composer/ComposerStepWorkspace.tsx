@@ -3,13 +3,16 @@
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import AbcjsPlaybackController from "@/components/music-sheet/AbcjsPlaybackController";
+import PianoKeyboard from "@/components/instruments/PianoKeyboard";
+import GuitarFretboard from "@/components/instruments/GuitarFretboard";
 import PianoPedalIndicator from "@/components/instruments/PianoPedalIndicator";
 import { buildArrangementLayerProposals, generateArrangementPipeline } from "@/lib/theory/arrangement-pipeline";
+import { harmonizeMelody } from "@/app/actions/harmonize";
 import { buildFingerstyleComposerIntegration, FINGERSTYLE_PROFILE_OPTIONS, type FingerstyleComposerProfileId } from "./fingerstyle-integration";
 import AbcEditor, { DEFAULT_ABC } from "./AbcEditor";
 import TheoryAssistant from "./TheoryAssistant";
 import type { ComposerStepId } from "./composer-steps";
-import type { TheoryAssistantLayerProposal } from "./theory-assistant-layer";
+import type { TheoryAssistantArrangementSuggestion, TheoryAssistantLayerProposal } from "./theory-assistant-layer";
 
 interface ComposerStepWorkspaceProps {
   slug: string;
@@ -56,7 +59,10 @@ function ComposerNotationPreviewLayout({ source, preview }: ComposerNotationPrev
 
 export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: ComposerStepWorkspaceProps) {
   const [melodyAbc, setMelodyAbc] = useState(initialMelodyAbc ?? DEFAULT_ABC);
+  const [isHarmonizing, setIsHarmonizing] = useState(false);
+  const [llmExplanation, setLlmExplanation] = useState("");
   const [acceptedHarmony, setAcceptedHarmony] = useState<TheoryAssistantLayerProposal | null>(null);
+  const [currentSuggestion, setCurrentSuggestion] = useState<TheoryAssistantArrangementSuggestion | null>(null);
   const [engine, setEngine] = useState<"piano" | "fingerstyle">("piano");
   const [profileId, setProfileId] = useState<FingerstyleComposerProfileId>("strict-pima");
   const [generatedAccompaniment, setGeneratedAccompaniment] = useState<string | null>(null);
@@ -89,51 +95,128 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
     const harmonyPreviewAbc = acceptedHarmony ? `${melodyAbc.trimEnd()}\n\n${acceptedHarmony.abc}` : melodyAbc;
 
     return (
-      <ComposerNotationPreviewLayout
-        source={(
-          <>
-            <section className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950/60">
-              <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">AI Analysis Settings</h2>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button type="button" className="rounded-xl bg-amber-500 px-3 py-2 text-xs font-bold text-white">
-                  Detect Key
-                </button>
-                <button type="button" className="rounded-xl border border-zinc-200 px-3 py-2 text-xs font-bold text-zinc-700 dark:border-zinc-800 dark:text-zinc-200">
-                  Set Raga
-                </button>
-              </div>
-            </section>
-            <TheoryAssistant abc={melodyAbc} onAcceptArrangement={setAcceptedHarmony} />
-            {acceptedHarmony && (
-              <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 dark:border-emerald-900/70 dark:bg-emerald-950/30 dark:text-emerald-300">
-                <strong>Chord Track Editor:</strong> {acceptedHarmony.name} accepted as the harmony layer.
+      <div className="space-y-6">
+        <ComposerNotationPreviewLayout
+          source={(
+            <>
+              <section className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950/60">
+                <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">AI Analysis Settings</h2>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button type="button" className="rounded-xl bg-amber-500 px-3 py-2 text-xs font-bold text-white">
+                    Detect Key
+                  </button>
+                  <button type="button" className="rounded-xl border border-zinc-200 px-3 py-2 text-xs font-bold text-zinc-700 dark:border-zinc-800 dark:text-zinc-200">
+                    Set Raga
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isHarmonizing || !pipeline}
+                    onClick={async () => {
+                      if (!pipeline) return;
+                      setIsHarmonizing(true);
+                      try {
+                        const result = await harmonizeMelody(melodyAbc, {
+                          key: pipeline.harmonization.key,
+                          scale: pipeline.harmonization.scale,
+                          timeSignature: pipeline.harmonization.timeSignature
+                        });
+                        setMelodyAbc(result.abc);
+                        setLlmExplanation(result.explanation);
+                      } catch (err) {
+                        console.error(err);
+                        alert("Failed to harmonize using AI.");
+                      } finally {
+                        setIsHarmonizing(false);
+                      }
+                    }}
+                    className="rounded-xl border border-sky-400/30 bg-sky-500/10 px-3 py-2 text-xs font-bold text-sky-600 transition hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-50 dark:text-sky-400"
+                  >
+                    {isHarmonizing ? "Harmonizing..." : "✨ Suggest AI Harmonization"}
+                  </button>
+                </div>
+                {llmExplanation && (
+                  <div className="mt-4 rounded-xl border border-sky-400/20 bg-sky-500/10 p-3">
+                    <p className="text-xs font-semibold text-sky-700 dark:text-sky-300">AI Theory Assistant Explanation</p>
+                    <p className="mt-1 text-xs text-sky-800 dark:text-sky-200">{llmExplanation}</p>
+                  </div>
+                )}
               </section>
-            )}
-            <section className="rounded-2xl border border-dashed border-zinc-300 bg-white/70 p-4 dark:border-zinc-700 dark:bg-zinc-950/50">
-              <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Chord Track Editor (Ghosted Melody below)</h2>
-              <pre className="mt-3 max-h-[min(54vh,640px)] overflow-auto whitespace-pre-wrap rounded-xl bg-zinc-50 p-3 text-xs leading-5 text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
-                {`% Ghosted melody context\n${melodyAbc}\n\n% Chord Track Editor\n${acceptedHarmony ? acceptedHarmony.abc : "% Accept an arrangement from the Theory Assistant to see the chord track here."}`}
-              </pre>
-            </section>
-          </>
-        )}
-        preview={(
-          <>
-            <div className="flex items-center justify-between gap-3">
-              <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Harmonization Preview</h3>
-              <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
-                Bounded preview
-              </span>
+              <TheoryAssistant abc={melodyAbc} onAcceptArrangement={setAcceptedHarmony} onAnalysisChange={setCurrentSuggestion} />
+            </>
+          )}
+          preview={(
+            <>
+              <div>
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Harmonization Preview</h3>
+                  <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                    Bounded preview
+                  </span>
+                </div>
+                <AbcjsPlaybackController
+                  abcString={harmonyPreviewAbc}
+                  title="Harmonization Preview"
+                  canvasId="composer-harmony-preview"
+                  {...COMPOSER_PREVIEW_PROPS}
+                />
+              </div>
+
+              <section className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950/50">
+                <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Current ABCNotation of the Song</h2>
+                <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap rounded-xl bg-zinc-50 p-3 text-xs leading-5 text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
+                  {melodyAbc}
+                </pre>
+              </section>
+            </>
+          )}
+        />
+
+        <section className="w-full overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-md dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="composer-step-responsive-grid grid gap-0 min-[1536px]:grid-cols-2">
+            <div className="border-b border-zinc-100 p-5 dark:border-zinc-800 min-[1536px]:border-r min-[1536px]:border-b-0">
+              <section className="h-full rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 dark:border-emerald-900/70 dark:bg-emerald-950/30 dark:text-emerald-300">
+                <h2 className="mb-2 text-lg font-bold text-emerald-900 dark:text-emerald-100">Composer Layer Note</h2>
+                {acceptedHarmony ? (
+                  <p>{acceptedHarmony.name} accepted as the harmony layer.</p>
+                ) : (
+                  <p>Accept an arrangement from the Theory Assistant to see the composer layer note.</p>
+                )}
+              </section>
             </div>
-            <AbcjsPlaybackController
-              abcString={harmonyPreviewAbc}
-              title="Harmonization Preview"
-              canvasId="composer-harmony-preview"
-              {...COMPOSER_PREVIEW_PROPS}
+            <div className="p-5">
+              <section className="h-full rounded-2xl border border-dashed border-zinc-300 bg-white/70 p-4 dark:border-zinc-700 dark:bg-zinc-950/50">
+                <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Chord Track Editor (Ghosted Melody below)</h2>
+                <pre className="mt-3 max-h-[min(54vh,640px)] overflow-auto whitespace-pre-wrap rounded-xl bg-zinc-50 p-3 text-xs leading-5 text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
+                  {`% Ghosted melody context\n${melodyAbc}\n\n% Chord Track Editor\n${acceptedHarmony ? acceptedHarmony.abc : "% Accept an arrangement from the Theory Assistant to see the chord track here."}`}
+                </pre>
+              </section>
+            </div>
+          </div>
+        </section>
+
+        {currentSuggestion && (
+          <section className="w-full space-y-6">
+            <PianoKeyboard
+              title="Piano review"
+              subtitle={`First-chord voicing for ${currentSuggestion.progression[0] ?? "—"}`}
+              highlights={currentSuggestion.pianoHighlights}
+              startOctave={3}
+              octaveCount={2}
+              className="w-full"
             />
-          </>
+            <GuitarFretboard
+              title="Guitar review"
+              subtitle={`${currentSuggestion.progression[0] ?? "—"} shape${currentSuggestion.capoFret > 0 ? ` with capo ${currentSuggestion.capoFret}` : ""}`}
+              positions={currentSuggestion.guitarPositions}
+              openStrings={currentSuggestion.guitarOpenStrings}
+              mutedStrings={currentSuggestion.guitarMutedStrings}
+              startFret={currentSuggestion.guitarStartFret}
+              capoFret={currentSuggestion.capoFret || undefined}
+              className="w-full"
+            />
+          </section>
         )}
-      />
+      </div>
     );
   }
 
