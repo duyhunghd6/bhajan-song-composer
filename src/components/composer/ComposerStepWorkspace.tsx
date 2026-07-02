@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import AbcjsPlaybackController from "@/components/music-sheet/AbcjsPlaybackController";
 import PianoPedalIndicator from "@/components/instruments/PianoPedalIndicator";
 import { buildArrangementLayerProposals, generateArrangementPipeline } from "@/lib/theory/arrangement-pipeline";
@@ -14,6 +15,43 @@ interface ComposerStepWorkspaceProps {
   slug: string;
   step: ComposerStepId;
   initialMelodyAbc?: string;
+}
+
+interface ComposerNotationPreviewLayoutProps {
+  source: ReactNode;
+  preview: ReactNode;
+}
+
+const COMPOSER_PREVIEW_RENDER_OPTIONS = {
+  staffwidth: 720,
+  wrap: {
+    minSpacing: 1.7,
+    maxSpacing: 2.5,
+    preferredMeasuresPerLine: 4,
+    lastLineLimit: 0.6,
+  },
+  paddingright: 32,
+};
+
+const COMPOSER_PREVIEW_PROPS = {
+  minWidthClassName: "min-w-[520px] max-w-[760px]",
+  sheetViewportClassName: "max-h-[min(72vh,780px)] overflow-auto p-4",
+  renderOptions: COMPOSER_PREVIEW_RENDER_OPTIONS,
+};
+
+function ComposerNotationPreviewLayout({ source, preview }: ComposerNotationPreviewLayoutProps) {
+  return (
+    <section className="w-full overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-md dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="composer-step-responsive-grid grid gap-0 min-[1536px]:grid-cols-2">
+        <div className="composer-step-source-panel min-w-0 space-y-5 border-b border-zinc-100 p-5 dark:border-zinc-800 min-[1536px]:border-r min-[1536px]:border-b-0">
+          {source}
+        </div>
+        <div className="min-w-0 space-y-3 p-5">
+          {preview}
+        </div>
+      </div>
+    </section>
+  );
 }
 
 export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: ComposerStepWorkspaceProps) {
@@ -48,37 +86,54 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
   }
 
   if (step === "harmony") {
+    const harmonyPreviewAbc = acceptedHarmony ? `${melodyAbc.trimEnd()}\n\n${acceptedHarmony.abc}` : melodyAbc;
+
     return (
-      <div className="space-y-5">
-        <section className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950/60">
-          <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">AI Analysis Settings</h2>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button type="button" className="rounded-xl bg-amber-500 px-3 py-2 text-xs font-bold text-white">
-              Detect Key
-            </button>
-            <button type="button" className="rounded-xl border border-zinc-200 px-3 py-2 text-xs font-bold text-zinc-700 dark:border-zinc-800 dark:text-zinc-200">
-              Set Raga
-            </button>
-          </div>
-        </section>
-        <TheoryAssistant abc={melodyAbc} onAcceptArrangement={setAcceptedHarmony} />
-        {acceptedHarmony && (
-          <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 dark:border-emerald-900/70 dark:bg-emerald-950/30 dark:text-emerald-300">
-            <strong>Chord Track Editor:</strong> {acceptedHarmony.name} accepted as the harmony layer.
-          </section>
+      <ComposerNotationPreviewLayout
+        source={(
+          <>
+            <section className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950/60">
+              <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">AI Analysis Settings</h2>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button type="button" className="rounded-xl bg-amber-500 px-3 py-2 text-xs font-bold text-white">
+                  Detect Key
+                </button>
+                <button type="button" className="rounded-xl border border-zinc-200 px-3 py-2 text-xs font-bold text-zinc-700 dark:border-zinc-800 dark:text-zinc-200">
+                  Set Raga
+                </button>
+              </div>
+            </section>
+            <TheoryAssistant abc={melodyAbc} onAcceptArrangement={setAcceptedHarmony} />
+            {acceptedHarmony && (
+              <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 dark:border-emerald-900/70 dark:bg-emerald-950/30 dark:text-emerald-300">
+                <strong>Chord Track Editor:</strong> {acceptedHarmony.name} accepted as the harmony layer.
+              </section>
+            )}
+            <section className="rounded-2xl border border-dashed border-zinc-300 bg-white/70 p-4 dark:border-zinc-700 dark:bg-zinc-950/50">
+              <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Chord Track Editor (Ghosted Melody below)</h2>
+              <pre className="mt-3 max-h-[min(54vh,640px)] overflow-auto whitespace-pre-wrap rounded-xl bg-zinc-50 p-3 text-xs leading-5 text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
+                {`% Ghosted melody context\n${melodyAbc}\n\n% Chord Track Editor\n${acceptedHarmony ? acceptedHarmony.abc : "% Accept an arrangement from the Theory Assistant to see the chord track here."}`}
+              </pre>
+            </section>
+          </>
         )}
-        <section className="rounded-2xl border border-dashed border-zinc-300 bg-white/70 p-4 dark:border-zinc-700 dark:bg-zinc-950/50">
-          <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Chord Track Editor (Ghosted Melody below)</h2>
-          <pre className="mt-3 whitespace-pre-wrap text-xs leading-5 text-zinc-500 dark:text-zinc-400">
-            {`% Ghosted melody context\n${melodyAbc}\n\n% Chord Track Editor\n${acceptedHarmony ? acceptedHarmony.abc : "% Accept an arrangement from the Theory Assistant to see the chord track here."}`}
-          </pre>
-        </section>
-        <AbcjsPlaybackController
-          abcString={acceptedHarmony ? `${melodyAbc.trimEnd()}\n\n${acceptedHarmony.abc}` : melodyAbc}
-          title="Harmonization Preview"
-          canvasId="composer-harmony-preview"
-        />
-      </div>
+        preview={(
+          <>
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Harmonization Preview</h3>
+              <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                Bounded preview
+              </span>
+            </div>
+            <AbcjsPlaybackController
+              abcString={harmonyPreviewAbc}
+              title="Harmonization Preview"
+              canvasId="composer-harmony-preview"
+              {...COMPOSER_PREVIEW_PROPS}
+            />
+          </>
+        )}
+      />
     );
   }
 
@@ -90,78 +145,124 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
         setGeneratedAccompaniment(pipeline?.accompaniment.abc ?? "V:Piano clef=treble name=\"Generated Piano\"\n| [EGB]4 [DFA]4 |");
       }
     };
+    const accompanimentAbc = generatedAccompaniment ?? pipeline?.accompaniment.abc ?? melodyAbc;
 
     return (
-      <div className="space-y-5">
-        <section className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950/60">
-          <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Engine Toggle</h2>
-          <div className="mt-3 flex flex-wrap gap-3">
-            <label className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-900">
-              <input type="radio" checked={engine === "piano"} onChange={() => setEngine("piano")} /> Piano Accomp.
-            </label>
-            <label className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-900">
-              <input type="radio" checked={engine === "fingerstyle"} onChange={() => setEngine("fingerstyle")} /> Fingerstyle
-            </label>
-            <select
-              aria-label="Profile"
-              value={profileId}
-              onChange={(event) => setProfileId(event.target.value as FingerstyleComposerProfileId)}
-              className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-900"
-            >
-              {FINGERSTYLE_PROFILE_OPTIONS.map((profile) => (
-                <option key={profile.id} value={profile.id}>{profile.label}</option>
-              ))}
-            </select>
-            <button type="button" onClick={generateAccompaniment} className="rounded-xl bg-amber-500 px-4 py-2 text-sm font-bold text-white">
-              Generate Accompaniment Matrix
-            </button>
-          </div>
-        </section>
-        <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/70 dark:bg-amber-950/30">
-          <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Playability Validation Report</h2>
-          <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">⚠️ Max span exceeded in m.4. Converted to arpeggio when required.</p>
-        </section>
-        <AbcjsPlaybackController
-          abcString={generatedAccompaniment ?? pipeline?.accompaniment.abc ?? melodyAbc}
-          title="Resulting ABC Staff Preview"
-          canvasId="composer-accompaniment-preview"
-        />
-      </div>
+      <ComposerNotationPreviewLayout
+        source={(
+          <>
+            <section className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950/60">
+              <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Engine Toggle</h2>
+              <div className="mt-3 flex flex-wrap gap-3">
+                <label className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-900">
+                  <input type="radio" checked={engine === "piano"} onChange={() => setEngine("piano")} /> Piano Accomp.
+                </label>
+                <label className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-900">
+                  <input type="radio" checked={engine === "fingerstyle"} onChange={() => setEngine("fingerstyle")} /> Fingerstyle
+                </label>
+                <select
+                  aria-label="Profile"
+                  value={profileId}
+                  onChange={(event) => setProfileId(event.target.value as FingerstyleComposerProfileId)}
+                  className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-900"
+                >
+                  {FINGERSTYLE_PROFILE_OPTIONS.map((profile) => (
+                    <option key={profile.id} value={profile.id}>{profile.label}</option>
+                  ))}
+                </select>
+                <button type="button" onClick={generateAccompaniment} className="rounded-xl bg-amber-500 px-4 py-2 text-sm font-bold text-white">
+                  Generate Accompaniment Matrix
+                </button>
+              </div>
+            </section>
+            <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/70 dark:bg-amber-950/30">
+              <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Playability Validation Report</h2>
+              <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">⚠️ Max span exceeded in m.4. Converted to arpeggio when required.</p>
+            </section>
+            <section className="rounded-2xl border border-dashed border-zinc-300 bg-white/70 p-4 dark:border-zinc-700 dark:bg-zinc-950/50">
+              <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Generated ABC Source</h2>
+              <pre className="mt-3 max-h-[min(54vh,640px)] overflow-auto whitespace-pre-wrap rounded-xl bg-zinc-50 p-3 text-xs leading-5 text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
+                {accompanimentAbc}
+              </pre>
+            </section>
+          </>
+        )}
+        preview={(
+          <>
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Resulting ABC Staff Preview</h3>
+              <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                Bounded preview
+              </span>
+            </div>
+            <AbcjsPlaybackController
+              abcString={accompanimentAbc}
+              title="Resulting ABC Staff Preview"
+              canvasId="composer-accompaniment-preview"
+              {...COMPOSER_PREVIEW_PROPS}
+            />
+          </>
+        )}
+      />
     );
   }
 
   if (step === "ensemble") {
     const proposals = pipeline ? buildArrangementLayerProposals(pipeline) : [];
+    const ensembleAbc = pipeline?.finalAbc ?? (proposals.map((proposal) => proposal.abc).join("\n\n") || melodyAbc);
+
     return (
-      <div className="space-y-5">
-        <section className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950/60">
-          <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Enable Layers</h2>
-          <div className="mt-3 flex flex-wrap gap-3 text-sm">
-            {(["djembe", "flute", "violin"] as const).map((layer) => (
-              <label key={layer} className="rounded-xl border border-zinc-200 bg-white px-3 py-2 capitalize dark:border-zinc-800 dark:bg-zinc-900">
-                <input
-                  type="checkbox"
-                  checked={ensembleEnabled[layer]}
-                  onChange={() => setEnsembleEnabled((current) => ({ ...current, [layer]: !current[layer] }))}
-                /> {layer}
-              </label>
-            ))}
-          </div>
-        </section>
-        <section className="rounded-2xl border border-indigo-200 bg-indigo-50 p-4 dark:border-indigo-900/70 dark:bg-indigo-950/30">
-          <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Conflict Resolution Hierarchy Log</h2>
-          <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">Flute yielded in m.8 due to active melody; Djembe follows bass/kick alignment.</p>
-        </section>
-        <AbcjsPlaybackController
-          abcString={pipeline?.finalAbc ?? (proposals.map((proposal) => proposal.abc).join("\n\n") || melodyAbc)}
-          title="Multi-track ABCJS Render (Full Score View)"
-          canvasId="composer-ensemble-preview"
-        />
-      </div>
+      <ComposerNotationPreviewLayout
+        source={(
+          <>
+            <section className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950/60">
+              <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Enable Layers</h2>
+              <div className="mt-3 flex flex-wrap gap-3 text-sm">
+                {(["djembe", "flute", "violin"] as const).map((layer) => (
+                  <label key={layer} className="rounded-xl border border-zinc-200 bg-white px-3 py-2 capitalize dark:border-zinc-800 dark:bg-zinc-900">
+                    <input
+                      type="checkbox"
+                      checked={ensembleEnabled[layer]}
+                      onChange={() => setEnsembleEnabled((current) => ({ ...current, [layer]: !current[layer] }))}
+                    /> {layer}
+                  </label>
+                ))}
+              </div>
+            </section>
+            <section className="rounded-2xl border border-indigo-200 bg-indigo-50 p-4 dark:border-indigo-900/70 dark:bg-indigo-950/30">
+              <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Conflict Resolution Hierarchy Log</h2>
+              <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">Flute yielded in m.8 due to active melody; Djembe follows bass/kick alignment.</p>
+            </section>
+            <section className="rounded-2xl border border-dashed border-zinc-300 bg-white/70 p-4 dark:border-zinc-700 dark:bg-zinc-950/50">
+              <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Multi-track ABC Source</h2>
+              <pre className="mt-3 max-h-[min(54vh,640px)] overflow-auto whitespace-pre-wrap rounded-xl bg-zinc-50 p-3 text-xs leading-5 text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
+                {ensembleAbc}
+              </pre>
+            </section>
+          </>
+        )}
+        preview={(
+          <>
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Multi-track ABCJS Render (Full Score View)</h3>
+              <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                Bounded preview
+              </span>
+            </div>
+            <AbcjsPlaybackController
+              abcString={ensembleAbc}
+              title="Multi-track ABCJS Render (Full Score View)"
+              canvasId="composer-ensemble-preview"
+              {...COMPOSER_PREVIEW_PROPS}
+            />
+          </>
+        )}
+      />
     );
   }
 
   const markdown = `---\ntitle: "${slug}"\nslug: "${slug}"\nabcNotations:\n  - type: "melody"\n    label: "Melody Music Sheet"\n---\n\n## Lyrics\n\nDraft lyrics...\n\n## ABC\n\n\`\`\`abc\n${melodyAbc}\n\`\`\``;
+  const reviewAbc = pipeline?.finalAbc ?? melodyAbc;
 
   const handleCopyMarkdown = () => {
     navigator.clipboard.writeText(markdown)
@@ -177,28 +278,46 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
   };
 
   return (
-    <div className="space-y-5">
-      <section className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950/60">
-        <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Playback Simulation: Test Full Audio & Sync</h2>
-        <div className="mt-3 flex flex-wrap items-center gap-3">
-          <button type="button" className="rounded-xl bg-amber-500 px-4 py-2 text-sm font-bold text-white">Play All Layers</button>
-          <PianoPedalIndicator
-            title="Sustain Pedal Indicator"
-            pedalAutomation={{
-              controller: { midiControlChange: 64, downValue: 127, upValue: 0 },
-              events: [{ measureIndex: 0, beat: 1, chord: "Em", type: "pedal-down", value: 127 }],
-            }}
+    <ComposerNotationPreviewLayout
+      source={(
+        <section className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950/50">
+          <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Raw Markdown Output File Preview</h2>
+          <textarea readOnly value={markdown} className="mt-3 min-h-72 w-full rounded-xl border border-zinc-200 bg-zinc-50 p-3 font-mono text-xs text-zinc-800 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200" />
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button type="button" onClick={handleCopyMarkdown} className="rounded-xl border border-zinc-200 px-3 py-2 text-xs font-bold text-zinc-700 dark:border-zinc-800 dark:text-zinc-200">{copyStatus}</button>
+            <button type="button" className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white">Submit as PR</button>
+          </div>
+        </section>
+      )}
+      preview={(
+        <>
+          <section className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950/60">
+            <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Playback Simulation: Test Full Audio & Sync</h2>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <button type="button" className="rounded-xl bg-amber-500 px-4 py-2 text-sm font-bold text-white">Play All Layers</button>
+              <PianoPedalIndicator
+                title="Sustain Pedal Indicator"
+                pedalAutomation={{
+                  controller: { midiControlChange: 64, downValue: 127, upValue: 0 },
+                  events: [{ measureIndex: 0, beat: 1, chord: "Em", type: "pedal-down", value: 127 }],
+                }}
+              />
+            </div>
+          </section>
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Review Music Staff Playback</h3>
+            <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+              Bounded preview
+            </span>
+          </div>
+          <AbcjsPlaybackController
+            abcString={reviewAbc}
+            title="Review Music Staff Playback"
+            canvasId="composer-review-preview"
+            {...COMPOSER_PREVIEW_PROPS}
           />
-        </div>
-      </section>
-      <section className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950/50">
-        <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Raw Markdown Output File Preview</h2>
-        <textarea readOnly value={markdown} className="mt-3 min-h-72 w-full rounded-xl border border-zinc-200 bg-zinc-50 p-3 font-mono text-xs text-zinc-800 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200" />
-        <div className="mt-3 flex flex-wrap gap-2">
-          <button type="button" onClick={handleCopyMarkdown} className="rounded-xl border border-zinc-200 px-3 py-2 text-xs font-bold text-zinc-700 dark:border-zinc-800 dark:text-zinc-200">{copyStatus}</button>
-          <button type="button" className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white">Submit as PR</button>
-        </div>
-      </section>
-    </div>
+        </>
+      )}
+    />
   );
 }

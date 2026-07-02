@@ -514,6 +514,7 @@ export default function AbcjsPlaybackController({
 
   return (
     <div aria-label={description ?? title} className="w-full bg-zinc-950 rounded-xl shadow-md overflow-hidden flex flex-col border border-zinc-800">
+      {title && <span className="sr-only">{title}</span>}
       {(controls || showLoopControls) && (
         <div className="flex flex-wrap gap-y-3 items-center justify-between bg-[#1e1e1e] text-zinc-300 px-4 py-2.5 text-sm border-b border-black shadow-inner">
           {/* Left: Transport & Time */}
@@ -552,6 +553,7 @@ export default function AbcjsPlaybackController({
                   className={`transition-colors cursor-pointer ${loopMode === 'range' ? 'text-amber-500' : 'hover:text-white'}`}
                   title="Toggle Loop Range"
                 >
+                  <span className="sr-only">{loopMode === "range" ? "Measure range" : "Whole sheet"}</span>
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                 </button>
               )}

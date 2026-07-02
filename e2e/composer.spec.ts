@@ -25,7 +25,7 @@ test.describe("composer workflow", () => {
     await expect(page).toHaveURL(/\/compose\/new-bhajan-arrangement\/melody$/);
     await expect(page.getByRole("heading", { name: "Step 1: Melody Input" })).toBeVisible();
     await expect(page.getByText("Layers & Navigation")).toBeVisible();
-    await expect(page.getByText("[▶] 1. Melody")).toBeVisible();
+    await expect(page.getByRole("link", { name: /Melody\s+Current/ })).toBeVisible();
     await expect(page.locator("#abc-editor-input")).toBeVisible();
     await expect(page.getByRole("link", { name: "Save & Harmonize" })).toHaveAttribute(
       "href",
@@ -57,21 +57,21 @@ test.describe("composer workflow", () => {
     await page.goto(`/compose/${slug}/melody`);
     await page.locator("#abc-editor-input").fill(composerAbc);
     await expect(page.getByRole("heading", { name: "Step 1: Melody Input" })).toBeVisible();
-    await expect(page.getByText("[▶] 1. Melody")).toBeVisible();
+    await expect(page.getByRole("link", { name: /Melody\s+Current/ })).toBeVisible();
     await expect(page.locator("#abc-editor-preview")).toBeVisible();
 
     await page.getByRole("link", { name: "Save & Harmonize" }).click();
     await expect(page).toHaveURL(`/compose/${slug}/harmony`);
     await expect(page.getByRole("heading", { name: "Step 2: Harmonization" })).toBeVisible();
-    await expect(page.getByText("[✓] 1. Melody")).toBeVisible();
-    await expect(page.getByText("[▶] 2. Harmony")).toBeVisible();
+    await expect(page.getByRole("link", { name: /Melody\s+Complete/ })).toBeVisible();
+    await expect(page.getByRole("link", { name: /Harmony\s+Current/ })).toBeVisible();
     await expect(page.getByRole("heading", { name: "AI Analysis Settings" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Chord Track Editor (Ghosted Melody below)" })).toBeVisible();
 
     await page.getByRole("link", { name: "Save & Add Accompaniment" }).click();
     await expect(page).toHaveURL(`/compose/${slug}/accompaniment`);
     await expect(page.getByRole("heading", { name: "Step 3: Accompaniment" })).toBeVisible();
-    await expect(page.getByText("[▶] 3. Accompaniment")).toBeVisible();
+    await expect(page.getByRole("link", { name: /Accompaniment\s+Current/ })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Engine Toggle" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Playability Validation Report" })).toBeVisible();
     await page.getByRole("button", { name: "Generate Accompaniment Matrix" }).click();
@@ -90,6 +90,45 @@ test.describe("composer workflow", () => {
     await expect(page.getByRole("heading", { name: "Playback Simulation: Test Full Audio & Sync" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Raw Markdown Output File Preview" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Copy Markdown" })).toBeVisible();
+  });
+
+  test("places source on the left and playback on the right at widescreen", async ({ page }) => {
+    await page.setViewportSize({ width: 1920, height: 1080 });
+
+    for (const step of ["harmony", "accompaniment", "ensemble", "review"] as const) {
+      await page.goto(`/compose/happy-birthday/${step}`);
+
+      const sourcePanel = page.locator(".composer-step-source-panel").first();
+      const previewCanvas = page.locator(`#composer-${step}-preview`);
+      await expect(sourcePanel).toBeVisible();
+      await expect(previewCanvas).toBeVisible();
+
+      const sourceBox = await sourcePanel.boundingBox();
+      const previewBox = await previewCanvas.boundingBox();
+      expect(sourceBox).not.toBeNull();
+      expect(previewBox).not.toBeNull();
+      if (!sourceBox || !previewBox) throw new Error(`Could not measure ${step} composer layout`);
+
+      expect(sourceBox.x + sourceBox.width).toBeLessThanOrEqual(previewBox.x);
+    }
+  });
+
+  test("stacks source above playback below the widescreen breakpoint", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto("/compose/happy-birthday/harmony");
+
+    const sourcePanel = page.locator(".composer-step-source-panel").first();
+    const previewCanvas = page.locator("#composer-harmony-preview");
+    await expect(sourcePanel).toBeVisible();
+    await expect(previewCanvas).toBeVisible();
+
+    const sourceBox = await sourcePanel.boundingBox();
+    const previewBox = await previewCanvas.boundingBox();
+    expect(sourceBox).not.toBeNull();
+    expect(previewBox).not.toBeNull();
+    if (!sourceBox || !previewBox) throw new Error("Could not measure stacked composer layout");
+
+    expect(previewBox.y).toBeGreaterThan(sourceBox.y + sourceBox.height);
   });
 
   test("loads an existing song into the metadata dashboard and continues to melody", async ({ page }) => {
