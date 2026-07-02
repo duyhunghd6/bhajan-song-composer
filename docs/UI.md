@@ -179,26 +179,36 @@ Focus: AI Theory Assistant generating chord progressions and refining them with 
 *(Note: Ghosted Background Layers allow the user to see the Melody notes faintly behind the active Chord track).*
 
 #### 2.2.3 Step 3: Accompaniment (`/compose/[slug]/accompaniment`)
-Focus: Generating Piano Accompaniment or Guitar Fingerstyle from the Harmonized Melody.
+Focus: AI-assisted generation of Piano Accompaniment or Guitar Fingerstyle from the Harmonized Melody.
 
 ```
-+-----------------------+----------------------------------------------------------+
-|  SIDEBAR (20%)        |  MAIN WORKSPACE CANVAS: STEP 3 - ACCOMPANIMENT (80%)     |
-|                       |                                                          |
-|  [✓] 2. Harmony       |  +----------------------------------------------------+  |
-|  [▶] 3. Accompaniment |  | Engine Toggle: (o) Piano Accomp. ( ) Fingerstyle   |  |
-|  [ ] 4. Ensemble      |  | Profile: [Pop/Ballad] [Rock/R&B] [Classical/Folk]  |  |
-|                       |  | [ Generate Accompaniment Matrix ]                  |  |
-|                       |  +----------------------------------------------------+  |
-|  [Track States]       |  +----------------------------------------------------+  |
-|  Melody (Background)  |  | Playability Validation Report                      |  |
-|  Harmony (Background) |  | ⚠️ "Max span exceeded in m.4. Converted to arpeggio"|  |
-|                       |  +----------------------------------------------------+  |
-|                       |  +----------------------------------------------------+  |
-|                       |  | Resulting ABC Staff Preview (Bass & Treble Clefs)  |  |
-|                       |  +----------------------------------------------------+  |
-|                       |  [ Back ]                            [ Save & Next ]     |
-+-----------------------+----------------------------------------------------------+
++----------------------------------------------------------------------------------+
+| COMPACT CHECKPOINTS: [✓] Metadata  [✓] Melody  [✓] Harmony  [▶] Accomp  [ ] Review|
++----------------------------------------------------------------------------------+
+| MAIN WORKSPACE CANVAS: STEP 3 - ACCOMPANIMENT                                    |
+|                                                                                  |
+| STACK 1: AI Accompaniment Generation (Two-column grid)                           |
+|  +------------------------------------+  +------------------------------------+  |
+|  | AI Accompaniment Settings          |  | Resulting ABC Staff Preview        |  |
+|  | [✨ Suggest AI Accompaniment]      |  | [Music Staff Playback]             |  |
+|  |                                    |  |                                    |  |
+|  | AI Suggested Accompaniments        |  +------------------------------------+  |
+|  | [Option 1: Flowing Pop Piano]      |  | Generated ABC Source               |  |
+|  | [Option 2: Strict PIMA Guitar]     |  | X:1 ... V:PianoLH ...              |  |
+|  | [Option 3: Folk Travis Guitar]     |  |                                    |  |
+|  +------------------------------------+  +------------------------------------+  |
+|                                                                                  |
+| STACK 2: Virtual Instruments (Full width)                                        |
+|  +----------------------------------------------------------------------------+  |
+|  | Piano Voicing Keyboard                                                     |  |
+|  | [============= KEYS & NOTE HIGHLIGHTING ===============]                     |  |
+|  +----------------------------------------------------------------------------+  |
+|  | Guitar Fretboard preview                                                   |  |
+|  | [============== FRETS & STRING MARKERS ===============]                     |  |
+|  +----------------------------------------------------------------------------+  |
+|                                                                                  |
+| [ Back ]                                                        [ Save & Next ]  |
++----------------------------------------------------------------------------------+
 ```
 
 #### 2.2.4 Step 4: Ensemble Expansion (`/compose/[slug]/ensemble`)

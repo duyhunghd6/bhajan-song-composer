@@ -5,7 +5,8 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import PocHandoffChecklist from "@/components/mockups/PocHandoffChecklist";
 import { generateArrangementPipeline } from "@/lib/theory/arrangement-pipeline";
-import { harmonizeMelody, type HarmonizationOption } from "@/app/actions/harmonize";
+import { harmonizeMelody } from "@/app/actions/harmonize";
+import { type HarmonizationOption } from "@/lib/theory/harmonization-candidates";
 
 const AbcjsPlaybackController = dynamic(() => import("@/components/music-sheet/AbcjsPlaybackController"), { ssr: false });
 
@@ -16,6 +17,22 @@ L:1/8
 Q:1/4=120
 K:Em
 | E2 E2 G2 A2 | B4 B2 A2 | G2 A2 B2 G2 | E8 |`;
+
+function harmonizationOptionId(option: HarmonizationOption, index: number): string {
+  return option.id || `candidate-${index + 1}`;
+}
+
+function harmonizationOptionLabel(option: HarmonizationOption): string {
+  return option.label || option.progression_name;
+}
+
+function harmonizationOptionAbc(option: HarmonizationOption): string {
+  return option.harmonizedAbc || option.abc;
+}
+
+function formatCandidateConfidence(confidence: number): string {
+  return `${Math.round(confidence * 100)}%`;
+}
 
 function statusPill(isReady: boolean, label: string) {
   return (
@@ -35,7 +52,7 @@ export default function ArrangementPipelineMockup() {
   const [melodyAbc, setMelodyAbc] = useState(SAMPLE_MELODY_ABC);
   const [isHarmonizing, setIsHarmonizing] = useState(false);
   const [aiSuggestions, setAiSuggestions] = useState<HarmonizationOption[]>([]);
-  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState<number | null>(null);
+  const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
 
   const pipeline = useMemo(
     () =>
@@ -149,7 +166,7 @@ ${pipeline.finalAbc}`;
                       timeSignature: pipeline.harmonization.timeSignature
                     });
                     setAiSuggestions(result.options);
-                    setSelectedSuggestionIndex(null);
+                    setSelectedCandidateId(null);
                   } catch (err) {
                     console.error(err);
                     alert("Failed to harmonize using AI.");
@@ -168,30 +185,65 @@ ${pipeline.finalAbc}`;
               <div className="mt-4 space-y-3">
                 <h3 className="text-sm font-bold text-zinc-100">AI Suggested Progressions</h3>
                 <div className="grid gap-3 sm:grid-cols-1">
-                  {aiSuggestions.map((option, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => {
-                        setSelectedSuggestionIndex(idx);
-                        setMelodyAbc(option.abc);
-                      }}
-                      className={`text-left rounded-xl border p-4 transition-all focus:outline-none focus:ring-2 focus:ring-amber-500/50 ${
-                        selectedSuggestionIndex === idx
-                          ? "border-amber-400 bg-amber-500/10 shadow-sm"
-                          : "border-zinc-800 bg-zinc-950/40 hover:border-amber-300/50 hover:bg-zinc-900"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <h4 className="text-sm font-bold text-zinc-100">Option {idx + 1}: {option.progression_name}</h4>
-                        {selectedSuggestionIndex === idx && (
-                          <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-bold text-white">Active</span>
+                  {aiSuggestions.map((option, idx) => {
+                    const candidateId = harmonizationOptionId(option, idx);
+                    const candidateLabel = harmonizationOptionLabel(option);
+                    const candidateAbc = harmonizationOptionAbc(option);
+                    const isSelected = selectedCandidateId === candidateId;
+
+                    return (
+                      <button
+                        key={candidateId}
+                        onClick={() => {
+                          setSelectedCandidateId(candidateId);
+                          setMelodyAbc(candidateAbc);
+                        }}
+                        className={`text-left rounded-xl border p-4 transition-all focus:outline-none focus:ring-2 focus:ring-amber-500/50 ${
+                          isSelected
+                            ? "border-amber-400 bg-amber-500/10 shadow-sm"
+                            : "border-zinc-800 bg-zinc-950/40 hover:border-amber-300/50 hover:bg-zinc-900"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <h4 className="text-sm font-bold text-zinc-100">Option {idx + 1}: {candidateLabel}</h4>
+                          {isSelected && (
+                            <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-bold text-white">Active</span>
+                          )}
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-2 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+                          <span>{option.style}</span>
+                          <span>Confidence {formatCandidateConfidence(option.confidence)}</span>
+                        </div>
+                        {option.progression.length > 0 && (
+                          <p className="mt-2 font-mono text-xs text-amber-300">
+                            {option.progression.join(" → ")}
+                          </p>
                         )}
-                      </div>
-                      <p className="mt-1 text-xs leading-5 text-zinc-400">
-                        {option.explanation}
-                      </p>
-                    </button>
-                  ))}
+                        {option.romanNumerals.length > 0 && (
+                          <p className="mt-1 font-mono text-[11px] text-zinc-500">
+                            {option.romanNumerals.join(" → ")}
+                          </p>
+                        )}
+                        <p className="mt-2 text-xs leading-5 text-zinc-400">
+                          {option.explanation}
+                        </p>
+                        {option.warnings.length > 0 && (
+                          <ul className="mt-2 list-disc space-y-1 pl-4 text-[11px] leading-4 text-amber-300">
+                            {option.warnings.map((warning) => (
+                              <li key={warning}>{warning}</li>
+                            ))}
+                          </ul>
+                        )}
+                        {option.validationNotes.length > 0 && (
+                          <ul className="mt-2 list-disc space-y-1 pl-4 text-[11px] leading-4 text-emerald-300">
+                            {option.validationNotes.map((note) => (
+                              <li key={note}>{note}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             )}
