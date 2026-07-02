@@ -13,11 +13,28 @@ test.describe("composer workflow", () => {
     await page.addInitScript(() => window.localStorage.clear());
   });
 
-  test("edits metadata, resource rows, and YAML preview", async ({ page }) => {
+  test("starts on the metadata dashboard and opens the route-based melody step", async ({ page }) => {
     await page.goto("/compose");
 
-    await expect(page.getByRole("heading", { name: "Draft an ABC notation layer" })).toBeVisible();
-    await expect(page.getByText("Schema valid")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Song Metadata & Layers Dashboard" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Metadata & Layer Status" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Arrangement tracks" })).toHaveCount(0);
+
+    await page.getByRole("link", { name: "Save & Start Melody" }).click();
+
+    await expect(page).toHaveURL(/\/compose\/new-bhajan-arrangement\/melody$/);
+    await expect(page.getByRole("heading", { name: "Step 1: Melody Input" })).toBeVisible();
+    await expect(page.getByText("Layers & Navigation")).toBeVisible();
+    await expect(page.getByText("[▶] 1. Melody")).toBeVisible();
+    await expect(page.locator("#abc-editor-input")).toBeVisible();
+    await expect(page.getByRole("link", { name: "Save & Harmonize" })).toHaveAttribute(
+      "href",
+      "/compose/new-bhajan-arrangement/harmony",
+    );
+  });
+
+  test("keeps metadata editing and YAML preview on the composer dashboard", async ({ page }) => {
+    await page.goto("/compose");
 
     await page.locator("#song-title").fill("E2E Bhajan Draft");
     await page.locator("#song-slug").fill("e2e-bhajan-draft");
@@ -28,165 +45,62 @@ test.describe("composer workflow", () => {
     await expect(yamlPreview).toHaveValue(/slug: "e2e-bhajan-draft"/);
     await expect(yamlPreview).toHaveValue(/tags: \["bhajan", "e2e", "playwright"\]/);
 
-    await page.getByRole("button", { name: "Add video" }).click();
-    await page.locator("#video-type-1").fill("practice-track");
-    await page.locator("#video-label-1").fill("Practice Track");
-    await page.locator("#video-url-1").fill("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
-    await expect(yamlPreview).toHaveValue(/type: "practice-track"/);
-    await expect(yamlPreview).toHaveValue(/label: "Practice Track"/);
-
-    await page.getByRole("button", { name: "Add layer" }).first().click();
-    await page.locator("#notation-type-1").fill("e2e-harmony");
-    await page.locator("#notation-label-1").fill("E2E Harmony Sheet");
-    await expect(yamlPreview).toHaveValue(/type: "e2e-harmony"/);
-    await expect(yamlPreview).toHaveValue(/label: "E2E Harmony Sheet"/);
-
-    await page.getByRole("button", { name: "Clear metadata draft" }).click();
-    await expect(page.locator("#song-title")).toHaveValue("New Bhajan Arrangement");
-    await expect(page.getByText("Metadata draft cleared. The starter form has been restored.")).toBeVisible();
-  });
-
-  test("manages ABC layers and editor state", async ({ page }) => {
-    await page.goto("/compose");
-
-    await expect(page.getByRole("heading", { name: "Arrangement tracks" })).toBeVisible();
-    await expect(page.getByText("3 total layers", { exact: true })).toBeVisible();
-    await expect(page.getByText("2 visible", { exact: true })).toBeVisible();
-
-    await page.getByRole("button", { name: "Visible" }).first().click();
-    await expect(page.getByText("1 visible", { exact: true })).toBeVisible();
-
-    await page.getByRole("button", { name: "Add layer" }).nth(1).click();
-    await expect(page.getByText("4 total layers", { exact: true })).toBeVisible();
-    await expect(page.getByLabel("Active layer name")).toHaveValue("Layer 4");
-
-    await page.getByLabel("Active layer name").fill("E2E Lead Layer");
-    await expect(page.getByRole("heading", { name: "Editing: E2E Lead Layer" })).toBeVisible();
-
-    await page.locator("#abc-editor-input").fill(composerAbc);
-    await expect(page.locator("#abc-editor-input")).toHaveValue(/Composer E2E Draft/);
-    await expect(page.locator("#abc-editor-preview")).toBeVisible();
-
-    await page.getByRole("button", { name: "Duplicate" }).click();
-    await expect(page.getByText("5 total layers", { exact: true })).toBeVisible();
-    await expect(page.getByLabel("Active layer name")).toHaveValue("E2E Lead Layer Copy");
-
-    await page.getByRole("button", { name: "Reset", exact: true }).click();
-    await expect(page.getByText("3 total layers", { exact: true })).toBeVisible();
-    await expect(page.getByLabel("Active layer name")).toHaveValue("Melody");
-  });
-
-  test("accepts constrained Theory Assistant suggestions as a separate Composer layer", async ({ page }) => {
-    await page.goto("/compose");
-
-    await page.locator("#theory-assistant-capo").selectOption("2");
-    await page.locator("#theory-assistant-skill-level").selectOption("intermediate");
-    await page.getByRole("button", { name: "Accept as Composer layer" }).click();
-
-    await expect(page.getByText("4 total layers", { exact: true })).toBeVisible();
-    await expect(page.getByLabel("Active layer name")).toHaveValue("Theory Assistant Arrangement (Intermediate)");
-    await expect(page.locator("#abc-editor-input")).toHaveValue(/practice arrangement layer/);
-    await expect(page.locator("#abc-editor-input")).toHaveValue(/capo 2/);
-    await expect(page.locator("#abc-editor-input")).not.toHaveValue(/T:Melody Layer/);
-    await expect(page.locator("#theory-assistant-accepted-message")).toContainText(
-      "Arrangement layer was accepted into the Composer stack."
+    await expect(page.getByRole("link", { name: "Save & Start Melody" })).toHaveAttribute(
+      "href",
+      "/compose/e2e-bhajan-draft/melody",
     );
   });
 
-  test("shows ordered arrangement pipeline gates before full-track generation", async ({ page }) => {
-    await page.goto("/compose");
+  test("shows the dedicated child UIs with sidebar progress and step navigation", async ({ page }) => {
+    const slug = "new-bhajan-arrangement";
 
-    await expect(page.getByRole("heading", { name: "Arrangement pipeline stage gates" })).toBeVisible();
-    await expect(page.getByTestId("pipeline-gate-melody")).toContainText("Complete");
-    await expect(page.getByTestId("pipeline-gate-harmonization")).toContainText("Available");
-    await expect(page.getByTestId("pipeline-gate-accompaniment")).toContainText("Locked");
-    await expect(page.getByTestId("pipeline-gate-full-track-expansion")).toContainText("Locked");
-    await expect(page.getByTestId("pipeline-gate-full-track")).toContainText("Locked");
+    await page.goto(`/compose/${slug}/melody`);
+    await page.locator("#abc-editor-input").fill(composerAbc);
+    await expect(page.getByRole("heading", { name: "Step 1: Melody Input" })).toBeVisible();
+    await expect(page.getByText("[▶] 1. Melody")).toBeVisible();
+    await expect(page.locator("#abc-editor-preview")).toBeVisible();
 
-    await page.getByRole("button", { name: "Run ordered pipeline" }).click();
+    await page.getByRole("link", { name: "Save & Harmonize" }).click();
+    await expect(page).toHaveURL(`/compose/${slug}/harmony`);
+    await expect(page.getByRole("heading", { name: "Step 2: Harmonization" })).toBeVisible();
+    await expect(page.getByText("[✓] 1. Melody")).toBeVisible();
+    await expect(page.getByText("[▶] 2. Harmony")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "AI Analysis Settings" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Chord Track Editor (Ghosted Melody below)" })).toBeVisible();
 
-    await expect(page.getByTestId("pipeline-gate-harmonization")).toContainText("Complete");
-    await expect(page.getByTestId("pipeline-gate-accompaniment")).toContainText("Complete");
-    await expect(page.getByTestId("pipeline-gate-full-track")).toContainText("Complete");
-    await expect(page.getByText("Full track ABC is ready after the ordered stage gates completed.")).toBeVisible();
+    await page.getByRole("link", { name: "Save & Add Accompaniment" }).click();
+    await expect(page).toHaveURL(`/compose/${slug}/accompaniment`);
+    await expect(page.getByRole("heading", { name: "Step 3: Accompaniment" })).toBeVisible();
+    await expect(page.getByText("[▶] 3. Accompaniment")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Engine Toggle" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Playability Validation Report" })).toBeVisible();
+    await page.getByRole("button", { name: "Generate Accompaniment Matrix" }).click();
+    await expect(page.getByRole("heading", { name: "Resulting ABC Staff Preview" })).toBeVisible();
+
+    await page.getByRole("link", { name: "Save & Add Ensemble" }).click();
+    await expect(page).toHaveURL(`/compose/${slug}/ensemble`);
+    await expect(page.getByRole("heading", { name: "Step 4: Ensemble Expansion" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Enable Layers" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Conflict Resolution Hierarchy Log" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Multi-track ABCJS Render (Full Score View)" })).toBeVisible();
+
+    await page.getByRole("link", { name: "Save & Review" }).click();
+    await expect(page).toHaveURL(`/compose/${slug}/review`);
+    await expect(page.getByRole("heading", { name: "Step 5: Review & Export" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Playback Simulation: Test Full Audio & Sync" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Raw Markdown Output File Preview" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Copy Markdown" })).toBeVisible();
   });
 
-  test("accepts and rejects generated pipeline outputs as editable Composer layers", async ({ page }) => {
-    await page.goto("/compose");
-
-    await page.getByRole("button", { name: "Run ordered pipeline" }).click();
-    await expect(page.getByRole("heading", { name: "Generated Composer layers" })).toBeVisible();
-
-    await expect(page.getByTestId("pipeline-layer-pipeline-harmonization")).toContainText("Generated Harmonization");
-    await expect(page.getByTestId("pipeline-layer-pipeline-accompaniment")).toContainText("Generated Accompaniment");
-    await expect(page.getByTestId("pipeline-layer-pipeline-drums")).toContainText("Generated Drum Guidance");
-    await expect(page.getByTestId("pipeline-layer-pipeline-bass")).toContainText("Generated Bass Map");
-    await expect(page.getByTestId("pipeline-layer-pipeline-counter-melody")).toContainText("Generated Counter-Melody");
-
-    await page.getByRole("button", { name: "Reject Generated Counter-Melody" }).click();
-    await expect(page.getByTestId("pipeline-layer-pipeline-counter-melody")).toHaveCount(0);
-
-    for (const name of [
-      "Generated Harmonization",
-      "Generated Accompaniment",
-      "Generated Drum Guidance",
-      "Generated Bass Map",
-    ]) {
-      await page.getByRole("button", { name: `Accept ${name}` }).click();
-    }
-
-    await expect(page.getByText("7 total layers", { exact: true })).toBeVisible();
-    await expect(page.getByLabel("Active layer name")).toHaveValue("Generated Bass Map");
-    await expect(page.locator("#abc-editor-input")).toHaveValue(/V:Bass clef=bass/);
-
-    await page.locator("#abc-editor-input").fill("V:Bass clef=bass name=\"Edited Bass\"\n| E,,8 |");
-    await expect(page.locator("#abc-editor-input")).toHaveValue(/Edited Bass/);
-  });
-
-  test("generates fingerstyle output for Composer layers with visual inspection", async ({ page }) => {
-    await page.goto("/compose");
-
-    await page.getByLabel("Fingerstyle picking profile").selectOption("folk-travis");
-    await page.getByRole("button", { name: "Generate fingerstyle output" }).click();
-
-    await expect(page.getByRole("heading", { name: "Fingerstyle Composer integration" })).toBeVisible();
-    await expect(page.getByText("ready_for_integration")).toBeVisible();
-    await expect(page.getByText("Max fret span: 3 frets")).toBeVisible();
-    await expect(page.getByRole("img", { name: /Fingerstyle visual inspection guitar fretboard diagram/ })).toBeVisible();
-    await expect(page.getByRole("img", { name: /Fingerstyle visual inspection hands SVG hands overlay/ })).toBeVisible();
-
-    await page.getByRole("button", { name: "Accept Fingerstyle Guitar" }).click();
-
-    await expect(page.getByText("4 total layers", { exact: true })).toBeVisible();
-    await expect(page.getByLabel("Active layer name")).toHaveValue("Fingerstyle Guitar (Folk / Travis Override)");
-    await expect(page.locator("#abc-editor-input")).toHaveValue(/T:Fingerstyle Guitar \(Folk \/ Travis Override\)/);
-  });
-
-  test("keeps the ABCJS music sheet visible after editing in dark mode", async ({ page }) => {
-    await page.emulateMedia({ colorScheme: "dark" });
+  test("loads an existing song into the metadata dashboard and continues to melody", async ({ page }) => {
     await page.goto("/compose?edit=happy-birthday");
 
-    await expect(page.getByRole("heading", { name: "Editing: Happy Birthday" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Music Sheet (ABCJS rendering)" })).toBeVisible();
-
-    const abcEditor = page.locator("#abc-editor-input");
-    await abcEditor.fill(`${await abcEditor.inputValue()}\n% e2e edit`);
-
-    const preview = page.locator("#abc-editor-preview");
-    await expect(preview.locator("svg")).toBeVisible();
-    await expect(preview.locator(".abcjs-top-line").first()).toBeVisible();
-    await expect(page.locator("#abc-editor-render-error")).toHaveCount(0);
-
-    await expect
-      .poll(async () =>
-        preview.evaluate((element) => {
-          const staffLine = element.querySelector(".abcjs-top-line");
-          return {
-            previewColor: getComputedStyle(element).color,
-            staffFill: staffLine ? getComputedStyle(staffLine).fill : null,
-          };
-        })
-      )
-      .toEqual({ previewColor: "rgb(0, 0, 0)", staffFill: "rgb(0, 0, 0)" });
+    await expect(page.getByRole("heading", { name: "Song Metadata & Layers Dashboard" })).toBeVisible();
+    await expect(page.getByText("Review metadata for Happy Birthday")).toBeVisible();
+    await expect(page.locator("#song-title")).toHaveValue("Happy Birthday");
+    await expect(page.getByRole("link", { name: "Continue arrangement" })).toHaveAttribute(
+      "href",
+      "/compose/happy-birthday/melody",
+    );
   });
 });

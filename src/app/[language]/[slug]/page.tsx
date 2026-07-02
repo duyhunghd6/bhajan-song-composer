@@ -9,6 +9,12 @@ interface PageProps {
   params: Promise<{ language: string; slug: string }>;
 }
 
+function getYouTubeId(url: string): string | null {
+  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+  const match = url.match(regExp);
+  return match && match[2].length === 11 ? match[2] : null;
+}
+
 export async function generateStaticParams() {
   const songs = await loadAllSongs();
   return songs.map((song) => ({
@@ -41,6 +47,9 @@ export default async function SongPage({ params }: PageProps) {
   } catch {
     notFound();
   }
+
+  const referenceVideo = song.meta.videos.find((video) => video.default) ?? song.meta.videos[0] ?? null;
+  const referenceVideoId = referenceVideo ? getYouTubeId(referenceVideo.url) : null;
 
   return (
     <main className="min-h-screen bg-zinc-50 dark:bg-zinc-950 transition-colors duration-300 py-12 px-4 sm:px-6 lg:px-8">
@@ -100,25 +109,58 @@ export default async function SongPage({ params }: PageProps) {
           </div>
         </div>
 
+        <section className="grid gap-6 lg:grid-cols-2" aria-label="Playback reference and lyrics">
+          <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-600 dark:text-amber-400">
+                  Reference Material
+                </p>
+                <h2 className="mt-2 text-xl font-bold text-zinc-900 dark:text-zinc-100">
+                  YouTube Player
+                </h2>
+              </div>
+              <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">
+                Type: {referenceVideo?.type ?? "Unavailable"}
+              </span>
+            </div>
+            {referenceVideoId ? (
+              <div className="aspect-video w-full overflow-hidden rounded-2xl border border-zinc-200/80 bg-black shadow-md dark:border-zinc-800/80">
+                <iframe
+                  id="reference-youtube-iframe-player"
+                  src={`https://www.youtube.com/embed/${referenceVideoId}?enablejsapi=1`}
+                  title={referenceVideo?.label ?? song.meta.title}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  className="h-full w-full border-0"
+                />
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-dashed border-zinc-200 p-10 text-center text-sm text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+                No reference video available.
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <h2 className="border-b border-zinc-100 pb-2 text-xl font-bold text-zinc-900 dark:border-zinc-800 dark:text-zinc-100">
+              Lyrics & Transliteration
+            </h2>
+            <div className="mt-4 whitespace-pre-line font-serif text-base leading-relaxed text-zinc-700 dark:text-zinc-300">
+              {song.lyrics}
+            </div>
+          </div>
+        </section>
+
         {/* Playback Module Component */}
         <Suspense fallback={<div className="p-12 text-center text-sm text-zinc-500 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800">Loading playback controls...</div>}>
           <PlaybackController song={song} />
         </Suspense>
 
-        {/* Lyrics & Notes */}
+        {/* Notes */}
         <div className="grid gap-6 md:grid-cols-12">
-          {/* Lyrics Card */}
-          <div className="md:col-span-7 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-6 rounded-2xl shadow-sm space-y-4">
-            <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 border-b border-zinc-100 dark:border-zinc-800 pb-2">
-              Lyrics
-            </h2>
-            <div className="whitespace-pre-line text-zinc-700 dark:text-zinc-300 font-serif leading-relaxed text-base">
-              {song.lyrics}
-            </div>
-          </div>
-
           {/* Notes Card */}
-          <div className="md:col-span-5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-6 rounded-2xl shadow-sm space-y-4">
+          <div className="md:col-span-12 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-6 rounded-2xl shadow-sm space-y-4">
             <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 border-b border-zinc-100 dark:border-zinc-800 pb-2">
               Notes & Information
             </h2>

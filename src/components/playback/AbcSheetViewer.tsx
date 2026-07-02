@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { GuitarFretboard, PianoKeyboard } from "@/components/instruments";
+import { GuitarFretboard, PianoKeyboard, PianoPedalIndicator } from "@/components/instruments";
 import MusicSheetRenderer, {
   type MusicSheetPlaybackCursorEvent,
 } from "@/components/music-sheet/MusicSheetRenderer";
@@ -38,10 +38,10 @@ export default function AbcSheetViewer({ abcString, songTitle }: AbcSheetViewerP
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100">
-              Instrument highlights
+              Visual Instrument Highlight Panel
             </h3>
             <p className="text-sm text-zinc-500 dark:text-zinc-400">
-              Guitar strings/frets and piano keys follow the active note in {songTitle}.
+              Layout toggles: Guitar Fretboard Mode / Piano Keyboard Mode. Highlights follow the active note in {songTitle}.
             </p>
           </div>
           <p
@@ -68,6 +68,21 @@ export default function AbcSheetViewer({ abcString, songTitle }: AbcSheetViewerP
             octaveCount={3}
             highlights={instrumentHighlights.pianoHighlights}
             handOverlayEvents={instrumentHighlights.pianoHandOverlayEvents}
+          />
+        </div>
+
+        <div className="mt-4">
+          <PianoPedalIndicator
+            title="Sustain Pedal Indicator"
+            pedalAutomation={{
+              controller: { midiControlChange: 64, downValue: 127, upValue: 0 },
+              events: [
+                { measureIndex: 0, beat: 1, chord: "I", type: "pedal-up", value: 0 },
+                { measureIndex: 0, beat: 2, chord: "I", type: "pedal-down", value: 127 },
+              ],
+            }}
+            currentMeasureIndex={0}
+            currentBeat={playbackCursor ? 2 : 1}
           />
         </div>
       </section>

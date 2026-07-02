@@ -5,6 +5,12 @@ test.describe("playback module", () => {
     await page.goto("/marathi/namostute");
 
     await expect(page.getByRole("heading", { name: "Namostute" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "YouTube Player" })).toBeVisible();
+    await expect(page.locator("#reference-youtube-iframe-player")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Lyrics & Transliteration" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Music Sheet Playback" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Visual Instrument Highlight Panel" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Sustain Pedal Indicator" })).toBeVisible();
     await expect(page.getByRole("button", { name: /split view/i })).toBeVisible();
     await expect(page.locator("#youtube-iframe-player")).toBeVisible();
     await expect(page.locator("#abc-music-canvas")).toBeAttached();

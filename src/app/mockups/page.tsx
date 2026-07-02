@@ -19,7 +19,7 @@ const MOCKUP_GATES: MockupGate[] = [
   {
     title: "Arrangement Pipeline POC",
     unid: "br-plan-09.c02",
-    href: "/mockups/arrangement-pipeline",
+    href: "/mockups/arrangement",
     status: "review-ready",
     purpose:
       "Melody input, key/scale detection, strong-beat analysis, chords, accompaniment, full-track decisions, final preview, and validation.",
@@ -27,7 +27,7 @@ const MOCKUP_GATES: MockupGate[] = [
   {
     title: "Fingerstyle Engine POC",
     unid: "br-plan-09.c03",
-    href: "/mockups/fingerstyle-engine",
+    href: "/mockups/fingerstyle",
     status: "review-ready",
     purpose:
       "Upward construction, downward compression, string routing, pruning, playability, fallback suggestions, matrix, preview, and visual events.",
@@ -35,7 +35,7 @@ const MOCKUP_GATES: MockupGate[] = [
   {
     title: "Piano Accompaniment POC",
     unid: "br-plan-09.c04",
-    href: "/mockups/piano-accompaniment",
+    href: "/mockups/piano",
     status: "review-ready",
     purpose:
       "Comping profile, bass anchoring, Low Interval Limit, right-hand voice leading, gap fills, validation, pedal automation, preview, and key highlights.",
@@ -43,7 +43,7 @@ const MOCKUP_GATES: MockupGate[] = [
   {
     title: "Ensemble Expansion POC",
     unid: "br-plan-09.c05",
-    href: "/mockups/ensemble-expansion",
+    href: "/mockups/ensemble",
     status: "review-ready",
     purpose:
       "Integration handshake, density grid, bass map, melodic gaps, Djembe, Flute/Violin yield states, conflicts, preview, and layer activity.",

@@ -35,7 +35,7 @@ export default async function ComposePage() {
                 Composer Workstation
               </p>
               <h1 className="mt-2 text-3xl font-extrabold text-zinc-900 dark:text-zinc-100">
-                Draft an ABC notation layer
+                Song Metadata & Layers Dashboard
               </h1>
             </div>
             <span className="px-3 py-1 text-xs font-semibold rounded-full border border-amber-200 bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800">
@@ -43,9 +43,9 @@ export default async function ComposePage() {
             </span>
           </div>
           <p className="max-w-3xl text-sm sm:text-base text-zinc-600 dark:text-zinc-400 leading-relaxed">
-            Create or refine a bhajan song entry with guided frontmatter fields, real-time ABC
-            rendering, and a browser-local layer stack. Drafts are saved in this browser so you can
-            refresh or return later without losing unsaved work.
+            Create or refine the song metadata and resource rows first, then continue into the five
+            focused composer child-UIs for melody, harmony, accompaniment, ensemble, and review.
+            Drafts are saved in this browser so you can refresh or return later without losing unsaved work.
           </p>
         </div>
 

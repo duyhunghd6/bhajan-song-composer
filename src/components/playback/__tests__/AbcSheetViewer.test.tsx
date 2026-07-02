@@ -21,6 +21,8 @@ describe("AbcSheetViewer", () => {
     expect(markup).toContain('id="abc-music-canvas"');
     expect(markup).toContain('id="midi-btn-play"');
     expect(markup).toContain("Whole sheet");
-    expect(markup).toContain("Instrument highlights");
+    expect(markup).toContain("Visual Instrument Highlight Panel");
+    expect(markup).toContain("Guitar Fretboard Mode / Piano Keyboard Mode");
+    expect(markup).toContain("Sustain Pedal Indicator");
   });
 });
