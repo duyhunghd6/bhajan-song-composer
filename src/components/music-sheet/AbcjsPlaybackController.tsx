@@ -81,6 +81,21 @@ interface SynthType {
   getIsRunning?: () => boolean;
 }
 
+/**
+ * Options forwarded to abcjs CreateSynth.init() for selective layer muting.
+ *
+ * ⚠️ IMPORTANT: This is the ONLY safe way to mute melody/chord layers.
+ * Do NOT try to mute by replacing ABC notes with rests (z) — abcjs CreateSynth
+ * generates zero audio events for rests, producing an empty audio buffer that
+ * crashes synth.start() with "Cannot set properties of undefined (setting 'onended')".
+ */
+export interface AbcjsPlaybackSynthOptions {
+  /** Mute all melody/note voices. true = mute all, number[] = mute specific voice indices. */
+  voicesOff?: boolean | number[];
+  /** Disable chord accompaniment synthesis. */
+  chordsOff?: boolean;
+}
+
 export interface AbcjsPlaybackControllerProps {
   abcString: string;
   title?: string;
@@ -92,6 +107,8 @@ export interface AbcjsPlaybackControllerProps {
   paperClassName?: string;
   sheetViewportClassName?: string;
   renderOptions?: Record<string, unknown>;
+  /** Options forwarded to abcjs CreateSynth.init() to control voice/chord muting. */
+  synthOptions?: AbcjsPlaybackSynthOptions;
   onPlaybackCursor?: (event: MusicSheetPlaybackCursorEvent | null) => void;
 }
 
@@ -112,6 +129,7 @@ export default function AbcjsPlaybackController({
   paperClassName = "bg-white",
   sheetViewportClassName = "overflow-x-auto p-4",
   renderOptions,
+  synthOptions,
   onPlaybackCursor,
 }: AbcjsPlaybackControllerProps) {
   const generatedId = useId().replace(/:/g, "");
@@ -226,6 +244,7 @@ export default function AbcjsPlaybackController({
           millisecondsPerMeasure: visualObjRef.current.millisecondsPerMeasure?.(tempo),
           options: {
             qpm: tempo,
+            ...synthOptions,
             onEnded: () => {
               if (suppressNextEndedRef.current && synthRef.current?.getIsRunning?.()) {
                 suppressNextEndedRef.current = false;
@@ -247,7 +266,7 @@ export default function AbcjsPlaybackController({
       console.error("Error initializing synth:", err);
     }
     return null;
-  }, [abcjsModule, clearActiveNoteHighlight, setPlaybackState, tempo]);
+  }, [abcjsModule, clearActiveNoteHighlight, setPlaybackState, synthOptions, tempo]);
 
   const playSynth = async () => {
     if (isPlaying) return;
@@ -267,11 +286,21 @@ export default function AbcjsPlaybackController({
           timingCallbacksRef.current?.start();
         }
 
-        synth.start();
-        setPlaybackState(true);
+        try {
+          synth.start();
+          setPlaybackState(true);
+        } catch (startErr: any) {
+          if (startErr?.message?.includes("onended") || startErr?.message?.includes("undefined")) {
+            console.warn("abcjs synth.start() failed: Sequence is likely empty (only rests). Playback gracefully skipped.");
+            setPlaybackState(false);
+          } else {
+            throw startErr;
+          }
+        }
       }
     } catch (err) {
       console.error("Error playing synth:", err);
+      setPlaybackState(false);
     }
   };
 
@@ -511,6 +540,20 @@ export default function AbcjsPlaybackController({
       timingCallbacksRef.current = null;
     };
   }, [abcjsModule, finalAbcString, clearActiveNoteHighlight, handleNoteClick, highlightTimingEvent, loopEndMeasure, loopMode, loopStartMeasure, onPlaybackCursor, playFromTimingEvent, renderOptions, setPlaybackState, tempo]);
+
+  // Invalidate synth when synthOptions change so next play uses updated voicesOff/chordsOff
+  const synthOptionsKey = JSON.stringify(synthOptions ?? {});
+  useEffect(() => {
+    if (synthRef.current) {
+      try {
+        synthRef.current.stop();
+      } catch { /* ignore */ }
+      synthRef.current = null;
+    }
+    timingCallbacksRef.current?.stop();
+    setPlaybackState(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [synthOptionsKey, setPlaybackState]);
 
   return (
     <div aria-label={description ?? title} className="w-full bg-zinc-950 rounded-xl shadow-md overflow-hidden flex flex-col border border-zinc-800">
