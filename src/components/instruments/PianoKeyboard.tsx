@@ -14,11 +14,30 @@ const BLACK_NOTES_BY_WHITE: Partial<Record<string, string>> = {
   A: "A#",
 };
 
-const WHITE_KEY_WIDTH = 36;
-const WHITE_KEY_HEIGHT = 144;
-const BLACK_KEY_WIDTH = 22;
-const BLACK_KEY_HEIGHT = 92;
-const LABEL_AREA_HEIGHT = 34;
+const PIANO_KEYBOARD_DIMENSIONS = {
+  default: {
+    whiteKeyWidth: 36,
+    whiteKeyHeight: 144,
+    blackKeyWidth: 22,
+    blackKeyHeight: 92,
+    labelAreaHeight: 34,
+    minWidth: 520,
+  },
+  compact: {
+    whiteKeyWidth: 26,
+    whiteKeyHeight: 104,
+    blackKeyWidth: 16,
+    blackKeyHeight: 66,
+    labelAreaHeight: 28,
+    minWidth: 360,
+  },
+} as const;
+
+export type PianoKeyboardSize = keyof typeof PIANO_KEYBOARD_DIMENSIONS;
+
+function getPianoKeyboardDimensions(size: PianoKeyboardSize = "default") {
+  return PIANO_KEYBOARD_DIMENSIONS[size];
+}
 
 type PianoHand = "left" | "right";
 export type PianoHandMode = "left" | "right" | "combined";
@@ -60,6 +79,7 @@ export interface PianoKeyboardProps {
   handMode?: PianoHandMode;
   onHandModeChange?: (handMode: PianoHandMode) => void;
   className?: string;
+  size?: PianoKeyboardSize;
 }
 
 export function normalizePianoNote(note: string): NormalizedPianoNote {
@@ -76,7 +96,8 @@ export function normalizePianoNote(note: string): NormalizedPianoNote {
   return { pitchClass, octave };
 }
 
-export function buildPianoKeys(startOctave = 3, octaveCount = 2): PianoKeyInfo[] {
+export function buildPianoKeys(startOctave = 3, octaveCount = 2, size: PianoKeyboardSize = "default"): PianoKeyInfo[] {
+  const dimensions = getPianoKeyboardDimensions(size);
   const firstOctave = Math.floor(startOctave);
   const octaves = Math.max(1, Math.floor(octaveCount));
   const keys: PianoKeyInfo[] = [];
@@ -86,7 +107,7 @@ export function buildPianoKeys(startOctave = 3, octaveCount = 2): PianoKeyInfo[]
     const octave = firstOctave + octaveOffset;
 
     for (const whiteNote of WHITE_NOTES) {
-      const whiteX = whiteKeyIndex * WHITE_KEY_WIDTH;
+      const whiteX = whiteKeyIndex * dimensions.whiteKeyWidth;
       keys.push({
         id: `${whiteNote}${octave}`,
         note: `${whiteNote}${octave}`,
@@ -95,8 +116,8 @@ export function buildPianoKeys(startOctave = 3, octaveCount = 2): PianoKeyInfo[]
         color: "white",
         x: whiteX,
         y: 0,
-        width: WHITE_KEY_WIDTH,
-        height: WHITE_KEY_HEIGHT,
+        width: dimensions.whiteKeyWidth,
+        height: dimensions.whiteKeyHeight,
       });
 
       const blackNote = BLACK_NOTES_BY_WHITE[whiteNote];
@@ -107,10 +128,10 @@ export function buildPianoKeys(startOctave = 3, octaveCount = 2): PianoKeyInfo[]
           octave,
           pitchClass: blackNote,
           color: "black",
-          x: whiteX + WHITE_KEY_WIDTH - BLACK_KEY_WIDTH / 2,
+          x: whiteX + dimensions.whiteKeyWidth - dimensions.blackKeyWidth / 2,
           y: 0,
-          width: BLACK_KEY_WIDTH,
-          height: BLACK_KEY_HEIGHT,
+          width: dimensions.blackKeyWidth,
+          height: dimensions.blackKeyHeight,
         });
       }
 
@@ -200,16 +221,18 @@ export default function PianoKeyboard({
   handMode,
   onHandModeChange,
   className = "",
+  size = "default",
 }: PianoKeyboardProps) {
   const [uncontrolledHandMode, setUncontrolledHandMode] = useState<PianoHandMode>(handMode ?? "combined");
   const activeHandMode = handMode ?? uncontrolledHandMode;
-  const keys = buildPianoKeys(startOctave, octaveCount);
+  const dimensions = getPianoKeyboardDimensions(size);
+  const keys = buildPianoKeys(startOctave, octaveCount, size);
   const visibleHighlights = getVisibleHighlights(highlights, activeHandMode);
   const visibleNoteMarkers = getVisibleNoteMarkers(noteMarkers, activeHandMode);
   const whiteKeys = keys.filter((key) => key.color === "white");
   const blackKeys = keys.filter((key) => key.color === "black");
-  const width = whiteKeys.length * WHITE_KEY_WIDTH;
-  const height = WHITE_KEY_HEIGHT + LABEL_AREA_HEIGHT;
+  const width = whiteKeys.length * dimensions.whiteKeyWidth;
+  const height = dimensions.whiteKeyHeight + dimensions.labelAreaHeight;
 
   function updateHandMode(nextHandMode: PianoHandMode) {
     if (handMode === undefined) {
@@ -256,7 +279,7 @@ export default function PianoKeyboard({
       </div>
 
       <div className="overflow-x-auto">
-        <div className="relative min-w-[520px]" style={{ width: `${width}px` }}>
+        <div className="relative" style={{ width: `${width}px`, minWidth: `${dimensions.minWidth}px` }}>
           <svg
             role="img"
             aria-label={`${title} piano keyboard diagram`}
@@ -297,7 +320,7 @@ export default function PianoKeyboard({
                 />
                 <text
                   x={key.x + key.width / 2}
-                  y={WHITE_KEY_HEIGHT + 28}
+                  y={dimensions.whiteKeyHeight + 28}
                   textAnchor="middle"
                   className="fill-zinc-500 text-[10px] font-semibold dark:fill-zinc-400"
                 >
@@ -306,7 +329,7 @@ export default function PianoKeyboard({
                 {highlight && (
                   <text
                     x={key.x + key.width / 2}
-                    y={WHITE_KEY_HEIGHT - 12}
+                    y={dimensions.whiteKeyHeight - 12}
                     textAnchor="middle"
                     className={getHighlightLabelClass(highlight)}
                   >

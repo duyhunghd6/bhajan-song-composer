@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useWorkspaceState } from "./useWorkspaceState";
 import type { ReactNode } from "react";
 import AbcjsPlaybackController from "@/components/music-sheet/AbcjsPlaybackController";
@@ -10,15 +10,15 @@ import PianoPedalIndicator from "@/components/instruments/PianoPedalIndicator";
 import { buildArrangementLayerProposals, generateArrangementPipeline } from "@/lib/theory/arrangement-pipeline";
 import { harmonizeMelody } from "@/app/actions/harmonize";
 import { type HarmonizationOption } from "@/lib/theory/harmonization-candidates";
-import { generateAccompanimentOptions } from "@/app/actions/accompaniment";
-import type { AccompanimentOption } from "@/lib/theory/accompaniment-candidates";
-import { generatePianoAccompaniment, type PianoAccompaniment } from "@/lib/theory/piano-accompaniment";
+import { generateAccompanimentOptions, generateGuitarOptions, generatePianoOptions } from "@/app/actions/accompaniment";
+import { buildAccompanimentAbc, getAccompanimentVoiceNames } from "@/lib/theory/accompaniment-abc";
+import { generatePianoAccompaniment } from "@/lib/theory/piano-accompaniment";
 import type { PianoCompingProfileId } from "@/lib/theory/piano-comping-profiles";
-import { buildFingerstyleComposerIntegration, type FingerstyleComposerIntegration, type FingerstyleComposerProfileId } from "./fingerstyle-integration";
+import { buildFingerstyleComposerIntegration, type FingerstyleComposerProfileId } from "./fingerstyle-integration";
 import AbcEditor, { DEFAULT_ABC } from "./AbcEditor";
 import TheoryAssistant from "./TheoryAssistant";
 import type { ComposerStepId } from "./composer-steps";
-import { buildTheoryAssistantLayerProposal, type TheoryAssistantArrangementSuggestion, type TheoryAssistantLayerProposal } from "./theory-assistant-layer";
+import { buildTheoryAssistantLayerProposal, type TheoryAssistantArrangementSuggestion } from "./theory-assistant-layer";
 
 interface ComposerStepWorkspaceProps {
   slug: string;
@@ -42,10 +42,27 @@ const COMPOSER_PREVIEW_RENDER_OPTIONS = {
   paddingright: 32,
 };
 
+const ACCOMPANIMENT_PREVIEW_RENDER_OPTIONS = {
+  staffwidth: 900,
+  wrap: {
+    minSpacing: 1.5,
+    maxSpacing: 2.2,
+    preferredMeasuresPerLine: 4,
+    lastLineLimit: 0.6,
+  },
+  paddingright: 16,
+};
+
 const COMPOSER_PREVIEW_PROPS = {
   minWidthClassName: "min-w-[520px] max-w-[760px]",
   sheetViewportClassName: "max-h-[min(72vh,780px)] overflow-auto p-4",
   renderOptions: COMPOSER_PREVIEW_RENDER_OPTIONS,
+};
+
+const ACCOMPANIMENT_PREVIEW_PROPS = {
+  minWidthClassName: "min-w-[520px]",
+  sheetViewportClassName: "max-h-[min(76vh,860px)] overflow-auto p-4",
+  renderOptions: ACCOMPANIMENT_PREVIEW_RENDER_OPTIONS,
 };
 
 function harmonizationOptionId(option: HarmonizationOption, index: number): string {
@@ -64,43 +81,11 @@ function formatCandidateConfidence(confidence: number): string {
   return `${Math.round(confidence * 100)}%`;
 }
 
-function buildAccompanimentPreviewAbc(baseAbc: string, generatedAccompaniment: string | null): string {
-  const headerLines = baseAbc.split("\n").filter((line) => /^[A-Z]:/.test(line));
-  const bodyLines = baseAbc.split("\n").filter((line) => !/^[A-Z]:/.test(line) && line.trim() !== "");
-
-  if (!generatedAccompaniment) {
-    return [
-      ...headerLines,
-      "%%playchord 0",
-      ...bodyLines,
-    ].join("\n");
-  }
-
-  let accompanimentBody = generatedAccompaniment.replace(/^[A-Z]:.*(\r?\n|$)/gm, (match) => {
-    if (match.startsWith("V:")) return match;
-    return "";
-  });
-
-  accompanimentBody = accompanimentBody.replace(/V:Guitar clef=treble-8/g, 'V:Guitar clef=bass name="Layer 2 Guitar Accompaniment"');
-
-  const voices = Array.from(accompanimentBody.matchAll(/V:([^\s]+)/g)).map((match) => match[1]);
-  const scoreVoices = ["(Melody)", ...voices.map((voice) => `(${voice})`)].join(" ");
-
-  return [
-    ...headerLines,
-    `%%score ${scoreVoices}`,
-    "%%playchord 0",
-    "V:Melody name=\"Original Melody\"",
-    ...bodyLines,
-    accompanimentBody,
-  ].join("\n");
-}
-
 function ComposerNotationPreviewLayout({ source, preview }: ComposerNotationPreviewLayoutProps) {
   return (
     <section className="w-full overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-md dark:border-zinc-800 dark:bg-zinc-900">
-      <div className="composer-step-responsive-grid grid gap-0 min-[1536px]:grid-cols-2">
-        <div className="composer-step-source-panel min-w-0 space-y-5 border-b border-zinc-100 p-5 dark:border-zinc-800 min-[1536px]:border-r min-[1536px]:border-b-0">
+      <div className="composer-step-responsive-grid grid gap-0">
+        <div className="composer-step-source-panel min-w-0 space-y-5 border-b border-zinc-100 p-5 dark:border-zinc-800 min-[1280px]:border-r min-[1280px]:border-b-0">
           {source}
         </div>
         <div className="min-w-0 space-y-3 p-5">
@@ -112,24 +97,23 @@ function ComposerNotationPreviewLayout({ source, preview }: ComposerNotationPrev
 }
 
 export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: ComposerStepWorkspaceProps) {
+  // Always initialize with the server-safe value to avoid hydration mismatch.
+  // localStorage restoration happens in useEffect below.
   const [melodyAbc, setMelodyAbc] = useState(initialMelodyAbc ?? DEFAULT_ABC);
+  const [hasMounted, setHasMounted] = useState(false);
   const [isHarmonizing, setIsHarmonizing] = useState(false);
-    const { state: ws, updateState } = useWorkspaceState(slug);
+  const { state: ws, updateState, isHydrated } = useWorkspaceState(slug);
   const [isGeneratingAccompaniment, setIsGeneratingAccompaniment] = useState(false);
+  const [isGeneratingGuitar, setIsGeneratingGuitar] = useState(false);
+  const [isGeneratingPiano, setIsGeneratingPiano] = useState(false);
+  const [activeAccompTab, setActiveAccompTab] = useState<"guitar" | "piano">("guitar");
   const [layerVisibility, setLayerVisibility] = useState({ melody: true, harmony: true });
+  const [accompLayerVisibility, setAccompLayerVisibility] = useState<Record<string, boolean>>({});
   const [currentSuggestion, setCurrentSuggestion] = useState<TheoryAssistantArrangementSuggestion | null>(null);
   const [ensembleEnabled, setEnsembleEnabled] = useState({ djembe: true, flute: true, violin: false });
   const [copyStatus, setCopyStatus] = useState("Copy Markdown");
 
-  // Derive the active ABC to use across steps. If a harmony option is selected, use it; otherwise fallback to the pure melody.
-  const activeHarmonyOption = useMemo(() => {
-    if (!ws.aiSuggestions || !ws.selectedCandidateId) return null;
-    return ws.aiSuggestions.find((opt, idx) => harmonizationOptionId(opt, idx) === ws.selectedCandidateId) || null;
-  }, [ws.aiSuggestions, ws.selectedCandidateId]);
-
-  const activeAbc = activeHarmonyOption ? harmonizationOptionAbc(activeHarmonyOption) : melodyAbc;
-
-    // --- LOCAL STORAGE HYDRATION (Melody only, workspace is handled by useWorkspaceState) ---
+  // Hydrate melodyAbc from localStorage after mount (client-only)
   useEffect(() => {
     try {
       const savedMelody = window.localStorage.getItem(`bhajan-song-composer:compose:${slug}:melody`);
@@ -140,7 +124,16 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
     } catch (e) {
       console.error("Failed to restore melody state from localStorage", e);
     }
+    setHasMounted(true);
   }, [slug]);
+
+  // Derive the active ABC to use across steps. If a harmony option is selected, use it; otherwise fallback to the pure melody.
+  const activeHarmonyOption = useMemo(() => {
+    if (!ws.aiSuggestions || !ws.selectedCandidateId) return null;
+    return ws.aiSuggestions.find((opt, idx) => harmonizationOptionId(opt, idx) === ws.selectedCandidateId) || null;
+  }, [ws.aiSuggestions, ws.selectedCandidateId]);
+
+  const activeAbc = activeHarmonyOption ? harmonizationOptionAbc(activeHarmonyOption) : melodyAbc;
 
   const pipeline = useMemo(() => {
     try {
@@ -149,6 +142,20 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
       return null;
     }
   }, [activeAbc]);
+
+  const accompanimentBuild = useMemo(() => buildAccompanimentAbc({
+    baseAbc: activeAbc,
+    generatedAccompaniment: ws.generatedAccompaniment,
+    generatedGuitar: ws.generatedGuitar,
+    generatedPiano: ws.generatedPiano,
+    layerVisibility: accompLayerVisibility,
+  }), [ws.generatedAccompaniment, ws.generatedGuitar, ws.generatedPiano, activeAbc, accompLayerVisibility]);
+  const accompanimentAbc = accompanimentBuild.abc;
+
+  const accompanimentVoiceNames = useMemo(
+    () => getAccompanimentVoiceNames(ws.generatedAccompaniment, ws.generatedGuitar, ws.generatedPiano),
+    [ws.generatedAccompaniment, ws.generatedGuitar, ws.generatedPiano]
+  );
 
   if (step === "melody") {
     return (
@@ -234,7 +241,7 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
                   >
                     {isHarmonizing ? "Generating Options..." : "✨ Suggest AI Harmonization"}
                   </button>
-                  {initialMelodyAbc && activeAbc !== initialMelodyAbc && (
+                  {hasMounted && initialMelodyAbc && activeAbc !== initialMelodyAbc && (
                     <button
                       type="button"
                       onClick={() => {
@@ -379,8 +386,8 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
         />
 
         <section className="w-full overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-md dark:border-zinc-800 dark:bg-zinc-900">
-          <div className="composer-step-responsive-grid grid gap-0 min-[1536px]:grid-cols-2">
-            <div className="border-b border-zinc-100 p-5 dark:border-zinc-800 min-[1536px]:border-r min-[1536px]:border-b-0">
+          <div className="composer-step-responsive-grid grid gap-0">
+            <div className="border-b border-zinc-100 p-5 dark:border-zinc-800 min-[1280px]:border-r min-[1280px]:border-b-0">
               <section className="h-full rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 dark:border-emerald-900/70 dark:bg-emerald-950/30 dark:text-emerald-300">
                 <h2 className="mb-2 text-lg font-bold text-emerald-900 dark:text-emerald-100">Composer Layer Note</h2>
                 {currentSuggestion ? (
@@ -408,145 +415,233 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
   }
 
   if (step === "accompaniment") {
-    const accompanimentAbc = useMemo(() => {
-      const baseAbc = activeAbc;
-      const headerLines = baseAbc.split('\n').filter(line => /^[A-Z]:/.test(line));
-      const bodyLines = baseAbc.split('\n').filter(line => !/^[A-Z]:/.test(line) && line.trim() !== '');
-
-      if (!ws.generatedAccompaniment) {
-        return [
-          ...headerLines,
-          "%%playchord 0",
-          ...bodyLines
-        ].join('\n');
-      }
-
-      let accompanimentBody = ws.generatedAccompaniment.replace(/^[A-Z]:.*(\r?\n|$)/gm, (match) => {
-        if (match.startsWith('V:')) return match; 
-        return '';
-      });
-      
-      accompanimentBody = accompanimentBody.replace(/V:Guitar clef=treble-8/g, 'V:Guitar clef=bass name="Layer 2 Guitar Accompaniment"');
-
-      const voices = Array.from(accompanimentBody.matchAll(/V:([^\s]+)/g)).map(m => m[1]);
-      const scoreVoices = ["(Melody)", ...voices.map(v => `(${v})`)].join(" ");
-
-      return [
-        ...headerLines,
-        `%%score ${scoreVoices}`,
-        "%%playchord 0",
-        "V:Melody name=\"Original Melody\"",
-        ...bodyLines,
-        accompanimentBody
-      ].join('\n');
-    }, [ws.generatedAccompaniment, activeAbc]);
-
+    // The combined ABC is built at the top level so hook ordering stays stable across steps.
     return (
       <div className="space-y-6">
         <ComposerNotationPreviewLayout
           source={(
             <>
               <section className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950/60">
-                <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">AI Accompaniment Generation</h2>
-                <div className="mt-3 flex flex-wrap gap-3">
-                    <button
-                      type="button"
-                      disabled={isGeneratingAccompaniment || !pipeline}
-                      onClick={async () => {
-                        if (!pipeline) return;
-                        setIsGeneratingAccompaniment(true);
-                        try {
-                          const result = await generateAccompanimentOptions(activeAbc, {
-                            key: pipeline.harmonization.key,
-                            scale: pipeline.harmonization.scale,
-                            timeSignature: pipeline.harmonization.timeSignature
-                          });
-                          updateState({ aiAccompanimentSuggestions: result.options });
-                          updateState({ selectedAccompanimentIndex: null });
-                        } catch (err) {
-                          console.error(err);
-                          alert("Failed to generate accompaniment options.");
-                        } finally {
-                          setIsGeneratingAccompaniment(false);
-                        }
-                      }}
-                      className="rounded-xl border border-sky-400/30 bg-sky-500/10 px-3 py-2 text-xs font-bold text-sky-600 transition hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-50 dark:text-sky-400"
-                    >
-                      {isGeneratingAccompaniment ? "Generating Options..." : "✨ Suggest AI Accompaniment"}
-                    </button>
-                    {ws.aiAccompanimentSuggestions.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          updateState({ aiAccompanimentSuggestions: [] });
-                          updateState({ selectedAccompanimentIndex: null });
-                          updateState({ pianoAccompanimentData: null });
-                          updateState({ guitarAccompanimentData: null });
-                          updateState({ generatedAccompaniment: null });
-                        }}
-                        className="rounded-xl border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-xs font-bold text-rose-600 transition hover:bg-rose-500/20 dark:text-rose-400"
-                      >
-                        ↺ Clear Accompaniment
-                      </button>
-                    )}
-                    {initialMelodyAbc && activeAbc !== initialMelodyAbc && (
+                <div className="flex items-center justify-between gap-2 mb-4">
+                  <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">AI Accompaniment Generation</h2>
+                  <div className="flex items-center gap-1.5">
+                    {hasMounted && initialMelodyAbc && activeAbc !== initialMelodyAbc && (
                       <button
                         type="button"
                         onClick={() => {
                           setMelodyAbc(initialMelodyAbc);
-                          updateState({ aiSuggestions: [], selectedCandidateId: null, acceptedHarmony: null, aiAccompanimentSuggestions: [], selectedAccompanimentIndex: null, pianoAccompanimentData: null, guitarAccompanimentData: null, generatedAccompaniment: null });
+                          updateState({ aiSuggestions: [], selectedCandidateId: null, acceptedHarmony: null, aiAccompanimentSuggestions: [], selectedAccompanimentIndex: null, pianoAccompanimentData: null, guitarAccompanimentData: null, generatedAccompaniment: null, aiGuitarSuggestions: [], aiPianoSuggestions: [], selectedGuitarIndex: null, selectedPianoIndex: null, generatedGuitar: null, generatedPiano: null });
+                          setAccompLayerVisibility({});
                         }}
-                        className="rounded-xl border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-xs font-bold text-rose-600 transition hover:bg-rose-500/20 dark:text-rose-400"
+                        title="Restore Original Melody"
+                        className="inline-flex items-center gap-1 rounded-lg border border-rose-400/30 bg-rose-500/10 px-2.5 py-1.5 text-xs font-bold text-rose-600 transition hover:bg-rose-500/20 dark:text-rose-400"
                       >
-                        ↺ Restore Original Melody
+                        <span className="text-sm">↺</span>
+                        <span className="hidden sm:inline">Restore</span>
                       </button>
                     )}
                   </div>
-                
-                {ws.aiAccompanimentSuggestions.length > 0 && (
-                  <div className="mt-4 space-y-3">
-                    <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">AI Suggested Accompaniments</h3>
-                    <div className="grid gap-3 sm:grid-cols-1">
-                      {ws.aiAccompanimentSuggestions.map((option, idx) => (
+                </div>
+
+                {/* Tab bar: Guitar | Piano */}
+                <div className="flex gap-1 rounded-xl bg-zinc-100 p-1 dark:bg-zinc-900/60 mb-4">
+                  <button
+                    type="button"
+                    onClick={() => setActiveAccompTab("guitar")}
+                    className={`flex-1 rounded-lg px-3 py-2 text-xs font-bold transition ${
+                      activeAccompTab === "guitar"
+                        ? "bg-white text-amber-700 shadow-sm dark:bg-zinc-800 dark:text-amber-400"
+                        : "text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+                    }`}
+                  >
+                    🎸 Guitar Accompaniment
+                    {ws.generatedGuitar && <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveAccompTab("piano")}
+                    className={`flex-1 rounded-lg px-3 py-2 text-xs font-bold transition ${
+                      activeAccompTab === "piano"
+                        ? "bg-white text-amber-700 shadow-sm dark:bg-zinc-800 dark:text-amber-400"
+                        : "text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+                    }`}
+                  >
+                    🎹 Piano Accompaniment
+                    {ws.generatedPiano && <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />}
+                  </button>
+                </div>
+
+                {/* Guitar Tab Content */}
+                {activeAccompTab === "guitar" && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">🎸 Guitar AI Options</h3>
+                      <div className="flex items-center gap-1.5">
                         <button
-                          key={option.id}
-                          onClick={() => {
-                            updateState({ selectedAccompanimentIndex: idx });
-                            if (option.instrument === "guitar") {
-                              const integration = buildFingerstyleComposerIntegration(activeAbc, undefined, { pickingProfile: option.style as FingerstyleComposerProfileId });
-                              updateState({ generatedAccompaniment: integration.composerLayer.abc });
-                              updateState({ guitarAccompanimentData: integration });
-                              updateState({ pianoAccompanimentData: null });
-                            } else {
-                              const pianoStyles = ["pop-ballad", "rock-rnb", "classical-folk"];
-                              const compingProfile = pianoStyles.includes(option.style) ? option.style as any : "pop-ballad";
-                              
-                              const accompaniment = generatePianoAccompaniment(activeAbc, { compingProfile });
-                              updateState({ generatedAccompaniment: accompaniment.abc });
-                              updateState({ pianoAccompanimentData: accompaniment });
-                              updateState({ guitarAccompanimentData: null });
+                          type="button"
+                          disabled={isGeneratingGuitar || !pipeline}
+                          onClick={async () => {
+                            if (!pipeline) return;
+                            setIsGeneratingGuitar(true);
+                            try {
+                              const result = await generateGuitarOptions(activeAbc, {
+                                key: pipeline.harmonization.key,
+                                scale: pipeline.harmonization.scale,
+                                timeSignature: pipeline.harmonization.timeSignature
+                              });
+                              updateState({ aiGuitarSuggestions: result.options, selectedGuitarIndex: null });
+                            } catch (err) {
+                              console.error(err);
+                              alert("Failed to generate guitar options.");
+                            } finally {
+                              setIsGeneratingGuitar(false);
                             }
                           }}
-                          className={`text-left rounded-xl border p-4 transition-all focus:outline-none focus:ring-2 focus:ring-amber-500/50 ${
-                            ws.selectedAccompanimentIndex === idx
-                              ? "border-amber-400 bg-amber-500/10 shadow-sm"
-                              : "border-zinc-200 bg-white hover:border-amber-300/50 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950/40 dark:hover:bg-zinc-900"
-                          }`}
+                          title="Suggest AI Guitar"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-sky-400/30 bg-sky-500/10 px-2.5 py-1.5 text-xs font-bold text-sky-600 transition hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-50 dark:text-sky-400"
                         >
-                          <div className="flex items-center justify-between gap-2">
-                            <h4 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
-                              {option.label} ({option.instrument})
-                            </h4>
-                            {ws.selectedAccompanimentIndex === idx && (
-                              <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-bold text-white">Active</span>
-                            )}
-                          </div>
-                          <p className="mt-1 text-xs leading-5 text-zinc-600 dark:text-zinc-400">
-                            {option.explanation}
-                          </p>
+                          {isGeneratingGuitar ? (
+                            <svg className="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                          ) : (
+                            <span className="text-sm">✨</span>
+                          )}
+                          <span>{isGeneratingGuitar ? "Generating..." : "Suggest AI Guitar"}</span>
                         </button>
-                      ))}
+                        {ws.generatedGuitar && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              updateState({ aiGuitarSuggestions: [], selectedGuitarIndex: null, generatedGuitar: null, guitarAccompanimentData: null });
+                            }}
+                            title="Clear Guitar"
+                            className="inline-flex items-center gap-1 rounded-lg border border-rose-400/30 bg-rose-500/10 px-2.5 py-1.5 text-xs font-bold text-rose-600 transition hover:bg-rose-500/20 dark:text-rose-400"
+                          >
+                            <span className="text-sm">↺</span>
+                            <span className="hidden sm:inline">Clear</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
+                    {ws.aiGuitarSuggestions.length > 0 && (
+                      <div className="grid gap-2">
+                        {ws.aiGuitarSuggestions.map((option, idx) => (
+                          <button
+                            key={option.id}
+                            onClick={() => {
+                              updateState({ selectedGuitarIndex: idx });
+                              const integration = buildFingerstyleComposerIntegration(activeAbc, undefined, { pickingProfile: option.style as FingerstyleComposerProfileId });
+                              updateState({ generatedGuitar: integration.composerLayer.abc, guitarAccompanimentData: integration });
+                            }}
+                            className={`text-left rounded-xl border p-3 transition-all focus:outline-none focus:ring-2 focus:ring-amber-500/50 ${
+                              ws.selectedGuitarIndex === idx
+                                ? "border-amber-400 bg-amber-500/10 shadow-sm"
+                                : "border-zinc-200 bg-white hover:border-amber-300/50 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950/40 dark:hover:bg-zinc-900"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <h4 className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
+                                🎸 {option.label}
+                              </h4>
+                              {ws.selectedGuitarIndex === idx && (
+                                <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-bold text-white">Active</span>
+                              )}
+                            </div>
+                            <p className="mt-1 text-[11px] leading-4 text-zinc-600 dark:text-zinc-400">
+                              {option.explanation}
+                            </p>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Piano Tab Content */}
+                {activeAccompTab === "piano" && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">🎹 Piano AI Options</h3>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          disabled={isGeneratingPiano || !pipeline}
+                          onClick={async () => {
+                            if (!pipeline) return;
+                            setIsGeneratingPiano(true);
+                            try {
+                              const result = await generatePianoOptions(activeAbc, {
+                                key: pipeline.harmonization.key,
+                                scale: pipeline.harmonization.scale,
+                                timeSignature: pipeline.harmonization.timeSignature
+                              });
+                              updateState({ aiPianoSuggestions: result.options, selectedPianoIndex: null });
+                            } catch (err) {
+                              console.error(err);
+                              alert("Failed to generate piano options.");
+                            } finally {
+                              setIsGeneratingPiano(false);
+                            }
+                          }}
+                          title="Suggest AI Piano"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-sky-400/30 bg-sky-500/10 px-2.5 py-1.5 text-xs font-bold text-sky-600 transition hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-50 dark:text-sky-400"
+                        >
+                          {isGeneratingPiano ? (
+                            <svg className="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                          ) : (
+                            <span className="text-sm">✨</span>
+                          )}
+                          <span>{isGeneratingPiano ? "Generating..." : "Suggest AI Piano"}</span>
+                        </button>
+                        {ws.generatedPiano && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              updateState({ aiPianoSuggestions: [], selectedPianoIndex: null, generatedPiano: null, pianoAccompanimentData: null });
+                            }}
+                            title="Clear Piano"
+                            className="inline-flex items-center gap-1 rounded-lg border border-rose-400/30 bg-rose-500/10 px-2.5 py-1.5 text-xs font-bold text-rose-600 transition hover:bg-rose-500/20 dark:text-rose-400"
+                          >
+                            <span className="text-sm">↺</span>
+                            <span className="hidden sm:inline">Clear</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    {ws.aiPianoSuggestions.length > 0 && (
+                      <div className="grid gap-2">
+                        {ws.aiPianoSuggestions.map((option, idx) => (
+                          <button
+                            key={option.id}
+                            onClick={() => {
+                              updateState({ selectedPianoIndex: idx });
+                              const pianoStyles: PianoCompingProfileId[] = ["pop-ballad", "rock-rnb", "classical-folk"];
+                              const compingProfile = pianoStyles.includes(option.style as PianoCompingProfileId)
+                                ? option.style as PianoCompingProfileId
+                                : "pop-ballad";
+                              const accompaniment = generatePianoAccompaniment(activeAbc, { compingProfile });
+                              updateState({ generatedPiano: accompaniment.abc, pianoAccompanimentData: accompaniment });
+                            }}
+                            className={`text-left rounded-xl border p-3 transition-all focus:outline-none focus:ring-2 focus:ring-amber-500/50 ${
+                              ws.selectedPianoIndex === idx
+                                ? "border-amber-400 bg-amber-500/10 shadow-sm"
+                                : "border-zinc-200 bg-white hover:border-amber-300/50 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950/40 dark:hover:bg-zinc-900"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <h4 className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
+                                🎹 {option.label}
+                              </h4>
+                              {ws.selectedPianoIndex === idx && (
+                                <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-bold text-white">Active</span>
+                              )}
+                            </div>
+                            <p className="mt-1 text-[11px] leading-4 text-zinc-600 dark:text-zinc-400">
+                              {option.explanation}
+                            </p>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </section>
@@ -554,6 +649,64 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
           )}
           preview={(
             <>
+              {/* Layer Visibility Toggles — always shown when any accompaniment is generated */}
+              {(ws.generatedAccompaniment || ws.generatedGuitar || ws.generatedPiano) && (
+                <section className="mb-4 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950/60">
+                  <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 mb-2">Layer Visibility</h2>
+                  <div className="flex flex-wrap gap-3">
+                    {/* Melody toggle */}
+                    <label className="flex items-center gap-2 text-xs font-semibold text-zinc-800 dark:text-zinc-200 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="rounded border-zinc-300 text-amber-500 focus:ring-amber-500"
+                        checked={accompLayerVisibility['__melody__'] !== false}
+                        onChange={() => setAccompLayerVisibility(prev => ({
+                          ...prev,
+                          ['__melody__']: !(prev['__melody__'] !== false)
+                        }))}
+                      />
+                      🎵 Melody
+                    </label>
+                    {/* Original Chords toggle */}
+                    <label className="flex items-center gap-2 text-xs font-semibold text-zinc-800 dark:text-zinc-200 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="rounded border-zinc-300 text-amber-500 focus:ring-amber-500"
+                        checked={accompLayerVisibility['__chords__'] !== false}
+                        onChange={() => setAccompLayerVisibility(prev => ({
+                          ...prev,
+                          ['__chords__']: !(prev['__chords__'] !== false)
+                        }))}
+                      />
+                      🎶 Original Chords
+                    </label>
+                    {/* Accompaniment voice toggles */}
+                    {accompanimentVoiceNames.map(voiceName => {
+                      const isVisible = accompLayerVisibility[voiceName] !== false;
+                      const friendlyName = voiceName
+                        .replace(/([A-Z])/g, ' $1')
+                        .replace(/^\s/, '')
+                        .replace('Piano', '🎹 Piano')
+                        .replace('Guitar', '🎸 Guitar');
+                      return (
+                        <label key={voiceName} className="flex items-center gap-2 text-xs font-semibold text-zinc-800 dark:text-zinc-200 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            className="rounded border-zinc-300 text-amber-500 focus:ring-amber-500"
+                            checked={isVisible}
+                            onChange={() => setAccompLayerVisibility(prev => ({
+                              ...prev,
+                              [voiceName]: !isVisible
+                            }))}
+                          />
+                          {friendlyName}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </section>
+              )}
+
               <div className="mb-3 flex items-center justify-between gap-3">
                 <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Resulting ABC Staff Preview</h3>
                 <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
@@ -563,8 +716,8 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
               <AbcjsPlaybackController
                 abcString={accompanimentAbc}
                 title="Accompaniment Music Sheet"
-                canvasId="abc-accompaniment-preview"
-                {...COMPOSER_PREVIEW_PROPS}
+                canvasId="composer-accompaniment-preview"
+                {...ACCOMPANIMENT_PREVIEW_PROPS}
               />
               
               <section className="mt-6 rounded-2xl border border-dashed border-zinc-300 bg-white/70 p-4 dark:border-zinc-700 dark:bg-zinc-950/50">
@@ -578,9 +731,10 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
         />
 
         <div className="w-full space-y-6">
-          {ws.pianoAccompanimentData && (
-            <section className="w-full rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/50">
-              <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 mb-6">Virtual Piano (Voicing & Comping)</h2>
+          {/* Virtual Piano — always visible on accompaniment step */}
+          <section className="w-full rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/50">
+            <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 mb-2">Virtual Piano (Voicing & Comping)</h2>
+            {ws.pianoAccompanimentData ? (
               <div className="space-y-6">
                 <PianoPedalIndicator 
                   title="Sustain Pedal Indicator" 
@@ -589,26 +743,53 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
                 <div className="overflow-x-auto pb-4">
                   <PianoKeyboard 
                     title="Piano Accompaniment Keys" 
-                    startOctave={2} 
-                    octaveCount={5} 
-                    highlights={ws.pianoAccompanimentData.pianoKeyHighlights} 
+                    startOctave={3} 
+                    octaveCount={3}
+                    size="compact"
+                    highlights={ws.pianoAccompanimentData.pianoKeyHighlights}
                   />
                 </div>
               </div>
-            </section>
-          )}
+            ) : (
+              <div className="space-y-4">
+                <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                  Select a piano accompaniment style above to see highlighted voicings and pedal automation.
+                </p>
+                <div className="overflow-x-auto pb-4">
+                  <PianoKeyboard 
+                    title="Piano Keyboard" 
+                    startOctave={3} 
+                    octaveCount={3}
+                    size="compact"
+                  />
+                </div>
+              </div>
+            )}
+          </section>
 
-          {ws.guitarAccompanimentData && (
-            <section className="w-full rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/50">
-              <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 mb-6">Virtual Guitar (Fingerstyle)</h2>
+          {/* Virtual Guitar — always visible on accompaniment step */}
+          <section className="w-full rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/50">
+            <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 mb-2">Virtual Guitar (Fingerstyle)</h2>
+            {ws.guitarAccompanimentData ? (
               <div className="overflow-x-auto pb-4">
                 <GuitarFretboard 
                   title="Fingerstyle Fretboard Preview" 
                   positions={ws.guitarAccompanimentData.fretboard.positions} 
                 />
               </div>
-            </section>
-          )}
+            ) : (
+              <div className="space-y-4">
+                <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                  Select a guitar accompaniment style above to see finger positions on the fretboard.
+                </p>
+                <div className="overflow-x-auto pb-4">
+                  <GuitarFretboard 
+                    title="Guitar Fretboard"
+                  />
+                </div>
+              </div>
+            )}
+          </section>
 
           {ws.generatedAccompaniment && !ws.pianoAccompanimentData && !ws.guitarAccompanimentData && (
             <section className="w-full rounded-2xl border border-amber-200 bg-amber-50 p-6 dark:border-amber-900/70 dark:bg-amber-950/30">

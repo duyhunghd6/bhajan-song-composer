@@ -1,3 +1,4 @@
+import { buildAbcDurationContext, extractMusicBodyLines, formatAbcDuration } from "./abc-duration";
 import { ChordInfo } from "./chords";
 import {
   extractMelodyMeasures,
@@ -253,11 +254,8 @@ interface MelodyTimelineEvent {
 }
 
 function extractMelodyTimelines(abcString: string): MelodyTimelineEvent[][] {
-  const body = abcString
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line && !line.startsWith("%") && !/^[A-Z]:/.test(line))
-    .join(" ");
+  const durationContext = buildAbcDurationContext(abcString);
+  const body = extractMusicBodyLines(abcString).join(" ");
   const rawMeasures = body.split(/[|\]]/);
   const measures: MelodyTimelineEvent[][] = [];
   const tokenRegex = /([_^=]?[A-Ga-g][,']*|z)([0-9]*\/?[0-9]*)/g;
@@ -267,14 +265,14 @@ function extractMelodyTimelines(abcString: string): MelodyTimelineEvent[][] {
     if (!trimmed || trimmed === ":" || trimmed === "::") continue;
 
     const events: MelodyTimelineEvent[] = [];
-    let elapsedEighths = 0;
+    let elapsedUnits = 0;
     let match: RegExpExecArray | null;
     tokenRegex.lastIndex = 0;
 
     while ((match = tokenRegex.exec(trimmed)) !== null) {
       const duration = parseNoteDuration(match[2]);
-      const startBeat = elapsedEighths / 2 + 1;
-      const endBeat = startBeat + duration / 2;
+      const startBeat = elapsedUnits / durationContext.unitsPerBeat + 1;
+      const endBeat = startBeat + duration / durationContext.unitsPerBeat;
       const type = match[1] === "z" ? "rest" : "note";
       events.push({
         type,
@@ -282,7 +280,7 @@ function extractMelodyTimelines(abcString: string): MelodyTimelineEvent[][] {
         startBeat,
         endBeat,
       });
-      elapsedEighths += duration;
+      elapsedUnits += duration;
     }
 
     measures.push(events);
@@ -336,17 +334,19 @@ function buildGapFillMeasure(
   chord: ChordInfo,
   measureIndex: number,
   timeline: MelodyTimelineEvent[],
-  beatCount: number
+  beatCount: number,
+  beatDurationUnits: number
 ): PianoGapFillMeasure {
   const gap = detectMelodicGap(timeline, measureIndex);
-  const beatSlots = Array.from({ length: beatCount }, () => "z2");
+  const beatDuration = formatAbcDuration(beatDurationUnits);
+  const beatSlots = Array.from({ length: beatCount }, () => `z${beatDuration}`);
   const events: PianoGapFillEvent[] = [];
 
   if (gap?.safe) {
     const fillNotes = chord.notes.slice(1);
     for (let beat = gap.startBeat; beat < gap.endBeat; beat += 1) {
       const note = fillNotes[(beat - gap.startBeat) % fillNotes.length];
-      const abc = `${noteNameToAbc(note, ",")}2`;
+      const abc = `${noteNameToAbc(note, ",")}${beatDuration}`;
       beatSlots[Math.floor(beat) - 1] = abc;
       events.push({
         measureIndex,
@@ -500,7 +500,8 @@ function inversionNameFor(firstRole: PianoRightHandRole): PianoRightHandVoicingM
 function buildRightHandVoicing(
   chord: ChordInfo,
   framework: PianoHarmonicFrameworkMeasure,
-  previousTones: PianoRightHandTone[] | null
+  previousTones: PianoRightHandTone[] | null,
+  fullMeasureUnits: number
 ): PianoRightHandVoicingMeasure {
   const targetMelodyNote = framework.targetMelodyNote;
   const target = targetMelodyNote ? normalizeNoteName(targetMelodyNote) : null;
@@ -555,17 +556,18 @@ function buildRightHandVoicing(
     commonTones: tones.filter((tone) => tone.retainedFromPrevious).map((tone) => tone.note),
     totalSemitoneMovement: tones.reduce((sum, tone) => sum + (tone.semitoneMovement ?? 0), 0),
     melodyMaskingAvoided: tones.every((tone) => !tone.masksMelody),
-    abc: `[${tones.map((tone) => tone.abc).join("")}]4`,
+    abc: `[${tones.map((tone) => tone.abc).join("")}]${formatAbcDuration(fullMeasureUnits)}`,
   };
 }
 
-function buildMeasurePattern(events: PianoBassEvent[], beatCount: number): string {
+function buildMeasurePattern(events: PianoBassEvent[], beatCount: number, beatDurationUnits: number): string {
   const root = events.find((event) => event.role === "root") ?? events[0];
   const fifth = events.find((event) => event.role === "fifth") ?? root;
   const octave = events.find((event) => event.role === "octave") ?? root;
   const pattern = [root, fifth, octave, fifth];
+  const beatDuration = formatAbcDuration(beatDurationUnits);
 
-  return Array.from({ length: beatCount }, (_, index) => `${pattern[index % pattern.length].abc}2`).join(" ");
+  return Array.from({ length: beatCount }, (_, index) => `${pattern[index % pattern.length].abc}${beatDuration}`).join(" ");
 }
 
 function midiForBassEvent(event: PianoBassEvent): number {
@@ -699,6 +701,7 @@ export function generatePianoAccompaniment(
   const resolved = resolveProgression(abcString, options.progression);
   const harmonization = generateHarmonizationStage(abcString);
   const beatCount = getBeatsPerMeasure(resolved.timeSignature);
+  const durationContext = buildAbcDurationContext(abcString);
   const bassFoundation = options.bassFoundation ?? "1-5-8";
   const cadencePoints = detectCadencePoints(abcString, beatCount);
   const strongBeatTargets = findStrongBeatTargets(abcString, beatCount);
@@ -728,23 +731,23 @@ export function generatePianoAccompaniment(
       foundation: bassFoundation,
       events,
       lowIntervalLimit: validateLowIntervalLimit(events),
-      abc: buildMeasurePattern(events, beatCount),
+      abc: buildMeasurePattern(events, beatCount, durationContext.unitsPerBeat),
     };
   });
 
   let previousRightHandTones: PianoRightHandTone[] | null = null;
   const rightHandVoicingMap = resolved.chords.map((chord, measureIndex) => {
-    const voicing = buildRightHandVoicing(chord, harmonicFramework[measureIndex], previousRightHandTones);
+    const voicing = buildRightHandVoicing(chord, harmonicFramework[measureIndex], previousRightHandTones, durationContext.fullMeasureUnits);
     previousRightHandTones = voicing.tones;
     return voicing;
   });
   const compingProfile = options.compingProfile ?? "pop-ballad";
   const compingProfileMap = resolved.chords.map((chord, measureIndex) =>
-    generatePianoCompingProfileMeasure(chord, measureIndex, compingProfile, beatCount)
+    generatePianoCompingProfileMeasure(chord, measureIndex, compingProfile, beatCount, durationContext.unitsPerBeat)
   );
   const melodyTimelines = extractMelodyTimelines(abcString);
   const gapFillMap = resolved.chords.map((chord, measureIndex) =>
-    buildGapFillMeasure(chord, measureIndex, melodyTimelines[measureIndex] ?? [], beatCount)
+    buildGapFillMeasure(chord, measureIndex, melodyTimelines[measureIndex] ?? [], beatCount, durationContext.unitsPerBeat)
   );
   const pedalAutomation = buildPedalAutomation(resolved.chords, beatCount);
   const pedalEventMetadata = buildPedalEventMetadata(pedalAutomation);

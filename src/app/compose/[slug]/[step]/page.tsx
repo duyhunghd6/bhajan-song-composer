@@ -40,7 +40,7 @@ export default async function ComposeStepPage({ params }: PageProps) {
 
   return (
     <main className="min-h-screen bg-zinc-50 px-4 py-12 transition-colors duration-300 dark:bg-zinc-950 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-7xl space-y-8">
+      <div className="mx-auto max-w-[1920px] space-y-8">
         <nav className="text-sm text-zinc-500 dark:text-zinc-400">
           <Link href="/" className="transition-colors hover:text-amber-500">
             Home

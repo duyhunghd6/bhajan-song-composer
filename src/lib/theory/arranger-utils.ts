@@ -1,5 +1,6 @@
 import { ChordInfo, getDiatonicChords } from "./chords";
 import { generateProgression, parseRootAndMode } from "./harmonizer";
+import { extractMusicBodyLines } from "./abc-duration";
 import { normalizeAbcNote, parseAbcHeader, parseNoteDuration } from "./melody-analyzer";
 
 export interface MelodyNoteEvent {
@@ -49,11 +50,7 @@ export function noteNameToAbc(noteName: string, octaveMarks = ""): string {
 }
 
 export function extractMelodyMeasures(abcString: string): MelodyNoteEvent[][] {
-  const body = abcString
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line && !line.startsWith("%") && !/^[A-Z]:/.test(line))
-    .join(" ");
+  const body = extractMusicBodyLines(abcString).join(" ");
 
   const rawMeasures = body.split(/[|\]]/);
   const measures: MelodyNoteEvent[][] = [];

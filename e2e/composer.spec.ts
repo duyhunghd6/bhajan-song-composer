@@ -72,9 +72,7 @@ test.describe("composer workflow", () => {
     await expect(page).toHaveURL(`/compose/${slug}/accompaniment`);
     await expect(page.getByRole("heading", { name: "Step 3: Accompaniment" })).toBeVisible();
     await expect(page.getByRole("link", { name: /Accompaniment\s+Current/ })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Engine Toggle" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Playability Validation Report" })).toBeVisible();
-    await page.getByRole("button", { name: "Generate Accompaniment Matrix" }).click();
+    await expect(page.getByRole("heading", { name: "AI Accompaniment Generation" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Resulting ABC Staff Preview" })).toBeVisible();
 
     await page.getByRole("link", { name: "Save & Add Ensemble" }).click();
@@ -99,22 +97,28 @@ test.describe("composer workflow", () => {
       await page.goto(`/compose/happy-birthday/${step}`);
 
       const sourcePanel = page.locator(".composer-step-source-panel").first();
+      const previewPanel = page.locator(".composer-step-responsive-grid > div").nth(1);
       const previewCanvas = page.locator(`#composer-${step}-preview`);
       await expect(sourcePanel).toBeVisible();
+      await expect(previewPanel).toBeVisible();
       await expect(previewCanvas).toBeVisible();
 
       const sourceBox = await sourcePanel.boundingBox();
+      const previewPanelBox = await previewPanel.boundingBox();
       const previewBox = await previewCanvas.boundingBox();
       expect(sourceBox).not.toBeNull();
+      expect(previewPanelBox).not.toBeNull();
       expect(previewBox).not.toBeNull();
-      if (!sourceBox || !previewBox) throw new Error(`Could not measure ${step} composer layout`);
+      if (!sourceBox || !previewPanelBox || !previewBox) throw new Error(`Could not measure ${step} composer layout`);
 
       expect(sourceBox.x + sourceBox.width).toBeLessThanOrEqual(previewBox.x);
+      expect(previewPanelBox.width).toBeGreaterThan(sourceBox.width);
+      expect(previewPanelBox.width / (sourceBox.width + previewPanelBox.width)).toBeGreaterThan(0.6);
     }
   });
 
   test("stacks source above playback below the widescreen breakpoint", async ({ page }) => {
-    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.setViewportSize({ width: 1279, height: 900 });
     await page.goto("/compose/happy-birthday/harmony");
 
     const sourcePanel = page.locator(".composer-step-source-panel").first();

@@ -181,7 +181,7 @@ describe("Piano accompaniment contract", () => {
         expect.objectContaining({ note: "B", role: "fifth", register: "C3-C5", masksMelody: false }),
       ],
     });
-    expect(accompaniment.rightHandVoicingMap[0].abc).toBe("[G,B,]4");
+    expect(accompaniment.rightHandVoicingMap[0].abc).toBe("[G,B,]8");
     expect(accompaniment.abc).toContain("V:PianoRH clef=treble");
   });
 
@@ -238,8 +238,8 @@ K:C
       profileId: "rock-rnb",
       style: "Rock/R&B",
       rhythmicFeel: "staccato octave off-beat comping",
-      leftHandAbc: "[E,,E,]1 z1 [E,,E,]1 z1",
-      rightHandAbc: "z1 [G,B,]1 z1 [G,B,]1",
+      leftHandAbc: "[E,,E,]2 z2 [E,,E,]2 z2",
+      rightHandAbc: "z2 [G,B,]2 z2 [G,B,]2",
       events: [
         { beat: 1, hand: "left", role: "octave", notes: ["E", "E"], articulation: "staccato" },
         { beat: 2, hand: "right", role: "off-beat-chord", notes: ["G", "B"], articulation: "syncopated" },
@@ -365,11 +365,11 @@ K:Em
     expect(accompaniment.playbackEvents).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ measureIndex: 0, beat: 1, hand: "left", articulation: "block", midi: [40, 47, 52], abc: "E,,2 B,,2 E,2 B,,2" }),
-        expect.objectContaining({ measureIndex: 0, beat: 1, hand: "right", articulation: "block", midi: [55, 59], abc: "[G,B,]4" }),
+        expect.objectContaining({ measureIndex: 0, beat: 1, hand: "right", articulation: "block", midi: [55, 59], abc: "[G,B,]8" }),
       ])
     );
     expect(accompaniment.abc).toContain("E,,2 B,,2 E,2 B,,2");
-    expect(accompaniment.abc).toContain("[G,B,]4");
+    expect(accompaniment.abc).toContain("[G,B,]8");
   });
 
   it("treats long held melody notes as fill windows after the attack", () => {

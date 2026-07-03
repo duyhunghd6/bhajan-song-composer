@@ -31,10 +31,13 @@ body {
   gap: 0;
 }
 
-@media (min-width: 1536px) {
-  .abc-editor-responsive-grid,
-  .composer-step-responsive-grid {
+@media (min-width: 1280px) {
+  .abc-editor-responsive-grid {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .composer-step-responsive-grid {
+    grid-template-columns: minmax(0, 35fr) minmax(0, 65fr) !important;
   }
 
   .abc-editor-source-panel,

@@ -14,6 +14,13 @@ export interface WorkspaceState {
   pianoAccompanimentData: PianoAccompaniment | null;
   guitarAccompanimentData: FingerstyleComposerIntegration | null;
   generatedAccompaniment: string | null;
+  // Separate Guitar / Piano AI generation
+  aiGuitarSuggestions: AccompanimentOption[];
+  aiPianoSuggestions: AccompanimentOption[];
+  selectedGuitarIndex: number | null;
+  selectedPianoIndex: number | null;
+  generatedGuitar: string | null;
+  generatedPiano: string | null;
 }
 
 const DEFAULT_STATE: WorkspaceState = {
@@ -25,6 +32,13 @@ const DEFAULT_STATE: WorkspaceState = {
   pianoAccompanimentData: null,
   guitarAccompanimentData: null,
   generatedAccompaniment: null,
+  // Separate Guitar / Piano AI generation
+  aiGuitarSuggestions: [],
+  aiPianoSuggestions: [],
+  selectedGuitarIndex: null,
+  selectedPianoIndex: null,
+  generatedGuitar: null,
+  generatedPiano: null,
 };
 
 export function useWorkspaceState(slug: string) {

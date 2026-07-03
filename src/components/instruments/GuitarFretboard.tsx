@@ -246,14 +246,14 @@ export default function GuitarFretboard({
             </g>
           )}
 
-          {visiblePositions.map((position) => {
+          {visiblePositions.map((position, posIdx) => {
             const tone = position.tone ?? "chord";
             const x = getGuitarStringX(position.string, stringCount);
             const y = getGuitarFretY(position.fret, firstFret);
             const label = position.finger ?? position.note ?? "•";
 
             return (
-              <g key={`${position.string}-${position.fret}-${position.finger ?? position.note ?? "note"}`}>
+              <g key={`${posIdx}-${position.string}-${position.fret}-${position.finger ?? position.note ?? "note"}`}>
                 <title>{describeGuitarPosition(position)}</title>
                 <circle
                   cx={x}

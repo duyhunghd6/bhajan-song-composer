@@ -1,3 +1,4 @@
+import { formatAbcDuration } from "./abc-duration";
 import { ChordInfo } from "./chords";
 import { noteNameToAbc } from "./arranger-utils";
 
@@ -39,22 +40,24 @@ const PROFILE_FEEL: Record<PianoCompingProfileId, string> = {
   "classical-folk": "Alberti bass",
 };
 
-function buildPopBalladEvents(chord: ChordInfo, beatCount: number): PianoCompingEvent[] {
+function buildPopBalladEvents(chord: ChordInfo, beatCount: number, beatDurationUnits: number): PianoCompingEvent[] {
   const [root, third, fifth] = chord.notes;
+  const beatDuration = formatAbcDuration(beatDurationUnits);
   const pattern: PianoCompingEvent[] = [
-    { beat: 1, hand: "left", role: "root", notes: [root], abc: `${noteNameToAbc(root, ",,")}2`, articulation: "legato" },
-    { beat: 2, hand: "left", role: "fifth", notes: [fifth], abc: `${noteNameToAbc(fifth, ",,")}2`, articulation: "legato" },
-    { beat: 3, hand: "left", role: "tenth", notes: [third], abc: `${noteNameToAbc(third, ",")}2`, articulation: "legato" },
-    { beat: 4, hand: "left", role: "fifth", notes: [fifth], abc: `${noteNameToAbc(fifth, ",,")}2`, articulation: "legato" },
+    { beat: 1, hand: "left", role: "root", notes: [root], abc: `${noteNameToAbc(root, ",,")}${beatDuration}`, articulation: "legato" },
+    { beat: 2, hand: "left", role: "fifth", notes: [fifth], abc: `${noteNameToAbc(fifth, ",,")}${beatDuration}`, articulation: "legato" },
+    { beat: 3, hand: "left", role: "tenth", notes: [third], abc: `${noteNameToAbc(third, ",")}${beatDuration}`, articulation: "legato" },
+    { beat: 4, hand: "left", role: "fifth", notes: [fifth], abc: `${noteNameToAbc(fifth, ",,")}${beatDuration}`, articulation: "legato" },
   ];
 
   return Array.from({ length: beatCount }, (_, index) => ({ ...pattern[index % pattern.length], beat: index + 1 }));
 }
 
-function buildRockRnbEvents(chord: ChordInfo, beatCount: number): PianoCompingEvent[] {
+function buildRockRnbEvents(chord: ChordInfo, beatCount: number, beatDurationUnits: number): PianoCompingEvent[] {
   const [root, third, fifth] = chord.notes;
-  const octave = `[${noteNameToAbc(root, ",,")}${noteNameToAbc(root, ",")}]1`;
-  const offBeatChord = `[${noteNameToAbc(third, ",")}${noteNameToAbc(fifth, ",")}]1`;
+  const beatDuration = formatAbcDuration(beatDurationUnits);
+  const octave = `[${noteNameToAbc(root, ",,")}${noteNameToAbc(root, ",")}]${beatDuration}`;
+  const offBeatChord = `[${noteNameToAbc(third, ",")}${noteNameToAbc(fifth, ",")}]${beatDuration}`;
   const pattern: PianoCompingEvent[] = [
     { beat: 1, hand: "left", role: "octave", notes: [root, root], abc: octave, articulation: "staccato" },
     { beat: 2, hand: "right", role: "off-beat-chord", notes: [third, fifth], abc: offBeatChord, articulation: "syncopated" },
@@ -65,28 +68,30 @@ function buildRockRnbEvents(chord: ChordInfo, beatCount: number): PianoCompingEv
   return Array.from({ length: beatCount }, (_, index) => ({ ...pattern[index % pattern.length], beat: index + 1 }));
 }
 
-function buildClassicalFolkEvents(chord: ChordInfo, beatCount: number): PianoCompingEvent[] {
-  return buildPopBalladEvents(chord, beatCount).map((event) =>
+function buildClassicalFolkEvents(chord: ChordInfo, beatCount: number, beatDurationUnits: number): PianoCompingEvent[] {
+  return buildPopBalladEvents(chord, beatCount, beatDurationUnits).map((event) =>
     event.role === "tenth" ? { ...event, role: "alberti-third" } : event
   );
 }
 
-function buildMeasureAbc(events: PianoCompingEvent[], hand: PianoCompingHand): string {
+function buildMeasureAbc(events: PianoCompingEvent[], hand: PianoCompingHand, beatDurationUnits: number): string {
   if (!events.some((event) => event.hand === hand)) return "";
-  return events.map((event) => (event.hand === hand ? event.abc : "z1")).join(" ");
+  const beatRest = `z${formatAbcDuration(beatDurationUnits)}`;
+  return events.map((event) => (event.hand === hand ? event.abc : beatRest)).join(" ");
 }
 
 export function generatePianoCompingProfileMeasure(
   chord: ChordInfo,
   measureIndex: number,
   profileId: PianoCompingProfileId,
-  beatCount: number
+  beatCount: number,
+  beatDurationUnits = 2
 ): PianoCompingProfileMeasure {
   const events = profileId === "rock-rnb"
-    ? buildRockRnbEvents(chord, beatCount)
+    ? buildRockRnbEvents(chord, beatCount, beatDurationUnits)
     : profileId === "classical-folk"
-      ? buildClassicalFolkEvents(chord, beatCount)
-      : buildPopBalladEvents(chord, beatCount);
+      ? buildClassicalFolkEvents(chord, beatCount, beatDurationUnits)
+      : buildPopBalladEvents(chord, beatCount, beatDurationUnits);
 
   return {
     measureIndex,
@@ -95,7 +100,7 @@ export function generatePianoCompingProfileMeasure(
     style: PROFILE_STYLE[profileId],
     rhythmicFeel: PROFILE_FEEL[profileId],
     events,
-    leftHandAbc: buildMeasureAbc(events, "left"),
-    rightHandAbc: buildMeasureAbc(events, "right"),
+    leftHandAbc: buildMeasureAbc(events, "left", beatDurationUnits),
+    rightHandAbc: buildMeasureAbc(events, "right", beatDurationUnits),
   };
 }
