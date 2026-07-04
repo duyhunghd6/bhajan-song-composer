@@ -112,6 +112,20 @@ export interface AbcjsPlaybackControllerProps {
   onPlaybackCursor?: (event: MusicSheetPlaybackCursorEvent | null) => void;
 }
 
+/**
+ * Parse the Q: (tempo) field from an ABC notation string.
+ * Supports formats like "Q: 1/4=65", "Q:120", "Q: 65".
+ * Returns the BPM number or the provided default if not found.
+ */
+function parseAbcTempo(abcString: string, defaultBpm = 120): number {
+  const match = abcString.match(/^\s*Q:\s*(?:\d+\/\d+=)?(\d+)/m);
+  if (match) {
+    const bpm = parseInt(match[1], 10);
+    if (bpm > 0 && bpm <= 600) return bpm;
+  }
+  return defaultBpm;
+}
+
 function formatTime(totalSeconds: number) {
   const m = Math.floor(totalSeconds / 60);
   const s = Math.floor(totalSeconds % 60);
@@ -138,7 +152,7 @@ export default function AbcjsPlaybackController({
   const [abcjsModule, setAbcjsModule] = useState<AbcjsType | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const isPlayingRef = useRef(false);
-  const [tempo, setTempo] = useState(120);
+  const [tempo, setTempo] = useState(() => parseAbcTempo(abcString));
   const [overrideKey, setOverrideKey] = useState<string>("");
   const [overrideMeter, setOverrideMeter] = useState<string>("");
   const [renderError, setRenderError] = useState<string | null>(null);
@@ -160,6 +174,12 @@ export default function AbcjsPlaybackController({
     if (overrideMeter) result = result.replace(/^\s*M:\s*(.+)$/m, `M: ${overrideMeter}`);
     return result;
   }, [abcString, overrideKey, overrideMeter]);
+
+  // Sync tempo from the ABC Q: field when the source ABC string changes
+  useEffect(() => {
+    const parsedBpm = parseAbcTempo(abcString);
+    setTempo(parsedBpm);
+  }, [abcString]);
 
   const keyMatch = finalAbcString.match(/^\s*K:\s*(.+)$/m);
   const parsedKey = keyMatch ? keyMatch[1].trim() : "C";
@@ -289,8 +309,9 @@ export default function AbcjsPlaybackController({
         try {
           synth.start();
           setPlaybackState(true);
-        } catch (startErr: any) {
-          if (startErr?.message?.includes("onended") || startErr?.message?.includes("undefined")) {
+        } catch (startErr: unknown) {
+          const message = startErr instanceof Error ? startErr.message : String(startErr);
+          if (message.includes("onended") || message.includes("undefined")) {
             console.warn("abcjs synth.start() failed: Sequence is likely empty (only rests). Playback gracefully skipped.");
             setPlaybackState(false);
           } else {
@@ -551,13 +572,13 @@ export default function AbcjsPlaybackController({
       synthRef.current = null;
     }
     timingCallbacksRef.current?.stop();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- synthOptions invalidation must reset the playback UI immediately after the external abcjs synth is stopped.
     setPlaybackState(false);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [synthOptionsKey, setPlaybackState]);
 
   return (
     <div aria-label={description ?? title} className="w-full bg-zinc-950 rounded-xl shadow-md overflow-hidden flex flex-col border border-zinc-800">
-      {title && <span className="sr-only">{title}</span>}
+      {title && <h3 className="sr-only">{title}</h3>}
       {(controls || showLoopControls) && (
         <div className="flex flex-wrap gap-y-3 items-center justify-between bg-[#1e1e1e] text-zinc-300 px-4 py-2.5 text-sm border-b border-black shadow-inner">
           {/* Left: Transport & Time */}
@@ -646,7 +667,7 @@ export default function AbcjsPlaybackController({
                   >
                     −
                   </button>
-                  <strong className="text-amber-500 font-semibold min-w-[20px] text-center">{tempo}</strong>
+                  <strong id="midi-tempo-value" className="text-amber-500 font-semibold min-w-[20px] text-center">{tempo}</strong>
                   <button
                     onClick={() => { const t = Math.min(200, tempo + 5); setTempo(t); stopSynth(); }}
                     className="px-1 text-zinc-400 hover:text-white rounded transition-colors cursor-pointer"
