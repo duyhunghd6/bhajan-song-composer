@@ -88,7 +88,7 @@ function stripGeneratedHeaders(generatedAccompaniment: string): string {
 }
 
 function normalizeGeneratedVoiceLine(voiceLine: string): string {
-  return voiceLine.replace(/V:Guitar clef=treble-8/g, 'V:Guitar clef=bass name="Layer 2 Guitar Accompaniment"');
+  return voiceLine.replace(/V:Guitar clef=treble-8/g, 'V:Guitar clef=treble-8 name="Layer 2 Guitar Accompaniment"');
 }
 
 function splitVoiceBlocks(generatedAccompaniment: string): string[] {

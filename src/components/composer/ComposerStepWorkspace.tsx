@@ -10,13 +10,19 @@ import PianoPedalIndicator from "@/components/instruments/PianoPedalIndicator";
 import { buildArrangementLayerProposals, generateArrangementPipeline } from "@/lib/theory/arrangement-pipeline";
 import { harmonizeMelody } from "@/app/actions/harmonize";
 import { type HarmonizationOption } from "@/lib/theory/harmonization-candidates";
-import { generateAccompanimentOptions, generateGuitarOptions, generatePianoOptions } from "@/app/actions/accompaniment";
 import { buildAccompanimentAbc, getAccompanimentVoiceNames } from "@/lib/theory/accompaniment-abc";
+import {
+  buildAccompanimentWorkflowAbcAnnotation,
+  getLatestSelectedWorkflowStep,
+  getWorkflowAppliedMusicAbc,
+  isAccompanimentWorkflowSourceCurrent,
+} from "@/lib/theory/accompaniment-workflow";
 import { generatePianoAccompaniment } from "@/lib/theory/piano-accompaniment";
 import type { PianoCompingProfileId } from "@/lib/theory/piano-comping-profiles";
 import { buildFingerstyleComposerIntegration, type FingerstyleComposerProfileId } from "./fingerstyle-integration";
 import AbcEditor, { DEFAULT_ABC } from "./AbcEditor";
 import TheoryAssistant from "./TheoryAssistant";
+import AccompanimentWorkflowWizard from "./AccompanimentWorkflowWizard";
 import type { ComposerStepId } from "./composer-steps";
 import { buildTheoryAssistantLayerProposal, type TheoryAssistantArrangementSuggestion } from "./theory-assistant-layer";
 
@@ -102,11 +108,7 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
   const [melodyAbc, setMelodyAbc] = useState(initialMelodyAbc ?? DEFAULT_ABC);
   const [hasMounted, setHasMounted] = useState(false);
   const [isHarmonizing, setIsHarmonizing] = useState(false);
-  const { state: ws, updateState, isHydrated } = useWorkspaceState(slug);
-  const [isGeneratingAccompaniment, setIsGeneratingAccompaniment] = useState(false);
-  const [isGeneratingGuitar, setIsGeneratingGuitar] = useState(false);
-  const [isGeneratingPiano, setIsGeneratingPiano] = useState(false);
-  const [activeAccompTab, setActiveAccompTab] = useState<"guitar" | "piano">("guitar");
+  const { state: ws, updateState } = useWorkspaceState(slug);
   const [layerVisibility, setLayerVisibility] = useState({ melody: true, harmony: true });
   const [accompLayerVisibility, setAccompLayerVisibility] = useState<Record<string, boolean>>({});
   const [currentSuggestion, setCurrentSuggestion] = useState<TheoryAssistantArrangementSuggestion | null>(null);
@@ -119,6 +121,7 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
       const savedMelody = window.localStorage.getItem(`bhajan-song-composer:compose:${slug}:melody`);
       const isDefault = savedMelody === DEFAULT_ABC || (savedMelody && savedMelody.includes("T:New Bhajan Arrangement"));
       if (savedMelody && !isDefault) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- melody must hydrate from localStorage after mount to avoid SSR/localStorage mismatches.
         setMelodyAbc(savedMelody);
       }
     } catch (e) {
@@ -143,19 +146,59 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
     }
   }, [activeAbc]);
 
+  const activeWorkflow = isAccompanimentWorkflowSourceCurrent(ws.accompanimentWorkflow, activeAbc)
+    ? ws.accompanimentWorkflow
+    : null;
+  const workflowAppliedMusicAbc = useMemo(
+    () => getWorkflowAppliedMusicAbc(activeWorkflow, activeAbc),
+    [activeWorkflow, activeAbc]
+  );
   const accompanimentBuild = useMemo(() => buildAccompanimentAbc({
-    baseAbc: activeAbc,
+    baseAbc: workflowAppliedMusicAbc,
     generatedAccompaniment: ws.generatedAccompaniment,
     generatedGuitar: ws.generatedGuitar,
     generatedPiano: ws.generatedPiano,
     layerVisibility: accompLayerVisibility,
-  }), [ws.generatedAccompaniment, ws.generatedGuitar, ws.generatedPiano, activeAbc, accompLayerVisibility]);
-  const accompanimentAbc = accompanimentBuild.abc;
+  }), [ws.generatedAccompaniment, ws.generatedGuitar, ws.generatedPiano, workflowAppliedMusicAbc, accompLayerVisibility]);
+
+  const appliedWorkflowStep = useMemo(() => getLatestSelectedWorkflowStep(activeWorkflow), [activeWorkflow]);
+  const workflowAnnotationAbc = useMemo(
+    () => buildAccompanimentWorkflowAbcAnnotation(activeWorkflow),
+    [activeWorkflow]
+  );
+  const accompanimentAbc = workflowAnnotationAbc
+    ? `${accompanimentBuild.abc.trimEnd()}\n\n${workflowAnnotationAbc}`
+    : accompanimentBuild.abc;
 
   const accompanimentVoiceNames = useMemo(
     () => getAccompanimentVoiceNames(ws.generatedAccompaniment, ws.generatedGuitar, ws.generatedPiano),
     [ws.generatedAccompaniment, ws.generatedGuitar, ws.generatedPiano]
   );
+  const guitarTabEnabled = Boolean(ws.generatedGuitar && accompLayerVisibility["__guitar_tab__"] === true);
+  // abcjs tablature is positionally mapped: tablature[i] renders under staff[i].
+  // The Guitar voice is NOT at staff index 0 (that's Melody), so we pad with
+  // { instrument: '' } placeholders for all preceding staves.
+  const guitarStaffIndex = accompanimentBuild.visibleVoiceNames.indexOf("Guitar") + 1; // +1 for Melody at index 0
+  const accompanimentPreviewProps = useMemo(() => ({
+    ...ACCOMPANIMENT_PREVIEW_PROPS,
+    renderOptions: {
+      ...ACCOMPANIMENT_PREVIEW_RENDER_OPTIONS,
+      ...(guitarTabEnabled && guitarStaffIndex > 0
+        ? {
+            tablature: [
+              ...Array.from({ length: guitarStaffIndex }, () => ({ instrument: "" as const })),
+              {
+                instrument: "guitar" as const,
+                label: "GUITAR TAB (%T)",
+                tuning: ["E,", "A,", "D", "G", "B", "e"],
+                capo: 0,
+                hideTabSymbol: false,
+              },
+            ],
+          }
+        : {}),
+    },
+  }), [guitarTabEnabled, guitarStaffIndex]);
 
   if (step === "melody") {
     return (
@@ -368,7 +411,7 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
                 </div>
                 <AbcjsPlaybackController
                   abcString={harmonyPreviewAbc}
-                  title="Harmonization Preview"
+                  title="Harmonization Audio Preview"
                   canvasId="composer-harmony-preview"
                   synthOptions={harmonySynthOptions}
                   {...COMPOSER_PREVIEW_PROPS}
@@ -430,7 +473,7 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
                         type="button"
                         onClick={() => {
                           setMelodyAbc(initialMelodyAbc);
-                          updateState({ aiSuggestions: [], selectedCandidateId: null, acceptedHarmony: null, aiAccompanimentSuggestions: [], selectedAccompanimentIndex: null, pianoAccompanimentData: null, guitarAccompanimentData: null, generatedAccompaniment: null, aiGuitarSuggestions: [], aiPianoSuggestions: [], selectedGuitarIndex: null, selectedPianoIndex: null, generatedGuitar: null, generatedPiano: null });
+                          updateState({ aiSuggestions: [], selectedCandidateId: null, acceptedHarmony: null, aiAccompanimentSuggestions: [], selectedAccompanimentIndex: null, pianoAccompanimentData: null, guitarAccompanimentData: null, generatedAccompaniment: null, aiGuitarSuggestions: [], aiPianoSuggestions: [], selectedGuitarIndex: null, selectedPianoIndex: null, generatedGuitar: null, generatedPiano: null, accompanimentWorkflow: null });
                           setAccompLayerVisibility({});
                         }}
                         title="Restore Original Melody"
@@ -443,207 +486,33 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
                   </div>
                 </div>
 
-                {/* Tab bar: Guitar | Piano */}
-                <div className="flex gap-1 rounded-xl bg-zinc-100 p-1 dark:bg-zinc-900/60 mb-4">
-                  <button
-                    type="button"
-                    onClick={() => setActiveAccompTab("guitar")}
-                    className={`flex-1 rounded-lg px-3 py-2 text-xs font-bold transition ${
-                      activeAccompTab === "guitar"
-                        ? "bg-white text-amber-700 shadow-sm dark:bg-zinc-800 dark:text-amber-400"
-                        : "text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
-                    }`}
-                  >
-                    🎸 Guitar Accompaniment
-                    {ws.generatedGuitar && <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveAccompTab("piano")}
-                    className={`flex-1 rounded-lg px-3 py-2 text-xs font-bold transition ${
-                      activeAccompTab === "piano"
-                        ? "bg-white text-amber-700 shadow-sm dark:bg-zinc-800 dark:text-amber-400"
-                        : "text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
-                    }`}
-                  >
-                    🎹 Piano Accompaniment
-                    {ws.generatedPiano && <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />}
-                  </button>
-                </div>
 
-                {/* Guitar Tab Content */}
-                {activeAccompTab === "guitar" && (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">🎸 Guitar AI Options</h3>
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          disabled={isGeneratingGuitar || !pipeline}
-                          onClick={async () => {
-                            if (!pipeline) return;
-                            setIsGeneratingGuitar(true);
-                            try {
-                              const result = await generateGuitarOptions(activeAbc, {
-                                key: pipeline.harmonization.key,
-                                scale: pipeline.harmonization.scale,
-                                timeSignature: pipeline.harmonization.timeSignature
-                              });
-                              updateState({ aiGuitarSuggestions: result.options, selectedGuitarIndex: null });
-                            } catch (err) {
-                              console.error(err);
-                              alert("Failed to generate guitar options.");
-                            } finally {
-                              setIsGeneratingGuitar(false);
-                            }
-                          }}
-                          title="Suggest AI Guitar"
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-sky-400/30 bg-sky-500/10 px-2.5 py-1.5 text-xs font-bold text-sky-600 transition hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-50 dark:text-sky-400"
-                        >
-                          {isGeneratingGuitar ? (
-                            <svg className="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
-                          ) : (
-                            <span className="text-sm">✨</span>
-                          )}
-                          <span>{isGeneratingGuitar ? "Generating..." : "Suggest AI Guitar"}</span>
-                        </button>
-                        {ws.generatedGuitar && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              updateState({ aiGuitarSuggestions: [], selectedGuitarIndex: null, generatedGuitar: null, guitarAccompanimentData: null });
-                            }}
-                            title="Clear Guitar"
-                            className="inline-flex items-center gap-1 rounded-lg border border-rose-400/30 bg-rose-500/10 px-2.5 py-1.5 text-xs font-bold text-rose-600 transition hover:bg-rose-500/20 dark:text-rose-400"
-                          >
-                            <span className="text-sm">↺</span>
-                            <span className="hidden sm:inline">Clear</span>
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    {ws.aiGuitarSuggestions.length > 0 && (
-                      <div className="grid gap-2">
-                        {ws.aiGuitarSuggestions.map((option, idx) => (
-                          <button
-                            key={option.id}
-                            onClick={() => {
-                              updateState({ selectedGuitarIndex: idx });
-                              const integration = buildFingerstyleComposerIntegration(activeAbc, undefined, { pickingProfile: option.style as FingerstyleComposerProfileId });
-                              updateState({ generatedGuitar: integration.composerLayer.abc, guitarAccompanimentData: integration });
-                            }}
-                            className={`text-left rounded-xl border p-3 transition-all focus:outline-none focus:ring-2 focus:ring-amber-500/50 ${
-                              ws.selectedGuitarIndex === idx
-                                ? "border-amber-400 bg-amber-500/10 shadow-sm"
-                                : "border-zinc-200 bg-white hover:border-amber-300/50 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950/40 dark:hover:bg-zinc-900"
-                            }`}
-                          >
-                            <div className="flex items-center justify-between gap-2">
-                              <h4 className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
-                                🎸 {option.label}
-                              </h4>
-                              {ws.selectedGuitarIndex === idx && (
-                                <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-bold text-white">Active</span>
-                              )}
-                            </div>
-                            <p className="mt-1 text-[11px] leading-4 text-zinc-600 dark:text-zinc-400">
-                              {option.explanation}
-                            </p>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Piano Tab Content */}
-                {activeAccompTab === "piano" && (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">🎹 Piano AI Options</h3>
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          disabled={isGeneratingPiano || !pipeline}
-                          onClick={async () => {
-                            if (!pipeline) return;
-                            setIsGeneratingPiano(true);
-                            try {
-                              const result = await generatePianoOptions(activeAbc, {
-                                key: pipeline.harmonization.key,
-                                scale: pipeline.harmonization.scale,
-                                timeSignature: pipeline.harmonization.timeSignature
-                              });
-                              updateState({ aiPianoSuggestions: result.options, selectedPianoIndex: null });
-                            } catch (err) {
-                              console.error(err);
-                              alert("Failed to generate piano options.");
-                            } finally {
-                              setIsGeneratingPiano(false);
-                            }
-                          }}
-                          title="Suggest AI Piano"
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-sky-400/30 bg-sky-500/10 px-2.5 py-1.5 text-xs font-bold text-sky-600 transition hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-50 dark:text-sky-400"
-                        >
-                          {isGeneratingPiano ? (
-                            <svg className="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
-                          ) : (
-                            <span className="text-sm">✨</span>
-                          )}
-                          <span>{isGeneratingPiano ? "Generating..." : "Suggest AI Piano"}</span>
-                        </button>
-                        {ws.generatedPiano && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              updateState({ aiPianoSuggestions: [], selectedPianoIndex: null, generatedPiano: null, pianoAccompanimentData: null });
-                            }}
-                            title="Clear Piano"
-                            className="inline-flex items-center gap-1 rounded-lg border border-rose-400/30 bg-rose-500/10 px-2.5 py-1.5 text-xs font-bold text-rose-600 transition hover:bg-rose-500/20 dark:text-rose-400"
-                          >
-                            <span className="text-sm">↺</span>
-                            <span className="hidden sm:inline">Clear</span>
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    {ws.aiPianoSuggestions.length > 0 && (
-                      <div className="grid gap-2">
-                        {ws.aiPianoSuggestions.map((option, idx) => (
-                          <button
-                            key={option.id}
-                            onClick={() => {
-                              updateState({ selectedPianoIndex: idx });
-                              const pianoStyles: PianoCompingProfileId[] = ["pop-ballad", "rock-rnb", "classical-folk"];
-                              const compingProfile = pianoStyles.includes(option.style as PianoCompingProfileId)
-                                ? option.style as PianoCompingProfileId
-                                : "pop-ballad";
-                              const accompaniment = generatePianoAccompaniment(activeAbc, { compingProfile });
-                              updateState({ generatedPiano: accompaniment.abc, pianoAccompanimentData: accompaniment });
-                            }}
-                            className={`text-left rounded-xl border p-3 transition-all focus:outline-none focus:ring-2 focus:ring-amber-500/50 ${
-                              ws.selectedPianoIndex === idx
-                                ? "border-amber-400 bg-amber-500/10 shadow-sm"
-                                : "border-zinc-200 bg-white hover:border-amber-300/50 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950/40 dark:hover:bg-zinc-900"
-                            }`}
-                          >
-                            <div className="flex items-center justify-between gap-2">
-                              <h4 className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
-                                🎹 {option.label}
-                              </h4>
-                              {ws.selectedPianoIndex === idx && (
-                                <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-bold text-white">Active</span>
-                              )}
-                            </div>
-                            <p className="mt-1 text-[11px] leading-4 text-zinc-600 dark:text-zinc-400">
-                              {option.explanation}
-                            </p>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
+                <AccompanimentWorkflowWizard
+                  sourceAbc={activeAbc}
+                  metadata={{
+                    key: pipeline?.harmonization.key ?? "Unknown",
+                    scale: pipeline?.harmonization.scale ?? "Unknown",
+                    timeSignature: pipeline?.harmonization.timeSignature ?? "4/4",
+                  }}
+                  workflow={ws.accompanimentWorkflow}
+                  onWorkflowChange={(accompanimentWorkflow) => updateState({ accompanimentWorkflow })}
+                  onGuitarProfileSelected={(profile) => {
+                    const guitarProfiles: FingerstyleComposerProfileId[] = ["strict-pima", "folk-travis"];
+                    const pickingProfile = guitarProfiles.includes(profile as FingerstyleComposerProfileId)
+                      ? profile as FingerstyleComposerProfileId
+                      : "strict-pima";
+                    const integration = buildFingerstyleComposerIntegration(workflowAppliedMusicAbc, undefined, { pickingProfile });
+                    updateState({ generatedGuitar: integration.composerLayer.abc, guitarAccompanimentData: integration });
+                  }}
+                  onPianoProfileSelected={(profile) => {
+                    const pianoStyles: PianoCompingProfileId[] = ["pop-ballad", "rock-rnb", "classical-folk"];
+                    const compingProfile = pianoStyles.includes(profile as PianoCompingProfileId)
+                      ? profile as PianoCompingProfileId
+                      : "pop-ballad";
+                    const accompaniment = generatePianoAccompaniment(workflowAppliedMusicAbc, { compingProfile });
+                    updateState({ generatedPiano: accompaniment.abc, pianoAccompanimentData: accompaniment });
+                  }}
+                />
               </section>
             </>
           )}
@@ -680,6 +549,21 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
                       />
                       🎶 Original Chords
                     </label>
+                    {/* Guitar tablature toggle */}
+                    {ws.generatedGuitar && (
+                      <label className="flex items-center gap-2 text-xs font-semibold text-zinc-800 dark:text-zinc-200 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          className="rounded border-zinc-300 text-amber-500 focus:ring-amber-500"
+                          checked={guitarTabEnabled}
+                          onChange={() => setAccompLayerVisibility(prev => ({
+                            ...prev,
+                            ['__guitar_tab__']: !guitarTabEnabled
+                          }))}
+                        />
+                        🎸 GUITAR TAB
+                      </label>
+                    )}
                     {/* Accompaniment voice toggles */}
                     {accompanimentVoiceNames.map(voiceName => {
                       const isVisible = accompLayerVisibility[voiceName] !== false;
@@ -715,11 +599,16 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
               </div>
               <AbcjsPlaybackController
                 abcString={accompanimentAbc}
-                title="Accompaniment Music Sheet"
+                title={appliedWorkflowStep ? `Resulting ABC Staff Preview: Step ${appliedWorkflowStep.label}` : "Accompaniment Music Sheet"}
                 canvasId="composer-accompaniment-preview"
-                {...ACCOMPANIMENT_PREVIEW_PROPS}
+                {...accompanimentPreviewProps}
               />
-              
+              {appliedWorkflowStep && (
+                <p className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-300">
+                  ABCNotation applied after Step {appliedWorkflowStep.index}: {appliedWorkflowStep.label}
+                </p>
+              )}
+
               <section className="mt-6 rounded-2xl border border-dashed border-zinc-300 bg-white/70 p-4 dark:border-zinc-700 dark:bg-zinc-950/50">
                 <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Generated ABC Source</h2>
                 <pre className="mt-3 max-h-[min(30vh,300px)] overflow-auto whitespace-pre-wrap rounded-xl bg-zinc-50 p-3 text-xs leading-5 text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
@@ -846,7 +735,7 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
             </div>
             <AbcjsPlaybackController
               abcString={ensembleAbc}
-              title="Multi-track ABCJS Render (Full Score View)"
+              title="Multi-track Full Score Playback"
               canvasId="composer-ensemble-preview"
               {...COMPOSER_PREVIEW_PROPS}
             />
@@ -907,7 +796,7 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
           </div>
           <AbcjsPlaybackController
             abcString={reviewAbc}
-            title="Review Music Staff Playback"
+            title="Review Music Playback Controller"
             canvasId="composer-review-preview"
             {...COMPOSER_PREVIEW_PROPS}
           />
