@@ -1,4 +1,4 @@
-import type { Dispatch, SetStateAction } from "react";
+import { useEffect, type Dispatch, type SetStateAction } from "react";
 import AbcjsPlaybackController from "@/components/music-sheet/AbcjsPlaybackController";
 import GuitarFretboard from "@/components/instruments/GuitarFretboard";
 import PianoKeyboard from "@/components/instruments/PianoKeyboard";
@@ -6,7 +6,10 @@ import PianoPedalIndicator from "@/components/instruments/PianoPedalIndicator";
 import type { ArrangementPipelineResult } from "@/lib/theory/arrangement-pipeline";
 import { generatePianoAccompaniment } from "@/lib/theory/piano-accompaniment";
 import type { PianoCompingProfileId } from "@/lib/theory/piano-comping-profiles";
-import type { AccompanimentWorkflowSession } from "@/lib/theory/accompaniment-workflow";
+import {
+  isAccompanimentWorkflowStepComplete,
+  type AccompanimentWorkflowSession,
+} from "@/lib/theory/accompaniment-workflow";
 import type { WorkspaceState } from "../useWorkspaceState";
 import { buildFingerstyleComposerIntegration, type FingerstyleComposerProfileId } from "../fingerstyle-integration";
 import AccompanimentWorkflowWizard from "../AccompanimentWorkflowWizard";
@@ -23,7 +26,6 @@ interface AccompanimentStepProps {
   pipeline: ArrangementPipelineResult | null;
   workflowAppliedMusicAbc: string;
   activeWorkflow: AccompanimentWorkflowSession | null;
-  accompanimentBuild: { abc: string; visibleVoiceNames: string[] };
   accompanimentAbc: string;
   accompanimentVoiceNames: string[];
   accompLayerVisibility: Record<string, boolean>;
@@ -43,7 +45,7 @@ export function AccompanimentStep({
   hasMounted,
   pipeline,
   workflowAppliedMusicAbc,
-  accompanimentBuild,
+  activeWorkflow,
   accompanimentAbc,
   accompanimentVoiceNames,
   accompLayerVisibility,
@@ -55,6 +57,21 @@ export function AccompanimentStep({
   ws,
   updateState,
 }: AccompanimentStepProps) {
+    const strongBeatsStepComplete = Boolean(
+      activeWorkflow && isAccompanimentWorkflowStepComplete(activeWorkflow, "strong-beat-targets")
+    );
+    const hasGeneratedAccompanimentLayer = Boolean(ws.generatedAccompaniment || ws.generatedGuitar || ws.generatedPiano);
+    const hasLayerVisibilityControls = strongBeatsStepComplete || hasGeneratedAccompanimentLayer;
+
+    useEffect(() => {
+      if (strongBeatsStepComplete || accompLayerVisibility["__strong_beats__"] !== true) return;
+
+      setAccompLayerVisibility((prev) => ({
+        ...prev,
+        __strong_beats__: false,
+      }));
+    }, [accompLayerVisibility, setAccompLayerVisibility, strongBeatsStepComplete]);
+
     return (
       <div className="space-y-6">
         <ComposerNotationPreviewLayout
@@ -140,8 +157,8 @@ export function AccompanimentStep({
           )}
           preview={(
             <>
-              {/* Layer Visibility Toggles — always shown when any accompaniment is generated */}
-              {(ws.generatedAccompaniment || ws.generatedGuitar || ws.generatedPiano) && (
+              {/* Layer Visibility Toggles — shown once Strong Beats are complete or accompaniment layers exist */}
+              {hasLayerVisibilityControls && (
                 <section className="mb-4 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950/60">
                   <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 mb-2">Layer Visibility</h2>
                   <div className="flex flex-wrap gap-3">
@@ -172,18 +189,20 @@ export function AccompanimentStep({
                       🎶 Original Chords
                     </label>
                     {/* Strong beats toggle */}
-                    <label className="flex items-center gap-2 text-xs font-semibold text-zinc-800 dark:text-zinc-200 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        className="rounded border-zinc-300 text-amber-500 focus:ring-amber-500"
-                        checked={accompLayerVisibility['__strong_beats__'] === true}
-                        onChange={() => setAccompLayerVisibility(prev => ({
-                          ...prev,
-                          ['__strong_beats__']: !(prev['__strong_beats__'] === true)
-                        }))}
-                      />
-                      ⬤ Strong Beats
-                    </label>
+                    {strongBeatsStepComplete && (
+                      <label className="flex items-center gap-2 text-xs font-semibold text-zinc-800 dark:text-zinc-200 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          className="rounded border-zinc-300 text-amber-500 focus:ring-amber-500"
+                          checked={accompLayerVisibility['__strong_beats__'] === true}
+                          onChange={() => setAccompLayerVisibility(prev => ({
+                            ...prev,
+                            ['__strong_beats__']: !(prev['__strong_beats__'] === true)
+                          }))}
+                        />
+                        ⬤ Strong Beats
+                      </label>
+                    )}
                     {/* Guitar tablature toggle */}
                     {hasGuitarVoice && (
                       <label className="flex items-center gap-2 text-xs font-semibold text-zinc-800 dark:text-zinc-200 cursor-pointer">
