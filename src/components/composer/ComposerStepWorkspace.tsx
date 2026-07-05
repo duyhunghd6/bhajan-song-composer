@@ -96,13 +96,16 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
     activeWorkflow && isAccompanimentWorkflowStepComplete(activeWorkflow, "strong-beat-targets")
   );
   const effectiveAccompLayerVisibility = useMemo(() => {
-    if (strongBeatsStepComplete || accompLayerVisibility.__strong_beats__ !== true) {
-      return accompLayerVisibility;
+    if (!strongBeatsStepComplete) {
+      return {
+        ...accompLayerVisibility,
+        __strong_beats__: false,
+      };
     }
 
     return {
       ...accompLayerVisibility,
-      __strong_beats__: false,
+      __strong_beats__: accompLayerVisibility.__strong_beats__ !== false,
     };
   }, [accompLayerVisibility, strongBeatsStepComplete]);
   const workflowAppliedMusicAbc = useMemo(
