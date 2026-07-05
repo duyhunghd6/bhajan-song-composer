@@ -7,7 +7,7 @@ test.describe("mockup review gate", () => {
     await expect(page.getByRole("heading", { name: "Mockup Review Gate" })).toBeVisible();
     await expect(page.getByText("UNID: br-plan-09.c01")).toBeVisible();
     await expect(page.getByText("Integration unlocked", { exact: true })).toBeVisible();
-    await expect(page.getByText("4 of 4 standalone POC gates review-ready")).toBeVisible();
+    await expect(page.getByText("6 of 6 standalone POC gates review-ready")).toBeVisible();
 
     const arrangementGate = page.getByRole("listitem").filter({ hasText: "Arrangement Pipeline POC" });
     await expect(arrangementGate.getByText("Review-ready standalone POC")).toBeVisible();

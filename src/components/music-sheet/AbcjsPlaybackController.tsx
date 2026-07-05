@@ -132,6 +132,122 @@ function formatTime(totalSeconds: number) {
   return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 }
 
+function postProcessBeats(container: HTMLDivElement | null) {
+  if (!container) return;
+
+  const staves = Array.from(container.querySelectorAll("g.abcjs-staff"));
+  const lyrics = Array.from(container.querySelectorAll("text.abcjs-lyric"));
+  const textNodes = container.querySelectorAll("text.abcjs-annotation");
+
+  // Determine if we have beat indicators
+  const beats = Array.from(textNodes).filter(node => {
+    const val = (node.textContent || "").trim();
+    return val === "⬤" || val === "●" || val === "•" || val === "·";
+  });
+
+  if (beats.length > 0) {
+    container.classList.add("has-beat-indicators");
+  } else {
+    container.classList.remove("has-beat-indicators");
+  }
+
+  // Add lyrics presence classes to the container
+  if (lyrics.length > 0) {
+    container.classList.add("has-lyrics");
+    container.classList.remove("no-lyrics");
+  } else {
+    container.classList.add("no-lyrics");
+    container.classList.remove("has-lyrics");
+  }
+
+  // 1. Group staves and get their vertical boundaries
+  const staffData = staves
+    .map((staff) => {
+      try {
+        const svgPath = staff as unknown as SVGGraphicsElement;
+        const box = svgPath.getBBox();
+        return {
+          element: staff,
+          y: box.y,
+          height: box.height,
+          bottom: box.y + box.height,
+          lyricY: null as number | null,
+        };
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean) as {
+    element: Element;
+    y: number;
+    height: number;
+    bottom: number;
+    lyricY: number | null;
+  }[];
+
+  // 2. Find the lyric Y coordinate for each staff system
+  lyrics.forEach((lyric) => {
+    const lyricY = parseFloat(lyric.getAttribute("y") || "0");
+    let bestStaff: typeof staffData[0] | null = null;
+    let minDiff = Infinity;
+    staffData.forEach((sd) => {
+      const diff = lyricY - sd.bottom;
+      if (diff > 0 && diff < 80 && diff < minDiff) {
+        minDiff = diff;
+        bestStaff = sd;
+      }
+    });
+    if (bestStaff) {
+      if (bestStaff.lyricY === null || lyricY > bestStaff.lyricY) {
+        bestStaff.lyricY = lyricY;
+      }
+    }
+  });
+
+  // 3. Position and style the beat indicators below lyrics
+  textNodes.forEach((node) => {
+    const val = (node.textContent || "").trim();
+    if (val === "⬤" || val === "●" || val === "•" || val === "·") {
+      if (val === "⬤") {
+        node.setAttribute("class", "abcjs-annotation beat-indicator beat-strong");
+        node.setAttribute("data-beat", "Strong");
+      } else if (val === "●") {
+        node.setAttribute("class", "abcjs-annotation beat-indicator beat-medium");
+        node.setAttribute("data-beat", "Medium");
+      } else if (val === "•" || val === "·") {
+        node.setAttribute("class", "abcjs-annotation beat-indicator beat-soft");
+        node.setAttribute("data-beat", "Soft");
+        node.textContent = "●"; // Normalize to standard filled circle
+      }
+
+      const nodeY = parseFloat(node.getAttribute("y") || "0");
+
+      // Find the corresponding staff system
+      let bestStaff: typeof staffData[0] | null = null;
+      let minStaffDist = Infinity;
+      staffData.forEach((sd) => {
+        const dist = Math.abs(sd.y + sd.height / 2 - nodeY);
+        if (dist < minStaffDist) {
+          minStaffDist = dist;
+          bestStaff = sd;
+        }
+      });
+
+      if (bestStaff) {
+        let targetY;
+        if (bestStaff.lyricY !== null && bestStaff.lyricY > 0) {
+          targetY = bestStaff.lyricY + 10; // Place 10px below the lyric line
+        } else {
+          targetY = bestStaff.bottom + 10; // Place 10px below staff bottom if no lyrics
+        }
+        node.setAttribute("y", String(targetY));
+      } else {
+        node.setAttribute("y", String(nodeY + 8)); // Fallback shift
+      }
+    }
+  });
+}
+
 export default function AbcjsPlaybackController({
   abcString,
   title = "Music Sheet Playback",
@@ -178,6 +294,7 @@ export default function AbcjsPlaybackController({
   // Sync tempo from the ABC Q: field when the source ABC string changes
   useEffect(() => {
     const parsedBpm = parseAbcTempo(abcString);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- tempo UI must resync immediately when the external ABC source changes.
     setTempo(parsedBpm);
   }, [abcString]);
 
@@ -470,12 +587,18 @@ export default function AbcjsPlaybackController({
       timingCallbacksRef.current = null;
       canvas.innerHTML = "";
 
-      const visualObj = abcjsModule.renderAbc(canvas, finalAbcString, {
-        responsive: "resize",
+      const mergedRenderOptions = {
+        responsive: "resize" as const,
         add_classes: true,
+        stafftopmargin: 0,
+        paddingbottom: 30,
         ...renderOptions,
         clickListener: handleNoteClick,
-      });
+      };
+      const visualObj = abcjsModule.renderAbc(canvas, finalAbcString, mergedRenderOptions);
+
+      // Post-process beat indicator circles below the lyric line
+      postProcessBeats(canvas);
 
       if (!visualObj || visualObj.length === 0) {
         renderErrorMessage = "ABC notation could not be rendered. Check the header and note syntax.";
@@ -750,6 +873,61 @@ export default function AbcjsPlaybackController({
         #${resolvedCanvasId} .abcjs-note-active * {
           fill: #f59e0b !important;
           stroke: #f59e0b !important;
+        }
+
+        #${resolvedCanvasId} .beat-indicator {
+          font-family: sans-serif !important;
+          font-weight: 800 !important;
+          alignment-baseline: middle !important;
+          text-anchor: middle !important;
+          transition: all 0.3s ease;
+        }
+
+        #${resolvedCanvasId} .beat-strong {
+          fill: #ef4444 !important; /* Red-500 */
+          font-size: 17px !important;
+          filter: drop-shadow(0px 0px 4px rgba(239, 68, 68, 0.6));
+        }
+
+        #${resolvedCanvasId} .beat-medium {
+          fill: #f59e0b !important; /* Amber-500 */
+          font-size: 16px !important;
+          filter: drop-shadow(0px 0px 3px rgba(245, 158, 11, 0.5));
+        }
+
+        #${resolvedCanvasId} .beat-soft {
+          fill: #64748b !important; /* Slate-500 */
+          font-size: 10px !important;
+          opacity: 0.6;
+        }
+
+        /* Style chords above notes */
+        #${resolvedCanvasId} svg text.abcjs-chord {
+          transform: translateY(-6px);
+          font-size: 13px !important;
+          font-weight: 600 !important;
+          fill: #a5b4fc !important; /* Indigo-300 style chord */
+        }
+
+        /* Pull tablature staff up when beat indicators AND lyrics are present */
+        #${resolvedCanvasId}.has-beat-indicators.has-lyrics g.abcjs-staff:not(.abcjs-v0),
+        #${resolvedCanvasId}.has-beat-indicators.has-lyrics g.abcjs-tabNumber,
+        #${resolvedCanvasId}.has-beat-indicators.has-lyrics g.abcjs-symbol:has(path[data-name="tab.big"]) {
+          transform: translateY(-70px);
+        }
+
+        /* Pull tablature staff up less when beat indicators are present but NO lyrics */
+        #${resolvedCanvasId}.has-beat-indicators.no-lyrics g.abcjs-staff:not(.abcjs-v0),
+        #${resolvedCanvasId}.has-beat-indicators.no-lyrics g.abcjs-tabNumber,
+        #${resolvedCanvasId}.has-beat-indicators.no-lyrics g.abcjs-symbol:has(path[data-name="tab.big"]) {
+          transform: translateY(-35px);
+        }
+
+        /* Default fallback behavior when no beat indicators are present (pull up by -50px to match globals.css) */
+        #${resolvedCanvasId}:not(.has-beat-indicators) g.abcjs-staff:not(.abcjs-v0),
+        #${resolvedCanvasId}:not(.has-beat-indicators) g.abcjs-tabNumber,
+        #${resolvedCanvasId}:not(.has-beat-indicators) g.abcjs-symbol:has(path[data-name="tab.big"]) {
+          transform: translateY(-50px);
         }
       `}</style>
     </div>
