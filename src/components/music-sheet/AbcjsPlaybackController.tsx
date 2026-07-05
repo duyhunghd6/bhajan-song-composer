@@ -236,13 +236,13 @@ function postProcessBeats(container: HTMLDivElement | null) {
       if (bestStaff) {
         let targetY;
         if (bestStaff.lyricY !== null && bestStaff.lyricY > 0) {
-          targetY = bestStaff.lyricY + 10; // Place 10px below the lyric line
+          targetY = bestStaff.lyricY + 14; // Place 14px below the lyric line
         } else {
-          targetY = bestStaff.bottom + 10; // Place 10px below staff bottom if no lyrics
+          targetY = bestStaff.bottom + 22; // Place 22px below staff bottom if no lyrics
         }
         node.setAttribute("y", String(targetY));
       } else {
-        node.setAttribute("y", String(nodeY + 8)); // Fallback shift
+        node.setAttribute("y", String(nodeY + 12)); // Fallback shift
       }
     }
   });
@@ -913,14 +913,14 @@ export default function AbcjsPlaybackController({
         #${resolvedCanvasId}.has-beat-indicators.has-lyrics g.abcjs-staff:not(.abcjs-v0),
         #${resolvedCanvasId}.has-beat-indicators.has-lyrics g.abcjs-tabNumber,
         #${resolvedCanvasId}.has-beat-indicators.has-lyrics g.abcjs-symbol:has(path[data-name="tab.big"]) {
-          transform: translateY(-70px);
+          transform: translateY(-60px);
         }
 
         /* Pull tablature staff up less when beat indicators are present but NO lyrics */
         #${resolvedCanvasId}.has-beat-indicators.no-lyrics g.abcjs-staff:not(.abcjs-v0),
         #${resolvedCanvasId}.has-beat-indicators.no-lyrics g.abcjs-tabNumber,
         #${resolvedCanvasId}.has-beat-indicators.no-lyrics g.abcjs-symbol:has(path[data-name="tab.big"]) {
-          transform: translateY(-35px);
+          transform: translateY(-25px);
         }
 
         /* Pull tablature staff up when NO beat indicators are present but lyrics are present */
