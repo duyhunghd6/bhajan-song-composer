@@ -15,8 +15,9 @@ Q: 1/4=65
 K: Em
 %%score (Melody Guitar)
 V:Melody name="Melody" stem=up
-"Em""_⬤"E E ("B7""_•"EB,) "Em""_●"E E ("B7""_•"EB,) | "Em""_⬤"E F "G""_•"G "D"F2 ("Em""_●"G2F) | "Em""_⬤"E E ("B7""_•"EB,) "Em""_●"E E ("B7""_•"EB,) | "Em""_⬤"E F "G""_•"G "D"F2 ("Em""_●"G2F) |
+"Em"E E ("B7"EB,) "Em"E E ("B7"EB,) | "Em"E F "G"G "D"F2 ("Em"G2F) | "Em"E E ("B7"EB,) "Em"E E ("B7"EB,) | "Em"E F "G"G "D"F2 ("Em"G2F) |
 w: Ha-ri Bol _ Ha-ri Bol _ | Ha-ri Ha-ri Bol _ | Ha-ri Bol _ Ha-ri Bol _ | Ha-ri Ha-ri Bol _
+w: ⬤ * • * ● * • * | ⬤ * • * * * | ⬤ * • * ● * • * | ⬤ * • * * * |
 V:Guitar clef=treble-8 name="Accompaniment" stem=down
 | E,2 E2 B,2 E2 | E,2 E2 B,2 E2 | E,2 E2 B,2 E2 | E,2 E2 B,2 E2 |`;
 
@@ -27,8 +28,9 @@ L: 1/8
 K: G
 %%score (Melody Guitar)
 V:Melody name="Melody" stem=up
-"G""_⬤"d2 "C""_•"c2 "G""_•"B2 | "Am""_⬤"c4 "D7""_•"A2 | "G""_⬤"B2 "D7""_•"A2 "G""_•"G2 | "D7""_⬤"A6 |
+"G"d2 "C"c2 "G"B2 | "Am"c4 "D7"A2 | "G"B2 "D7"A2 "G"G2 | "D7"A6 |
 w: Hare Krish-na | Ha-re | Krish-na Krish-na | Ha-re |
+w: ⬤ • • | ⬤ • | ⬤ • • | ⬤ |
 V:Guitar clef=treble-8 name="Accompaniment" stem=down
 | G,2 B,2 D2 | C,2 E,2 G,2 | D,2 F,2 A,2 | G,6 |`;
 
@@ -39,8 +41,9 @@ L: 1/8
 K: Am
 %%score (Melody Guitar)
 V:Melody name="Melody" stem=up
-"Am""_⬤"A2"G""_•"B "C""_●"c2"F""_•"d | "Am""_⬤"e3 "G""_●"e2"_•"d | "F""_⬤"c2"G""_•"B "Am""_●"A2"G""_•"G | "Am""_⬤"A6 |
+"Am"A2"G"B "C"c2"F"d | "Am"e3 "G"e2d | "F"c2"G"B "Am"A2"G"G | "Am"A6 |
 w: Jay Ra-ma Jay Ra-ma | Jay Jay Ra-ma | Jay Ra-ma Jay Ra-ma | Jay |
+w: ⬤ • ● • | ⬤ ● • | ⬤ • ● • | ⬤ |
 V:Guitar clef=treble-8 name="Accompaniment" stem=down
 | A,,3 E,3 | A,,3 E,3 | G,,3 D,3 | A,,6 |`;
 
@@ -71,12 +74,7 @@ function autoAnnotateBeats(abcText: string, meter: string): string {
 
   for (const line of lines) {
     const tr = line.trim();
-    if (!tr || tr.startsWith('%') || (tr.match(/^[A-UX-Z]:/) && !tr.startsWith('V:'))) {
-      processedLines.push(line);
-      continue;
-    }
-
-    if (tr.startsWith('w:') || tr.startsWith('W:')) {
+    if (!tr || tr.startsWith('%') || /^[A-Z]:/.test(tr) || tr.startsWith('w:') || tr.startsWith('W:')) {
       processedLines.push(line);
       continue;
     }
@@ -84,85 +82,87 @@ function autoAnnotateBeats(abcText: string, meter: string): string {
     let voicePrefix = '';
     let musicPart = line;
 
-    const vMatch = line.match(/^(\[?V:[^\]\s]+\]?\s*)/);
+    const vMatch = line.match(/^(\[V:[^\]]+\]\s*)/);
     if (vMatch) {
       voicePrefix = vMatch[1];
       musicPart = line.substring(voicePrefix.length);
     }
 
-    // Tokenize the notes
-    const tokenRegex = /("([^"]+)"|\|\]|\|\||\|:|:\||::|\||([^_=]?[A-Ga-g,']+[0-9]*\/?[0-9]*)|([zZxX][0-9]*\/?[0-9]*)|(\(\d+:\d+:\d+|\(\d+)|[\(\)-]|\s+)/g;
+    const tokenRegex = /("[^"]+"|\[[^\]|:]+\][0-9]*\/?[0-9]*|\|\]|\|\||\|:|:\||::|\||([^_=]?[A-Ga-g,']+[0-9]*\/?[0-9]*)|([zZxX][0-9]*\/?[0-9]*)|(\(\d+:\d+:\d+|\(\d+)|[()\-]|\s+)/g;
     let match;
     const tokens: {
       text: string;
       isNote: boolean;
       isRest: boolean;
       isBar: boolean;
-      isChord: boolean;
+      durationText: string;
     }[] = [];
 
     while ((match = tokenRegex.exec(musicPart)) !== null) {
+      const text = match[0];
+      const isChordGroup = /^\[[^\]|:]+\]/.test(text) && /[A-Ga-g]/.test(text);
       tokens.push({
-        text: match[0],
-        isNote: !!match[3],
-        isRest: !!match[4],
-        isBar: match[0] === '|' || match[0] === '||' || match[0] === '|]' || match[0] === '|:' || match[0] === ':|' || match[0] === '::',
-        isChord: match[0].startsWith('"')
+        text,
+        isNote: !!match[2] || isChordGroup,
+        isRest: !!match[3],
+        isBar: text === '|' || text === '||' || text === '|]' || text === '|:' || text === ':|' || text === '::',
+        durationText: text,
       });
     }
 
     let timeInMeasure = 0;
-    const annotatedTokens: string[] = [];
+    const beatTokens: string[] = [];
 
     for (const token of tokens) {
       if (token.isBar) {
-        timeInMeasure = 0;
-        annotatedTokens.push(token.text);
+        if (timeInMeasure > 0) {
+          beatTokens.push('|');
+          timeInMeasure = 0;
+        }
         continue;
       }
 
       if (token.isNote) {
-        const duration = parseTokenDuration(token.text);
-        let annotation = '';
+        const duration = parseTokenDuration(token.durationText);
+        let beatToken = '*';
 
         if (meter === '4/4') {
           if (timeInMeasure === 0) {
-            annotation = '"_⬤"';
+            beatToken = '⬤';
           } else if (timeInMeasure === 4) {
-            annotation = '"_●"';
+            beatToken = '●';
           } else if (timeInMeasure === 2 || timeInMeasure === 6) {
-            annotation = '"_•"';
+            beatToken = '•';
           }
         } else if (meter === '3/4') {
           if (timeInMeasure === 0) {
-            annotation = '"_⬤"';
+            beatToken = '⬤';
           } else if (timeInMeasure === 2 || timeInMeasure === 4) {
-            annotation = '"_•"';
+            beatToken = '•';
           }
         } else if (meter === '6/8') {
           if (timeInMeasure === 0) {
-            annotation = '"_⬤"';
+            beatToken = '⬤';
           } else if (timeInMeasure === 3) {
-            annotation = '"_●"';
+            beatToken = '●';
           } else if (timeInMeasure === 1 || timeInMeasure === 2 || timeInMeasure === 4 || timeInMeasure === 5) {
-            annotation = '"_•"';
+            beatToken = '•';
           }
-        } else {
-          if (timeInMeasure === 0) annotation = '"_⬤"';
+        } else if (timeInMeasure === 0) {
+          beatToken = '⬤';
         }
 
-        annotatedTokens.push(annotation + token.text);
+        beatTokens.push(beatToken);
         timeInMeasure += duration;
       } else if (token.isRest) {
-        const duration = parseTokenDuration(token.text);
-        annotatedTokens.push(token.text);
-        timeInMeasure += duration;
-      } else {
-        annotatedTokens.push(token.text);
+        timeInMeasure += parseTokenDuration(token.text);
       }
     }
 
-    processedLines.push(voicePrefix + annotatedTokens.join(''));
+    processedLines.push(voicePrefix + musicPart);
+    if (beatTokens.length > 0) {
+      processedLines.push(`w: ${beatTokens.join(' ')}`);
+    }
   }
 
   return processedLines.join('\n');
@@ -252,7 +252,7 @@ ${editorInput}`;
                 Beat Strength Accent Highlight
               </h1>
               <p className="max-w-3xl text-base leading-7 text-zinc-400 sm:text-lg">
-                Standalone mockup displaying metric subdivisions (Strong, Medium, Soft Beats) using dynamic circle notations. Styled using SVG post-processing and React state variables. This test page utilizes the production <code>&lt;AbcjsPlaybackController /&gt;</code> component.
+                Standalone mockup displaying metric subdivisions (Strong, Medium, Soft Beats) on a separate ABC lyrics-like row instead of mutating melody notes. Styled using SVG post-processing and React state variables. This test page utilizes the production <code>&lt;AbcjsPlaybackController /&gt;</code> component.
               </p>
             </div>
 

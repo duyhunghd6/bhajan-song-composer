@@ -54,11 +54,11 @@ export function AbcjsPlaybackStyles({ resolvedCanvasId }: { resolvedCanvasId: st
           transform: translateY(-60px);
         }
 
-        /* Pull tablature staff up less when beat indicators are present but NO lyrics */
+        /* Keep default tablature spacing for beat-only rows so Melody, beat icons, and TAB stay separated */
         #${resolvedCanvasId}.has-beat-indicators.no-lyrics g.abcjs-l0.abcjs-tablature-staff,
         #${resolvedCanvasId}.has-beat-indicators.no-lyrics g.abcjs-l0.abcjs-tabNumber,
         #${resolvedCanvasId}.has-beat-indicators.no-lyrics g.abcjs-l0.abcjs-symbol:has(path[data-name="tab.big"]) {
-          transform: translateY(-25px);
+          transform: translateY(0);
         }
 
         /* Pull tablature staff up when NO beat indicators are present but lyrics are present */

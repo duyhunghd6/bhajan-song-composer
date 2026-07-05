@@ -17,14 +17,16 @@
      [AbcjsPlaybackController.tsx](file:///Users/steve/duyhunghd6/bhajan-song-composer/src/components/music-sheet/AbcjsPlaybackController.tsx)
      
   2. ABC Notation for Beat Circles:
-     - Beat circles are represented as custom text annotations attached to notes using the
-       below-staff prefix '_' (e.g. "_⬤" for strong, "_●" for medium, "_•" for soft beats).
-     - Standardizing on below-staff annotations keeps them out of the way of chord symbols.
-     
+     - Beat circles are represented as a separate lyrics-like beat row using `w:` instead of
+       custom annotations attached directly to melody notes.
+     - Example: write the clean melody line first, then add `w: ⬤ * • * ● * • * |` below it.
+     - This keeps melody notes unchanged while allowing abcjs to align beat icons like lyric syllables.
+
   3. SVG Post-Processing (Aligning below lyrics):
      - The function `postProcessBeats(container)` reads staff paths (`path.abcjs-staff`) and
        lyric elements (`text.abcjs-lyric`) dynamically using getBBox().
-     - It repositions the beat indicators to align horizontally exactly 16px below the lyric row.
+     - It classifies glyph-only lyric nodes as beat indicators, then repositions them 16px below
+       the real lyric row when lyrics exist, or below the staff when no real lyrics exist.
      
   4. Preventing Spacing Overlaps & Clipping:
      - The guitar tab staff is pushed down by 25px using CSS:

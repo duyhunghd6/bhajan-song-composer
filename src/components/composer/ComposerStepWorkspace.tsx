@@ -9,6 +9,7 @@ import { buildAccompanimentAbc, getAccompanimentVoiceNames } from "@/lib/theory/
 import {
   buildAccompanimentWorkflowAbcAnnotation,
   getLatestSelectedWorkflowStep,
+  getSelectedWorkflowOption,
   getWorkflowAppliedMusicAbc,
   isAccompanimentWorkflowSourceCurrent,
   isAccompanimentWorkflowStepComplete,
@@ -23,6 +24,7 @@ import type { ComposerStepId } from "./composer-steps";
 import type { TheoryAssistantArrangementSuggestion } from "./theory-assistant-layer";
 import { AccompanimentStep } from "./workspace/AccompanimentStep";
 import { HarmonyStep } from "./workspace/HarmonyStep";
+import type { StrongBeatDirective } from "@/lib/theory/abc-beat-annotations";
 import {
   ACCOMPANIMENT_PREVIEW_RENDER_OPTIONS,
   COMPOSER_PREVIEW_RENDER_OPTIONS,
@@ -114,13 +116,20 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
       return pipeline;
     }
   }, [workflowAppliedMusicAbc, pipeline]);
+
+  const strongBeatDirectives = useMemo(() => {
+    const option = activeWorkflow ? getSelectedWorkflowOption(activeWorkflow, "strong-beat-targets") : null;
+    return (option?.data?.strongBeatDirectives as StrongBeatDirective[]) ?? undefined;
+  }, [activeWorkflow]);
+
   const accompanimentBuild = useMemo(() => buildAccompanimentAbc({
     baseAbc: workflowAppliedMusicAbc,
     generatedAccompaniment: ws.generatedAccompaniment,
     generatedGuitar: ws.generatedGuitar,
     generatedPiano: ws.generatedPiano,
     layerVisibility: effectiveAccompLayerVisibility,
-  }), [ws.generatedAccompaniment, ws.generatedGuitar, ws.generatedPiano, workflowAppliedMusicAbc, effectiveAccompLayerVisibility]);
+    strongBeatDirectives,
+  }), [ws.generatedAccompaniment, ws.generatedGuitar, ws.generatedPiano, workflowAppliedMusicAbc, effectiveAccompLayerVisibility, strongBeatDirectives]);
 
   const ensembleInputLayerVisibility = useMemo(() => ({
     __melody__: ensembleInputLayers.__melody__ !== false,
@@ -141,7 +150,8 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
       PianoRH: ensembleInputLayerVisibility.PianoRH,
       PianoCompingLH: ensembleInputLayerVisibility.PianoCompingLH,
     },
-  }), [ws.generatedAccompaniment, ws.generatedGuitar, ws.generatedPiano, workflowAppliedMusicAbc, ensembleInputLayerVisibility]);
+    strongBeatDirectives,
+  }), [ws.generatedAccompaniment, ws.generatedGuitar, ws.generatedPiano, workflowAppliedMusicAbc, ensembleInputLayerVisibility, strongBeatDirectives]);
   const ensembleFoundationAbc = ensembleFoundationBuild.abc;
   const activeEnsembleWorkflow = isEnsembleWorkflowSourceCurrent(ws.ensembleWorkflow, ensembleFoundationAbc)
     ? ws.ensembleWorkflow
@@ -158,7 +168,8 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
     generatedPiano: ws.generatedPiano,
     extraVoiceSources: appliedEnsembleSources,
     layerVisibility: effectiveAccompLayerVisibility,
-  }), [ws.generatedAccompaniment, ws.generatedGuitar, ws.generatedPiano, workflowAppliedMusicAbc, appliedEnsembleSources, effectiveAccompLayerVisibility]);
+    strongBeatDirectives,
+  }), [ws.generatedAccompaniment, ws.generatedGuitar, ws.generatedPiano, workflowAppliedMusicAbc, appliedEnsembleSources, effectiveAccompLayerVisibility, strongBeatDirectives]);
 
   const appliedWorkflowStep = useMemo(() => getLatestSelectedWorkflowStep(activeWorkflow), [activeWorkflow]);
   const workflowAnnotationAbc = useMemo(

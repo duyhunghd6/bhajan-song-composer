@@ -12,18 +12,66 @@ export function parseAbcTempo(abcString: string, defaultBpm = 120): number {
   return defaultBpm;
 }
 
+function beatIndicatorWeight(value: string): number {
+  if (value === "⬤") return 3;
+  if (value === "●") return 2;
+  if (value === "•" || value === "·") return 1;
+  return 0;
+}
+
+function isBeatIndicatorNode(node: Element): boolean {
+  return beatIndicatorWeight((node.textContent || "").trim()) > 0;
+}
+
+function beatIndicatorDedupeKey(node: Element): string {
+  const className = node.getAttribute("class") || "";
+  const line = className.match(/\babcjs-l\d+\b/)?.[0] ?? "line";
+  const measure = className.match(/\babcjs-m\d+\b/)?.[0] ?? className.match(/\babcjs-mm\d+\b/)?.[0] ?? "measure";
+  const voice = className.match(/\babcjs-v\d+\b/)?.[0] ?? "voice";
+  const x = Math.round(parseFloat(node.getAttribute("x") || "0"));
+  return `${line}:${measure}:${voice}:${x}`;
+}
+
+function dedupeBeatIndicatorNodes(nodes: Element[]): Element[] {
+  const chosen = new Map<string, Element>();
+  const duplicates: Element[] = [];
+
+  for (const node of nodes) {
+    const key = beatIndicatorDedupeKey(node);
+    const current = chosen.get(key);
+    if (!current) {
+      chosen.set(key, node);
+      continue;
+    }
+
+    const nodeWeight = beatIndicatorWeight((node.textContent || "").trim());
+    const currentWeight = beatIndicatorWeight((current.textContent || "").trim());
+    if (nodeWeight > currentWeight) {
+      duplicates.push(current);
+      chosen.set(key, node);
+    } else {
+      duplicates.push(node);
+    }
+  }
+
+  duplicates.forEach((node) => node.remove());
+  return [...chosen.values()];
+}
+
 export function postProcessBeats(container: HTMLDivElement | null) {
   if (!container) return;
 
   const staves = Array.from(container.querySelectorAll("g.abcjs-staff"));
-  const lyrics = Array.from(container.querySelectorAll("text.abcjs-lyric"));
-  const textNodes = container.querySelectorAll("text.abcjs-annotation");
-
-  // Determine if we have beat indicators
-  const beats = Array.from(textNodes).filter(node => {
-    const val = (node.textContent || "").trim();
-    return val === "⬤" || val === "●" || val === "•" || val === "·";
+  const allLyrics = Array.from(container.querySelectorAll("text.abcjs-lyric"));
+  const annotationNodes = Array.from(container.querySelectorAll("text.abcjs-annotation"));
+  const beatLyricNodes = allLyrics.filter(isBeatIndicatorNode);
+  const lyrics = allLyrics.filter((node) => {
+    const text = (node.textContent || "").trim();
+    return text.length > 0 && !isBeatIndicatorNode(node);
   });
+
+  // Determine if we have beat indicators, and collapse duplicate markers rendered at the same note position.
+  const beats = dedupeBeatIndicatorNodes([...beatLyricNodes, ...annotationNodes.filter(isBeatIndicatorNode)]);
 
   if (beats.length > 0) {
     container.classList.add("has-beat-indicators");
@@ -31,7 +79,7 @@ export function postProcessBeats(container: HTMLDivElement | null) {
     container.classList.remove("has-beat-indicators");
   }
 
-  // Add lyrics presence classes to the container
+  // Add lyrics presence classes to the container. Beat-only w: rows are not treated as user lyrics.
   if (lyrics.length > 0) {
     container.classList.add("has-lyrics");
     container.classList.remove("no-lyrics");
@@ -119,45 +167,46 @@ export function postProcessBeats(container: HTMLDivElement | null) {
   }
 
   // 3. Position and style the beat indicators below lyrics
-  for (const node of Array.from(textNodes)) {
+  for (const node of beats) {
     const val = (node.textContent || "").trim();
-    if (val === "⬤" || val === "●" || val === "•" || val === "·") {
-      if (val === "⬤") {
-        node.setAttribute("class", "abcjs-annotation beat-indicator beat-strong");
-        node.setAttribute("data-beat", "Strong");
-      } else if (val === "●") {
-        node.setAttribute("class", "abcjs-annotation beat-indicator beat-medium");
-        node.setAttribute("data-beat", "Medium");
-      } else if (val === "•" || val === "·") {
-        node.setAttribute("class", "abcjs-annotation beat-indicator beat-soft");
-        node.setAttribute("data-beat", "Soft");
-        node.textContent = "●"; // Normalize to standard filled circle
+    node.classList.add("beat-indicator");
+    node.setAttribute("aria-hidden", "true");
+
+    if (val === "⬤") {
+      node.classList.add("beat-strong");
+      node.setAttribute("data-beat", "Strong");
+    } else if (val === "●") {
+      node.classList.add("beat-medium");
+      node.setAttribute("data-beat", "Medium");
+    } else if (val === "•" || val === "·") {
+      node.classList.add("beat-soft");
+      node.setAttribute("data-beat", "Soft");
+      node.textContent = "●"; // Normalize to standard filled circle
+    }
+
+    const nodeY = parseFloat(node.getAttribute("y") || "0");
+
+    // Find the corresponding staff system
+    let bestStaff: StaffDataItem | null = null;
+    let minStaffDist = Infinity;
+    for (const sd of staffData) {
+      const dist = Math.abs(sd.y + sd.height / 2 - nodeY);
+      if (dist < minStaffDist) {
+        minStaffDist = dist;
+        bestStaff = sd;
       }
+    }
 
-      const nodeY = parseFloat(node.getAttribute("y") || "0");
-
-      // Find the corresponding staff system
-      let bestStaff: StaffDataItem | null = null;
-      let minStaffDist = Infinity;
-      for (const sd of staffData) {
-        const dist = Math.abs(sd.y + sd.height / 2 - nodeY);
-        if (dist < minStaffDist) {
-          minStaffDist = dist;
-          bestStaff = sd;
-        }
-      }
-
-      if (bestStaff) {
-        let targetY;
-        if (bestStaff.lyricY !== null && bestStaff.lyricY > 0) {
-          targetY = bestStaff.lyricY + 16; // Place 16px below the lyric line
-        } else {
-          targetY = bestStaff.bottom + 22; // Place 22px below staff bottom if no lyrics
-        }
-        node.setAttribute("y", String(targetY));
+    if (bestStaff) {
+      let targetY;
+      if (bestStaff.lyricY !== null && bestStaff.lyricY > 0) {
+        targetY = bestStaff.lyricY + 16; // Place 16px below the real lyric line
       } else {
-        node.setAttribute("y", String(nodeY + 12)); // Fallback shift
+        targetY = bestStaff.bottom + 22; // Place 22px below staff bottom if no real lyrics
       }
+      node.setAttribute("y", String(targetY));
+    } else {
+      node.setAttribute("y", String(nodeY + 12)); // Fallback shift
     }
   }
 }

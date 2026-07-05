@@ -152,7 +152,24 @@ describe("accompaniment workflow", () => {
     expect(toolNames).toContain("generate_piano_fills_pedal_validation");
     expect(toolNames).toContain("generate_consolidated_chord_ingestion");
     expect(toolNames).toContain("break_measures_line");
+    expect(toolNames).toContain("add_strong_beat_icons");
     expect(toolNames).toContain("valid_guitar_tab");
+  });
+
+  it("adds add_strong_beat_icons tool-call requirements to Strong Beats prompts and schemas", () => {
+    const prompt = buildAccompanimentWorkflowPrompt({
+      stepId: "strong-beat-targets",
+      sourceAbc: sampleAbc,
+      metadata: { key: "C", scale: "major", timeSignature: "3/4" },
+      previousSelections: [],
+    });
+    const schema = buildAccompanimentWorkflowToolSchema("strong-beat-targets");
+    const data = schema.function.parameters.properties.options.items.properties.data as WorkflowDataSchemaForTest;
+
+    expect(prompt).toContain("add_strong_beat_icons");
+    expect(prompt).toContain("local algorithm");
+    expect(data.required).toEqual(["strongBeatDirectives"]);
+    expect(data.properties?.strongBeatDirectives.description).toContain("add_strong_beat_icons");
   });
 
   it("adds break_measures_line tool-call requirements to chord ABC prompts and schemas", () => {

@@ -42,6 +42,41 @@ describe("guitar tab validation", () => {
     expect(result.issues).toEqual([]);
   });
 
+  it("accepts a concrete open-position bass-anchor voicing", () => {
+    const result = validateGuitarTab([
+      event({ note: "E3", string: 6, fret: 0, role: "bass-root", simultaneousGroupId: "em" }),
+      event({ note: "B3", string: 5, fret: 2, role: "fifth", simultaneousGroupId: "em" }),
+      event({ note: "E4", string: 4, fret: 2, role: "octave-root", simultaneousGroupId: "em" }),
+      event({ note: "G3", string: 3, fret: 0, role: "minor-third", simultaneousGroupId: "em" }),
+    ]);
+
+    expect(result.valid).toBe(true);
+    expect(result.validatedGroups[0]).toMatchObject({ strings: [6, 5, 4, 3], noteCount: 4 });
+  });
+
+  it("rejects invalid string and fret values", () => {
+    const result = validateGuitarTab([
+      event({ string: 7 as 6, fret: -1 }),
+    ]);
+
+    expect(result.valid).toBe(false);
+    expect(result.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "invalid-string" }),
+      expect.objectContaining({ code: "invalid-fret" }),
+    ]));
+  });
+
+  it("rejects pitch/string/fret mismatches", () => {
+    const result = validateGuitarTab([
+      event({ note: "G3", string: 6, fret: 0 }),
+    ]);
+
+    expect(result.valid).toBe(false);
+    expect(result.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "pitch-string-mismatch", string: 6 }),
+    ]));
+  });
+
   it("rejects overfull fretting-hand spans", () => {
     const result = validateGuitarTab([
       event({ note: "F3", string: 6, fret: 1, role: "bass" }),
