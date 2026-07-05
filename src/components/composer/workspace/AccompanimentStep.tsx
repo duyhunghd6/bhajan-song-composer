@@ -1,8 +1,5 @@
 import { useEffect, type Dispatch, type SetStateAction } from "react";
 import AbcjsPlaybackController from "@/components/music-sheet/AbcjsPlaybackController";
-import GuitarFretboard from "@/components/instruments/GuitarFretboard";
-import PianoKeyboard from "@/components/instruments/PianoKeyboard";
-import PianoPedalIndicator from "@/components/instruments/PianoPedalIndicator";
 import type { ArrangementPipelineResult } from "@/lib/theory/arrangement-pipeline";
 import { generatePianoAccompaniment } from "@/lib/theory/piano-accompaniment";
 import type { PianoCompingProfileId } from "@/lib/theory/piano-comping-profiles";
@@ -275,74 +272,12 @@ export function AccompanimentStep({
           )}
         />
 
-        <div className="w-full space-y-6">
-          {/* Virtual Piano — always visible on accompaniment step */}
-          <section className="w-full rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/50">
-            <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 mb-2">Virtual Piano (Voicing & Comping)</h2>
-            {ws.pianoAccompanimentData ? (
-              <div className="space-y-6">
-                <PianoPedalIndicator 
-                  title="Sustain Pedal Indicator" 
-                  pedalAutomation={ws.pianoAccompanimentData.pedalAutomation} 
-                />
-                <div className="overflow-x-auto pb-4">
-                  <PianoKeyboard 
-                    title="Piano Accompaniment Keys" 
-                    startOctave={3} 
-                    octaveCount={3}
-                    size="compact"
-                    highlights={ws.pianoAccompanimentData.pianoKeyHighlights}
-                  />
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                  Select a piano accompaniment style above to see highlighted voicings and pedal automation.
-                </p>
-                <div className="overflow-x-auto pb-4">
-                  <PianoKeyboard 
-                    title="Piano Keyboard" 
-                    startOctave={3} 
-                    octaveCount={3}
-                    size="compact"
-                  />
-                </div>
-              </div>
-            )}
+        {ws.generatedAccompaniment && !ws.pianoAccompanimentData && !ws.guitarAccompanimentData && (
+          <section className="w-full rounded-2xl border border-amber-200 bg-amber-50 p-6 dark:border-amber-900/70 dark:bg-amber-950/30">
+            <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">Playability Validation Report</h2>
+            <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">⚠️ Max span exceeded in m.4. Converted to arpeggio when required.</p>
           </section>
-
-          {/* Virtual Guitar — always visible on accompaniment step */}
-          <section className="w-full rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/50">
-            <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 mb-2">Virtual Guitar (Fingerstyle)</h2>
-            {ws.guitarAccompanimentData ? (
-              <div className="overflow-x-auto pb-4">
-                <GuitarFretboard 
-                  title="Fingerstyle Fretboard Preview" 
-                  positions={ws.guitarAccompanimentData.fretboard.positions} 
-                />
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                  Select a guitar accompaniment style above to see finger positions on the fretboard.
-                </p>
-                <div className="overflow-x-auto pb-4">
-                  <GuitarFretboard 
-                    title="Guitar Fretboard"
-                  />
-                </div>
-              </div>
-            )}
-          </section>
-
-          {ws.generatedAccompaniment && !ws.pianoAccompanimentData && !ws.guitarAccompanimentData && (
-            <section className="w-full rounded-2xl border border-amber-200 bg-amber-50 p-6 dark:border-amber-900/70 dark:bg-amber-950/30">
-              <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">Playability Validation Report</h2>
-              <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">⚠️ Max span exceeded in m.4. Converted to arpeggio when required.</p>
-            </section>
-          )}
-        </div>
+        )}
       </div>
     );
 }
