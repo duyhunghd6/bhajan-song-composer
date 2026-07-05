@@ -1,4 +1,4 @@
-import { buildAbcDurationContext, extractMusicBodyLines, formatAbcDuration } from "./abc-duration";
+import { buildAbcDurationContext, extractMusicBodyLines, formatAbcDuration, splitAbcMeasureSegments } from "./abc-duration";
 import { ChordInfo } from "./chords";
 import {
   extractMelodyMeasures,
@@ -6,211 +6,38 @@ import {
   noteNameToAbc,
   resolveProgression,
 } from "./arranger-utils";
-import { CadenceRole, generateHarmonizationStage } from "./harmonizer";
+import { generateHarmonizationStage } from "./harmonizer";
 import { parseNoteDuration } from "./melody-analyzer";
 import {
   generatePianoCompingProfileMeasure,
-  PianoCompingProfileId,
-  PianoCompingProfileMeasure,
 } from "./piano-comping-profiles";
-import {
-  PianoHandEvent,
-  PianoPlaybackEvent,
-  PianoPlayabilityReport,
-  validatePianoPlayability,
-} from "./piano-playability";
+import { validatePianoPlayability } from "./piano-playability";
 import { getNoteValue } from "./scales";
+import { buildPedalAutomation, buildPedalEventMetadata } from "./piano-accompaniment/pedal-automation";
+import { buildPhysicalHandEvents, buildPianoOutputContract } from "./piano-accompaniment/output-contract";
+import type {
+  MelodyTimelineEvent,
+  PianoAccompaniment,
+  PianoAccompanimentOptions,
+  PianoBassEvent,
+  PianoBassFoundation,
+  PianoBassRole,
+  PianoCadencePoint,
+  PianoGapFillEvent,
+  PianoGapFillMeasure,
+  PianoHarmonicFrameworkMeasure,
+  PianoLeftHandBassMeasure,
+  PianoLowIntervalLimitReport,
+  PianoMelodicGapEvent,
+  PianoMelodyRole,
+  PianoRightHandRole,
+  PianoRightHandTone,
+  PianoRightHandVoicingMeasure,
+  PianoSourceAnalysis,
+} from "./piano-accompaniment/types";
+export type * from "./piano-accompaniment/types";
 
-export type PianoBassFoundation = "root" | "octave" | "open-fifth" | "1-5-8";
-export type PianoMelodyRole = "root" | "third" | "fifth" | "seventh" | "non-chord-tone";
-export type PianoBassRole = "root" | "fifth" | "octave";
-export type PianoRightHandRole = "root" | "third" | "fifth" | "seventh";
 
-export interface PianoAccompanimentOptions {
-  progression?: string[];
-  bassFoundation?: PianoBassFoundation;
-  compingProfile?: PianoCompingProfileId;
-}
-
-export interface PianoCadencePoint {
-  measureIndex: number;
-  beat: number;
-  type: "phrase-ending";
-}
-
-export interface PianoSourceAnalysis {
-  key: string;
-  timeSignature: string;
-  cadencePoints: PianoCadencePoint[];
-  strongBeatTargets: Array<{
-    measureIndex: number;
-    beat: number;
-    note: string;
-  }>;
-}
-
-export interface PianoHarmonicFrameworkMeasure {
-  measureIndex: number;
-  chord: string;
-  chordNotes: string[];
-  targetMelodyNote: string | null;
-  targetBeat: number | null;
-  melodyRole: PianoMelodyRole;
-  cadenceRole: CadenceRole;
-}
-
-export interface PianoBassEvent {
-  note: string;
-  abc: string;
-  register: "C2-C3";
-  role: PianoBassRole;
-}
-
-export interface PianoLowIntervalLimitReport {
-  valid: boolean;
-  rejectedIntervals: string[];
-}
-
-export interface PianoLeftHandBassMeasure {
-  measureIndex: number;
-  chord: string;
-  root: string;
-  foundation: PianoBassFoundation;
-  events: PianoBassEvent[];
-  lowIntervalLimit: PianoLowIntervalLimitReport;
-  abc: string;
-}
-
-export interface PianoRightHandTone {
-  note: string;
-  abc: string;
-  midi: number;
-  register: "C3-C5";
-  role: PianoRightHandRole;
-  retainedFromPrevious: boolean;
-  semitoneMovement: number | null;
-  masksMelody: boolean;
-}
-
-export interface PianoRightHandVoicingMeasure {
-  measureIndex: number;
-  chord: string;
-  targetMelodyNote: string | null;
-  inversion: "root" | "first" | "second" | "third";
-  guideTones: string[];
-  tones: PianoRightHandTone[];
-  commonTones: string[];
-  totalSemitoneMovement: number;
-  melodyMaskingAvoided: boolean;
-  abc: string;
-}
-
-export interface PianoMelodicGapEvent {
-  measureIndex: number;
-  startBeat: number;
-  endBeat: number;
-  durationBeats: number;
-  safe: boolean;
-  resumedBy: string | null;
-}
-
-export interface PianoGapFillEvent {
-  measureIndex: number;
-  beat: number;
-  role: "passing-fill";
-  notes: string[];
-  abc: string;
-  yieldsToMelodyAt: number | null;
-}
-
-export interface PianoGapFillMeasure {
-  measureIndex: number;
-  chord: string;
-  gap: PianoMelodicGapEvent | null;
-  events: PianoGapFillEvent[];
-  abc: string;
-}
-
-export type PianoPedalEventType = "pedal-down" | "pedal-flush" | "pedal-up";
-
-export interface PianoPedalEvent {
-  measureIndex: number;
-  beat: number;
-  chord: string;
-  type: PianoPedalEventType;
-  value: 0 | 127;
-  previousChord?: string;
-}
-
-export interface PianoPedalAutomation {
-  controller: {
-    midiControlChange: 64;
-    downValue: 127;
-    upValue: 0;
-  };
-  events: PianoPedalEvent[];
-}
-
-export interface PianoPedalEventMetadata {
-  measureIndex: number;
-  beat: number;
-  chord: string;
-  controller: "sustain";
-  midiControlChange: 64;
-  state: "down" | "flush" | "up";
-  value: 0 | 127;
-  previousChord?: string;
-  label: "Pedal Down" | "Pedal Flush" | "Pedal Up";
-}
-
-export type PianoFingeringRole = PianoBassRole | PianoRightHandRole;
-
-export interface PianoKeyHighlight {
-  measureIndex: number;
-  beat: number;
-  hand: "left" | "right";
-  note: string;
-  midi: number;
-  abc: string;
-  finger: number;
-  role: PianoFingeringRole;
-  label: string;
-}
-
-export interface PianoFingeringNote {
-  note: string;
-  pitchClass: string;
-  midi: number;
-  abc: string;
-  finger: number;
-  role: PianoFingeringRole;
-}
-
-export interface PianoFingeringMetadata {
-  measureIndex: number;
-  beat: number;
-  hand: "left" | "right";
-  source: "left-hand-bass" | "right-hand-voicing";
-  chord: string;
-  notes: PianoFingeringNote[];
-}
-
-export interface PianoAccompaniment {
-  sourceAnalysis: PianoSourceAnalysis;
-  harmonicFramework: PianoHarmonicFrameworkMeasure[];
-  leftHandBassMap: PianoLeftHandBassMeasure[];
-  rightHandVoicingMap: PianoRightHandVoicingMeasure[];
-  compingProfileMap: PianoCompingProfileMeasure[];
-  gapFillMap: PianoGapFillMeasure[];
-  physicalValidation: PianoPlayabilityReport;
-  playbackEvents: PianoPlaybackEvent[];
-  pedalAutomation: PianoPedalAutomation;
-  pedalEventMetadata: PianoPedalEventMetadata[];
-  grandStaffAbc: string;
-  pianoKeyHighlights: PianoKeyHighlight[];
-  fingeringMetadata: PianoFingeringMetadata[];
-  abc: string;
-}
 
 const LIL_ALLOWED_ROLES = new Set<PianoBassRole>(["root", "fifth", "octave"]);
 
@@ -246,12 +73,6 @@ function findStrongBeatTargets(abcString: string, beatCount: number): PianoSourc
   });
 }
 
-interface MelodyTimelineEvent {
-  type: "note" | "rest";
-  note: string | null;
-  startBeat: number;
-  endBeat: number;
-}
 
 function extractMelodyTimelines(abcString: string): MelodyTimelineEvent[][] {
   const durationContext = buildAbcDurationContext(abcString);
@@ -368,68 +189,6 @@ function buildGapFillMeasure(
   };
 }
 
-function buildPedalAutomation(chords: ChordInfo[], beatCount: number): PianoPedalAutomation {
-  const events: PianoPedalEvent[] = [];
-
-  chords.forEach((chord, measureIndex) => {
-    const previousChord = chords[measureIndex - 1]?.chordName;
-    if (measureIndex === 0) {
-      events.push({ measureIndex, beat: 1, chord: chord.chordName, type: "pedal-down", value: 127 });
-      return;
-    }
-
-    if (previousChord !== chord.chordName) {
-      events.push({
-        measureIndex,
-        beat: 1,
-        chord: chord.chordName,
-        type: "pedal-flush",
-        value: 0,
-        previousChord,
-      });
-      events.push({ measureIndex, beat: 1, chord: chord.chordName, type: "pedal-down", value: 127 });
-    }
-  });
-
-  const lastChord = chords.at(-1);
-  if (lastChord) {
-    events.push({
-      measureIndex: chords.length - 1,
-      beat: beatCount,
-      chord: lastChord.chordName,
-      type: "pedal-up",
-      value: 0,
-    });
-  }
-
-  return {
-    controller: { midiControlChange: 64, downValue: 127, upValue: 0 },
-    events,
-  };
-}
-
-function buildPedalEventMetadata(pedalAutomation: PianoPedalAutomation): PianoPedalEventMetadata[] {
-  return pedalAutomation.events.map((event) => {
-    const state = event.type.replace("pedal-", "") as PianoPedalEventMetadata["state"];
-    const label = event.type === "pedal-down"
-      ? "Pedal Down"
-      : event.type === "pedal-flush"
-        ? "Pedal Flush"
-        : "Pedal Up";
-
-    return {
-      measureIndex: event.measureIndex,
-      beat: event.beat,
-      chord: event.chord,
-      controller: "sustain",
-      midiControlChange: pedalAutomation.controller.midiControlChange,
-      state,
-      value: event.value,
-      ...(event.previousChord ? { previousChord: event.previousChord } : {}),
-      label,
-    };
-  });
-}
 
 function detectCadencePoints(abcString: string, beatCount: number): PianoCadencePoint[] {
   const measures = extractMelodyMeasures(abcString);
@@ -570,129 +329,6 @@ function buildMeasurePattern(events: PianoBassEvent[], beatCount: number, beatDu
   return Array.from({ length: beatCount }, (_, index) => `${pattern[index % pattern.length].abc}${beatDuration}`).join(" ");
 }
 
-function midiForBassEvent(event: PianoBassEvent): number {
-  const pitchClass = getNoteValue(normalizeNoteName(event.note)) ?? 0;
-  const baseOctave = event.role === "octave" ? 48 : 36;
-  return baseOctave + pitchClass;
-}
-
-const MIDI_PITCH_CLASSES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-
-function noteWithOctave(midi: number): string {
-  const pitchClass = MIDI_PITCH_CLASSES[((midi % 12) + 12) % 12];
-  const octave = Math.floor(midi / 12) - 1;
-  return `${pitchClass}${octave}`;
-}
-
-function fingerForBassRole(role: PianoBassRole): number {
-  if (role === "root") return 5;
-  if (role === "fifth") return 2;
-  return 1;
-}
-
-function fingerForRightHandTone(index: number, toneCount: number): number {
-  if (toneCount === 1) return 2;
-  if (toneCount === 2) return index === 0 ? 1 : 3;
-  return [1, 2, 4, 5][index] ?? 5;
-}
-
-function buildPianoOutputContract(
-  leftHandBassMap: PianoLeftHandBassMeasure[],
-  rightHandVoicingMap: PianoRightHandVoicingMeasure[]
-): Pick<PianoAccompaniment, "pianoKeyHighlights" | "fingeringMetadata"> {
-  const fingeringMetadata: PianoFingeringMetadata[] = [];
-
-  leftHandBassMap.forEach((measure) => {
-    fingeringMetadata.push({
-      measureIndex: measure.measureIndex,
-      beat: 1,
-      hand: "left",
-      source: "left-hand-bass",
-      chord: measure.chord,
-      notes: measure.events.map((event) => {
-        const midi = midiForBassEvent(event);
-        const finger = fingerForBassRole(event.role);
-        return {
-          note: noteWithOctave(midi),
-          pitchClass: normalizeNoteName(event.note),
-          midi,
-          abc: event.abc,
-          finger,
-          role: event.role,
-        };
-      }),
-    });
-  });
-
-  rightHandVoicingMap.forEach((measure) => {
-    fingeringMetadata.push({
-      measureIndex: measure.measureIndex,
-      beat: 1,
-      hand: "right",
-      source: "right-hand-voicing",
-      chord: measure.chord,
-      notes: measure.tones.map((tone, index) => {
-        const finger = fingerForRightHandTone(index, measure.tones.length);
-        return {
-          note: noteWithOctave(tone.midi),
-          pitchClass: normalizeNoteName(tone.note),
-          midi: tone.midi,
-          abc: tone.abc,
-          finger,
-          role: tone.role,
-        };
-      }),
-    });
-  });
-
-  const pianoKeyHighlights = fingeringMetadata.flatMap((event) =>
-    event.notes.map((note) => ({
-      measureIndex: event.measureIndex,
-      beat: event.beat,
-      hand: event.hand,
-      note: note.note,
-      midi: note.midi,
-      abc: note.abc,
-      finger: note.finger,
-      role: note.role,
-      label: String(note.finger),
-    }))
-  );
-
-  return { pianoKeyHighlights, fingeringMetadata };
-}
-
-function buildPhysicalHandEvents(
-  leftHandBassMap: PianoLeftHandBassMeasure[],
-  rightHandVoicingMap: PianoRightHandVoicingMeasure[]
-): PianoHandEvent[] {
-  const leftHandEvents = leftHandBassMap.map((measure): PianoHandEvent => ({
-    measureIndex: measure.measureIndex,
-    beat: 1,
-    hand: "left",
-    notes: measure.events.map((event) => ({
-      note: event.note,
-      midi: midiForBassEvent(event),
-      abc: event.abc,
-    })),
-    abc: measure.abc,
-  }));
-  const rightHandEvents = rightHandVoicingMap.map((measure): PianoHandEvent => ({
-    measureIndex: measure.measureIndex,
-    beat: 1,
-    hand: "right",
-    notes: measure.tones.map((tone) => ({
-      note: tone.note,
-      midi: tone.midi,
-      abc: tone.abc,
-    })),
-    abc: measure.abc,
-  }));
-
-  return [...leftHandEvents, ...rightHandEvents].sort((a, b) =>
-    a.measureIndex - b.measureIndex || a.beat - b.beat || a.hand.localeCompare(b.hand)
-  );
-}
 
 export function generatePianoAccompaniment(
   abcString: string,

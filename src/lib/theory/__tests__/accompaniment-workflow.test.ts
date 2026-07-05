@@ -18,9 +18,11 @@ import {
   getWorkflowAppliedMusicAbc,
   hasLyricChordAnnotations,
   isAccompanimentWorkflowStepUnlocked,
+  isGuitarTabValidationWorkflowStep,
   normalizeWorkflowOptionDataLineBreaks,
   type AccompanimentWorkflowOption,
 } from "../accompaniment-workflow";
+import { buildValidGuitarTabToolSchema } from "../guitar-tab-validation";
 
 const sampleAbc = `X:1
 T:Workflow Sample
@@ -140,7 +142,7 @@ describe("accompaniment workflow", () => {
       previousSelections: [],
     });
     const schema = buildAccompanimentWorkflowToolSchema("chord-progression");
-    const data = schema.function.parameters.properties.options.items.properties.data;
+    const data = schema.function.parameters.properties.options.items.properties.data as any;
 
     expect(prompt).toContain("break_measures_line");
     expect(prompt).toContain("same number of measures per line");
@@ -249,6 +251,48 @@ K:C
     expect(prompt).toContain("Keep the user's chords.");
     expect(schema.function.name).toBe("generate_consolidated_chord_ingestion");
     expect(schema.function.parameters.required).toEqual(["chordToneMapping", "chordProgression", "voiceLeadingValidation"]);
+  });
+
+  it("marks guitar voicing and polish as tab-validation steps", () => {
+    expect(isGuitarTabValidationWorkflowStep("guitar-comping-profile")).toBe(false);
+    expect(isGuitarTabValidationWorkflowStep("guitar-voicing-bass")).toBe(true);
+    expect(isGuitarTabValidationWorkflowStep("guitar-fills-validation")).toBe(true);
+  });
+
+  it("builds guitar prompts that require valid_guitar_tab before final output", () => {
+    const prompt = buildAccompanimentWorkflowPrompt({
+      stepId: "guitar-fills-validation",
+      sourceAbc: sampleAbc,
+      metadata: { key: "Em", scale: "minor", timeSignature: "4/4" },
+      previousSelections: [],
+    });
+
+    expect(prompt).toContain("valid_guitar_tab");
+    expect(prompt).toContain("guitarTab.events");
+    expect(prompt).toContain("one guitar string cannot play E3 and G3");
+  });
+
+  it("requires guitarTab events in guitar tab-bearing workflow schemas", () => {
+    const schema = buildAccompanimentWorkflowToolSchema("guitar-voicing-bass");
+    const data = schema.function.parameters.properties.options.items.properties.data as any;
+
+    expect(data.required).toEqual(["guitarTab"]);
+    expect(data.properties.guitarTab.required).toEqual(["events"]);
+    expect(data.properties.guitarTab.properties.events.items.required).toEqual([
+      "measureIndex",
+      "beat",
+      "note",
+      "string",
+      "fret",
+      "role",
+    ]);
+  });
+
+  it("exposes the valid_guitar_tab schema for the LLM tool loop", () => {
+    const schema = buildValidGuitarTabToolSchema();
+
+    expect(schema.function.name).toBe("valid_guitar_tab");
+    expect(schema.function.description).toContain("do not finalize until every option is valid");
   });
 
   it("advances to the next unlocked incomplete step", () => {

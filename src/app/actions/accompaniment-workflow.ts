@@ -1,12 +1,13 @@
 "use server";
 
-import { requestOpenAiCompatibleTool } from "./ai-config";
+import { requestOpenAiCompatibleTool, requestOpenAiCompatibleToolLoop, type ToolLoopValidationResult } from "./ai-config";
 import {
   buildAccompanimentWorkflowPrompt,
   buildAccompanimentWorkflowToolSchema,
   buildConsolidatedChordIngestionPrompt,
   buildConsolidatedChordIngestionToolSchema,
   extractLyricChordAnnotations,
+  isGuitarTabValidationWorkflowStep,
   normalizeWorkflowOptionDataLineBreaks,
   type AccompanimentWorkflowMetadata,
   type AccompanimentWorkflowOption,
@@ -14,6 +15,12 @@ import {
   type AccompanimentWorkflowSelectedContext,
   type AccompanimentWorkflowStepId,
 } from "@/lib/theory/accompaniment-workflow";
+import {
+  buildValidGuitarTabToolSchema,
+  validateGuitarTab,
+  type GuitarTabEvent,
+  type GuitarTabValidationResult,
+} from "@/lib/theory/guitar-tab-validation";
 
 interface RawWorkflowStepResult {
   options?: Array<Partial<AccompanimentWorkflowOption>>;
@@ -49,6 +56,47 @@ function normalizeId(value: unknown, fallback: string): string {
 function stringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+}
+
+function guitarTabEventsFromOption(option: Partial<AccompanimentWorkflowOption>): GuitarTabEvent[] | null {
+  const data = option.data;
+  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
+  const guitarTab = (data as { guitarTab?: unknown }).guitarTab;
+  if (!guitarTab || typeof guitarTab !== "object" || Array.isArray(guitarTab)) return null;
+  const events = (guitarTab as { events?: unknown }).events;
+  return Array.isArray(events) ? events as GuitarTabEvent[] : null;
+}
+
+function validateGuitarWorkflowResult(raw: unknown): ToolLoopValidationResult {
+  const result = raw as RawWorkflowStepResult;
+  const options = Array.isArray(result.options) ? result.options.slice(0, 5) : [];
+  const validations: Array<{ optionId: string; validation: GuitarTabValidationResult }> = [];
+  const messages: string[] = [];
+
+  if (options.length === 0) {
+    return { valid: false, message: "Final guitar workflow output contained no options." };
+  }
+
+  for (const [index, option] of options.entries()) {
+    const optionId = normalizeId(option.id, `option-${index + 1}`);
+    const events = guitarTabEventsFromOption(option);
+    if (!events || events.length === 0) {
+      messages.push(`${optionId} is missing data.guitarTab.events.`);
+      continue;
+    }
+
+    const validation = validateGuitarTab(events);
+    validations.push({ optionId, validation });
+    if (!validation.valid) {
+      messages.push(`${optionId}: ${validation.issues.map((issue) => issue.message).join("; ")}`);
+    }
+  }
+
+  return {
+    valid: messages.length === 0,
+    message: messages.join("\n"),
+    toolResult: { valid: messages.length === 0, issues: messages, validations },
+  };
 }
 
 function normalizeOptions(raw: unknown, sourceAbc: string): AccompanimentWorkflowOption[] {
@@ -101,13 +149,31 @@ export async function generateAccompanimentWorkflowStep(
     const requestPrompt = buildAccompanimentWorkflowPrompt(input);
     const toolSchema = buildAccompanimentWorkflowToolSchema(input.stepId);
     const toolName = toolNameForStep(input.stepId);
-    const rawResult = await requestOpenAiCompatibleTool({
-      systemPrompt: "You are an expert music theory arranger for Indian devotional/bhajan music. You make one small human-reviewable accompaniment decision at a time and always justify options with concrete theory and playability constraints.",
-      userPrompt: requestPrompt,
-      toolSchema,
-      toolName,
-      temperature: 0.25,
-    });
+    const systemPrompt = "You are an expert music theory arranger for Indian devotional/bhajan music. You make one small human-reviewable accompaniment decision at a time and always justify options with concrete theory and playability constraints.";
+    const rawResult = isGuitarTabValidationWorkflowStep(input.stepId)
+      ? await requestOpenAiCompatibleToolLoop({
+        systemPrompt: `${systemPrompt} For guitar tab-bearing steps, call valid_guitar_tab with concrete string/fret events before calling the final generation tool. Revise and revalidate until valid_guitar_tab reports valid=true.`,
+        userPrompt: requestPrompt,
+        tools: [buildValidGuitarTabToolSchema(), toolSchema],
+        finalToolName: toolName,
+        localTools: [{
+          name: "valid_guitar_tab",
+          execute: (args) => {
+            const events = (args as { events?: unknown }).events;
+            return validateGuitarTab(Array.isArray(events) ? events as GuitarTabEvent[] : []);
+          },
+        }],
+        validateFinalResult: validateGuitarWorkflowResult,
+        temperature: 0.25,
+        maxIterations: 8,
+      })
+      : await requestOpenAiCompatibleTool({
+        systemPrompt,
+        userPrompt: requestPrompt,
+        toolSchema,
+        toolName,
+        temperature: 0.25,
+      });
 
     return makeRun({
       stepId: input.stepId,

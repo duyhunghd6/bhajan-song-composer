@@ -1,260 +1,26 @@
 import { splitAbcMeasureSegments } from "./abc-duration";
+import {
+  ACCOMPANIMENT_CHORD_INGESTION_STEP_IDS,
+  ACCOMPANIMENT_GUITAR_TAB_VALIDATION_STEP_IDS,
+  ACCOMPANIMENT_WORKFLOW_STEPS,
+  ACCOMPANIMENT_WORKFLOW_STEP_IDS,
+  ACCOMPANIMENT_WORKFLOW_VERSION,
+  type AccompanimentLyricChordAnnotation,
+  type AccompanimentWorkflowMetadata,
+  type AccompanimentWorkflowOption,
+  type AccompanimentWorkflowRun,
+  type AccompanimentWorkflowSelectedContext,
+  type AccompanimentWorkflowSession,
+  type AccompanimentWorkflowStepDefinition,
+  type AccompanimentWorkflowStepId,
+  type AccompanimentWorkflowStepState,
+} from "./accompaniment-workflow/definition";
+export * from "./accompaniment-workflow/definition";
+export {
+  buildAccompanimentWorkflowToolSchema,
+  buildConsolidatedChordIngestionToolSchema,
+} from "./accompaniment-workflow/tool-schema";
 
-export const ACCOMPANIMENT_WORKFLOW_VERSION = 1;
-
-export const ACCOMPANIMENT_WORKFLOW_STEP_IDS = [
-  "melody-snapshot",
-  "key-scale-cadence",
-  "strong-beat-targets",
-  "chord-tone-mapping",
-  "chord-progression",
-  "voice-leading-validation",
-  "guitar-comping-profile",
-  "guitar-voicing-bass",
-  "guitar-fills-validation",
-  "piano-comping-bass",
-  "piano-rh-voicing",
-  "piano-fills-pedal-validation",
-] as const;
-
-export type AccompanimentWorkflowStepId = (typeof ACCOMPANIMENT_WORKFLOW_STEP_IDS)[number];
-export type AccompanimentWorkflowScope = "shared" | "guitar" | "piano";
-
-export const ACCOMPANIMENT_WORKFLOW_GUITAR_STEP_IDS = [
-  "guitar-comping-profile",
-  "guitar-voicing-bass",
-  "guitar-fills-validation",
-] as const satisfies readonly AccompanimentWorkflowStepId[];
-
-export const ACCOMPANIMENT_WORKFLOW_PIANO_STEP_IDS = [
-  "piano-comping-bass",
-  "piano-rh-voicing",
-  "piano-fills-pedal-validation",
-] as const satisfies readonly AccompanimentWorkflowStepId[];
-
-export const ACCOMPANIMENT_CHORD_INGESTION_STEP_IDS = [
-  "chord-tone-mapping",
-  "chord-progression",
-  "voice-leading-validation",
-] as const satisfies readonly AccompanimentWorkflowStepId[];
-
-export interface AccompanimentLyricChordAnnotation {
-  chord: string;
-  lineNumber: number;
-  measureIndex: number;
-  lyricFragment: string;
-  rawLyricLine: string;
-}
-
-export interface AccompanimentWorkflowMetadata {
-  key: string;
-  scale: string;
-  timeSignature: string;
-  title?: string;
-  devotionalMood?: string;
-}
-
-export interface AccompanimentWorkflowOption {
-  id: string;
-  label: string;
-  summary: string;
-  justification: string;
-  data: Record<string, unknown>;
-  warnings: string[];
-  validationNotes: string[];
-}
-
-export interface AccompanimentWorkflowRun {
-  id: string;
-  createdAt: string;
-  stepId: AccompanimentWorkflowStepId;
-  requestPrompt: string;
-  userNote: string;
-  options: AccompanimentWorkflowOption[];
-  rawResult?: unknown;
-}
-
-export interface AccompanimentWorkflowStepState {
-  runs: AccompanimentWorkflowRun[];
-  activeRunId: string | null;
-  selectedOptionId: string | null;
-  selectedAt: string | null;
-  promptNote: string;
-}
-
-export interface AccompanimentWorkflowSession {
-  version: number;
-  sourceAbc: string;
-  sourceAbcFingerprint: string;
-  currentStepId: AccompanimentWorkflowStepId;
-  steps: Record<AccompanimentWorkflowStepId, AccompanimentWorkflowStepState>;
-  guitarProfileHint: string | null;
-  pianoProfileHint: string | null;
-}
-
-export interface AccompanimentWorkflowSelectedContext {
-  stepId: AccompanimentWorkflowStepId;
-  label: string;
-  summary: string;
-  justification: string;
-  data: Record<string, unknown>;
-}
-
-export interface AccompanimentWorkflowStepDefinition {
-  id: AccompanimentWorkflowStepId;
-  index: number;
-  label: string;
-  shortLabel: string;
-  scope: AccompanimentWorkflowScope;
-  description: string;
-  dependencies: AccompanimentWorkflowStepId[];
-  outputFocus: string[];
-  theoryReference: string;
-}
-
-const SHARED_DEPENDENCIES = [
-  "melody-snapshot",
-  "key-scale-cadence",
-  "strong-beat-targets",
-  "chord-tone-mapping",
-  "chord-progression",
-  "voice-leading-validation",
-] as const;
-
-export const ACCOMPANIMENT_WORKFLOW_STEPS: AccompanimentWorkflowStepDefinition[] = [
-  {
-    id: "melody-snapshot",
-    index: 1,
-    label: "Melody Snapshot & Metadata",
-    shortLabel: "Melody",
-    scope: "shared",
-    description: "Confirm the immutable source ABC, key/meter metadata, mood, and melody-preservation constraints.",
-    dependencies: [],
-    outputFocus: ["confirmed source ABC summary", "key and meter assumptions", "melody preservation risks"],
-    theoryReference: "THEORY.md §6.4 Step 1 and §6.2 validation rules.",
-  },
-  {
-    id: "key-scale-cadence",
-    index: 2,
-    label: "Key, Scale & Cadence Analysis",
-    shortLabel: "Key/Cadence",
-    scope: "shared",
-    description: "Analyze K: header, pitch content, scale/raga context, phrase endings, and cadence targets.",
-    dependencies: ["melody-snapshot"],
-    outputFocus: ["detected key/scale", "cadence measures", "phrase boundary notes"],
-    theoryReference: "THEORY.md §1, §3, §5, and ARRANGEMENT02-PIANO.md §1.1 cadence parsing.",
-  },
-  {
-    id: "strong-beat-targets",
-    index: 3,
-    label: "Strong-beat Target Notes",
-    shortLabel: "Strong Beats",
-    scope: "shared",
-    description: "Identify structurally strong melody notes per measure, including beat 1 in 3/4 and beats 1/3 in 4/4.",
-    dependencies: ["key-scale-cadence"],
-    outputFocus: ["measure-by-measure strong notes", "metric strength", "passing/neighbor notes to ignore"],
-    theoryReference: "THEORY.md §4 rhythm/meter and §6.4 Steps 2–3.",
-  },
-  {
-    id: "chord-tone-mapping",
-    index: 4,
-    label: "Chord-tone Role Mapping",
-    shortLabel: "Chord Roles",
-    scope: "shared",
-    description: "Map each strong melody note to plausible root, 3rd, 5th, 7th, suspension, or tension roles.",
-    dependencies: ["strong-beat-targets"],
-    outputFocus: ["possible chord functions", "valid tensions/suspensions", "raga or chromatic warnings"],
-    theoryReference: "THEORY.md §2 chords/extensions and §3 functional harmony.",
-  },
-  {
-    id: "chord-progression",
-    index: 5,
-    label: "Chord Progression Selection",
-    shortLabel: "Progression",
-    scope: "shared",
-    description: "Generate chord progression candidates and chord-annotated ABC without changing the melody.",
-    dependencies: ["chord-tone-mapping"],
-    outputFocus: ["progression", "roman numerals", "harmonized ABC", "cadence support"],
-    theoryReference: "THEORY.md §6.4 Steps 4 and 6 plus common bhajan I-IV-V-I guidance.",
-  },
-  {
-    id: "voice-leading-validation",
-    index: 6,
-    label: "Voice-leading & Harmonized ABC Validation",
-    shortLabel: "Validate Harmony",
-    scope: "shared",
-    description: "Smooth chord transitions, preserve the melody exactly, and validate beat counts and pitch alignment.",
-    dependencies: ["chord-progression"],
-    outputFocus: ["final harmonized ABC", "voice-leading fixes", "validation notes", "bass root map"],
-    theoryReference: "THEORY.md §3.3 voice leading, §6.2 validation, and §6.4 Steps 5, 7, 8.",
-  },
-  {
-    id: "guitar-comping-profile",
-    index: 7,
-    label: "Guitar Comping Profile",
-    shortLabel: "Guitar Profile",
-    scope: "guitar",
-    description: "Choose the rhythm-guitar profile: ballad arpeggio, folk strum, Travis/PIMA, or rock/power support.",
-    dependencies: [...SHARED_DEPENDENCIES],
-    outputFocus: ["guitar style", "picking/strumming profile", "melody avoidance strategy"],
-    theoryReference: "ARRANGEMENT01-GUITAR.md §2.1–2.3.",
-  },
-  {
-    id: "guitar-voicing-bass",
-    index: 8,
-    label: "Guitar Voicing & Bass Plan",
-    shortLabel: "Guitar Voicing",
-    scope: "guitar",
-    description: "Plan open/barre voicings, guide tones, root/fifth anchors, and walking bass transitions.",
-    dependencies: ["guitar-comping-profile"],
-    outputFocus: ["voicing map", "bass anchors", "walking bass notes", "fret/register warnings"],
-    theoryReference: "ARRANGEMENT01-GUITAR.md §2.2, §2.4, and §4 validation checklist.",
-  },
-  {
-    id: "guitar-fills-validation",
-    index: 9,
-    label: "Guitar Fills / Intro / Interlude / Outro / Validation",
-    shortLabel: "Guitar Polish",
-    scope: "guitar",
-    description: "Choose fills, intro/interlude/outro behavior, and validate playability before final guitar rendering.",
-    dependencies: ["guitar-voicing-bass"],
-    outputFocus: ["intro plan", "fill rules", "interlude/outro plan", "final guitar profile id"],
-    theoryReference: "ARRANGEMENT01-GUITAR.md §4 plus rhythm-guitar support rules.",
-  },
-  {
-    id: "piano-comping-bass",
-    index: 10,
-    label: "Piano Comping + LH Bass Anchoring",
-    shortLabel: "Piano Bass",
-    scope: "piano",
-    description: "Choose the piano comping profile and left-hand root/octave/open-fifth/tenth foundation.",
-    dependencies: [...SHARED_DEPENDENCIES],
-    outputFocus: ["piano style", "left-hand pattern", "low interval limit strategy", "comping profile id"],
-    theoryReference: "ARRANGEMENT02-PIANO.md §1 and §3.",
-  },
-  {
-    id: "piano-rh-voicing",
-    index: 11,
-    label: "Piano RH Voicing + Voice-leading",
-    shortLabel: "Piano RH",
-    scope: "piano",
-    description: "Plan right-hand guide tones, inversions, drop/open voicings, shortest-path motion, and melody-register avoidance.",
-    dependencies: ["piano-comping-bass"],
-    outputFocus: ["RH voicing map", "guide tones", "inversions", "collision/register warnings"],
-    theoryReference: "ARRANGEMENT02-PIANO.md §2.",
-  },
-  {
-    id: "piano-fills-pedal-validation",
-    index: 12,
-    label: "Piano Fills / Pedal / Validation",
-    shortLabel: "Piano Polish",
-    scope: "piano",
-    description: "Choose gap fills, yield behavior, sustain pedal automation, and validate hand span/collisions/LIL.",
-    dependencies: ["piano-rh-voicing"],
-    outputFocus: ["gap fill rules", "pedal automation", "validation report", "final piano profile id"],
-    theoryReference: "ARRANGEMENT02-PIANO.md §4–§7.",
-  },
-];
 
 const STEP_BY_ID = new Map(ACCOMPANIMENT_WORKFLOW_STEPS.map((step) => [step.id, step]));
 const LYRIC_CHORD_PATTERN = /\[([A-G](?:#|b)?(?:(?:maj|min|m|dim|aug|sus|add)\d*|\d+)?(?:[#b]\d+)*(?:\/[A-G](?:#|b)?)?)\]/g;
@@ -303,6 +69,10 @@ export function hasLyricChordAnnotations(sourceAbc: string): boolean {
 
 export function isChordIngestionWorkflowStep(stepId: AccompanimentWorkflowStepId): boolean {
   return ACCOMPANIMENT_CHORD_INGESTION_STEP_IDS.some((candidate) => candidate === stepId);
+}
+
+export function isGuitarTabValidationWorkflowStep(stepId: AccompanimentWorkflowStepId): boolean {
+  return ACCOMPANIMENT_GUITAR_TAB_VALIDATION_STEP_IDS.some((candidate) => candidate === stepId);
 }
 
 function formatLyricChordAnnotations(sourceAbc: string): string {
@@ -662,11 +432,14 @@ export function buildAccompanimentWorkflowPrompt(input: {
     : input.stepId === "voice-leading-validation"
       ? "\nStep-specific data requirement: each option.data MUST include validatedAbc or harmonizedAbc containing the full final chord-annotated ABC after voice-leading validation, so the user can immediately hear it in Music Staff Playback. Before returning validatedAbc or harmonizedAbc, apply the break_measures_line formatting rule: the output ABC melody music body must have the same number of music lines and the same number of measures per line as the Source ABC. Include a validation note confirming measure line breaks match the Source ABC."
       : "";
+  const guitarTabInstruction = isGuitarTabValidationWorkflowStep(input.stepId)
+    ? "\nGuitar tab validation requirement: each option.data MUST include guitarTab.events with measureIndex, beat, note, string, fret, and role. Before finalizing an option, call the valid_guitar_tab tool with those exact events. If valid_guitar_tab reports any issue, revise the tab and call valid_guitar_tab again. Hard physical rule: in any simultaneous group, a string number may appear only once; one guitar string cannot play E3 and G3 (or any two pitches) at the same time."
+    : "";
   const lyricChordInstruction = lyricChordAnnotations.length > 0 && isChordIngestionWorkflowStep(input.stepId)
     ? "\n- The source ABC has chord symbols embedded inside the lyric w: lines. Treat those lyric chord symbols as the user-supplied chord progression. Do not invent a different progression; map roles, progression, and validation around these chords."
     : "";
 
-  return `DEFAULT PROMPT — MUSIC ACCOMPANIMENT WORKFLOW STEP ${step.index}\n\nTask: ${step.label}\n${step.description}\n\nTheory reference to follow:\n${step.theoryReference}\n\nOutput focus:\n${step.outputFocus.map((item) => `- ${item}`).join("\n")}\n\nGlobal hard rules:\n- Return between 1 and 5 distinct options.\n- Every option must include a concise label, summary, justification, warnings, and validation notes.\n- Preserve the source melody ABC exactly unless this step explicitly asks for chord annotations.\n- Respect previously selected workflow decisions.\n- If a choice is musically risky, include a warning instead of hiding the risk.\n- Prefer devotional/bhajan-appropriate support unless the user's note asks otherwise.${abcDataInstruction}${lyricChordInstruction}\n\nMetadata:\n${formatMetadata(input.metadata)}\n\nPreviously selected workflow context:\n${formatPreviousSelections(input.previousSelections)}\n\nLyric chord annotations:\n${formatLyricChordAnnotations(input.sourceAbc)}\n\nSource ABC:\n\`\`\`abc\n${input.sourceAbc}\n\`\`\`\n\nUSER NOTE TO ADD TO PROMPT:\n${userNote || "(none)"}`;
+  return `DEFAULT PROMPT — MUSIC ACCOMPANIMENT WORKFLOW STEP ${step.index}\n\nTask: ${step.label}\n${step.description}\n\nTheory reference to follow:\n${step.theoryReference}\n\nOutput focus:\n${step.outputFocus.map((item) => `- ${item}`).join("\n")}\n\nGlobal hard rules:\n- Return between 1 and 5 distinct options.\n- Every option must include a concise label, summary, justification, warnings, and validation notes.\n- Preserve the source melody ABC exactly unless this step explicitly asks for chord annotations.\n- Respect previously selected workflow decisions.\n- If a choice is musically risky, include a warning instead of hiding the risk.\n- Prefer devotional/bhajan-appropriate support unless the user's note asks otherwise.${abcDataInstruction}${guitarTabInstruction}${lyricChordInstruction}\n\nMetadata:\n${formatMetadata(input.metadata)}\n\nPreviously selected workflow context:\n${formatPreviousSelections(input.previousSelections)}\n\nLyric chord annotations:\n${formatLyricChordAnnotations(input.sourceAbc)}\n\nSource ABC:\n\`\`\`abc\n${input.sourceAbc}\n\`\`\`\n\nUSER NOTE TO ADD TO PROMPT:\n${userNote || "(none)"}`;
 }
 
 export function buildConsolidatedChordIngestionPrompt(input: {
@@ -678,129 +451,4 @@ export function buildConsolidatedChordIngestionPrompt(input: {
   const userNote = input.userNote?.trim();
 
   return `DEFAULT PROMPT — MUSIC ACCOMPANIMENT WORKFLOW CONSOLIDATED CHORD INGESTION\n\nTask: The lyrics contain chord symbols like [Em]Hari Bol, Hari [D]Bol. In one LLM decision, ingest the lyric chord progression and produce reviewable results for these three workflow steps:\n1. Chord-tone Role Mapping\n2. Chord Progression Selection\n3. Voice-leading & Harmonized ABC Validation\n\nHard rules:\n- Use the lyric chord annotations below as the supplied chord progression. Do not invent a replacement progression.\n- Return between 1 and 5 options for each of the three result groups.\n- Chord-tone options explain how strong melody notes function over the supplied chords.\n- Progression options preserve the supplied chord order and provide roman numerals/function labels.\n- Validation options must include option.data.validatedAbc or option.data.harmonizedAbc containing the full source ABC with playable chord symbols applied outside the w: lyric lines, so Music Staff Playback can render the harmony.\n- Before returning any harmonizedAbc or validatedAbc, apply the break_measures_line formatting rule: the output ABC melody music body must have the same number of music lines and the same number of measures per line as the Source ABC. If Source ABC has 5 music lines of 4 measures each, returned ABC must do the same.\n- Preserve the source melody ABC exactly except for adding/moving chord annotations into playable ABC chord positions.\n- Include warnings for any lyric chord that conflicts with strong melody tones, raga/scale expectations, cadence support, or measure-line preservation.\n\nMetadata:\n${formatMetadata(input.metadata)}\n\nPreviously selected workflow context:\n${formatPreviousSelections(input.previousSelections)}\n\nLyric chord annotations to ingest:\n${formatLyricChordAnnotations(input.sourceAbc)}\n\nSource ABC:\n\`\`\`abc\n${input.sourceAbc}\n\`\`\`\n\nUSER NOTE TO ADD TO PROMPT:\n${userNote || "(none)"}`;
-}
-
-function buildWorkflowOptionDataProperty(stepId?: AccompanimentWorkflowStepId) {
-  if (stepId === "chord-progression") {
-    return {
-      type: "object",
-      description: "Step-specific structured decision data. Must include harmonizedAbc for Music Staff Playback.",
-      additionalProperties: true,
-      properties: {
-        harmonizedAbc: {
-          type: "string",
-          description: "Full source ABC with proposed chord symbols applied. Must follow break_measures_line: preserve the same melody music line count and same measures per line as Source ABC.",
-        },
-      },
-      required: ["harmonizedAbc"],
-    };
-  }
-
-  if (stepId === "voice-leading-validation") {
-    return {
-      type: "object",
-      description: "Step-specific structured decision data. Prefer validatedAbc for the final Music Staff Playback source.",
-      additionalProperties: true,
-      properties: {
-        validatedAbc: {
-          type: "string",
-          description: "Full final chord-annotated ABC after voice-leading validation. Must follow break_measures_line: preserve the same melody music line count and same measures per line as Source ABC.",
-        },
-        harmonizedAbc: {
-          type: "string",
-          description: "Fallback full final harmonized ABC. Must also follow break_measures_line so melody line breaks match Source ABC.",
-        },
-      },
-    };
-  }
-
-  return {
-    type: "object",
-    description: "Step-specific structured decision data. Include profile/style ids when relevant.",
-    additionalProperties: true,
-  };
-}
-
-function buildWorkflowOptionsProperty(description: string, stepId?: AccompanimentWorkflowStepId) {
-  return {
-    type: "array",
-    minItems: 1,
-    maxItems: 5,
-    description,
-    items: {
-      type: "object",
-      additionalProperties: false,
-      properties: {
-        id: { type: "string", description: "Stable kebab-case option id." },
-        label: { type: "string", description: "Short human-readable option label." },
-        summary: { type: "string", description: "One or two sentence summary." },
-        justification: { type: "string", description: "Music-theory justification for this option." },
-        data: buildWorkflowOptionDataProperty(stepId),
-        warnings: {
-          type: "array",
-          items: { type: "string" },
-          description: "Warnings for risky harmony, playability, register, raga, or ABC validity choices.",
-        },
-        validationNotes: {
-          type: "array",
-          items: { type: "string" },
-          description: "Notes showing how the option satisfies this step's validation rules.",
-        },
-      },
-      required: ["id", "label", "summary", "justification", "data", "warnings", "validationNotes"],
-    },
-  };
-}
-
-function buildWorkflowResultGroupProperty(stepId: AccompanimentWorkflowStepId) {
-  const step = getAccompanimentWorkflowStep(stepId);
-  return {
-    type: "object",
-    additionalProperties: false,
-    description: `Options for ${step.label}.`,
-    properties: {
-      options: buildWorkflowOptionsProperty(`One to five options for ${step.label}.`, stepId),
-    },
-    required: ["options"],
-  };
-}
-
-export function buildConsolidatedChordIngestionToolSchema() {
-  return {
-    type: "function",
-    function: {
-      name: "generate_consolidated_chord_ingestion",
-      description: "Generate chord role, progression, and voice-leading validation options from chord annotations embedded in ABC lyric lines.",
-      parameters: {
-        type: "object",
-        additionalProperties: false,
-        properties: {
-          chordToneMapping: buildWorkflowResultGroupProperty("chord-tone-mapping"),
-          chordProgression: buildWorkflowResultGroupProperty("chord-progression"),
-          voiceLeadingValidation: buildWorkflowResultGroupProperty("voice-leading-validation"),
-        },
-        required: ["chordToneMapping", "chordProgression", "voiceLeadingValidation"],
-      },
-    },
-  };
-}
-
-export function buildAccompanimentWorkflowToolSchema(stepId: AccompanimentWorkflowStepId) {
-  const step = getAccompanimentWorkflowStep(stepId);
-
-  return {
-    type: "function",
-    function: {
-      name: `generate_${stepId.replaceAll("-", "_")}`,
-      description: `Generate 1-5 human-reviewable options for ${step.label}.`,
-      parameters: {
-        type: "object",
-        additionalProperties: false,
-        properties: {
-          options: buildWorkflowOptionsProperty("One to five options for the user to choose from.", stepId),
-        },
-        required: ["options"],
-      },
-    },
-  };
 }

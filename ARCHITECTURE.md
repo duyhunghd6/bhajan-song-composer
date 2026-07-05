@@ -1,0 +1,115 @@
+# Architecture
+
+This project is a Next.js bhajan song composition app. The codebase is organized around a few deep modules: Composer UI, music-sheet playback, theory engines, workflow orchestration, and visual mockups.
+
+## Application areas
+
+### Composer UI
+
+Composer screens live under `src/components/composer/`.
+
+- `ComposerStepWorkspace.tsx` is the step router for melody, harmony, accompaniment, ensemble, and review flows.
+- `workspace/` contains step-specific modules:
+  - `HarmonyStep.tsx` handles harmonization selection and preview.
+  - `AccompanimentStep.tsx` handles accompaniment workflow review, layer visibility, and instrument previews.
+  - `preview.tsx` contains shared preview layout, render options, and harmonization display helpers.
+- `LayerManager.tsx` remains the public layer-stack entrypoint.
+- `layers/layer-manager-parts.tsx` contains layer stack defaults, layer parsing/combining utilities, and the extracted pipeline/fingerstyle panels.
+- `AccompanimentWorkflowWizard.tsx` and `EnsembleWorkflowWizard.tsx` are workflow shells.
+- `accompaniment-workflow/wizard-parts.tsx` and `ensemble-workflow/wizard-parts.tsx` contain reusable wizard state transitions and option-list UI.
+- `SongForm.tsx` is the metadata form shell.
+- `song-form/metadata.ts` contains metadata defaults and YAML serialization.
+- `song-form/TextField.tsx` contains the shared text field module.
+
+The Composer UI owns React state, persistence hooks, and user interaction. It delegates music decisions and ABC construction to theory modules.
+
+### Music sheet / ABCJS playback
+
+Music notation playback lives under `src/components/music-sheet/`.
+
+- `AbcjsPlaybackController.tsx` is the public playback controller entrypoint.
+- `abcjs-playback/types.ts` defines the local abcjs adapter types and controller props.
+- `abcjs-playback/abc-rendering.ts` contains tempo parsing and SVG post-processing for beat indicators, lyrics, and tablature staff spacing.
+- `abcjs-playback/AbcjsPlaybackControls.tsx` contains transport, metadata override, tempo, and loop-range controls.
+- `abcjs-playback/AbcjsPlaybackStyles.tsx` contains the scoped styles applied to rendered abcjs output.
+
+The playback module is intentionally a client-side adapter around abcjs. Callers pass ABC text and optional render/synth settings; the implementation owns abcjs rendering, synth lifecycle, click-to-play, cursor events, and visual post-processing.
+
+### Theory engine
+
+Music-theory logic lives under `src/lib/theory/`.
+
+- `piano-accompaniment.ts` remains the public piano accompaniment interface.
+- `piano-accompaniment/types.ts` contains the exported piano accompaniment contract.
+- `piano-accompaniment/pedal-automation.ts` contains sustain pedal automation and UI metadata generation.
+- `piano-accompaniment/output-contract.ts` contains piano key highlights, fingering metadata, and physical hand events.
+- `fingerstyle-arranger.ts` remains the public fingerstyle arrangement interface.
+- `fingerstyle-arranger/types.ts` contains the exported fingerstyle source-layer, playability, artifact, and output contract types.
+- `accompaniment-workflow.ts` remains the public accompaniment workflow interface.
+- `accompaniment-workflow/definition.ts` contains workflow ids, types, constants, and step definitions.
+- `accompaniment-workflow/tool-schema.ts` contains structured LLM tool schemas for accompaniment workflow generation.
+- `ensemble-workflow.ts` remains the public ensemble workflow interface.
+- `ensemble-workflow/definition.ts` contains ensemble workflow ids, types, default generation plan, and step definitions.
+
+Compatibility entrypoints were preserved so existing callers can continue importing from `@/lib/theory/piano-accompaniment`, `@/lib/theory/fingerstyle-arranger`, `@/lib/theory/accompaniment-workflow`, and `@/lib/theory/ensemble-workflow`.
+
+### Visual instrument mockups
+
+Visual prototypes live under `src/app/mockups/visual-instruments/`.
+
+- `VisualInstrumentsMockupClient.tsx` is the interactive mockup shell.
+- `mockup-parts.tsx` contains sample ABC, guitar/piano marker timelines, state panels, event cards, and variant switching.
+
+The mockup modules are not production workflow modules, but their generated marker data mirrors the contracts used by the Composer and playback surfaces.
+
+## Module seams
+
+The main seams are:
+
+1. **Composer UI → theory engine**
+   - Composer modules call theory modules for arrangements, workflow prompts, ABC annotations, and generated instrument data.
+   - Theory modules do not import Composer UI.
+
+2. **Composer UI → music-sheet playback**
+   - Composer modules pass ABC strings to `AbcjsPlaybackController`.
+   - The playback adapter owns abcjs-specific rendering and synth behavior.
+
+3. **Workflow shells → workflow definitions**
+   - Wizard shells manage local UI state and action calls.
+   - Workflow definition modules own step ids, labels, dependency rules, prompts, and schemas.
+
+4. **Public entrypoints → extracted implementation modules**
+   - Large historical files remain stable import points.
+   - Extracted submodules concentrate implementation details behind those import points.
+
+## Testing strategy
+
+Theory tests are split by module under `src/lib/theory/__tests__/`:
+
+- `accompaniment-stage.test.ts`
+- `piano-accompaniment.test.ts`
+- `piano-arranger.test.ts`
+- `fingerstyle-arranger.test.ts`
+- `arranger-fixtures.ts` for shared ABC fixtures
+
+The original `arrangers.test.ts` remains as a skipped pointer so test discovery stays explicit while the real suites live in smaller files.
+
+Recommended validation commands:
+
+```bash
+npm test
+npx tsc --noEmit
+npm run lint
+npm run build
+```
+
+Current project note: unit tests and TypeScript checks pass after the restructure. `npm run lint` currently fails on the vendored `public/abcjs-basic-min.js` file, and `npm run build` currently fails because the app uses Server Actions with static export.
+
+## File-size and locality guidelines
+
+- Keep public entrypoint files thin where possible.
+- Put exported contracts in `types.ts` when a domain has many shared types.
+- Prefer local subdirectories for implementation details before introducing global shared modules.
+- Extract a module when it gives locality: future changes should happen in one place rather than across many callers.
+- Avoid shallow pass-through modules that merely rename a function without hiding implementation complexity.
+- Preserve compatibility import paths during structural refactors unless a migration is intentional.

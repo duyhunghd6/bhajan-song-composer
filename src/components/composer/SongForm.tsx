@@ -2,91 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { SongMetadata, SongMetadataSchema } from "@/lib/songs/schema";
-
-const DEFAULT_STORAGE_KEY = "bhajan-song-composer:song-form:draft";
-
-const DEFAULT_METADATA: SongMetadata = {
-  title: "New Bhajan Arrangement",
-  slug: "new-bhajan-arrangement",
-  language: "marathi",
-  category: "praise",
-  raga: "",
-  taal: "",
-  key: "Em",
-  timeSignature: "4/4",
-  videos: [
-    {
-      type: "beat-karaoke",
-      url: "https://www.youtube.com/watch?v=",
-      label: "Beat Karaoke",
-      default: true,
-    },
-  ],
-  abcNotations: [
-    {
-      type: "melody",
-      label: "Melody Music Sheet",
-      default: true,
-    },
-  ],
-  tags: ["bhajan"],
-  composer: "Traditional",
-  contributors: ["community"],
-};
+import { DEFAULT_METADATA, DEFAULT_STORAGE_KEY, metadataToYaml, splitList } from "./song-form/metadata";
+import { TextField } from "./song-form/TextField";
 
 interface SongFormProps {
   initialMetadata?: SongMetadata;
   storageKey?: string;
   onChange?: (metadata: SongMetadata) => void;
-}
-
-const splitList = (value: string) =>
-  value
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-
-const quoteYaml = (value: string) => JSON.stringify(value);
-
-const formatYamlList = (items: string[]) => `[${items.map(quoteYaml).join(", ")}]`;
-
-function metadataToYaml(metadata: SongMetadata) {
-  const lines = [
-    "---",
-    `title: ${quoteYaml(metadata.title)}`,
-    `slug: ${quoteYaml(metadata.slug)}`,
-    `language: ${quoteYaml(metadata.language)}`,
-    `category: ${quoteYaml(metadata.category)}`,
-  ];
-
-  if (metadata.raga) lines.push(`raga: ${quoteYaml(metadata.raga)}`);
-  if (metadata.taal) lines.push(`taal: ${quoteYaml(metadata.taal)}`);
-
-  lines.push(`key: ${quoteYaml(metadata.key)}`);
-  lines.push(`timeSignature: ${quoteYaml(metadata.timeSignature)}`);
-  lines.push("videos:");
-  metadata.videos.forEach((video) => {
-    lines.push(`  - type: ${quoteYaml(video.type)}`);
-    lines.push(`    url: ${quoteYaml(video.url)}`);
-    lines.push(`    label: ${quoteYaml(video.label)}`);
-    if (video.default) lines.push("    default: true");
-  });
-
-  lines.push("abcNotations:");
-  metadata.abcNotations.forEach((notation) => {
-    lines.push(`  - type: ${quoteYaml(notation.type)}`);
-    lines.push(`    label: ${quoteYaml(notation.label)}`);
-    if (notation.default) lines.push("    default: true");
-  });
-
-  lines.push(`tags: ${formatYamlList(metadata.tags)}`);
-  if (metadata.composer) lines.push(`composer: ${quoteYaml(metadata.composer)}`);
-  if (metadata.contributors?.length) {
-    lines.push(`contributors: ${formatYamlList(metadata.contributors)}`);
-  }
-  lines.push("---");
-
-  return lines.join("\n");
 }
 
 export default function SongForm({
@@ -527,32 +449,5 @@ export default function SongForm({
         </aside>
       </div>
     </section>
-  );
-}
-
-interface TextFieldProps {
-  id: string;
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  required?: boolean;
-  className?: string;
-}
-
-function TextField({ id, label, value, onChange, required = false, className = "" }: TextFieldProps) {
-  return (
-    <label className={`block space-y-1.5 ${className}`} htmlFor={id}>
-      <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-        {label}
-        {required && <span className="text-rose-500"> *</span>}
-      </span>
-      <input
-        id={id}
-        type="text"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent placeholder:text-zinc-400"
-      />
-    </label>
   );
 }

@@ -1,0 +1,7 @@
+export const sampleAbc = `X:1
+T:Namostute
+M:4/4
+L:1/8
+Q:1/4=120
+K:Em
+|: E2 E2 G2 A2 | B4 B2 A2 | G2 A2 B2 G2 | E8 :|`;
