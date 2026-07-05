@@ -9,6 +9,7 @@ import {
   buildAccompanimentWorkflowToolSchema,
   buildConsolidatedChordIngestionPrompt,
   buildConsolidatedChordIngestionToolSchema,
+  break_measures_line,
   createAccompanimentWorkflowSession,
   extractLyricChordAnnotations,
   getNextUncompletedWorkflowStepId,
@@ -17,6 +18,7 @@ import {
   getWorkflowAppliedMusicAbc,
   hasLyricChordAnnotations,
   isAccompanimentWorkflowStepUnlocked,
+  normalizeWorkflowOptionDataLineBreaks,
   type AccompanimentWorkflowOption,
 } from "../accompaniment-workflow";
 
@@ -125,6 +127,27 @@ describe("accompaniment workflow", () => {
     expect(item.required).toEqual(["id", "label", "summary", "justification", "data", "warnings", "validationNotes"]);
   });
 
+  it("adds break_measures_line requirements to chord ABC prompts and schemas", () => {
+    const prompt = buildAccompanimentWorkflowPrompt({
+      stepId: "chord-progression",
+      sourceAbc: sampleAbc,
+      metadata: { key: "C", scale: "major", timeSignature: "3/4" },
+      previousSelections: [],
+    });
+    const consolidatedPrompt = buildConsolidatedChordIngestionPrompt({
+      sourceAbc: `${sampleAbc}\nw: [C]Ha-ri | [G]Bol |`,
+      metadata: { key: "C", scale: "major", timeSignature: "3/4" },
+      previousSelections: [],
+    });
+    const schema = buildAccompanimentWorkflowToolSchema("chord-progression");
+    const data = schema.function.parameters.properties.options.items.properties.data;
+
+    expect(prompt).toContain("break_measures_line");
+    expect(prompt).toContain("same number of measures per line");
+    expect(consolidatedPrompt).toContain("break_measures_line");
+    expect(data.properties.harmonizedAbc.description).toContain("break_measures_line");
+  });
+
   it("builds an ABC comment annotation for the latest applied workflow step", () => {
     const session = createAccompanimentWorkflowSession(sampleAbc);
     selectOption(session, "melody-snapshot");
@@ -144,6 +167,54 @@ describe("accompaniment workflow", () => {
     selectOption(session, "chord-progression", { harmonizedAbc: progressionAbc });
 
     expect(getWorkflowAppliedMusicAbc(session, sampleAbc)).toBe(progressionAbc);
+  });
+
+  it("breaks generated ABC measures to match the source melody line pattern", () => {
+    const referenceAbc = `X:1
+T:Line Pattern
+M:4/4
+L:1/8
+K:C
+| C2 D2 E2 F2 | G2 A2 B2 c2 |
+| c2 B2 A2 G2 | F2 E2 D2 C2 |
+| C8 | D8 |`;
+    const generatedAbc = `X:1
+T:Generated Collapsed
+M:4/4
+L:1/8
+K:C
+V:Melody name="Melody"
+| "C"C2 D2 E2 F2 | "G"G2 A2 B2 c2 | "Am"c2 B2 A2 G2 | "F"F2 E2 D2 C2 | "C"C8 | "G"D8 |`;
+
+    const normalized = break_measures_line(generatedAbc, referenceAbc);
+    const musicLines = normalized
+      .split("\n")
+      .filter((line) => line.trim().startsWith("|"));
+
+    expect(musicLines).toHaveLength(3);
+    expect(musicLines.map((line) => line.split("|").filter((part) => part.trim()).length)).toEqual([2, 2, 2]);
+  });
+
+  it("normalizes ABC-shaped workflow option data while preserving unrelated fields", () => {
+    const referenceAbc = `X:1
+T:Line Pattern
+M:4/4
+L:1/8
+K:C
+| C2 D2 E2 F2 | G2 A2 B2 c2 |
+| c2 B2 A2 G2 | F2 E2 D2 C2 |`;
+    const data = normalizeWorkflowOptionDataLineBreaks({
+      harmonizedAbc: `X:1
+T:Generated
+M:4/4
+L:1/8
+K:C
+| "C"C2 D2 E2 F2 | "G"G2 A2 B2 c2 | "Am"c2 B2 A2 G2 | "F"F2 E2 D2 C2 |`,
+      style: "devotional",
+    }, referenceAbc);
+
+    expect(data.style).toBe("devotional");
+    expect(String(data.harmonizedAbc).split("\n").filter((line) => line.trim().startsWith("|"))).toHaveLength(2);
   });
 
   it("prefers voice-leading validated ABC over the earlier progression ABC", () => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useWorkspaceState } from "./useWorkspaceState";
 import type { ReactNode } from "react";
 import AbcjsPlaybackController from "@/components/music-sheet/AbcjsPlaybackController";
@@ -70,11 +70,7 @@ const COMPOSER_PREVIEW_PROPS = {
   renderOptions: COMPOSER_PREVIEW_RENDER_OPTIONS,
 };
 
-const ACCOMPANIMENT_PREVIEW_PROPS = {
-  minWidthClassName: "min-w-[520px]",
-  sheetViewportClassName: "max-h-[min(76vh,860px)] overflow-auto p-4",
-  renderOptions: ACCOMPANIMENT_PREVIEW_RENDER_OPTIONS,
-};
+
 
 function harmonizationOptionId(option: HarmonizationOption, index: number): string {
   return option.id || `candidate-${index + 1}`;
@@ -253,29 +249,53 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
   }, [ws.generatedAccompaniment, ws.generatedGuitar, ws.generatedPiano]);
   const hasGuitarVoice = accompanimentBuild.visibleVoiceNames.includes("Guitar");
   const guitarTabEnabled = Boolean(hasGuitarVoice && accompLayerVisibility["__guitar_tab__"] === true);
-  // abcjs tablature is positionally mapped: tablature[i] renders under staff[i].
-  // Melody and Guitar are merged onto a single staff, so Guitar is always staff index 0.
-  const guitarStaffIndex = 0;
-  const accompanimentPreviewProps = useMemo(() => ({
-    ...ACCOMPANIMENT_PREVIEW_PROPS,
-    renderOptions: {
-      ...ACCOMPANIMENT_PREVIEW_RENDER_OPTIONS,
-      ...(guitarTabEnabled && guitarStaffIndex >= 0
-        ? {
-            tablature: [
-              ...Array.from({ length: guitarStaffIndex }, () => ({ instrument: "" as const })),
-              {
-                instrument: "guitar" as const,
-                label: "GUITAR TAB (%T)",
-                tuning: ["E,,", "A,,", "D,", "G,", "B,", "E"],
-                capo: 0,
-                hideTabSymbol: false,
-              },
-            ],
-          }
-        : {}),
-    },
-  }), [guitarTabEnabled, guitarStaffIndex]);
+
+  const getRenderOptionsFor = useCallback((abc: string, baseOptions: typeof ACCOMPANIMENT_PREVIEW_RENDER_OPTIONS | typeof COMPOSER_PREVIEW_RENDER_OPTIONS) => {
+    if (!guitarTabEnabled) return baseOptions;
+
+    let guitarIndex = -1;
+    const scoreMatch = abc.match(/^%%score\s+(.+)$/m);
+    
+    if (scoreMatch) {
+      const scoreLine = scoreMatch[1];
+      const staffGroups = scoreLine.match(/(\([^)]+\)|\[[^\]]+\]|\{[^}]+\}|\S+)/g);
+      if (staffGroups) {
+        guitarIndex = staffGroups.findIndex(group => group.includes("Guitar"));
+      }
+    }
+    
+    if (guitarIndex === -1) {
+      const matches = [...abc.matchAll(/^V:([^\s=]+)/gm)];
+      const voiceNames = [...new Set(matches.map(m => m[1]))];
+      guitarIndex = voiceNames.indexOf("Guitar");
+    }
+
+    if (guitarIndex >= 0) {
+      const result = {
+        staffwidth: baseOptions.staffwidth,
+        paddingright: baseOptions.paddingright,
+        // stafftopmargin: 35 creates a clean vertical separation between lyric text and tab numbers on systems 2, 3, 4, etc.
+        stafftopmargin: 35,
+        // We omit baseOptions.wrap here because abcjs auto-wrapping conflicts with tablature rendering on multi-system staves.
+        // The ABC notation has explicit line breaks, so it wraps naturally without issues.
+        tablature: [
+          ...Array.from({ length: guitarIndex }, () => ({ instrument: "" as const })),
+          {
+            instrument: "guitar" as const,
+            label: "GUITAR TAB (%T)",
+            tuning: ["E,,", "A,,", "D,", "G,", "B,", "E"],
+            capo: 0,
+            hideTabSymbol: false,
+          },
+        ],
+      };
+      console.log("[DEBUG] getRenderOptionsFor returns:", JSON.stringify(result));
+      return result;
+    }
+
+    console.log("[DEBUG] getRenderOptionsFor fallback. guitarIndex:", guitarIndex);
+    return baseOptions;
+  }, [guitarTabEnabled]);
 
   if (step === "melody") {
     return (
@@ -652,6 +672,19 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
                       />
                       🎶 Original Chords
                     </label>
+                    {/* Strong beats toggle */}
+                    <label className="flex items-center gap-2 text-xs font-semibold text-zinc-800 dark:text-zinc-200 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="rounded border-zinc-300 text-amber-500 focus:ring-amber-500"
+                        checked={accompLayerVisibility['__strong_beats__'] === true}
+                        onChange={() => setAccompLayerVisibility(prev => ({
+                          ...prev,
+                          ['__strong_beats__']: !(prev['__strong_beats__'] === true)
+                        }))}
+                      />
+                      ⬤ Strong Beats
+                    </label>
                     {/* Guitar tablature toggle */}
                     {hasGuitarVoice && (
                       <label className="flex items-center gap-2 text-xs font-semibold text-zinc-800 dark:text-zinc-200 cursor-pointer">
@@ -704,7 +737,9 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
                 abcString={accompanimentAbc}
                 title={appliedWorkflowStep ? `Resulting ABC Staff Preview: Step ${appliedWorkflowStep.label}` : "Accompaniment Music Sheet"}
                 canvasId="composer-accompaniment-preview"
-                {...accompanimentPreviewProps}
+                minWidthClassName="min-w-[520px]"
+                sheetViewportClassName="max-h-[min(76vh,860px)] overflow-auto p-4"
+                renderOptions={getRenderOptionsFor(accompanimentAbc, ACCOMPANIMENT_PREVIEW_RENDER_OPTIONS)}
               />
               {appliedWorkflowStep && (
                 <p className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-300">
@@ -905,7 +940,9 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
               abcString={ensembleAbc}
               title="Multi-track Full Score Playback"
               canvasId="composer-ensemble-preview"
-              {...ACCOMPANIMENT_PREVIEW_PROPS}
+              minWidthClassName="min-w-[520px]"
+              sheetViewportClassName="max-h-[min(76vh,860px)] overflow-auto p-4"
+              renderOptions={getRenderOptionsFor(ensembleAbc, ACCOMPANIMENT_PREVIEW_RENDER_OPTIONS)}
             />
           </>
         )}
@@ -966,7 +1003,9 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
             abcString={reviewAbc}
             title="Review Music Playback Controller"
             canvasId="composer-review-preview"
-            {...COMPOSER_PREVIEW_PROPS}
+            minWidthClassName="min-w-[520px] max-w-[760px]"
+            sheetViewportClassName="max-h-[min(76vh,780px)] overflow-auto p-4"
+            renderOptions={getRenderOptionsFor(reviewAbc, COMPOSER_PREVIEW_RENDER_OPTIONS)}
           />
         </>
       )}

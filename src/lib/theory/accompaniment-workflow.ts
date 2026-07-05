@@ -1,3 +1,5 @@
+import { splitAbcMeasureSegments } from "./abc-duration";
+
 export const ACCOMPANIMENT_WORKFLOW_VERSION = 1;
 
 export const ACCOMPANIMENT_WORKFLOW_STEP_IDS = [
@@ -529,6 +531,122 @@ function formatPreviousSelections(previousSelections: AccompanimentWorkflowSelec
   ].join("\n")).join("\n\n");
 }
 
+function isMusicBodyLine(line: string): boolean {
+  const trimmed = line.trim();
+  if (!trimmed) return false;
+  if (trimmed.startsWith("%")) return false;
+  if (/^[A-Za-z]:/.test(trimmed)) return false;
+  return true;
+}
+
+function referenceMeasureLinePattern(referenceAbc: string): number[] {
+  return referenceAbc
+    .split(/\r?\n/)
+    .filter(isMusicBodyLine)
+    .map((line) => splitAbcMeasureSegments(line).length)
+    .filter((count) => count > 0);
+}
+
+function regroupMeasures(measures: string[], pattern: number[], fallbackLineCount: number): string[] {
+  const effectivePattern = pattern.length > 0 ? pattern : [Math.max(measures.length, 1)];
+  const output: string[] = [];
+  let cursor = 0;
+
+  for (const count of effectivePattern) {
+    const group = measures.slice(cursor, cursor + count);
+    if (group.length === 0) break;
+    output.push(`| ${group.join(" | ")} |`);
+    cursor += count;
+  }
+
+  if (cursor < measures.length) {
+    const remainingLineCount = Math.max(fallbackLineCount - output.length, 1);
+    const remaining = measures.slice(cursor);
+    const chunkSize = Math.max(1, Math.ceil(remaining.length / remainingLineCount));
+    for (let index = 0; index < remaining.length; index += chunkSize) {
+      output.push(`| ${remaining.slice(index, index + chunkSize).join(" | ")} |`);
+    }
+  }
+
+  return output;
+}
+
+function rebuildMusicLinesForPattern(lines: string[], pattern: number[]): string[] {
+  const musicLineIndices = lines.flatMap((line, index) => isMusicBodyLine(line) ? [index] : []);
+  if (musicLineIndices.length === 0) return lines;
+
+  const measures = musicLineIndices.flatMap((index) => splitAbcMeasureSegments(lines[index]));
+  if (measures.length === 0) return lines;
+
+  const regroupedMusicLines = regroupMeasures(measures, pattern, musicLineIndices.length);
+  const lyricLines = lines.filter((line) => line.trim().startsWith("w:"));
+  const output: string[] = [];
+  let inserted = false;
+  let lyricIndex = 0;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (isMusicBodyLine(line)) {
+      if (!inserted) {
+        for (const musicLine of regroupedMusicLines) {
+          output.push(musicLine);
+          if (lyricIndex < lyricLines.length) {
+            output.push(lyricLines[lyricIndex]);
+            lyricIndex += 1;
+          }
+        }
+        inserted = true;
+      }
+      continue;
+    }
+
+    if (line.trim().startsWith("w:")) continue;
+    output.push(line);
+  }
+
+  while (lyricIndex < lyricLines.length) {
+    output.push(lyricLines[lyricIndex]);
+    lyricIndex += 1;
+  }
+
+  return output;
+}
+
+export function break_measures_line(generatedAbc: string, referenceAbc: string): string {
+  const pattern = referenceMeasureLinePattern(referenceAbc);
+  if (pattern.length === 0) return generatedAbc;
+
+  const lines = generatedAbc.split(/\r?\n/);
+  const melodyStart = lines.findIndex((line) => /^V:Melody\b/.test(line.trim()));
+
+  if (melodyStart >= 0) {
+    const nextVoiceOffset = lines.slice(melodyStart + 1).findIndex((line) => /^V:/.test(line.trim()));
+    const melodyEnd = nextVoiceOffset >= 0 ? melodyStart + 1 + nextVoiceOffset : lines.length;
+    return [
+      ...lines.slice(0, melodyStart + 1),
+      ...rebuildMusicLinesForPattern(lines.slice(melodyStart + 1, melodyEnd), pattern),
+      ...lines.slice(melodyEnd),
+    ].join("\n");
+  }
+
+  return rebuildMusicLinesForPattern(lines, pattern).join("\n");
+}
+
+const ABC_OPTION_DATA_KEYS = ["harmonizedAbc", "validatedAbc", "chordAnnotatedAbc", "abc"] as const;
+
+export function normalizeWorkflowOptionDataLineBreaks(
+  data: Record<string, unknown>,
+  sourceAbc: string
+): Record<string, unknown> {
+  return ABC_OPTION_DATA_KEYS.reduce((nextData, key) => {
+    const value = nextData[key];
+    if (typeof value === "string" && value.trim()) {
+      nextData[key] = break_measures_line(value, sourceAbc);
+    }
+    return nextData;
+  }, { ...data });
+}
+
 export function buildAccompanimentWorkflowPrompt(input: {
   stepId: AccompanimentWorkflowStepId;
   sourceAbc: string;
@@ -540,9 +658,9 @@ export function buildAccompanimentWorkflowPrompt(input: {
   const userNote = input.userNote?.trim();
   const lyricChordAnnotations = extractLyricChordAnnotations(input.sourceAbc);
   const abcDataInstruction = input.stepId === "chord-progression"
-    ? "\nStep-specific data requirement: each option.data MUST include harmonizedAbc containing the full source ABC with the proposed chord symbols applied, so the user can immediately hear this progression in Music Staff Playback."
+    ? "\nStep-specific data requirement: each option.data MUST include harmonizedAbc containing the full source ABC with the proposed chord symbols applied, so the user can immediately hear this progression in Music Staff Playback. Before returning harmonizedAbc, apply the break_measures_line formatting rule: the output ABC melody music body must have the same number of music lines and the same number of measures per line as the Source ABC. If Source ABC has 5 music lines of 4 measures each, harmonizedAbc must do the same."
     : input.stepId === "voice-leading-validation"
-      ? "\nStep-specific data requirement: each option.data MUST include harmonizedAbc or validatedAbc containing the full final chord-annotated ABC after voice-leading validation, so the user can immediately hear it in Music Staff Playback."
+      ? "\nStep-specific data requirement: each option.data MUST include validatedAbc or harmonizedAbc containing the full final chord-annotated ABC after voice-leading validation, so the user can immediately hear it in Music Staff Playback. Before returning validatedAbc or harmonizedAbc, apply the break_measures_line formatting rule: the output ABC melody music body must have the same number of music lines and the same number of measures per line as the Source ABC. Include a validation note confirming measure line breaks match the Source ABC."
       : "";
   const lyricChordInstruction = lyricChordAnnotations.length > 0 && isChordIngestionWorkflowStep(input.stepId)
     ? "\n- The source ABC has chord symbols embedded inside the lyric w: lines. Treat those lyric chord symbols as the user-supplied chord progression. Do not invent a different progression; map roles, progression, and validation around these chords."
@@ -559,10 +677,51 @@ export function buildConsolidatedChordIngestionPrompt(input: {
 }): string {
   const userNote = input.userNote?.trim();
 
-  return `DEFAULT PROMPT — MUSIC ACCOMPANIMENT WORKFLOW CONSOLIDATED CHORD INGESTION\n\nTask: The lyrics contain chord symbols like [Em]Hari Bol, Hari [D]Bol. In one LLM decision, ingest the lyric chord progression and produce reviewable results for these three workflow steps:\n1. Chord-tone Role Mapping\n2. Chord Progression Selection\n3. Voice-leading & Harmonized ABC Validation\n\nHard rules:\n- Use the lyric chord annotations below as the supplied chord progression. Do not invent a replacement progression.\n- Return between 1 and 5 options for each of the three result groups.\n- Chord-tone options explain how strong melody notes function over the supplied chords.\n- Progression options preserve the supplied chord order and provide roman numerals/function labels.\n- Validation options must include option.data.harmonizedAbc or option.data.validatedAbc containing the full source ABC with playable chord symbols applied outside the w: lyric lines, so Music Staff Playback can render the harmony.\n- Preserve the source melody ABC exactly except for adding/moving chord annotations into playable ABC chord positions.\n- Include warnings for any lyric chord that conflicts with strong melody tones, raga/scale expectations, or cadence support.\n\nMetadata:\n${formatMetadata(input.metadata)}\n\nPreviously selected workflow context:\n${formatPreviousSelections(input.previousSelections)}\n\nLyric chord annotations to ingest:\n${formatLyricChordAnnotations(input.sourceAbc)}\n\nSource ABC:\n\`\`\`abc\n${input.sourceAbc}\n\`\`\`\n\nUSER NOTE TO ADD TO PROMPT:\n${userNote || "(none)"}`;
+  return `DEFAULT PROMPT — MUSIC ACCOMPANIMENT WORKFLOW CONSOLIDATED CHORD INGESTION\n\nTask: The lyrics contain chord symbols like [Em]Hari Bol, Hari [D]Bol. In one LLM decision, ingest the lyric chord progression and produce reviewable results for these three workflow steps:\n1. Chord-tone Role Mapping\n2. Chord Progression Selection\n3. Voice-leading & Harmonized ABC Validation\n\nHard rules:\n- Use the lyric chord annotations below as the supplied chord progression. Do not invent a replacement progression.\n- Return between 1 and 5 options for each of the three result groups.\n- Chord-tone options explain how strong melody notes function over the supplied chords.\n- Progression options preserve the supplied chord order and provide roman numerals/function labels.\n- Validation options must include option.data.validatedAbc or option.data.harmonizedAbc containing the full source ABC with playable chord symbols applied outside the w: lyric lines, so Music Staff Playback can render the harmony.\n- Before returning any harmonizedAbc or validatedAbc, apply the break_measures_line formatting rule: the output ABC melody music body must have the same number of music lines and the same number of measures per line as the Source ABC. If Source ABC has 5 music lines of 4 measures each, returned ABC must do the same.\n- Preserve the source melody ABC exactly except for adding/moving chord annotations into playable ABC chord positions.\n- Include warnings for any lyric chord that conflicts with strong melody tones, raga/scale expectations, cadence support, or measure-line preservation.\n\nMetadata:\n${formatMetadata(input.metadata)}\n\nPreviously selected workflow context:\n${formatPreviousSelections(input.previousSelections)}\n\nLyric chord annotations to ingest:\n${formatLyricChordAnnotations(input.sourceAbc)}\n\nSource ABC:\n\`\`\`abc\n${input.sourceAbc}\n\`\`\`\n\nUSER NOTE TO ADD TO PROMPT:\n${userNote || "(none)"}`;
 }
 
-function buildWorkflowOptionsProperty(description: string) {
+function buildWorkflowOptionDataProperty(stepId?: AccompanimentWorkflowStepId) {
+  if (stepId === "chord-progression") {
+    return {
+      type: "object",
+      description: "Step-specific structured decision data. Must include harmonizedAbc for Music Staff Playback.",
+      additionalProperties: true,
+      properties: {
+        harmonizedAbc: {
+          type: "string",
+          description: "Full source ABC with proposed chord symbols applied. Must follow break_measures_line: preserve the same melody music line count and same measures per line as Source ABC.",
+        },
+      },
+      required: ["harmonizedAbc"],
+    };
+  }
+
+  if (stepId === "voice-leading-validation") {
+    return {
+      type: "object",
+      description: "Step-specific structured decision data. Prefer validatedAbc for the final Music Staff Playback source.",
+      additionalProperties: true,
+      properties: {
+        validatedAbc: {
+          type: "string",
+          description: "Full final chord-annotated ABC after voice-leading validation. Must follow break_measures_line: preserve the same melody music line count and same measures per line as Source ABC.",
+        },
+        harmonizedAbc: {
+          type: "string",
+          description: "Fallback full final harmonized ABC. Must also follow break_measures_line so melody line breaks match Source ABC.",
+        },
+      },
+    };
+  }
+
+  return {
+    type: "object",
+    description: "Step-specific structured decision data. Include profile/style ids when relevant.",
+    additionalProperties: true,
+  };
+}
+
+function buildWorkflowOptionsProperty(description: string, stepId?: AccompanimentWorkflowStepId) {
   return {
     type: "array",
     minItems: 1,
@@ -576,11 +735,7 @@ function buildWorkflowOptionsProperty(description: string) {
         label: { type: "string", description: "Short human-readable option label." },
         summary: { type: "string", description: "One or two sentence summary." },
         justification: { type: "string", description: "Music-theory justification for this option." },
-        data: {
-          type: "object",
-          description: "Step-specific structured decision data. Include profile/style ids when relevant.",
-          additionalProperties: true,
-        },
+        data: buildWorkflowOptionDataProperty(stepId),
         warnings: {
           type: "array",
           items: { type: "string" },
@@ -604,7 +759,7 @@ function buildWorkflowResultGroupProperty(stepId: AccompanimentWorkflowStepId) {
     additionalProperties: false,
     description: `Options for ${step.label}.`,
     properties: {
-      options: buildWorkflowOptionsProperty(`One to five options for ${step.label}.`),
+      options: buildWorkflowOptionsProperty(`One to five options for ${step.label}.`, stepId),
     },
     required: ["options"],
   };
@@ -642,7 +797,7 @@ export function buildAccompanimentWorkflowToolSchema(stepId: AccompanimentWorkfl
         type: "object",
         additionalProperties: false,
         properties: {
-          options: buildWorkflowOptionsProperty("One to five options for the user to choose from."),
+          options: buildWorkflowOptionsProperty("One to five options for the user to choose from.", stepId),
         },
         required: ["options"],
       },

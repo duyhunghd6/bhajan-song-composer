@@ -174,4 +174,88 @@ K:Em
     expect(result.abc).not.toContain("V:Flute");
     expect(result.visibleVoiceNames).toEqual(["Djembe"]);
   });
+
+  it("keeps Strong Beats off by default and strips pre-existing beat markers", () => {
+    const melodyAbc = `X:1
+T:Strong Beats Off Test
+M:4/4
+L:1/8
+K:Em
+"Em""_⬤"E2 E2 "_●"G2 A2 | B4 B2 A2 |`;
+
+    const result = buildAccompanimentAbc({
+      baseAbc: melodyAbc,
+      layerVisibility: {},
+    });
+
+    expect(result.abc).not.toContain('"_⬤"');
+    expect(result.abc).not.toContain('"_●"');
+    expect(result.abc).not.toContain('"_•"');
+  });
+
+  it("adds 4/4 Strong, Medium, and Soft beat markers when the Strong Beats layer is visible", () => {
+    const melodyAbc = `X:1
+T:Strong Beats 4/4 Test
+M:4/4
+L:1/8
+K:Em
+"Em"E2 E2 "G"G2 A2 | B4 B2 A2 |`;
+
+    const result = buildAccompanimentAbc({
+      baseAbc: melodyAbc,
+      layerVisibility: { __strong_beats__: true },
+    });
+
+    expect(result.abc).toContain('"Em""_⬤"E2');
+    expect(result.abc).toContain('"_•"E2');
+    expect(result.abc).toContain('"G""_●"G2');
+    expect(result.abc).toContain('"_•"A2');
+  });
+
+  it("keeps beat markers when chords are hidden but removes chord symbols", () => {
+    const melodyAbc = `X:1
+T:Strong Beats Chord Toggle Test
+M:4/4
+L:1/8
+K:Em
+"Em"E2 E2 "G"G2 A2 |`;
+
+    const result = buildAccompanimentAbc({
+      baseAbc: melodyAbc,
+      layerVisibility: { __strong_beats__: true, __chords__: false },
+    });
+
+    expect(result.abc).toContain('"_⬤"E2');
+    expect(result.abc).toContain('"_●"G2');
+    expect(result.abc).not.toContain('"Em"');
+    expect(result.abc).not.toContain('"G"');
+  });
+
+  it("adds meter-specific beat markers for 3/4 and 6/8", () => {
+    const threeFour = buildAccompanimentAbc({
+      baseAbc: `X:1
+T:Strong Beats 3/4 Test
+M:3/4
+L:1/8
+K:G
+| d2 c2 B2 |`,
+      layerVisibility: { __strong_beats__: true },
+    });
+    const sixEight = buildAccompanimentAbc({
+      baseAbc: `X:1
+T:Strong Beats 6/8 Test
+M:6/8
+L:1/8
+K:Am
+| A B c d e f |`,
+      layerVisibility: { __strong_beats__: true },
+    });
+
+    expect(threeFour.abc).toContain('"_⬤"d2');
+    expect(threeFour.abc).toContain('"_•"c2');
+    expect(threeFour.abc).toContain('"_•"B2');
+    expect(sixEight.abc).toContain('"_⬤"A');
+    expect(sixEight.abc).toContain('"_●"d');
+    expect(sixEight.abc.match(/"_•"/g)).toHaveLength(4);
+  });
 });

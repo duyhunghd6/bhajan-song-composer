@@ -52,10 +52,10 @@ body {
   }
 }
 
-/* Pull abcjs tablature up so it sits tightly under the lyrics */
-g.abcjs-tablature-staff,
-g.abcjs-tabNumber,
-g.abcjs-symbol:has(path[data-name="tab.big"]) {
+/* Pull abcjs tablature up so it sits tightly under the lyrics ONLY on the first system */
+g.abcjs-l0.abcjs-tablature-staff,
+g.abcjs-l0.abcjs-tabNumber,
+g.abcjs-l0.abcjs-symbol:has(path[data-name="tab.big"]) {
   transform: translateY(-50px);
 }
 

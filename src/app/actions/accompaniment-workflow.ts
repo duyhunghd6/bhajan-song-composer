@@ -7,6 +7,7 @@ import {
   buildConsolidatedChordIngestionPrompt,
   buildConsolidatedChordIngestionToolSchema,
   extractLyricChordAnnotations,
+  normalizeWorkflowOptionDataLineBreaks,
   type AccompanimentWorkflowMetadata,
   type AccompanimentWorkflowOption,
   type AccompanimentWorkflowRun,
@@ -50,7 +51,7 @@ function stringArray(value: unknown): string[] {
   return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
 }
 
-function normalizeOptions(raw: unknown): AccompanimentWorkflowOption[] {
+function normalizeOptions(raw: unknown, sourceAbc: string): AccompanimentWorkflowOption[] {
   const result = raw as RawWorkflowStepResult;
   const options = Array.isArray(result.options) ? result.options.slice(0, 5) : [];
 
@@ -58,15 +59,21 @@ function normalizeOptions(raw: unknown): AccompanimentWorkflowOption[] {
     throw new Error("LLM returned no workflow options");
   }
 
-  return options.map((option, index) => ({
-    id: normalizeId(option.id, `option-${index + 1}`),
-    label: typeof option.label === "string" && option.label.trim() ? option.label.trim() : `Option ${index + 1}`,
-    summary: typeof option.summary === "string" ? option.summary : "",
-    justification: typeof option.justification === "string" ? option.justification : "",
-    data: option.data && typeof option.data === "object" && !Array.isArray(option.data) ? option.data : {},
-    warnings: stringArray(option.warnings),
-    validationNotes: stringArray(option.validationNotes),
-  }));
+  return options.map((option, index) => {
+    const data = option.data && typeof option.data === "object" && !Array.isArray(option.data)
+      ? normalizeWorkflowOptionDataLineBreaks(option.data, sourceAbc)
+      : {};
+
+    return {
+      id: normalizeId(option.id, `option-${index + 1}`),
+      label: typeof option.label === "string" && option.label.trim() ? option.label.trim() : `Option ${index + 1}`,
+      summary: typeof option.summary === "string" ? option.summary : "",
+      justification: typeof option.justification === "string" ? option.justification : "",
+      data,
+      warnings: stringArray(option.warnings),
+      validationNotes: stringArray(option.validationNotes),
+    };
+  });
 }
 
 function makeRun(input: {
@@ -106,7 +113,7 @@ export async function generateAccompanimentWorkflowStep(
       stepId: input.stepId,
       requestPrompt,
       userNote: input.userNote,
-      options: normalizeOptions(rawResult),
+      options: normalizeOptions(rawResult, input.sourceAbc),
       rawResult,
     });
   } catch (error) {
@@ -139,21 +146,21 @@ export async function generateConsolidatedChordIngestionWorkflowSteps(
         stepId: "chord-tone-mapping",
         requestPrompt,
         userNote: input.userNote,
-        options: normalizeOptions(result.chordToneMapping),
+        options: normalizeOptions(result.chordToneMapping, input.sourceAbc),
         rawResult: result.chordToneMapping,
       }),
       makeRun({
         stepId: "chord-progression",
         requestPrompt,
         userNote: input.userNote,
-        options: normalizeOptions(result.chordProgression),
+        options: normalizeOptions(result.chordProgression, input.sourceAbc),
         rawResult: result.chordProgression,
       }),
       makeRun({
         stepId: "voice-leading-validation",
         requestPrompt,
         userNote: input.userNote,
-        options: normalizeOptions(result.voiceLeadingValidation),
+        options: normalizeOptions(result.voiceLeadingValidation, input.sourceAbc),
         rawResult: result.voiceLeadingValidation,
       }),
     ];

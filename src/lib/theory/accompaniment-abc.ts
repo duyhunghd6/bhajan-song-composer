@@ -7,6 +7,7 @@ import {
   splitAbcMeasureSegments,
   stripAbcChordSymbols,
 } from "./abc-duration";
+import { annotateStrongBeatIndicators, stripBeatAnnotations } from "./abc-beat-annotations";
 
 /**
  * Replace all note tokens in an ABC music line with rests of equal duration.
@@ -187,7 +188,8 @@ export function buildAccompanimentAbc({
   const headerLines = getHeaderLines(baseAbc);
   const showChords = layerVisibility.__chords__ !== false;
   const showMelody = layerVisibility.__melody__ !== false;
-  const musicLines = extractMusicBodyLines(melodyBlock);
+  const showStrongBeats = layerVisibility.__strong_beats__ === true;
+  const musicLines = extractMusicBodyLines(melodyBlock).map(stripBeatAnnotations);
 
   // Build melody lines: strip chords if chord layer is off, replace notes with rests if melody is off
   let melodyMusicLines: string[];
@@ -199,6 +201,10 @@ export function buildAccompanimentAbc({
     melodyMusicLines = musicLines.map(stripAbcChordSymbols);
   } else {
     melodyMusicLines = musicLines;
+  }
+
+  if (showStrongBeats && showMelody) {
+    melodyMusicLines = annotateStrongBeatIndicators({ musicLines: melodyMusicLines, baseAbc });
   }
 
   const melodyOutputLines = interleaveLyrics(melodyMusicLines, showMelody ? getLyricsLines(melodyBlock) : []);
