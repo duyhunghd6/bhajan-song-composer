@@ -1,4 +1,5 @@
 import { AccompanimentStage } from "./accompaniment-stage";
+import { extractMusicBodyLines, splitAbcMeasureSegments } from "./abc-duration";
 import {
   DjembeArrangement,
   DjembeEvent,
@@ -152,10 +153,57 @@ function noteToAbc(note: string): string {
   return `${accidentalPrefix}${pitch.toLowerCase()}${"'".repeat(Math.max(0, octave - 5))}`;
 }
 
+function melodyMeasureLinePattern(melodyAbc: string): number[] {
+  return extractMusicBodyLines(melodyAbc)
+    .map((line) => splitAbcMeasureSegments(line).length)
+    .filter((count) => count > 0);
+}
+
+function formatMeasuresByStaffSystem(measures: string[], pattern: number[]): string[] {
+  const effectivePattern = pattern.length > 0 ? pattern : [Math.max(measures.length, 1)];
+  const lines: string[] = [];
+  let cursor = 0;
+
+  for (const count of effectivePattern) {
+    const group = measures.slice(cursor, cursor + count);
+    if (group.length === 0) break;
+    lines.push(`| ${group.join(" | ")} |`);
+    cursor += count;
+  }
+
+  if (cursor < measures.length) {
+    lines.push(`| ${measures.slice(cursor).join(" | ")} |`);
+  }
+
+  return lines;
+}
+
+function regroupVoiceAbcByStaffSystem(voiceAbc: string, pattern: number[]): string {
+  const lines = voiceAbc.split(/\r?\n/);
+  const voiceLine = lines[0]?.trim();
+  if (!voiceLine?.startsWith("V:")) return voiceAbc;
+
+  const directiveLines = lines.slice(1).filter((line) => {
+    const trimmed = line.trim();
+    return trimmed.startsWith("%%") || trimmed.startsWith("%");
+  });
+  const musicMeasures = splitAbcMeasureSegments(extractMusicBodyLines(voiceAbc).join(" "));
+
+  if (musicMeasures.length === 0) return voiceAbc;
+
+  return [
+    voiceLine,
+    ...directiveLines,
+    "% Layer 3 voice is split to match the source Melody staff-system line pattern.",
+    ...formatMeasuresByStaffSystem(musicMeasures, pattern),
+  ].join("\n");
+}
+
 function buildOrchestralLayerAbc(
   voiceName: "Flute" | "Violin",
   events: OrchestralSupportEvent[],
-  measureCount: number
+  measureCount: number,
+  pattern: number[]
 ): string {
   const measures = Array.from({ length: measureCount }, (_, measureIndex) => {
     const notes = events
@@ -166,22 +214,30 @@ function buildOrchestralLayerAbc(
     return notes.length > 0 ? notes.join(" ") : "z8";
   });
 
-  return `V:${voiceName} name="Layer 3 ${voiceName} Support"\n%%MIDI program ${ORCHESTRAL_MIDI_PROGRAM_BY_VOICE[voiceName]}\n| ${measures.join(" | ")} |`;
+  return [
+    `V:${voiceName} name="Layer 3 ${voiceName} Support"`,
+    `%%MIDI program ${ORCHESTRAL_MIDI_PROGRAM_BY_VOICE[voiceName]}`,
+    "% Layer 3 voice is split to match the source Melody staff-system line pattern.",
+    ...formatMeasuresByStaffSystem(measures, pattern),
+  ].join("\n");
 }
 
 function buildAbcLayers(
   djembe: DjembeArrangement,
   orchestral: OrchestralSupportArrangement,
-  measureCount: number
+  measureCount: number,
+  melodyAbc: string
 ): EnsembleAbcLayers {
-  const layer3Flute = buildOrchestralLayerAbc("Flute", orchestral.fluteSupportMap, measureCount);
-  const layer3Violin = buildOrchestralLayerAbc("Violin", orchestral.violinSupportMap, measureCount);
+  const pattern = melodyMeasureLinePattern(melodyAbc);
+  const layer3Djembe = regroupVoiceAbcByStaffSystem(djembe.abc, pattern);
+  const layer3Flute = buildOrchestralLayerAbc("Flute", orchestral.fluteSupportMap, measureCount, pattern);
+  const layer3Violin = buildOrchestralLayerAbc("Violin", orchestral.violinSupportMap, measureCount, pattern);
 
   return {
-    layer3Djembe: djembe.abc,
+    layer3Djembe,
     layer3Flute,
     layer3Violin,
-    combined: [djembe.abc, layer3Flute, layer3Violin].join("\n"),
+    combined: [layer3Djembe, layer3Flute, layer3Violin].join("\n"),
   };
 }
 
@@ -387,7 +443,7 @@ export function generateEnsembleExpansionOutput(
     fluteBreath: orchestral.fluteBreathMap,
     violinExpression: orchestral.violinExpressionMap,
   };
-  const abcLayers = buildAbcLayers(djembe, orchestral, accompaniment.measures.length);
+  const abcLayers = buildAbcLayers(djembe, orchestral, accompaniment.measures.length, melodyAbc);
   const playbackEvents = buildPlaybackEvents(djembe, orchestral);
   const midiControlEvents = buildMidiControlEvents(orchestral);
   const visualActivity = buildVisualActivity(handshake, djembe, orchestral);

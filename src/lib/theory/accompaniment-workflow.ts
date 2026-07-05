@@ -18,6 +18,7 @@ import {
 export * from "./accompaniment-workflow/definition";
 export {
   buildAccompanimentWorkflowToolSchema,
+  buildAddStrongBeatIconsToolSchema,
   buildBreakMeasuresLineToolSchema,
   buildConsolidatedChordIngestionToolSchema,
   getAccompanimentWorkflowLlmToolNames,
@@ -318,8 +319,20 @@ function measureLinePatternFromLines(lines: string[]): number[] {
     .filter((count) => count > 0);
 }
 
+function stripInlineVoicePrefix(line: string): string {
+  return line.replace(/^\[V:[^\]]+\]\s*/, "");
+}
+
 export function getAbcMeasureLinePattern(abcString: string): number[] {
   const lines = abcString.split(/\r?\n/);
+  const inlineMelodyLines = lines
+    .map((line) => line.trim())
+    .filter((line) => /^\[V:Melody\]\s*/.test(line));
+
+  if (inlineMelodyLines.length > 0) {
+    return measureLinePatternFromLines(inlineMelodyLines.map(stripInlineVoicePrefix));
+  }
+
   const melodyStart = lines.findIndex((line) => /^V:Melody\b/.test(line.trim()));
 
   if (melodyStart >= 0) {
@@ -372,7 +385,7 @@ function rebuildMusicLinesForPattern(lines: string[], pattern: number[]): string
   const musicLineIndices = lines.flatMap((line, index) => isMusicBodyLine(line) ? [index] : []);
   if (musicLineIndices.length === 0) return lines;
 
-  const measures = musicLineIndices.flatMap((index) => splitAbcMeasureSegments(lines[index]));
+  const measures = musicLineIndices.flatMap((index) => splitAbcMeasureSegments(stripInlineVoicePrefix(lines[index])));
   if (measures.length === 0) return lines;
 
   const regroupedMusicLines = regroupMeasures(measures, pattern, musicLineIndices.length);
@@ -409,11 +422,72 @@ function rebuildMusicLinesForPattern(lines: string[], pattern: number[]): string
   return output;
 }
 
+function splitInlineVoiceBody(lines: string[]): { prefix: string[]; voiceLines: Map<string, string[]>; suffix: string[] } {
+  const voiceLines = new Map<string, string[]>();
+  const prefix: string[] = [];
+  const suffix: string[] = [];
+  let sawInlineVoice = false;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    const match = trimmed.match(/^\[V:([^\]]+)\]\s*(.*)$/);
+    if (match) {
+      sawInlineVoice = true;
+      const voiceName = match[1];
+      const bodyLine = match[2];
+      const entries = voiceLines.get(voiceName) ?? [];
+      entries.push(bodyLine);
+      voiceLines.set(voiceName, entries);
+      continue;
+    }
+
+    if (sawInlineVoice && (trimmed.startsWith("w:") || trimmed.startsWith("+:") || trimmed.startsWith("% Staff system"))) continue;
+    if (sawInlineVoice && trimmed && !/^[A-Za-z]:/.test(trimmed) && !trimmed.startsWith("%")) {
+      suffix.push(line);
+      continue;
+    }
+
+    if (sawInlineVoice) suffix.push(line);
+    else prefix.push(line);
+  }
+
+  return { prefix, voiceLines, suffix };
+}
+
+function regroupInlineVoiceLines(lines: string[], pattern: number[]): string[] {
+  const { prefix, voiceLines, suffix } = splitInlineVoiceBody(lines);
+  const melodyLines = voiceLines.get("Melody");
+  if (!melodyLines || melodyLines.length === 0) return lines;
+
+  const regroupedByVoice = new Map<string, string[]>();
+  for (const [voiceName, bodyLines] of voiceLines) {
+    regroupedByVoice.set(voiceName, rebuildMusicLinesForPattern(bodyLines, pattern));
+  }
+
+  const orderedVoiceNames = Array.from(voiceLines.keys());
+  const lineCount = regroupedByVoice.get("Melody")?.length ?? 0;
+  const output = [...prefix];
+
+  for (let lineIndex = 0; lineIndex < lineCount; lineIndex += 1) {
+    output.push(`% Staff system ${lineIndex + 1}: Melody and visible instruments share this measure range.`);
+    for (const voiceName of orderedVoiceNames) {
+      const bodyLine = regroupedByVoice.get(voiceName)?.[lineIndex];
+      if (bodyLine) output.push(`[V:${voiceName}] ${bodyLine}`);
+    }
+  }
+
+  return [...output, ...suffix.filter((line) => line.trim())];
+}
+
 export function break_measures_line(generatedAbc: string, referenceAbc: string): string {
   const pattern = referenceMeasureLinePattern(referenceAbc);
   if (pattern.length === 0) return generatedAbc;
 
   const lines = generatedAbc.split(/\r?\n/);
+  if (lines.some((line) => /^\[V:Melody\]\s*/.test(line.trim()))) {
+    return regroupInlineVoiceLines(lines, pattern).join("\n");
+  }
+
   const melodyStart = lines.findIndex((line) => /^V:Melody\b/.test(line.trim()));
 
   if (melodyStart >= 0) {
@@ -459,6 +533,9 @@ export function buildAccompanimentWorkflowPrompt(input: {
     : input.stepId === "voice-leading-validation"
       ? "\nStep-specific data requirement: each option.data MUST include validatedAbc or harmonizedAbc containing the full final chord-annotated ABC after voice-leading validation, so the user can immediately hear it in Music Staff Playback. Before calling the final generate_voice_leading_validation tool, call the break_measures_line tool with the generated ABCNotation, then copy the returned abc exactly into option.data.validatedAbc or option.data.harmonizedAbc. The output ABC Melody music body must have the same number of music lines and the same number of measures per line as the Source ABC. Include a validation note confirming measure line breaks match the Source ABC."
       : "";
+  const strongBeatInstruction = input.stepId === "strong-beat-targets"
+    ? "\nStrong Beats local algorithm requirement: choose only the review direction/emphasis. Before calling the final generate_strong_beat_targets tool, call add_strong_beat_icons so the local algorithm computes concrete beat icon positions in ABCNotation. Copy the returned strongBeatDirectives into option.data.strongBeatDirectives, and copy the returned abcNotation into option.data.annotatedAbc when present. Do not invent measureIndex or beatTime values yourself."
+    : "";
   const guitarTabInstruction = isGuitarTabValidationWorkflowStep(input.stepId)
     ? "\nGuitar tab validation requirement: each option.data MUST include guitarTab.events with measureIndex, beat, note, string, fret, and role. Before finalizing an option, call the valid_guitar_tab tool with those exact events. If valid_guitar_tab reports any issue, revise the tab and call valid_guitar_tab again. Hard physical rule: in any simultaneous group, a string number may appear only once; one guitar string cannot play E3 and G3 (or any two pitches) at the same time."
     : "";
@@ -466,8 +543,9 @@ export function buildAccompanimentWorkflowPrompt(input: {
     ? "\n- The source ABC has chord symbols embedded inside the lyric w: lines. Treat those lyric chord symbols as the user-supplied chord progression. Do not invent a different progression; map roles, progression, and validation around these chords."
     : "";
   const midiInstruction = "\n- Any generated Guitar Classic/Classical Guitar ABC must include `%%MIDI program 24` immediately after the Guitar voice declaration.\n- Only an exact `Guitar Left Hand` target may be retargeted to Harmonium/Reed Organ, and it must use `%%MIDI program 20`; do not change `Guitar LH Accompaniment`, `Guitar Right Hand`, or generic Guitar layers.";
+  const staffSystemInstruction = "\n- Multi-voice ABC line grouping requirement: when returning ABC with Melody plus Guitar/Piano/etc., preserve the source Melody visual staff systems. Emit/validate the body as Staff system 1 = [V:Melody] line 1, then each instrument's line 1; Staff system 2 = [V:Melody] line 2, then each instrument's line 2; continue through all Melody lines. Do not write all Melody lines first and all accompaniment lines later when the final ABC contains multiple instruments.";
 
-  return `DEFAULT PROMPT — MUSIC ACCOMPANIMENT WORKFLOW STEP ${step.index}\n\nTask: ${step.label}\n${step.description}\n\nTheory reference to follow:\n${step.theoryReference}\n\nOutput focus:\n${step.outputFocus.map((item) => `- ${item}`).join("\n")}\n\nGlobal hard rules:\n- Return between 1 and 5 distinct options.\n- Every option must include a concise label, summary, justification, warnings, and validation notes.\n- Preserve the source melody ABC exactly unless this step explicitly asks for chord annotations.\n- Respect previously selected workflow decisions.\n- If a choice is musically risky, include a warning instead of hiding the risk.\n- Prefer devotional/bhajan-appropriate support unless the user's note asks otherwise.${midiInstruction}${abcDataInstruction}${guitarTabInstruction}${lyricChordInstruction}\n\nMetadata:\n${formatMetadata(input.metadata)}\n\nPreviously selected workflow context:\n${formatPreviousSelections(input.previousSelections)}\n\nLyric chord annotations:\n${formatLyricChordAnnotations(input.sourceAbc)}\n\nSource ABC:\n\`\`\`abc\n${input.sourceAbc}\n\`\`\`\n\nUSER NOTE TO ADD TO PROMPT:\n${userNote || "(none)"}`;
+  return `DEFAULT PROMPT — MUSIC ACCOMPANIMENT WORKFLOW STEP ${step.index}\n\nTask: ${step.label}\n${step.description}\n\nTheory reference to follow:\n${step.theoryReference}\n\nOutput focus:\n${step.outputFocus.map((item) => `- ${item}`).join("\n")}\n\nGlobal hard rules:\n- Return between 1 and 5 distinct options.\n- Every option must include a concise label, summary, justification, warnings, and validation notes.\n- Preserve the source melody ABC exactly unless this step explicitly asks for chord annotations.\n- Respect previously selected workflow decisions.\n- If a choice is musically risky, include a warning instead of hiding the risk.\n- Prefer devotional/bhajan-appropriate support unless the user's note asks otherwise.${midiInstruction}${staffSystemInstruction}${abcDataInstruction}${strongBeatInstruction}${guitarTabInstruction}${lyricChordInstruction}\n\nMetadata:\n${formatMetadata(input.metadata)}\n\nPreviously selected workflow context:\n${formatPreviousSelections(input.previousSelections)}\n\nLyric chord annotations:\n${formatLyricChordAnnotations(input.sourceAbc)}\n\nSource ABC:\n\`\`\`abc\n${input.sourceAbc}\n\`\`\`\n\nUSER NOTE TO ADD TO PROMPT:\n${userNote || "(none)"}`;
 }
 
 export function buildConsolidatedChordIngestionPrompt(input: {
@@ -478,5 +556,5 @@ export function buildConsolidatedChordIngestionPrompt(input: {
 }): string {
   const userNote = input.userNote?.trim();
 
-  return `DEFAULT PROMPT — MUSIC ACCOMPANIMENT WORKFLOW CONSOLIDATED CHORD INGESTION\n\nTask: The lyrics contain chord symbols like [Em]Hari Bol, Hari [D]Bol. In one LLM decision, ingest the lyric chord progression and produce reviewable results for these three workflow steps:\n1. Chord-tone Role Mapping\n2. Chord Progression Selection\n3. Voice-leading & Harmonized ABC Validation\n\nHard rules:\n- Use the lyric chord annotations below as the supplied chord progression. Do not invent a replacement progression.\n- Return between 1 and 5 options for each of the three result groups.\n- Chord-tone options explain how strong melody notes function over the supplied chords.\n- Progression options preserve the supplied chord order and provide roman numerals/function labels.\n- Validation options must include option.data.validatedAbc or option.data.harmonizedAbc containing the full source ABC with playable chord symbols applied outside the w: lyric lines, so Music Staff Playback can render the harmony.\n- Before calling generate_consolidated_chord_ingestion, call the break_measures_line tool for every harmonizedAbc or validatedAbc candidate, then copy each returned abc exactly into the final tool payload.\n- The output ABC Melody music body must have the same number of music lines and the same number of measures per line as the Source ABC. If Source ABC has 5 music lines of 4 measures each, returned ABC must do the same.\n- Preserve the source melody ABC exactly except for adding/moving chord annotations into playable ABC chord positions.\n- Include warnings for any lyric chord that conflicts with strong melody tones, raga/scale expectations, cadence support, or measure-line preservation.\n\nMetadata:\n${formatMetadata(input.metadata)}\n\nPreviously selected workflow context:\n${formatPreviousSelections(input.previousSelections)}\n\nLyric chord annotations to ingest:\n${formatLyricChordAnnotations(input.sourceAbc)}\n\nSource ABC:\n\`\`\`abc\n${input.sourceAbc}\n\`\`\`\n\nUSER NOTE TO ADD TO PROMPT:\n${userNote || "(none)"}`;
+  return `DEFAULT PROMPT — MUSIC ACCOMPANIMENT WORKFLOW CONSOLIDATED CHORD INGESTION\n\nTask: The lyrics contain chord symbols like [Em]Hari Bol, Hari [D]Bol. In one LLM decision, ingest the lyric chord progression and produce reviewable results for these three workflow steps:\n1. Chord-tone Role Mapping\n2. Chord Progression Selection\n3. Voice-leading & Harmonized ABC Validation\n\nHard rules:\n- Use the lyric chord annotations below as the supplied chord progression. Do not invent a replacement progression.\n- Return between 1 and 5 options for each of the three result groups.\n- Chord-tone options explain how strong melody notes function over the supplied chords.\n- Progression options preserve the supplied chord order and provide roman numerals/function labels.\n- Validation options must include option.data.validatedAbc or option.data.harmonizedAbc containing the full source ABC with playable chord symbols applied outside the w: lyric lines, so Music Staff Playback can render the harmony.\n- Before calling generate_consolidated_chord_ingestion, call the break_measures_line tool for every harmonizedAbc or validatedAbc candidate, then copy each returned abc exactly into the final tool payload.\n- The output ABC Melody music body must have the same number of music lines and the same number of measures per line as the Source ABC. If Source ABC has 5 music lines of 4 measures each, returned ABC must do the same.\n- For any multi-voice returned ABC, group by visual staff system: [V:Melody] source line N, then every instrument line N for the same measure range, then move to Melody line N+1.\n- Preserve the source melody ABC exactly except for adding/moving chord annotations into playable ABC chord positions.\n- Include warnings for any lyric chord that conflicts with strong melody tones, raga/scale expectations, cadence support, or measure-line preservation.\n\nMetadata:\n${formatMetadata(input.metadata)}\n\nPreviously selected workflow context:\n${formatPreviousSelections(input.previousSelections)}\n\nLyric chord annotations to ingest:\n${formatLyricChordAnnotations(input.sourceAbc)}\n\nSource ABC:\n\`\`\`abc\n${input.sourceAbc}\n\`\`\`\n\nUSER NOTE TO ADD TO PROMPT:\n${userNote || "(none)"}`;
 }

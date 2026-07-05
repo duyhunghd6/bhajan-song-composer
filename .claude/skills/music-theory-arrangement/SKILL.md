@@ -80,6 +80,29 @@ When outputting ABC notation for the arranged instruments, use these `%%MIDI` co
 
 Refer to the **`abcjs` Instrument Simulation Guide** in the `abcjs` skill file for complete code examples.
 
+### ABC Multi-Instrument Staff-System Grouping
+
+When an arrangement produces ABC for Melody plus Guitar, Piano, Djembe, Flute, Violin, or any other additional instrument, preserve the source Melody's visual staff systems. Treat each Melody music line as the root line for one staff-system group:
+
+```abc
+% Staff system 1
+[V:Melody] melody-line-1
+[V:Guitar] guitar-line-1
+[V:Piano] piano-line-1
+
+% Staff system 2
+[V:Melody] melody-line-2
+[V:Guitar] guitar-line-2
+[V:Piano] piano-line-2
+```
+
+Hard rules:
+
+- Every instrument line in a group must cover the same measure range and duration as the Melody line for that group.
+- If an instrument is silent for that group, write rests for those measures rather than omitting the voice line.
+- Do not output all Melody lines first and all instrument lines later when final ABC contains multiple instruments; interleave by staff system for abcjs rendering/playback alignment.
+- Use comments like `% Staff system N` for readability, but avoid blank lines inside one ABC tune because blank lines can split tunes.
+
 ---
 
 ## Relationship to Other Skills

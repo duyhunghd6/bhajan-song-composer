@@ -123,6 +123,7 @@ Important accompaniment rules:
 - Guitar tab validation steps must provide concrete tab events with measure, beat, note, string, fret, and role.
 - Piano output should expose pedal automation, key highlights, fingering metadata, and physical validation where available.
 - Keep generated ABC previewable with `AbcjsPlaybackController`.
+- For multi-instrument ABC, preserve Melody visual line breaks and group by staff system: `[V:Melody]` line N, then each Guitar/Piano/etc. line N for the same measure range, before moving to line N+1.
 
 ### Ensemble workflow small steps
 
@@ -144,6 +145,7 @@ Important ensemble rules:
 - Use ensemble instruments to support, not overcrowd, the devotional melody.
 - Apply conflict resolution in this order: preserve melody, preserve accompaniment foundation, flatten melodic runs, then remove/soften percussion fills.
 - Keep Djembe, Flute, and Violin decisions independently reviewable before final apply.
+- Final Layer 3 ABC must inherit the same staff-system grouping as accompaniment: Melody line N, Layer 2 line N, then each Djembe/Flute/Violin line N for the same measure range.
 
 ## Validation commands
 

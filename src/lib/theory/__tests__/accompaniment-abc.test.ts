@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildAccompanimentAbc } from "../accompaniment-abc";
 import { buildAbcDurationContext, measureDurationUnits, splitAbcMeasureSegments } from "../abc-duration";
+import { addStrongBeatIconsToAbcNotation } from "../abc-beat-annotations";
 import { generatePianoAccompaniment } from "../piano-accompaniment";
 
 const HAPPY_BIRTHDAY_ABC = `X: 1
@@ -15,8 +16,22 @@ d B G | F E c/2c/2 | B G A | G2 |]
 w: birth-day dear [Name] _ Hap-py birth-day to you!`;
 
 function getVoiceBody(abc: string, voiceName: string): string {
-  const match = abc.match(new RegExp(`V:${voiceName}[^\\n]*\\n([\\s\\S]*?)(?=\\nV:|$)`));
-  return match?.[1].trim() ?? "";
+  const legacyMatch = abc.match(new RegExp(`V:${voiceName}[^\\n]*\\n([\\s\\S]*?)(?=\\nV:|$)`));
+  const legacyLines = legacyMatch?.[1]
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean) ?? [];
+  const directiveLines = legacyLines.filter((line) => line.startsWith("%%"));
+  const inlineLines = abc.split("\n").flatMap((line) => {
+    const inlineVoice = line.match(new RegExp(`^\\[V:${voiceName}\\]\\s*(.*)$`));
+    return inlineVoice ? [inlineVoice[1].trim()] : [];
+  });
+
+  if (inlineLines.length > 0) {
+    return [...directiveLines, ...inlineLines].join("\n").trim();
+  }
+
+  return legacyLines.join("\n").trim();
 }
 
 function getVoiceMusicBody(abc: string, voiceName: string): string {
@@ -24,6 +39,10 @@ function getVoiceMusicBody(abc: string, voiceName: string): string {
     .split("\n")
     .filter((line) => !line.trim().startsWith("%"))
     .join("\n");
+}
+
+function getBeatLyricLines(abc: string): string[] {
+  return abc.split("\n").filter((line) => /^w:\s*[|*⬤●•·\s]+$/.test(line.trim()));
 }
 
 describe("accompaniment ABC alignment", () => {
@@ -68,7 +87,7 @@ describe("accompaniment ABC alignment", () => {
     expect(result.abc).toContain("w: Hap-py birth-day to you!");
 
     const pianoBody = getVoiceBody(result.abc, "PianoLH");
-    expect(pianoBody.startsWith("z | ")).toBe(true);
+    expect(splitAbcMeasureSegments(pianoBody)[0]).toBe("z");
 
     const bars = splitAbcMeasureSegments(pianoBody);
     expect(bars).toHaveLength(9);
@@ -238,7 +257,8 @@ T:Strong Beats Off Test
 M:4/4
 L:1/8
 K:Em
-"Em""_⬤"E2 E2 "_●"G2 A2 | B4 B2 A2 |`;
+"Em""_⬤"E2 E2 "_●"G2 A2 | B4 B2 A2 |
+w: ⬤ • ● • | ⬤ ● • |`;
 
     const result = buildAccompanimentAbc({
       baseAbc: melodyAbc,
@@ -248,6 +268,7 @@ K:Em
     expect(result.abc).not.toContain('"_⬤"');
     expect(result.abc).not.toContain('"_●"');
     expect(result.abc).not.toContain('"_•"');
+    expect(getBeatLyricLines(result.abc)).toHaveLength(0);
   });
 
   it("adds 4/4 Strong, Medium, and Soft beat markers when the Strong Beats layer is visible", () => {
@@ -263,10 +284,35 @@ K:Em
       layerVisibility: { __strong_beats__: true },
     });
 
-    expect(result.abc).toContain('"Em""_⬤"E2');
-    expect(result.abc).toContain('"_•"E2');
-    expect(result.abc).toContain('"G""_●"G2');
-    expect(result.abc).toContain('"_•"A2');
+    expect(result.abc).toContain('"Em"E2 E2 "G"G2 A2');
+    expect(result.abc).not.toContain('"_⬤"');
+    expect(result.abc).not.toContain('"_●"');
+    expect(result.abc).not.toContain('"_•"');
+    expect(getBeatLyricLines(result.abc)).toEqual(["w: ⬤ • ● • | ⬤ ● • |"]);
+  });
+
+  it("computes Strong Beats option directives through the local ABC icon algorithm", () => {
+    const melodyAbc = `X:1
+T:Strong Beats Local Tool Test
+M:4/4
+L:1/8
+K:Em
+| E2 E2 G2 A2 | B4 B2 A2 |`;
+
+    const result = addStrongBeatIconsToAbcNotation({
+      abcNotation: melodyAbc,
+      emphasis: "primary-strong-beats",
+    });
+
+    expect(result.valid).toBe(true);
+    expect(result.strongBeatDirectives).toEqual([
+      { measureIndex: 0, beats: [{ beatTime: 1, weight: "strong" }, { beatTime: 3, weight: "medium" }] },
+      { measureIndex: 1, beats: [{ beatTime: 1, weight: "strong" }, { beatTime: 3, weight: "medium" }] },
+    ]);
+    expect(result.abcNotation).toContain("w: ⬤ * ● * | ⬤ ● * |");
+    expect(result.abcNotation).not.toContain('"_⬤"');
+    expect(result.abcNotation).not.toContain('"_●"');
+    expect(result.abcNotation).not.toContain('"_•"');
   });
 
   it("adds Strong Beats annotations without changing the Melody music line count", () => {
@@ -288,8 +334,8 @@ w: Krish-na Krish-na`;
     const musicLines = result.abc.split("\n").filter((line) => line.trim().startsWith("|"));
 
     expect(musicLines).toHaveLength(2);
-    expect(result.abc).toContain('"_⬤"E2');
-    expect(result.abc).toContain('"_●"G2');
+    expect(getBeatLyricLines(result.abc)).toHaveLength(2);
+    expect(result.abc).toContain("w: ⬤ • ● • | ⬤ ● • |");
   });
 
   it("keeps beat markers when chords are hidden but removes chord symbols", () => {
@@ -305,8 +351,10 @@ K:Em
       layerVisibility: { __strong_beats__: true, __chords__: false },
     });
 
-    expect(result.abc).toContain('"_⬤"E2');
-    expect(result.abc).toContain('"_●"G2');
+    expect(result.abc).toContain("E2 E2 G2 A2");
+    expect(result.abc).toContain("w: ⬤ • ● • |");
+    expect(result.abc).not.toContain('"_⬤"');
+    expect(result.abc).not.toContain('"_●"');
     expect(result.abc).not.toContain('"Em"');
     expect(result.abc).not.toContain('"G"');
   });
@@ -331,11 +379,9 @@ K:Am
       layerVisibility: { __strong_beats__: true },
     });
 
-    expect(threeFour.abc).toContain('"_⬤"d2');
-    expect(threeFour.abc).toContain('"_•"c2');
-    expect(threeFour.abc).toContain('"_•"B2');
-    expect(sixEight.abc).toContain('"_⬤"A');
-    expect(sixEight.abc).toContain('"_●"d');
-    expect(sixEight.abc.match(/"_•"/g)).toHaveLength(4);
+    expect(getBeatLyricLines(threeFour.abc)).toEqual(["w: ⬤ • • |"]);
+    expect(getBeatLyricLines(sixEight.abc)).toEqual(["w: ⬤ • • ● • • |"]);
+    expect(threeFour.abc).not.toContain('"_⬤"');
+    expect(sixEight.abc).not.toContain('"_⬤"');
   });
 });

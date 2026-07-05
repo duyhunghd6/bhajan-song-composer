@@ -7,7 +7,12 @@ import {
   splitAbcMeasureSegments,
   stripAbcChordSymbols,
 } from "./abc-duration";
-import { annotateStrongBeatIndicators, stripBeatAnnotations } from "./abc-beat-annotations";
+import {
+  buildStrongBeatLyricLines,
+  isStrongBeatLyricLine,
+  stripBeatAnnotations,
+  stripStrongBeatLyricLines,
+} from "./abc-beat-annotations";
 
 /**
  * Replace all note tokens in an ABC music line with rests of equal duration.
@@ -34,6 +39,8 @@ function replaceMelodyNotesWithRests(musicLine: string): string {
   );
 }
 
+import type { StrongBeatDirective } from "./abc-beat-annotations";
+
 export interface BuildAccompanimentAbcOptions {
   baseAbc: string;
   generatedAccompaniment?: string | null;
@@ -41,6 +48,7 @@ export interface BuildAccompanimentAbcOptions {
   generatedPiano?: string | null;
   extraVoiceSources?: Array<string | null | undefined>;
   layerVisibility?: Record<string, boolean>;
+  strongBeatDirectives?: StrongBeatDirective[];
 }
 
 export interface AccompanimentVoiceInfo {
@@ -58,25 +66,45 @@ function getHeaderLines(abcString: string): string[] {
   return abcString.split("\n").filter((line) => /^[A-Z]:/.test(line.trim()));
 }
 
-function getLyricsLines(abcString: string): string[] {
-  return abcString.split("\n").filter((line) => /^w:/.test(line.trim()));
+function isMelodyBodyLine(line: string): boolean {
+  const trimmed = line.trim();
+  if (!trimmed) return false;
+  if (trimmed.startsWith("%")) return false;
+  return !/^[A-Za-z]:/.test(trimmed);
 }
 
-function interleaveLyrics(musicLines: string[], lyricsLines: string[]): string[] {
-  const output: string[] = [];
-  let lyricsIndex = 0;
+function getLyricsLineGroups(abcString: string): string[][] {
+  const groups: string[][] = [];
+  let currentMusicLineIndex = -1;
 
-  for (const musicLine of musicLines) {
-    output.push(musicLine);
-    if (lyricsIndex < lyricsLines.length) {
-      output.push(lyricsLines[lyricsIndex]);
-      lyricsIndex += 1;
+  for (const line of abcString.split("\n")) {
+    if (isMelodyBodyLine(line)) {
+      currentMusicLineIndex += 1;
+      groups[currentMusicLineIndex] ??= [];
+      continue;
+    }
+
+    if (/^w:/.test(line.trim()) && currentMusicLineIndex >= 0 && !isStrongBeatLyricLine(line)) {
+      groups[currentMusicLineIndex] ??= [];
+      groups[currentMusicLineIndex].push(line);
     }
   }
 
-  while (lyricsIndex < lyricsLines.length) {
-    output.push(lyricsLines[lyricsIndex]);
-    lyricsIndex += 1;
+  return groups;
+}
+
+function interleaveLyrics(musicLines: string[], lyricsGroups: string[][], beatLyricLines: string[] = []): string[] {
+  const output: string[] = [];
+
+  for (let index = 0; index < musicLines.length; index += 1) {
+    output.push(musicLines[index]);
+    output.push(...(lyricsGroups[index] ?? []));
+    const beatLine = beatLyricLines[index];
+    if (beatLine) output.push(beatLine);
+  }
+
+  for (let index = musicLines.length; index < lyricsGroups.length; index += 1) {
+    output.push(...(lyricsGroups[index] ?? []));
   }
 
   return output;
@@ -164,9 +192,50 @@ function splitVoiceBodyLines(lines: string[]): { directives: string[]; musicLine
   }, { directives: [] as string[], musicLines: [] as string[] });
 }
 
-function alignVoiceBlock(block: string, baseAbc: string): string {
-  const lines = block.split("\n");
+interface AlignedVoiceBlock {
+  name: string;
+  voiceLine: string;
+  directives: string[];
+  musicLines: string[];
+}
+
+function regroupMeasureSegmentsForMelodyLines(
+  measures: string[],
+  pattern: number[],
+  firstLineStartsWithPickup = false
+): string[] {
+  const effectivePattern = pattern.length > 0 ? pattern : [Math.max(measures.length, 1)];
+  const output: string[] = [];
+  let cursor = 0;
+
+  for (let lineIndex = 0; lineIndex < effectivePattern.length; lineIndex += 1) {
+    const count = effectivePattern[lineIndex];
+    const group = measures.slice(cursor, cursor + count);
+    if (group.length === 0) break;
+    const joinedGroup = group.join(" | ");
+    output.push(lineIndex === 0 && firstLineStartsWithPickup ? `${joinedGroup} |` : `| ${joinedGroup} |`);
+    cursor += count;
+  }
+
+  if (cursor < measures.length) {
+    output.push(`| ${measures.slice(cursor).join(" | ")} |`);
+  }
+
+  return output;
+}
+
+function getMelodyMeasureLinePattern(melodyMusicLines: string[]): number[] {
+  return melodyMusicLines
+    .map((line) => splitAbcMeasureSegments(line).length)
+    .filter((count) => count > 0);
+}
+
+function alignVoiceBlockToMelodyLines(block: string, baseAbc: string, melodyLinePattern: number[]): AlignedVoiceBlock | null {
+  const lines = stripStrongBeatLyricLines(block).split("\n").map(stripBeatAnnotations);
   const voiceLine = normalizeGeneratedVoiceLine(lines[0].trim());
+  const name = getVoiceName(voiceLine);
+  if (!name) return null;
+
   const { directives, musicLines } = splitVoiceBodyLines(lines.slice(1));
   const normalizedDirectives = normalizeMidiDirectives(voiceLine, directives);
   const voiceBody = musicLines.join(" ").trim();
@@ -186,11 +255,16 @@ function alignVoiceBlock(block: string, baseAbc: string): string {
   const normalizedFullMeasures = fullMeasureBars
     .slice(0, fullMeasureCount)
     .map((bar) => normalizeAbcMeasureDuration(bar, durationContext.fullMeasureUnits));
-  const alignedMusicLine = hasPickup
-    ? `${buildPickupRest(pickupUnits)} | ${normalizedFullMeasures.join(" | ")} |`
-    : `| ${normalizedFullMeasures.join(" | ")} |`;
+  const alignedMeasures = hasPickup
+    ? [buildPickupRest(pickupUnits), ...normalizedFullMeasures]
+    : normalizedFullMeasures;
 
-  return [voiceLine, ...normalizedDirectives, alignedMusicLine].join("\n");
+  return {
+    name,
+    voiceLine,
+    directives: normalizedDirectives,
+    musicLines: regroupMeasureSegmentsForMelodyLines(alignedMeasures, melodyLinePattern, hasPickup),
+  };
 }
 
 export function getLayerVoiceNames(...sources: Array<string | null | undefined>): string[] {
@@ -216,6 +290,7 @@ export function buildAccompanimentAbc({
   generatedPiano,
   extraVoiceSources = [],
   layerVisibility = {},
+  strongBeatDirectives,
 }: BuildAccompanimentAbcOptions): BuildAccompanimentAbcResult {
   const baseAbcBlocks = baseAbc.split(/(?=^V:)/m).filter(block => block.trim());
   const melodyBlock = baseAbcBlocks.find(b => b.startsWith("V:Melody")) 
@@ -227,7 +302,8 @@ export function buildAccompanimentAbc({
   const showChords = layerVisibility.__chords__ !== false;
   const showMelody = layerVisibility.__melody__ !== false;
   const showStrongBeats = layerVisibility.__strong_beats__ === true;
-  const musicLines = extractMusicBodyLines(melodyBlock).map(stripBeatAnnotations);
+  const cleanMelodyBlock = stripStrongBeatLyricLines(melodyBlock);
+  const musicLines = extractMusicBodyLines(cleanMelodyBlock).map(stripBeatAnnotations);
 
   // Build melody lines: strip chords if chord layer is off, replace notes with rests if melody is off
   let melodyMusicLines: string[];
@@ -241,11 +317,15 @@ export function buildAccompanimentAbc({
     melodyMusicLines = musicLines;
   }
 
-  if (showStrongBeats && showMelody) {
-    melodyMusicLines = annotateStrongBeatIndicators({ musicLines: melodyMusicLines, baseAbc });
-  }
+  const beatLyricLines = (showStrongBeats && showMelody)
+    ? buildStrongBeatLyricLines({ musicLines: melodyMusicLines, baseAbc, directives: strongBeatDirectives })
+    : [];
 
-  const melodyOutputLines = interleaveLyrics(melodyMusicLines, showMelody ? getLyricsLines(melodyBlock) : []);
+  const melodyOutputLines = interleaveLyrics(
+    melodyMusicLines,
+    showMelody ? getLyricsLineGroups(cleanMelodyBlock) : [],
+    beatLyricLines
+  );
 
   // Merge all accompaniment sources into a single aligned block list
   const allSources = [
@@ -273,19 +353,21 @@ export function buildAccompanimentAbc({
   for (const source of allSources) {
     for (const block of splitVoiceBlocks(source)) {
       const name = getVoiceName(block);
-      if (name) {
+      // Skip Melody here to prevent duplicate staves. Melody is handled explicitly via melodyOutputLines
+      // and dynamic beat annotations. We do not want accompaniment sources to re-inject raw Melody blocks.
+      if (name && name !== "Melody") {
         voiceBlockMap.set(name, block);
       }
     }
   }
 
-  const alignedBlocks = [...voiceBlockMap.values()].map((block) => alignVoiceBlock(block, baseAbc));
-  const voiceNames = alignedBlocks.map(getVoiceName).filter(Boolean) as string[];
-  const visibleBlocks = alignedBlocks.filter((block) => {
-    const voiceName = getVoiceName(block);
-    return !voiceName || layerVisibility[voiceName] !== false;
-  });
-  const visibleVoiceNames = visibleBlocks.map(getVoiceName).filter(Boolean) as string[];
+  const melodyLinePattern = getMelodyMeasureLinePattern(melodyMusicLines);
+  const alignedBlocks = [...voiceBlockMap.values()]
+    .map((block) => alignVoiceBlockToMelodyLines(block, baseAbc, melodyLinePattern))
+    .filter(Boolean) as AlignedVoiceBlock[];
+  const voiceNames = alignedBlocks.map((block) => block.name);
+  const visibleBlocks = alignedBlocks.filter((block) => layerVisibility[block.name] !== false);
+  const visibleVoiceNames = visibleBlocks.map((block) => block.name);
 
   // Always include Melody in score so the staff stays visible (rests show the silent voice)
   const scoreParts: string[] = [];
@@ -309,24 +391,49 @@ export function buildAccompanimentAbc({
     output.push("%%botmargin 80");
   }
 
-  // Melody stems point UP, Guitar stems point DOWN for clean fingerstyle visual
+  const lyricsGroups = showMelody ? getLyricsLineGroups(cleanMelodyBlock) : [];
+
+  // Define all voices first, then interleave the body by visual staff system:
+  // Melody line N, lyric/beat helper lines for that same melody line, then every visible
+  // accompaniment/ensemble voice line N. This keeps abcjs rendering/playback aligned when
+  // the source melody has multiple visual lines.
   output.push('V:Melody name="Original Melody" stem=up');
-  output.push(...melodyOutputLines);
-  
-  const processedVisibleBlocks = visibleBlocks.map(block => {
-    if (getVoiceName(block) === "Guitar") {
-      // Find the V:Guitar line and append stem=down if not already present
-      return block.replace(/^(V:Guitar.*?)$/m, (match) => {
-        return match.includes('stem=') ? match : `${match} stem=down`;
-      });
-    }
-    return block;
+  const processedVisibleBlocks = visibleBlocks.map((block) => {
+    const voiceLine = block.name === "Guitar" && !block.voiceLine.includes("stem=")
+      ? `${block.voiceLine} stem=down`
+      : block.voiceLine;
+    return {
+      ...block,
+      voiceLine,
+      musicLines: block.musicLines.map((line) => stripBeatAnnotations(stripStrongBeatLyricLines(line))),
+    };
   });
-  
-  output.push(...processedVisibleBlocks);
+
+  for (const block of processedVisibleBlocks) {
+    output.push(block.voiceLine, ...block.directives);
+  }
+
+  for (let lineIndex = 0; lineIndex < melodyMusicLines.length; lineIndex += 1) {
+    output.push(`% Staff system ${lineIndex + 1}: Melody and visible instruments share this measure range.`);
+    output.push(`[V:Melody] ${melodyMusicLines[lineIndex]}`);
+    output.push(...(lyricsGroups[lineIndex] ?? []));
+    const beatLine = beatLyricLines[lineIndex];
+    if (beatLine) output.push(beatLine);
+
+    for (const block of processedVisibleBlocks) {
+      const voiceLine = block.musicLines[lineIndex];
+      if (voiceLine) output.push(`[V:${block.name}] ${voiceLine}`);
+    }
+  }
+
+  for (let lineIndex = melodyMusicLines.length; lineIndex < lyricsGroups.length; lineIndex += 1) {
+    output.push(...(lyricsGroups[lineIndex] ?? []));
+  }
+
+  const finalAbcOutput = output.join("\n");
 
   return {
-    abc: output.join("\n"),
+    abc: finalAbcOutput,
     voiceNames,
     visibleVoiceNames,
   };

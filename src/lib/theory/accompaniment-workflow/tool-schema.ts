@@ -58,6 +58,49 @@ function buildWorkflowOptionDataProperty(stepId?: AccompanimentWorkflowStepId) {
     };
   }
 
+  if (stepId === "strong-beat-targets") {
+    return {
+      type: "object",
+      description: "Step-specific structured decision data. Must include strongBeatDirectives.",
+      additionalProperties: true,
+      properties: {
+        strongBeatEmphasis: {
+          type: "string",
+          enum: ["all-metric-beats", "primary-strong-beats", "downbeats-only"],
+          description: "The reviewable emphasis direction for this option. The local add_strong_beat_icons algorithm uses this direction to compute concrete icons.",
+        },
+        annotatedAbc: {
+          type: "string",
+          description: "Full ABCNotation returned by add_strong_beat_icons with local beat icon annotations applied. Copy the returned abcNotation exactly when provided.",
+        },
+        strongBeatDirectives: {
+          type: "array",
+          description: "A list of explicit strong beat directives copied from the local add_strong_beat_icons tool result; do not invent measureIndex or beatTime values.",
+          items: {
+            type: "object",
+            properties: {
+              measureIndex: { type: "number", description: "0-indexed measure index." },
+              beats: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    beatTime: { type: "number", description: "1-indexed beat position (e.g., 1, 2, 3.5)." },
+                    weight: { type: "string", enum: ["strong", "medium", "soft"], description: "The strength of the beat." }
+                  },
+                  required: ["beatTime", "weight"]
+                },
+                description: "Array of beat positions with their respective weights.",
+              },
+            },
+            required: ["measureIndex", "beats"],
+          },
+        },
+      },
+      required: ["strongBeatDirectives"],
+    };
+  }
+
   if (stepId === "chord-progression") {
     return {
       type: "object",
@@ -66,7 +109,7 @@ function buildWorkflowOptionDataProperty(stepId?: AccompanimentWorkflowStepId) {
       properties: {
         harmonizedAbc: {
           type: "string",
-          description: "Full source ABC with proposed chord symbols applied. Must follow break_measures_line: preserve the same melody music line count and same measures per line as Source ABC.",
+          description: "Full source ABC with proposed chord symbols applied. Must be copied exactly from the break_measures_line tool result so it preserves the same Melody music line count and same measures per line as Source ABC."
         },
       },
       required: ["harmonizedAbc"],
@@ -81,11 +124,11 @@ function buildWorkflowOptionDataProperty(stepId?: AccompanimentWorkflowStepId) {
       properties: {
         validatedAbc: {
           type: "string",
-          description: "Full final chord-annotated ABC after voice-leading validation. Must follow break_measures_line: preserve the same melody music line count and same measures per line as Source ABC.",
+          description: "Full final chord-annotated ABC after voice-leading validation. Must be copied exactly from the break_measures_line tool result so it preserves the same Melody music line count and same measures per line as Source ABC."
         },
         harmonizedAbc: {
           type: "string",
-          description: "Fallback full final harmonized ABC. Must also follow break_measures_line so melody line breaks match Source ABC.",
+          description: "Fallback full final harmonized ABC. Must also be copied exactly from the break_measures_line tool result so Melody line breaks match Source ABC."
         },
       },
     };
@@ -139,6 +182,63 @@ function buildWorkflowResultGroupProperty(stepId: AccompanimentWorkflowStepId) {
       options: buildWorkflowOptionsProperty(`One to five options for ${step.label}.`, stepId),
     },
     required: ["options"],
+  };
+}
+
+export function getAccompanimentWorkflowLlmToolNames(): string[] {
+  return [
+    ...ACCOMPANIMENT_WORKFLOW_STEPS.map((step) => `generate_${step.id.replaceAll("-", "_")}`),
+    "generate_consolidated_chord_ingestion",
+    "break_measures_line",
+    "add_strong_beat_icons",
+    "valid_guitar_tab",
+  ];
+}
+
+export function buildAddStrongBeatIconsToolSchema() {
+  return {
+    type: "function",
+    function: {
+      name: "add_strong_beat_icons",
+      description: "Call this during the Strong Beats step before final output. The LLM only chooses an emphasis direction; this local algorithm computes beat icon directives and returns ABCNotation with beat icons applied. Copy strongBeatDirectives and abcNotation from the result into the final option data.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          emphasis: {
+            type: "string",
+            enum: ["all-metric-beats", "primary-strong-beats", "downbeats-only"],
+            description: "Reviewable emphasis direction. all-metric-beats marks strong, medium, and soft metric beats; primary-strong-beats keeps strong and medium beats; downbeats-only keeps only primary downbeats.",
+          },
+          rationale: {
+            type: "string",
+            description: "Short musical reason for this emphasis direction. This guides the option text only; concrete icons are computed locally.",
+          },
+        },
+        required: ["emphasis"],
+      },
+    },
+  };
+}
+
+export function buildBreakMeasuresLineToolSchema() {
+  return {
+    type: "function",
+    function: {
+      name: "break_measures_line",
+      description: "Normalize generated ABCNotation so its Melody music body uses the same number of music lines and the same number of measures per line as the source Melody. For multi-voice ABC, the final body must be grouped by staff system: Melody line N, then each instrument line N for the same measure range. Call this before any final workflow tool output that includes harmonizedAbc, validatedAbc, chordAnnotatedAbc, or abc for Music Staff Playback.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          generatedAbc: {
+            type: "string",
+            description: "The full generated ABCNotation that should be regrouped to match the source Melody measure-line pattern.",
+          },
+        },
+        required: ["generatedAbc"],
+      },
+    },
   };
 }
 
