@@ -923,11 +923,18 @@ export default function AbcjsPlaybackController({
           transform: translateY(-35px);
         }
 
-        /* Default fallback behavior when no beat indicators are present (pull up by -50px to match globals.css) */
-        #${resolvedCanvasId}:not(.has-beat-indicators) g.abcjs-staff:not(.abcjs-v0),
-        #${resolvedCanvasId}:not(.has-beat-indicators) g.abcjs-tabNumber,
-        #${resolvedCanvasId}:not(.has-beat-indicators) g.abcjs-symbol:has(path[data-name="tab.big"]) {
+        /* Pull tablature staff up when NO beat indicators are present but lyrics are present */
+        #${resolvedCanvasId}:not(.has-beat-indicators).has-lyrics g.abcjs-staff:not(.abcjs-v0),
+        #${resolvedCanvasId}:not(.has-beat-indicators).has-lyrics g.abcjs-tabNumber,
+        #${resolvedCanvasId}:not(.has-beat-indicators).has-lyrics g.abcjs-symbol:has(path[data-name="tab.big"]) {
           transform: translateY(-50px);
+        }
+
+        /* Keep default spacing (no pull up) when NO beat indicators and NO lyrics are present */
+        #${resolvedCanvasId}:not(.has-beat-indicators).no-lyrics g.abcjs-staff:not(.abcjs-v0),
+        #${resolvedCanvasId}:not(.has-beat-indicators).no-lyrics g.abcjs-tabNumber,
+        #${resolvedCanvasId}:not(.has-beat-indicators).no-lyrics g.abcjs-symbol:has(path[data-name="tab.big"]) {
+          transform: translateY(0);
         }
       `}</style>
     </div>
