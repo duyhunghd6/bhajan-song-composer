@@ -192,7 +192,7 @@ function postProcessBeats(container: HTMLDivElement | null) {
     let minDiff = Infinity;
     staffData.forEach((sd) => {
       const diff = lyricY - sd.bottom;
-      if (diff > 0 && diff < 80 && diff < minDiff) {
+      if (diff > 0 && diff < 150 && diff < minDiff) {
         minDiff = diff;
         bestStaff = sd;
       }
@@ -236,7 +236,7 @@ function postProcessBeats(container: HTMLDivElement | null) {
       if (bestStaff) {
         let targetY;
         if (bestStaff.lyricY !== null && bestStaff.lyricY > 0) {
-          targetY = bestStaff.lyricY + 14; // Place 14px below the lyric line
+          targetY = bestStaff.lyricY + 16; // Place 16px below the lyric line
         } else {
           targetY = bestStaff.bottom + 22; // Place 22px below staff bottom if no lyrics
         }
