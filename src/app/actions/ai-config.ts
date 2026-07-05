@@ -47,7 +47,7 @@ export type ToolDiagnosticEvent =
   | { type: "chat-request"; iteration?: number; messageCount: number; toolChoice: unknown; toolNames: string[] }
   | { type: "chat-response"; iteration?: number; toolCallNames: string[] }
   | { type: "chat-error"; iteration?: number; status?: number; message: string }
-  | { type: "tool-call"; iteration: number; toolName: string; toolCallId: string; local: boolean; final: boolean }
+  | { type: "tool-call"; iteration: number; toolName: string; toolCallId: string; local: boolean; final: boolean; input?: unknown }
   | { type: "tool-result"; iteration: number; toolName: string; toolCallId: string; result: unknown }
   | { type: "final-validation"; iteration: number; toolName: string; valid: boolean; failedValidationAttempts: number; maxValidationAttempts: number; message?: string; toolResult?: unknown }
   | { type: "loop-exhausted"; maxIterations: number; failedValidationAttempts: number; maxValidationAttempts: number; lastValidationMessage: string };
@@ -197,6 +197,7 @@ export async function requestOpenAiCompatibleTool(input: {
     await emitDiagnostic(input.onDiagnostic, { type: "chat-error", iteration: 0, message: `LLM did not return the expected ${input.toolName} tool call` });
     throw new Error(`LLM did not return the expected ${input.toolName} tool call`);
   }
+  const args = parseToolCallArguments(toolCall, input.toolName);
   await emitDiagnostic(input.onDiagnostic, {
     type: "tool-call",
     iteration: 0,
@@ -204,8 +205,8 @@ export async function requestOpenAiCompatibleTool(input: {
     toolCallId: toolCall.id ?? `${input.toolName}-0`,
     local: false,
     final: true,
+    input: args,
   });
-  const args = parseToolCallArguments(toolCall, input.toolName);
   await emitDiagnostic(input.onDiagnostic, {
     type: "final-validation",
     iteration: 0,
@@ -277,17 +278,23 @@ export async function requestOpenAiCompatibleToolLoop(input: {
         continue;
       }
 
+      const localTool = localTools.get(toolName);
+      const parsedInput = toolName === input.finalToolName || localTool
+        ? parseToolCallArguments(toolCall, toolName)
+        : undefined;
+
       await emitDiagnostic(input.onDiagnostic, {
         type: "tool-call",
         iteration,
         toolName,
         toolCallId,
-        local: localTools.has(toolName),
+        local: Boolean(localTool),
         final: toolName === input.finalToolName,
+        input: parsedInput,
       });
 
       if (toolName === input.finalToolName) {
-        const args = parseToolCallArguments(toolCall, input.finalToolName);
+        const args = parsedInput;
         const validation = input.validateFinalResult(args);
         if (!validation.valid) failedValidationAttempts += 1;
         await emitDiagnostic(input.onDiagnostic, {
@@ -319,7 +326,6 @@ export async function requestOpenAiCompatibleToolLoop(input: {
         continue;
       }
 
-      const localTool = localTools.get(toolName);
       if (!localTool) {
         toolResults.push({
           role: "tool",
@@ -330,7 +336,7 @@ export async function requestOpenAiCompatibleToolLoop(input: {
         continue;
       }
 
-      const args = parseToolCallArguments(toolCall, toolName);
+      const args = parsedInput;
       const result = await localTool.execute(args);
       await emitDiagnostic(input.onDiagnostic, { type: "tool-result", iteration, toolName, toolCallId, result });
       if (typeof result === "object" && result && "valid" in result && (result as { valid?: boolean }).valid === false) {

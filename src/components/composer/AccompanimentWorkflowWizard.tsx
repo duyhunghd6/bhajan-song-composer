@@ -219,9 +219,9 @@ export default function AccompanimentWorkflowWizard({
     setError(null);
   };
 
-  const handleSelectOption = (option: AccompanimentWorkflowOption) => {
+  const handleSelectOption = (option: AccompanimentWorkflowOption, runId: string) => {
     if (!session) return;
-    const next = selectOption(session, activeStep.id, option, activeUserNote);
+    const next = selectOption(session, activeStep.id, option, activeUserNote, runId);
     onWorkflowChange(next);
     if (activeStep.id === "guitar-fills-validation") onGuitarProfileSelected(extractProfile(option));
     if (activeStep.id === "piano-fills-pedal-validation") onPianoProfileSelected(extractProfile(option));

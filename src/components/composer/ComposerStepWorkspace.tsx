@@ -349,7 +349,7 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
               <h2 className="mb-4 text-lg font-bold text-zinc-900 dark:text-zinc-100">AI Ensemble Generation</h2>
               <EnsembleWorkflowWizard
                 sourceAbc={ensembleFoundationAbc}
-                melodyAbc={workflowAppliedMusicAbc}
+                melodyAbc={activeAbc}
                 accompaniment={workflowAppliedPipeline?.accompaniment ?? null}
                 metadata={{
                   key: workflowAppliedPipeline?.harmonization.key ?? "Unknown",

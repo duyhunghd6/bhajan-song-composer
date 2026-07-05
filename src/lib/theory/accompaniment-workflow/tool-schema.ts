@@ -61,43 +61,16 @@ function buildWorkflowOptionDataProperty(stepId?: AccompanimentWorkflowStepId) {
   if (stepId === "strong-beat-targets") {
     return {
       type: "object",
-      description: "Step-specific structured decision data. Must include strongBeatDirectives.",
-      additionalProperties: true,
+      description: "Step-specific structured decision data. The LLM chooses only the reviewable Strong Beats emphasis; concrete beat positions and ABC lyric beat rows are computed locally.",
+      additionalProperties: false,
       properties: {
         strongBeatEmphasis: {
           type: "string",
           enum: ["all-metric-beats", "primary-strong-beats", "downbeats-only"],
-          description: "The reviewable emphasis direction for this option. The local add_strong_beat_icons algorithm uses this direction to compute concrete icons.",
-        },
-        annotatedAbc: {
-          type: "string",
-          description: "Full ABCNotation returned by add_strong_beat_icons with local beat icon annotations applied. Copy the returned abcNotation exactly when provided.",
-        },
-        strongBeatDirectives: {
-          type: "array",
-          description: "A list of explicit strong beat directives copied from the local add_strong_beat_icons tool result; do not invent measureIndex or beatTime values.",
-          items: {
-            type: "object",
-            properties: {
-              measureIndex: { type: "number", description: "0-indexed measure index." },
-              beats: {
-                type: "array",
-                items: {
-                  type: "object",
-                  properties: {
-                    beatTime: { type: "number", description: "1-indexed beat position (e.g., 1, 2, 3.5)." },
-                    weight: { type: "string", enum: ["strong", "medium", "soft"], description: "The strength of the beat." }
-                  },
-                  required: ["beatTime", "weight"]
-                },
-                description: "Array of beat positions with their respective weights.",
-              },
-            },
-            required: ["measureIndex", "beats"],
-          },
+          description: "Reviewable emphasis direction. The local add_strong_beat_icons algorithm computes concrete strongBeatDirectives and beat-only w: lyric rows from this value.",
         },
       },
-      required: ["strongBeatDirectives"],
+      required: ["strongBeatEmphasis"],
     };
   }
 
@@ -200,7 +173,7 @@ export function buildAddStrongBeatIconsToolSchema() {
     type: "function",
     function: {
       name: "add_strong_beat_icons",
-      description: "Call this during the Strong Beats step before final output. The LLM only chooses an emphasis direction; this local algorithm computes beat icon directives and returns ABCNotation with beat icons applied. Copy strongBeatDirectives and abcNotation from the result into the final option data.",
+      description: "Call this during the Strong Beats step before final output. The LLM chooses an emphasis direction only; this local algorithm computes concrete beat directives and an ABC preview using beat-only w: lyric rows. Do not copy abcNotation, annotatedAbc, strongBeatDirectives, measureIndex, or beatTime into the final generate_strong_beat_targets payload. Later ABC rendering inserts the beat lyric rows after the Melody line inside each staff-system/sentence group.",
       parameters: {
         type: "object",
         additionalProperties: false,

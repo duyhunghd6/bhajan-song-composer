@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   ACCOMPANIMENT_WORKFLOW_GUITAR_STEP_IDS,
   ACCOMPANIMENT_WORKFLOW_STEP_IDS,
@@ -8,6 +8,7 @@ import {
   clearAccompanimentWorkflowStepResults,
   abcMatchesReferenceMeasureLinePattern,
   buildAccompanimentWorkflowToolSchema,
+  buildAddStrongBeatIconsToolSchema,
   buildBreakMeasuresLineToolSchema,
   buildConsolidatedChordIngestionPrompt,
   buildConsolidatedChordIngestionToolSchema,
@@ -25,6 +26,7 @@ import {
   normalizeWorkflowOptionDataLineBreaks,
   type AccompanimentWorkflowOption,
 } from "../accompaniment-workflow";
+import { requestOpenAiCompatibleToolLoop, type ToolDiagnosticEvent } from "../../../app/actions/ai-config";
 import { buildValidGuitarTabToolSchema } from "../guitar-tab-validation";
 
 const sampleAbc = `X:1
@@ -33,6 +35,11 @@ M:3/4
 L:1/8
 K:C
 | C2 E2 G2 | A3 G F2 | E6 |`;
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllEnvs();
+});
 
 interface WorkflowSchemaPropertyForTest {
   description?: string;
@@ -165,11 +172,106 @@ describe("accompaniment workflow", () => {
     });
     const schema = buildAccompanimentWorkflowToolSchema("strong-beat-targets");
     const data = schema.function.parameters.properties.options.items.properties.data as WorkflowDataSchemaForTest;
+    const addStrongBeatSchema = buildAddStrongBeatIconsToolSchema();
 
     expect(prompt).toContain("add_strong_beat_icons");
     expect(prompt).toContain("local algorithm");
-    expect(data.required).toEqual(["strongBeatDirectives"]);
-    expect(data.properties?.strongBeatDirectives.description).toContain("add_strong_beat_icons");
+    expect(prompt).toContain("beat-only w: lyric rows");
+    expect(prompt).toContain("staff-system/sentence group");
+    expect(prompt).not.toContain("Copy the returned strongBeatDirectives");
+    expect(prompt).not.toContain("copy the returned abcNotation");
+    expect(data.required).toEqual(["strongBeatEmphasis"]);
+    expect(data.properties?.strongBeatEmphasis.description).toContain("local add_strong_beat_icons");
+    expect(data.properties?.strongBeatDirectives).toBeUndefined();
+    expect(data.properties?.annotatedAbc).toBeUndefined();
+    expect(addStrongBeatSchema.function.name).toBe("add_strong_beat_icons");
+    expect(addStrongBeatSchema.function.description).toContain("beat-only w: lyric rows");
+    expect(addStrongBeatSchema.function.description).toContain("Do not copy abcNotation");
+    expect(addStrongBeatSchema.function.description).toContain("staff-system/sentence group");
+    expect(addStrongBeatSchema.function.parameters.required).toEqual(["emphasis"]);
+  });
+
+  it("records parsed final Strong Beats tool payloads in diagnostics", async () => {
+    vi.stubEnv("AI_API_URL", "https://llm.test");
+    vi.stubEnv("AI_API_KEY", "test-key");
+    vi.stubEnv("AI_MODEL", "test-model");
+    const finalArgs = {
+      options: [{
+        id: "primary-strong-beats",
+        label: "Primary strong beats",
+        summary: "Emphasize devotional downbeats and cadences.",
+        justification: "Keeps the melody intact while marking structural anchors.",
+        data: { strongBeatEmphasis: "primary-strong-beats" },
+        warnings: [],
+        validationNotes: ["Concrete beat rows are generated locally."],
+      }],
+    };
+    const fetchMock = vi.spyOn(global, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        choices: [{
+          message: {
+            role: "assistant",
+            content: null,
+            tool_calls: [{
+              id: "local-call-1",
+              function: { name: "add_strong_beat_icons", arguments: JSON.stringify({ emphasis: "primary-strong-beats" }) },
+            }],
+          },
+        }],
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        choices: [{
+          message: {
+            role: "assistant",
+            content: null,
+            tool_calls: [{
+              id: "final-call-1",
+              function: { name: "generate_strong_beat_targets", arguments: JSON.stringify(finalArgs) },
+            }],
+          },
+        }],
+      }), { status: 200 }));
+    const diagnostics: ToolDiagnosticEvent[] = [];
+
+    const result = await requestOpenAiCompatibleToolLoop({
+      systemPrompt: "system",
+      userPrompt: "user",
+      tools: [
+        { type: "function", function: { name: "add_strong_beat_icons" } },
+        { type: "function", function: { name: "generate_strong_beat_targets" } },
+      ],
+      finalToolName: "generate_strong_beat_targets",
+      localTools: [{
+        name: "add_strong_beat_icons",
+        execute: () => ({
+          abcNotation: sampleAbc,
+          strongBeatDirectives: [{ measureIndex: 0, beats: [{ beatTime: 1, weight: "strong" }] }],
+          issues: [],
+          emphasis: "primary-strong-beats",
+          valid: true,
+        }),
+      }],
+      validateFinalResult: (args) => ({
+        valid: Array.isArray((args as { options?: unknown }).options),
+        toolResult: { valid: true, optionCount: (args as { options: unknown[] }).options.length },
+      }),
+      onDiagnostic: (event) => {
+        diagnostics.push(event);
+      },
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(result).toEqual(finalArgs);
+    expect(diagnostics.find((event) => event.type === "tool-call" && event.final)).toMatchObject({
+      type: "tool-call",
+      toolName: "generate_strong_beat_targets",
+      input: finalArgs,
+    });
+    expect(diagnostics.find((event) => event.type === "final-validation")).toMatchObject({
+      toolName: "generate_strong_beat_targets",
+      valid: true,
+      toolResult: { valid: true, optionCount: 1 },
+    });
   });
 
   it("adds break_measures_line tool-call requirements to chord ABC prompts and schemas", () => {

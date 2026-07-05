@@ -338,6 +338,50 @@ w: Krish-na Krish-na`;
     expect(result.abc).toContain("w: ⬤ • ● • | ⬤ ● • |");
   });
 
+  it("groups Melody lyrics, Strong Beats, and instruments by staff-system sentence", () => {
+    const melodyAbc = `X:1
+T:Strong Beats Staff-System Grouping Test
+M:4/4
+L:1/8
+K:Em
+| E2 E2 G2 A2 | B4 B2 A2 |
+w: Ha-ri Bol Ha-ri Bol
+| G2 A2 B2 G2 | E8 |
+w: Krish-na Krish-na`;
+    const guitarAbc = `V:Guitar clef=treble-8
+%%MIDI program 24
+| E,2 B,2 E2 G2 | B,2 E2 G2 B2 | G,2 D2 G2 B2 | E,8 |`;
+
+    const result = buildAccompanimentAbc({
+      baseAbc: melodyAbc,
+      generatedGuitar: guitarAbc,
+      layerVisibility: { __strong_beats__: true },
+    });
+    const lines = result.abc.split("\n");
+    const system1Index = lines.findIndex((line) => line.startsWith("% Staff system 1"));
+    const system2Index = lines.findIndex((line) => line.startsWith("% Staff system 2"));
+
+    expect(system1Index).toBeGreaterThan(-1);
+    expect(system2Index).toBeGreaterThan(system1Index);
+    expect(lines.slice(system1Index, system2Index)).toEqual([
+      "% Staff system 1: Melody and visible instruments share this measure range.",
+      "[V:Melody] | E2 E2 G2 A2 | B4 B2 A2 |",
+      "w: Ha-ri Bol Ha-ri Bol",
+      "w: ⬤ • ● • | ⬤ ● • |",
+      "[V:Guitar] | E,2 B,2 E2 G2 | B,2 E2 G2 B2 |",
+    ]);
+    expect(lines.slice(system2Index)).toEqual([
+      "% Staff system 2: Melody and visible instruments share this measure range.",
+      "[V:Melody] | G2 A2 B2 G2 | E8 |",
+      "w: Krish-na Krish-na",
+      "w: ⬤ • ● • | ⬤ |",
+      "[V:Guitar] | G,2 D2 G2 B2 | E,8 |",
+    ]);
+    expect(result.abc).not.toContain('"_⬤"');
+    expect(result.abc).not.toContain('"_●"');
+    expect(result.abc).not.toContain('"_•"');
+  });
+
   it("keeps beat markers when chords are hidden but removes chord symbols", () => {
     const melodyAbc = `X:1
 T:Strong Beats Chord Toggle Test

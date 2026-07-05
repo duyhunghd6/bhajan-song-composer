@@ -25,6 +25,23 @@ export function emptyStepState() {
 
 export function mergeRun(workflow: EnsembleWorkflowSession, run: EnsembleWorkflowRun, promptNote: string): EnsembleWorkflowSession {
   const stepState = workflow.steps[run.stepId] ?? emptyStepState();
+
+  let preservedRun: EnsembleWorkflowRun | null = null;
+  if (stepState.activeRunId && stepState.selectedOptionId) {
+    const active = stepState.runs.find(r => r.id === stepState.activeRunId);
+    if (active) {
+      const selectedOption = active.options.find(o => o.id === stepState.selectedOptionId);
+      if (selectedOption) {
+        preservedRun = {
+          ...active,
+          options: [selectedOption]
+        };
+      }
+    }
+  }
+
+  const nextRuns = preservedRun && preservedRun.id !== run.id ? [preservedRun, run] : [run];
+
   return {
     ...workflow,
     currentStepId: run.stepId,
@@ -34,10 +51,10 @@ export function mergeRun(workflow: EnsembleWorkflowSession, run: EnsembleWorkflo
       ...workflow.steps,
       [run.stepId]: {
         ...stepState,
-        runs: [...stepState.runs, run],
-        activeRunId: run.id,
-        selectedOptionId: null,
-        selectedAt: null,
+        runs: nextRuns,
+        activeRunId: preservedRun ? stepState.activeRunId : run.id,
+        selectedOptionId: preservedRun ? stepState.selectedOptionId : null,
+        selectedAt: preservedRun ? stepState.selectedAt : null,
         promptNote,
       },
     },
@@ -101,7 +118,7 @@ export function skipInstrumentSteps(workflow: EnsembleWorkflowSession, instrumen
     };
     nextSteps[stepId] = {
       ...stepState,
-      runs: [...stepState.runs, run],
+      runs: [run],
       activeRunId: run.id,
       selectedOptionId: skipOption.id,
       selectedAt: now,

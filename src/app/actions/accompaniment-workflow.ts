@@ -137,6 +137,46 @@ function diagnosticKind(event: ToolDiagnosticEvent): AccompanimentWorkflowLlmLog
   return event.type;
 }
 
+const MAX_PAYLOAD_PREVIEW_DEPTH = 4;
+const MAX_PAYLOAD_PREVIEW_ITEMS = 5;
+const MAX_PAYLOAD_PREVIEW_STRING_LENGTH = 240;
+
+function compactStringPreview(value: string): string {
+  if (value.length <= MAX_PAYLOAD_PREVIEW_STRING_LENGTH) return value;
+  return `${value.slice(0, MAX_PAYLOAD_PREVIEW_STRING_LENGTH)}… (${value.length} chars)`;
+}
+
+function compactPayloadPreview(value: unknown, depth = 0): unknown {
+  if (value == null || typeof value === "number" || typeof value === "boolean") return value;
+  if (typeof value === "string") return compactStringPreview(value);
+  if (typeof value !== "object") return String(value);
+  if (depth >= MAX_PAYLOAD_PREVIEW_DEPTH) return Array.isArray(value) ? `[${value.length} items]` : "[object]";
+
+  if (Array.isArray(value)) {
+    const items = value.slice(0, MAX_PAYLOAD_PREVIEW_ITEMS).map((item) => compactPayloadPreview(item, depth + 1));
+    return value.length > MAX_PAYLOAD_PREVIEW_ITEMS
+      ? [...items, `… ${value.length - MAX_PAYLOAD_PREVIEW_ITEMS} more item${value.length - MAX_PAYLOAD_PREVIEW_ITEMS === 1 ? "" : "s"}`]
+      : items;
+  }
+
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(([key, entry]) => [key, compactPayloadPreview(entry, depth + 1)])
+  );
+}
+
+function diagnosticPayloadPreview(event: ToolDiagnosticEvent): unknown {
+  switch (event.type) {
+    case "tool-call":
+      return event.input === undefined ? undefined : compactPayloadPreview(event.input);
+    case "tool-result":
+      return compactPayloadPreview(event.result);
+    case "final-validation":
+      return event.toolResult === undefined ? undefined : compactPayloadPreview(event.toolResult);
+    default:
+      return undefined;
+  }
+}
+
 function llmLogEntryFromDiagnostic(input: {
   event: ToolDiagnosticEvent;
   state: WorkflowDiagnosticState;
@@ -155,6 +195,7 @@ function llmLogEntryFromDiagnostic(input: {
     toolName: "toolName" in event ? event.toolName : undefined,
     toolCallNames: event.type === "chat-response" ? event.toolCallNames : undefined,
     validationMessage: event.type === "final-validation" ? event.message : event.type === "loop-exhausted" ? event.lastValidationMessage : undefined,
+    payloadPreview: diagnosticPayloadPreview(event),
     logPath: state.logPath,
   };
 }
@@ -287,6 +328,16 @@ function makeAddStrongBeatIconsLocalTool(sourceAbc: string, onCalled?: (result: 
   };
 }
 
+const STRONG_BEAT_LLM_DISALLOWED_DATA_KEYS = [
+  "annotatedAbc",
+  "abcNotation",
+  "strongBeatDirectives",
+  "abc",
+  "harmonizedAbc",
+  "validatedAbc",
+  "chordAnnotatedAbc",
+] as const;
+
 function validateStrongBeatWorkflowResult(input: {
   raw: unknown;
   localToolCalled: boolean;
@@ -295,21 +346,35 @@ function validateStrongBeatWorkflowResult(input: {
   const result = input.raw as RawWorkflowStepResult;
   const options = Array.isArray(result.options) ? result.options.slice(0, 5) : [];
   const messages: string[] = [];
+  const successfulLocalEmphases = new Set(
+    input.localResults
+      .filter((result) => result.valid)
+      .map((result) => result.emphasis)
+  );
 
   if (options.length === 0) {
     return { valid: false, message: "Final Strong Beats workflow output contained no options." };
   }
 
   if (!input.localToolCalled) {
-    messages.push("Call add_strong_beat_icons before calling generate_strong_beat_targets so beat icons are computed by the local algorithm.");
+    messages.push("Call add_strong_beat_icons before calling generate_strong_beat_targets so beat icons are computed by the local algorithm as beat-only w: lyric rows.");
   }
 
   for (const [index, option] of options.entries()) {
     const optionId = normalizeId(option.id, `option-${index + 1}`);
     const data = optionData(option);
-    const directives = data?.strongBeatDirectives;
-    if (!Array.isArray(directives) || directives.length === 0) {
-      messages.push(`${optionId} is missing data.strongBeatDirectives copied from add_strong_beat_icons.`);
+    const emphasis = data?.strongBeatEmphasis;
+
+    if (!isStrongBeatEmphasis(emphasis)) {
+      messages.push(`${optionId} is missing data.strongBeatEmphasis. The Strong Beats final payload should include only the emphasis direction.`);
+    } else if (!successfulLocalEmphases.has(emphasis)) {
+      messages.push(`${optionId} uses strongBeatEmphasis="${emphasis}" but add_strong_beat_icons was not called successfully for that emphasis.`);
+    }
+
+    for (const key of STRONG_BEAT_LLM_DISALLOWED_DATA_KEYS) {
+      if (data && key in data) {
+        messages.push(`${optionId} must not include data.${key}. Strong Beat ABC notation and directives are generated locally as beat-only w: lyric rows after the final LLM payload.`);
+      }
     }
   }
 
@@ -321,6 +386,7 @@ function validateStrongBeatWorkflowResult(input: {
       issues: messages,
       localResults: input.localResults.map((result) => ({
         emphasis: result.emphasis,
+        valid: result.valid,
         directiveCount: result.strongBeatDirectives.length,
         issues: result.issues,
       })),
@@ -409,12 +475,16 @@ function makeBreakMeasuresLineLocalTool(sourceAbc: string, onCalled?: () => void
 function normalizeStrongBeatOptionData(data: Record<string, unknown>, sourceAbc: string): Record<string, unknown> {
   const emphasis = isStrongBeatEmphasis(data.strongBeatEmphasis) ? data.strongBeatEmphasis : "all-metric-beats";
   const localResult = addStrongBeatIconsToAbcNotation({ abcNotation: sourceAbc, emphasis });
+  const safeData = { ...data };
+
+  for (const key of STRONG_BEAT_LLM_DISALLOWED_DATA_KEYS) {
+    delete safeData[key];
+  }
 
   return {
-    ...data,
+    ...safeData,
     strongBeatEmphasis: emphasis,
     strongBeatDirectives: localResult.strongBeatDirectives,
-    annotatedAbc: localResult.abcNotation,
   };
 }
 
@@ -497,7 +567,7 @@ export async function generateAccompanimentWorkflowStep(
       let strongBeatToolCalled = false;
       const strongBeatResults: StrongBeatIconGenerationResult[] = [];
       rawResult = await requestOpenAiCompatibleToolLoop({
-        systemPrompt: `${systemPrompt} For the Strong Beats step, the model chooses an emphasis direction only. Call add_strong_beat_icons before the final generation tool so the local algorithm computes concrete ABC beat icons and strongBeatDirectives. Copy returned strongBeatDirectives exactly into final option data.`,
+        systemPrompt: `${systemPrompt} For the Strong Beats step, the model chooses an emphasis direction only. Call add_strong_beat_icons before the final generation tool for each distinct emphasis you will offer so the local algorithm computes and validates concrete beat positions. The final generate_strong_beat_targets payload must include only option.data.strongBeatEmphasis; do not include abcNotation, annotatedAbc, strongBeatDirectives, measureIndex, or beatTime.`,
         userPrompt: requestPrompt,
         tools: [buildAddStrongBeatIconsToolSchema(), toolSchema],
         finalToolName: toolName,
@@ -565,11 +635,19 @@ export async function generateAccompanimentWorkflowStep(
       });
     }
 
+    let options: AccompanimentWorkflowOption[];
+    try {
+      options = normalizeOptions(rawResult, input.sourceAbc, input.stepId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "unknown normalization error";
+      throw new Error(`Validated ${toolName} output could not be normalized into selectable options: ${message}`);
+    }
+
     return makeRun({
       stepId: input.stepId,
       requestPrompt,
       userNote: input.userNote,
-      options: normalizeOptions(rawResult, input.sourceAbc, input.stepId),
+      options,
       rawResult,
       diagnostics,
     });

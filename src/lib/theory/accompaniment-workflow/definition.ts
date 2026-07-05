@@ -89,6 +89,7 @@ export interface AccompanimentWorkflowLlmLogEntry {
   toolName?: string;
   toolCallNames?: string[];
   validationMessage?: string;
+  payloadPreview?: unknown;
   logPath?: string;
 }
 
