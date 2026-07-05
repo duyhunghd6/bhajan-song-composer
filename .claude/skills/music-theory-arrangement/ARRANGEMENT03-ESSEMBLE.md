@@ -41,31 +41,33 @@ The Djembe layer stitches itself mathematically to the rhythmic topography estab
 
 ### 2.1 Djembe Sound Palette
 
-| Tone | Technique | Frequency Band | ABC Notation |
-| ---- | --------- | -------------- | ------------ |
-| **Bass (B)** | Open palm, center of head | Low (~100-200 Hz) | `C,` (low register) |
-| **Mid-Tone (T)** | Fingertips, edge of head | Mid (~300-600 Hz) | `G` (mid register) |
-| **Slap (S)** | Sharp edge strike | High (~1-4 kHz transient) | `c'` (high register) |
+To simulate a realistic African Djembe on web platforms using standard General MIDI soundfonts, assign the track to **MIDI Channel 10** (Percussion) to leverage conga/bongo samples. Map the Djembe strokes to specific ABC pitch values that correspond to conga MIDI note numbers:
+
+| Stroke | Technique | MIDI Instrument (Ch 10) | MIDI Note | ABC Pitch |
+| ------ | --------- | ----------------------- | --------- | --------- |
+| **Bass (Dum)** | Open palm, center of head | Low Conga | 64 | `E` |
+| **Tone (Go)** | Fingertips, edge of head | Open High Conga | 63 | `_E` |
+| **Slap (Pa)** | Sharp edge strike | Mute High Conga | 62 | `D` |
 
 ### 2.2 Bass-to-Kick Sync Protocol
 
-Map the Djembe's **Bass** tone exactly to the transients of the Layer 2 bassline:
+Map the Djembe's **Bass** tone (`E`) exactly to the transients of the Layer 2 bassline:
 
 ```
 If guitar thumb / piano LH plays root on beats 1 and 3:
-  → Djembe Bass fires simultaneously on beats 1 and 3
+  → Djembe Bass (Dum, E) fires simultaneously on beats 1 and 3
   → Fuses acoustic bass and drum impact into a single low-frequency event
 ```
 
 **ABC Example:**
 ```abc
-%%MIDI program 116
 V:Djembe clef=perc name="Djembe" snm="Dj"
+%%MIDI channel 10
 K:C clef=perc
 L:1/8
-% B = Bass, T = Tone, S = Slap
+% E = Bass, _E = Tone, D = Slap
 % Beat:  1  &  2  &  3  &  4  &
-         B  T  S  T  B  T  S  T |
+         E _E  D _E  E _E  D _E |
 ```
 
 ### 2.3 Subdivision Weave (Fill the Gaps)
@@ -74,17 +76,17 @@ Populate subdivisions that Layer 2 is NOT playing:
 
 | Layer 2 Activity | Djembe Action |
 | ---------------- | ------------- |
-| **Downbeats occupied** by piano/guitar | Place low-velocity **Mid-Tone** taps on off-beats ("ands") |
-| **Off-beats occupied** by syncopated comping | Place **Bass** accents on downbeats only |
+| **Downbeats occupied** by piano/guitar | Place low-velocity **Tone** (`_E`) taps on off-beats ("ands") |
+| **Off-beats occupied** by syncopated comping | Place **Bass** (`E`) accents on downbeats only |
 | **Continuous 8ths** from Layer 2 | Djembe holds minimal groove — Bass on 1, Slap on 3, rest elsewhere |
 
 ### 2.4 Backbeat Snap (Transient Matching)
 
-Map the high-frequency **Slap** tone to the backbeat (beats 2 and 4):
+Map the high-frequency **Slap** tone (`D`) to the backbeat (beats 2 and 4):
 
 ```
 When guitar fingerstyle includes percussive string slaps:
-  → Align Djembe Slap with those events
+  → Align Djembe Slap (Pa, D) with those events
   → Reinforces physical groove impact without conflicting transients
 ```
 
@@ -94,33 +96,39 @@ When guitar fingerstyle includes percussive string slaps:
 
 ```abc
 V:Djembe clef=perc
+%%MIDI channel 10
 K:C clef=perc
 L:1/8
 M:4/4
 % Gentle, breathing pattern
-B,2 G z B,2 G z |  % Bass-Tone-rest, Bass-Tone-rest
+% E = Bass | _E = Tone | D = Slap
+E2 _E z E2 _E z |  % Bass-Tone-rest, Bass-Tone-rest
 ```
 
 #### Preset B: Folk / Upbeat (Energetic)
 
 ```abc
 V:Djembe clef=perc
+%%MIDI channel 10
 K:C clef=perc
 L:1/8
 M:4/4
 % Standard 4/4 groove
-B, G c' G B, G c' G |  % Bass-Tone-Slap-Tone-Bass-Tone-Slap-Tone
+% E = Bass | _E = Tone | D = Slap
+E _E D _E E _E D _E |  % Bass-Tone-Slap-Tone-Bass-Tone-Slap-Tone
 ```
 
 #### Preset C: 6/8 Compound (Flowing)
 
 ```abc
 V:Djembe clef=perc
+%%MIDI channel 10
 K:C clef=perc
 L:1/8
 M:6/8
 % Compound meter feel
-B, G G c' G G |  % Bass-Tone-Tone-Slap-Tone-Tone
+% E = Bass | _E = Tone | D = Slap
+E _E _E D _E _E |  % Bass-Tone-Tone-Slap-Tone-Tone
 ```
 
 ---
@@ -278,13 +286,14 @@ V:Piano   clef=treble name="Piano"   snm="Pno"
 V:Violin  clef=treble name="Violin"  snm="Vln"
 V:Flute   clef=treble name="Flute"   snm="Fl"
 V:Djembe  clef=perc   name="Djembe"  snm="Dj"
+%%MIDI channel 10
 K:C
 %
 [V:Melody] "C"c2 B2 A2 G2   | "F"A2 G2 F2 E2   | "G7"D2 E2 F2 G2  | "C"c8          |
 [V:Piano]  [CEG]4 [CEG]4    | [FAc]4 [FAc]4    | [GBd]4 [GBd]4   | [CEG]8         |
 [V:Violin] !mp!E4 G4        | !mp!A4 c4        | !mp!B4 d4       | !mp!E8         |
 [V:Flute]  !p!c'8           | !p!a8            | z4 !mf!d'e'f'g' | !p!c'8         |
-[V:Djembe] C,Gc'G C,Gc'G   | C,Gc'G C,Gc'G   | C,Gc'G C,Gc'G  | C,4 z4         |
+[V:Djembe] E _E D _E E _E D _E | E _E D _E E _E D _E | E _E D _E E _E D _E | E4 z4 |
 ```
 
 ---

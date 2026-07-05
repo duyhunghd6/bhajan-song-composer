@@ -66,6 +66,19 @@ When arranging from a melody-only input, follow this document reading order:
 3. ARRANGEMENT03-ESSEMBLE.md →  If expanding to full ensemble
 ```
 
+### 🎹 MIDI Instrument Mapping Guide
+
+When outputting ABC notation for the arranged instruments, use these `%%MIDI` configurations to match the app's soundfont profiles:
+
+| Instrument | MIDI Program / Channel | Key Techniques for Realism |
+| ---------- | ---------------------- | -------------------------- |
+| **Acoustic Guitar** | `%%MIDI program 25` | Use arpeggiated/staggered patterns (no block chords) to simulate fingerpicking. |
+| **Violin** | `%%MIDI program 40` | Use slurs `()` to simulate smooth continuous bowing (legato). |
+| **Flute** | `%%MIDI program 73` | Use slurs `()` for legato, and insert 16th-note rests (`z/`) for breath. |
+| **Djembe** | `%%MIDI channel 10` | Map Bass (Dum) = `E`, Tone (Go) = `_E`, Slap (Pa) = `D` conga samples. |
+
+Refer to the **`abcjs` Instrument Simulation Guide** in the `abcjs` skill file for complete code examples.
+
 ---
 
 ## Relationship to Other Skills
