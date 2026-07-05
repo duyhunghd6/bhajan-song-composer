@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Tablature Test</title>
+  <script src="/abcjs-basic-min.js"></script>
+  <style>
+    body { font-family: sans-serif; padding: 20px; max-width: 1000px; margin: 0 auto; }
+    .example-container { border: 1px solid #ddd; padding: 20px; margin-bottom: 40px; border-radius: 8px; background: #f9f9f9; }
+    h2 { margin-top: 0; color: #333; }
+    
+    /* Pull abcjs tablature up so it sits tightly under the lyrics */
+    g.abcjs-staff:not(.abcjs-v0),
+    g.abcjs-tabNumber,
+    g.abcjs-symbol:has(path[data-name="tab.big"]) {
+      transform: translateY(-50px);
+    }
+  </style>
+</head>
+<body>
+  <h1>ABC Tablature Rendering Gallery</h1>
+  <p>This page demonstrates how different styles of ABC notation are rendered into Guitar Tablature.</p>
+
+  <div id="examples"></div>
+
+  <script>
+    const examples = [
+      {
+        title: "1. Full Fingerstyle with Lyrics (Hari Bol)",
+        description: "Melody (stems up) with lyrics, layered over Bass Accompaniment (stems down) on a single combined staff.",
+        abc: `X: 1
+T: Hari Bol (Fingerstyle Arrangement)
+M: 4/4
+L: 1/8
+Q: 1/4=65
+K: Em
+%%score (Melody Guitar)
+%%playchord 0
+%%vocalspace 10
+%%botmargin 80
+V:Melody name="Original Melody" stem=up
+E E (EB,) E E (EB,) | E F G F2 (G2F) | E E (EB,) E E (EB,) | E F G F2 (G2F) |
+w: Ha-ri Bol _ Ha-ri Bol _ | Ha-ri Ha-ri Bol _ | Ha-ri Bol _ Ha-ri Bol _ | Ha-ri Ha-ri Bol _
+V:Guitar clef=treble-8 name="Layer 2 Guitar Accompaniment" stem=down
+| E,2 E2 B,2 E2 | E,2 E2 B,2 E2 | E,2 E2 B,2 E2 | E,2 E2 B,2 E2 |`
+      },
+      {
+        title: "2. Melody Only (No Lyrics)",
+        description: "A simple melody rendered directly to tablature. Notice how clean it is when there are no lyrics or bass stems to clear.",
+        abc: `X: 2
+T: Simple Folk Melody
+M: 4/4
+L: 1/4
+K: G
+%%score (Guitar)
+%%botmargin 60
+V:Guitar clef=treble-8
+G A B c | d2 B2 | c e d c | B4 |`
+      },
+      {
+        title: "3. Polyphonic Block Chords (Strumming)",
+        description: "Multiple notes stacked vertically in brackets [ ] to create chords. The tablature correctly identifies the strings for each note.",
+        abc: `X: 3
+T: G Major Chord Progression
+M: 4/4
+L: 1/2
+K: G
+%%score (Guitar)
+%%botmargin 60
+V:Guitar clef=treble-8
+[G,B,DGB] [C,G,CEG] | [D,A,DFA] [G,B,DGB] |`
+      },
+      {
+        title: "4. Rapid Scale Run (Arpeggios)",
+        description: "Fast 16th notes spanning multiple strings to demonstrate fret mapping across the neck.",
+        abc: `X: 4
+T: E Minor Arpeggio Run
+M: 4/4
+L: 1/16
+K: Em
+%%score (Guitar)
+%%botmargin 60
+V:Guitar clef=treble-8
+E,G,B,E GBeB GEDB, G,4 |`
+      }
+    ];
+
+    const container = document.getElementById("examples");
+
+    examples.forEach((ex, index) => {
+      // Create DOM elements
+      const div = document.createElement("div");
+      div.className = "example-container";
+      div.innerHTML = `
+        <h2>${ex.title}</h2>
+        <p><em>${ex.description}</em></p>
+        <div id="paper-${index}"></div>
+      `;
+      container.appendChild(div);
+
+      // Render the ABC
+      window.ABCJS.renderAbc(`paper-${index}`, ex.abc, {
+        add_classes: true,
+        responsive: "resize",
+        tablature: [
+          {
+            instrument: "guitar",
+            tuning: ["E,,", "A,,", "D,", "G,", "B,", "E"]
+          }
+        ]
+      });
+    });
+  </script>
+</body>
+</html>
