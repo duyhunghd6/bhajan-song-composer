@@ -19,6 +19,43 @@ export default function AbcSheetViewer({ abcString, songTitle }: AbcSheetViewerP
     [abcString, playbackCursor]
   );
 
+  const renderOptions = useMemo(() => {
+    let guitarIndex = -1;
+    const scoreMatch = abcString.match(/^%%score\s+(.+)$/m);
+    
+    if (scoreMatch) {
+      // Parse the score directive: e.g. "(Melody Guitar) (Piano)" -> ["(Melody Guitar)", "(Piano)"]
+      const scoreLine = scoreMatch[1];
+      const staffGroups = scoreLine.match(/(\([^)]+\)|\[[^\]]+\]|\{[^}]+\}|\S+)/g);
+      if (staffGroups) {
+        guitarIndex = staffGroups.findIndex(group => group.includes("Guitar"));
+      }
+    }
+    
+    if (guitarIndex === -1) {
+      // Fallback: use order of V: declarations
+      const matches = [...abcString.matchAll(/^V:([^\s=]+)/gm)];
+      const voiceNames = [...new Set(matches.map(m => m[1]))];
+      guitarIndex = voiceNames.indexOf("Guitar");
+    }
+    
+    if (guitarIndex >= 0) {
+      return {
+        tablature: [
+          ...Array.from({ length: guitarIndex }, () => ({ instrument: "" as const })),
+          {
+            instrument: "guitar" as const,
+            label: "GUITAR TAB (%T)",
+            tuning: ["E,,", "A,,", "D,", "G,", "B,", "E"],
+            capo: 0,
+            hideTabSymbol: false,
+          },
+        ]
+      };
+    }
+    return {};
+  }, [abcString]);
+
   return (
     <div className="space-y-4">
       <AbcjsPlaybackController
@@ -29,6 +66,7 @@ export default function AbcSheetViewer({ abcString, songTitle }: AbcSheetViewerP
         controls
         showLoopControls
         onPlaybackCursor={setPlaybackCursor}
+        renderOptions={renderOptions}
       />
 
       <section

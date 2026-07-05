@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "validate:songs": "node scripts/validate-songs.mjs"
+    "validate:songs": "node scripts/validate-songs.mjs",
+    "postinstall": "npx patch-package"
   },
   "dependencies": {
     "abcjs": "^6.6.3",

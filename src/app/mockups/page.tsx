@@ -56,6 +56,14 @@ const MOCKUP_GATES: MockupGate[] = [
     purpose:
       "Synchronized guitar/piano highlights and numbered blue/yellow note markers driven by Music Sheet playback cursor events.",
   },
+  {
+    title: "Beat Strength Highlight POC",
+    unid: "br-plan-09.c07",
+    href: "/mockups/beats",
+    status: "review-ready",
+    purpose:
+      "Metric subdivisions (Strong, Medium, Soft Beats) highlighted using circles below lyrics, fully integrated into the reusable playback controller.",
+  },
 ];
 
 export default function MockupsPage() {

@@ -38,6 +38,7 @@ export interface BuildAccompanimentAbcOptions {
   generatedAccompaniment?: string | null;
   generatedGuitar?: string | null;
   generatedPiano?: string | null;
+  extraVoiceSources?: Array<string | null | undefined>;
   layerVisibility?: Record<string, boolean>;
 }
 
@@ -88,6 +89,7 @@ function stripGeneratedHeaders(generatedAccompaniment: string): string {
 }
 
 function normalizeGeneratedVoiceLine(voiceLine: string): string {
+  if (!voiceLine.startsWith("V:Guitar") || voiceLine.includes("name=")) return voiceLine;
   return voiceLine.replace(/V:Guitar clef=treble-8/g, 'V:Guitar clef=treble-8 name="Layer 2 Guitar Accompaniment"');
 }
 
@@ -152,22 +154,20 @@ function alignVoiceBlock(block: string, baseAbc: string): string {
   return `${voiceLine}\n| ${normalizedFullMeasures.join(" | ")} |`;
 }
 
+export function getLayerVoiceNames(...sources: Array<string | null | undefined>): string[] {
+  const names = sources.flatMap((source) =>
+    source ? splitVoiceBlocks(source).map(getVoiceName).filter(Boolean) as string[] : []
+  );
+  return [...new Set(names)];
+}
+
 export function getAccompanimentVoiceNames(
   generatedAccompaniment?: string | null,
   generatedGuitar?: string | null,
   generatedPiano?: string | null,
+  extraVoiceSources: Array<string | null | undefined> = [],
 ): string[] {
-  const names: string[] = [];
-  if (generatedAccompaniment) {
-    names.push(...splitVoiceBlocks(generatedAccompaniment).map(getVoiceName).filter(Boolean) as string[]);
-  }
-  if (generatedGuitar) {
-    names.push(...splitVoiceBlocks(generatedGuitar).map(getVoiceName).filter(Boolean) as string[]);
-  }
-  if (generatedPiano) {
-    names.push(...splitVoiceBlocks(generatedPiano).map(getVoiceName).filter(Boolean) as string[]);
-  }
-  return [...new Set(names)];
+  return getLayerVoiceNames(generatedAccompaniment, generatedGuitar, generatedPiano, ...extraVoiceSources);
 }
 
 export function buildAccompanimentAbc({
@@ -175,12 +175,19 @@ export function buildAccompanimentAbc({
   generatedAccompaniment,
   generatedGuitar,
   generatedPiano,
+  extraVoiceSources = [],
   layerVisibility = {},
 }: BuildAccompanimentAbcOptions): BuildAccompanimentAbcResult {
+  const baseAbcBlocks = baseAbc.split(/(?=^V:)/m).filter(block => block.trim());
+  const melodyBlock = baseAbcBlocks.find(b => b.startsWith("V:Melody")) 
+    || baseAbcBlocks.find(b => !b.startsWith("V:")) 
+    || "";
+  const otherBaseBlocks = baseAbcBlocks.filter(b => b !== melodyBlock && b.startsWith("V:") && !b.startsWith("V:Melody"));
+
   const headerLines = getHeaderLines(baseAbc);
   const showChords = layerVisibility.__chords__ !== false;
   const showMelody = layerVisibility.__melody__ !== false;
-  const musicLines = extractMusicBodyLines(baseAbc);
+  const musicLines = extractMusicBodyLines(melodyBlock);
 
   // Build melody lines: strip chords if chord layer is off, replace notes with rests if melody is off
   let melodyMusicLines: string[];
@@ -194,10 +201,16 @@ export function buildAccompanimentAbc({
     melodyMusicLines = musicLines;
   }
 
-  const melodyOutputLines = interleaveLyrics(melodyMusicLines, showMelody ? getLyricsLines(baseAbc) : []);
+  const melodyOutputLines = interleaveLyrics(melodyMusicLines, showMelody ? getLyricsLines(melodyBlock) : []);
 
   // Merge all accompaniment sources into a single aligned block list
-  const allSources = [generatedAccompaniment, generatedGuitar, generatedPiano].filter(Boolean) as string[];
+  const allSources = [
+    generatedAccompaniment,
+    generatedGuitar,
+    generatedPiano,
+    ...extraVoiceSources,
+    ...otherBaseBlocks
+  ].filter(Boolean) as string[];
 
   if (allSources.length === 0) {
     return {
@@ -231,15 +244,42 @@ export function buildAccompanimentAbc({
   const visibleVoiceNames = visibleBlocks.map(getVoiceName).filter(Boolean) as string[];
 
   // Always include Melody in score so the staff stays visible (rests show the silent voice)
-  const scoreParts: string[] = ["(Melody)"];
-  scoreParts.push(...visibleVoiceNames.map((voiceName) => `(${voiceName})`));
+  const scoreParts: string[] = [];
+  if (visibleVoiceNames.includes("Guitar")) {
+    // Merge Melody and Guitar onto a single staff so the Tablature plugin reads both!
+    scoreParts.push("(Melody Guitar)");
+    scoreParts.push(...visibleVoiceNames.filter(v => v !== "Guitar").map((v) => `(${v})`));
+  } else {
+    scoreParts.push("(Melody)");
+    scoreParts.push(...visibleVoiceNames.map((voiceName) => `(${voiceName})`));
+  }
 
   const output = [...headerLines];
-  if (scoreParts.length > 0) output.push(`%%score ${scoreParts.join(" ")}`);
-  if (!showChords || !showMelody) output.push("%%playchord 0");
-  output.push('V:Melody name="Original Melody"');
+  if (scoreParts.length > 0) {
+    output.push(`%%score ${scoreParts.join(" ")}`);
+  }
+  // Inject vocalspace to ensure the lyrics clear the downward stems exactly.
+  // The CSS translateY(-40px) pulls the Tablature UP to meet the lyrics.
+  if (visibleVoiceNames.includes("Guitar")) {
+    output.push("%%vocalspace 10");
+    output.push("%%botmargin 80");
+  }
+
+  // Melody stems point UP, Guitar stems point DOWN for clean fingerstyle visual
+  output.push('V:Melody name="Original Melody" stem=up');
   output.push(...melodyOutputLines);
-  output.push(...visibleBlocks);
+  
+  const processedVisibleBlocks = visibleBlocks.map(block => {
+    if (getVoiceName(block) === "Guitar") {
+      // Find the V:Guitar line and append stem=down if not already present
+      return block.replace(/^(V:Guitar.*?)$/m, (match) => {
+        return match.includes('stem=') ? match : `${match} stem=down`;
+      });
+    }
+    return block;
+  });
+  
+  output.push(...processedVisibleBlocks);
 
   return {
     abc: output.join("\n"),

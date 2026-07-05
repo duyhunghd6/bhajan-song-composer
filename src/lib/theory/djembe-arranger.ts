@@ -1,6 +1,7 @@
 import { AccompanimentStage } from "./accompaniment-stage";
 import { getBeatsPerMeasure } from "./arranger-utils";
 import { EnsembleIntegrationHandshake, generateEnsembleIntegrationHandshake } from "./ensemble-expander";
+import type { EnsembleGenerationPlan } from "./ensemble-workflow";
 
 export type DjembeStroke = "bass" | "mid-tone" | "slap";
 export type DjembeEventSource = "layer2-bass-transient" | "unused-subdivision" | "backbeat";
@@ -8,6 +9,7 @@ export type DjembeEventSource = "layer2-bass-transient" | "unused-subdivision" |
 export interface DjembeArrangementOptions {
   accompaniment: AccompanimentStage;
   handshake?: EnsembleIntegrationHandshake;
+  plan?: EnsembleGenerationPlan["djembe"];
 }
 
 export interface DjembeEvent {
@@ -81,10 +83,19 @@ function pushIfTransientIsFree(
   eventMap.push(event);
 }
 
-function buildMidToneEvents(handshake: EnsembleIntegrationHandshake, beatCount: number): DjembeEvent[] {
+function buildMidToneEvents(
+  handshake: EnsembleIntegrationHandshake,
+  beatCount: number,
+  plan?: EnsembleGenerationPlan["djembe"]
+): DjembeEvent[] {
+  if (plan?.density === "minimal" || plan?.fillPolicy === "none" || plan?.grooveProfile === "sparse") return [];
+
   return handshake.rhythmicDensityGrid.flatMap((slice) => {
     const offBeat = slice.beat + 0.5;
     if (offBeat > beatCount) return [];
+    if (plan?.fillPolicy === "gap-only" && slice.layer1Active) return [];
+    if (plan?.fillPolicy === "cadence-only" && slice.beat !== beatCount) return [];
+    if (plan?.density === "moderate" && slice.beat % 2 === 0) return [];
 
     return [{
       measureIndex: slice.measureIndex,
@@ -98,9 +109,12 @@ function buildMidToneEvents(handshake: EnsembleIntegrationHandshake, beatCount: 
   });
 }
 
-function buildSlapEvents(handshake: EnsembleIntegrationHandshake): DjembeEvent[] {
+function buildSlapEvents(handshake: EnsembleIntegrationHandshake, plan?: EnsembleGenerationPlan["djembe"]): DjembeEvent[] {
+  if (plan?.backbeatSlaps === false || plan?.density === "minimal" || plan?.grooveProfile === "sparse") return [];
+
   return handshake.rhythmicDensityGrid
     .filter((slice) => slice.beat === 2 || slice.beat === 4)
+    .filter((slice) => plan?.fillPolicy !== "gap-only" || !slice.layer1Active)
     .map((slice) => ({
       measureIndex: slice.measureIndex,
       beat: slice.beat,
@@ -116,21 +130,42 @@ function eventSort(a: DjembeEvent, b: DjembeEvent): number {
   return a.measureIndex - b.measureIndex || a.startMs - b.startMs;
 }
 
+function strokeToAbc(stroke: DjembeStroke): string {
+  if (stroke === "bass") return "C,";
+  if (stroke === "slap") return "c";
+  return "G";
+}
+
+function buildDjembeAbc(eventMap: DjembeEvent[], measureCount: number, beatCount: number): string {
+  const subdivisions = beatCount * 2;
+  const measures = Array.from({ length: measureCount }, (_, measureIndex) => {
+    const tokens = Array.from({ length: subdivisions }, () => "z");
+    for (const event of eventMap.filter((candidate) => candidate.measureIndex === measureIndex)) {
+      const subdivisionIndex = Math.max(0, Math.min(subdivisions - 1, Math.round((event.beat - 1) * 2)));
+      tokens[subdivisionIndex] = strokeToAbc(event.stroke);
+    }
+    return tokens.join(" ");
+  });
+
+  return `V:Djembe clef=perc name="Layer 3 Djembe Interlock"\n| ${measures.join(" | ")} |`;
+}
+
 export function generateDjembeArrangement(
   melodyAbc: string,
   options: DjembeArrangementOptions
 ): DjembeArrangement {
   const { accompaniment } = options;
+  const plan = options.plan;
   const handshake = options.handshake ?? generateEnsembleIntegrationHandshake(melodyAbc, { accompaniment });
   const beatCount = getBeatsPerMeasure(accompaniment.timeSignature);
-  const eventMap: DjembeEvent[] = handshake.bassMap.map(buildBassEvent);
+  const eventMap: DjembeEvent[] = plan?.bassSync === false ? [] : handshake.bassMap.map(buildBassEvent);
   const transientConflictReport: DjembeTransientConflict[] = [];
 
-  for (const event of buildMidToneEvents(handshake, beatCount)) {
+  for (const event of buildMidToneEvents(handshake, beatCount, plan)) {
     pushIfTransientIsFree(eventMap, transientConflictReport, event);
   }
 
-  for (const event of buildSlapEvents(handshake)) {
+  for (const event of buildSlapEvents(handshake, plan)) {
     pushIfTransientIsFree(eventMap, transientConflictReport, event);
   }
 
@@ -153,6 +188,6 @@ export function generateDjembeArrangement(
       velocityMetadataAssigned: eventMap.every((event) => event.velocity > 0),
       transientConflictsAvoided: new Set(transientKeys).size === transientKeys.length,
     },
-    abc: `V:Djembe perc name="Layer 3 Djembe Interlock"\n| ${accompaniment.measures.map(() => "B m S m").join(" | ")} |`,
+    abc: buildDjembeAbc(eventMap, accompaniment.measures.length, beatCount),
   };
 }

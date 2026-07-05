@@ -19,7 +19,7 @@ test.describe("composer song edit dashboard and redirect", () => {
     // Verify key tone and resource indicators on Happy Birthday card/row
     const hbCard = page.locator("[data-song-slug='happy-birthday']");
     await expect(hbCard).toBeVisible();
-    await expect(hbCard.locator(".song-key-badge")).toHaveText("Key: C");
+    await expect(hbCard.locator(".song-key-badge")).toHaveText("Key: G");
 
     // Check indicators (Video, Backing Track, Melody, Guitar should be visible based on happy-birthday resources)
     await expect(hbCard.locator("[data-indicator='video']")).toBeVisible();
@@ -46,16 +46,17 @@ test.describe("composer song edit dashboard and redirect", () => {
     await expect(page.locator("#song-title")).toHaveValue("Happy Birthday");
     await expect(page.locator("#song-slug")).toHaveValue("happy-birthday");
     
-    // The active layer name should default to "Melody Music Sheet"
-    await expect(page.getByLabel("Active layer name")).toHaveValue("Melody Music Sheet");
+    // Click "Continue arrangement" to enter the step workstation
+    await page.getByRole("link", { name: "Continue arrangement" }).click();
+    await expect(page).toHaveURL(/\/compose\/happy-birthday\/melody$/);
 
     // The ABC editor input should contain the Happy Birthday melody notation
     const abcEditor = page.locator("#abc-editor-input");
-    await expect(abcEditor).toContainText("T:Happy Birthday (Melody)");
-    await expect(abcEditor).toContainText("K:C");
+    await expect(abcEditor).toContainText("T: Happy Birthday To You");
+    await expect(abcEditor).toContainText("K: G");
 
-    // Check back link exists and works
-    await page.getByRole("link", { name: "Back to Edit List" }).click();
+    // Check back link exists and works (using breadcrumb to go back to catalogue)
+    await page.getByRole("link", { name: "Catalogue Editor" }).click();
     await expect(page).toHaveURL(/\/edit/);
   });
 });

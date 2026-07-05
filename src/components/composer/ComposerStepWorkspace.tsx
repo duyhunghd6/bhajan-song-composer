@@ -7,7 +7,7 @@ import AbcjsPlaybackController from "@/components/music-sheet/AbcjsPlaybackContr
 import PianoKeyboard from "@/components/instruments/PianoKeyboard";
 import GuitarFretboard from "@/components/instruments/GuitarFretboard";
 import PianoPedalIndicator from "@/components/instruments/PianoPedalIndicator";
-import { buildArrangementLayerProposals, generateArrangementPipeline } from "@/lib/theory/arrangement-pipeline";
+import { generateArrangementPipeline } from "@/lib/theory/arrangement-pipeline";
 import { harmonizeMelody } from "@/app/actions/harmonize";
 import { type HarmonizationOption } from "@/lib/theory/harmonization-candidates";
 import { buildAccompanimentAbc, getAccompanimentVoiceNames } from "@/lib/theory/accompaniment-abc";
@@ -17,12 +17,17 @@ import {
   getWorkflowAppliedMusicAbc,
   isAccompanimentWorkflowSourceCurrent,
 } from "@/lib/theory/accompaniment-workflow";
+import {
+  buildEnsembleWorkflowAbcAnnotation,
+  isEnsembleWorkflowSourceCurrent,
+} from "@/lib/theory/ensemble-workflow";
 import { generatePianoAccompaniment } from "@/lib/theory/piano-accompaniment";
 import type { PianoCompingProfileId } from "@/lib/theory/piano-comping-profiles";
 import { buildFingerstyleComposerIntegration, type FingerstyleComposerProfileId } from "./fingerstyle-integration";
 import AbcEditor, { DEFAULT_ABC } from "./AbcEditor";
 import TheoryAssistant from "./TheoryAssistant";
 import AccompanimentWorkflowWizard from "./AccompanimentWorkflowWizard";
+import EnsembleWorkflowWizard from "./EnsembleWorkflowWizard";
 import type { ComposerStepId } from "./composer-steps";
 import { buildTheoryAssistantLayerProposal, type TheoryAssistantArrangementSuggestion } from "./theory-assistant-layer";
 
@@ -111,8 +116,14 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
   const { state: ws, updateState } = useWorkspaceState(slug);
   const [layerVisibility, setLayerVisibility] = useState({ melody: true, harmony: true });
   const [accompLayerVisibility, setAccompLayerVisibility] = useState<Record<string, boolean>>({});
+  const [ensembleInputLayers, setEnsembleInputLayers] = useState<Record<string, boolean>>({
+    __melody__: true,
+    Guitar: true,
+    PianoLH: true,
+    PianoRH: true,
+    PianoCompingLH: true,
+  });
   const [currentSuggestion, setCurrentSuggestion] = useState<TheoryAssistantArrangementSuggestion | null>(null);
-  const [ensembleEnabled, setEnsembleEnabled] = useState({ djembe: true, flute: true, violin: false });
   const [copyStatus, setCopyStatus] = useState("Copy Markdown");
 
   // Hydrate melodyAbc from localStorage after mount (client-only)
@@ -153,6 +164,13 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
     () => getWorkflowAppliedMusicAbc(activeWorkflow, activeAbc),
     [activeWorkflow, activeAbc]
   );
+  const workflowAppliedPipeline = useMemo(() => {
+    try {
+      return generateArrangementPipeline(workflowAppliedMusicAbc);
+    } catch {
+      return pipeline;
+    }
+  }, [workflowAppliedMusicAbc, pipeline]);
   const accompanimentBuild = useMemo(() => buildAccompanimentAbc({
     baseAbc: workflowAppliedMusicAbc,
     generatedAccompaniment: ws.generatedAccompaniment,
@@ -161,36 +179,95 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
     layerVisibility: accompLayerVisibility,
   }), [ws.generatedAccompaniment, ws.generatedGuitar, ws.generatedPiano, workflowAppliedMusicAbc, accompLayerVisibility]);
 
+  const ensembleInputLayerVisibility = useMemo(() => ({
+    __melody__: ensembleInputLayers.__melody__ !== false,
+    Guitar: ensembleInputLayers.Guitar !== false,
+    PianoLH: ensembleInputLayers.PianoLH !== false,
+    PianoRH: ensembleInputLayers.PianoRH !== false,
+    PianoCompingLH: ensembleInputLayers.PianoCompingLH !== false,
+  }), [ensembleInputLayers]);
+  const ensembleFoundationBuild = useMemo(() => buildAccompanimentAbc({
+    baseAbc: workflowAppliedMusicAbc,
+    generatedAccompaniment: ws.generatedAccompaniment,
+    generatedGuitar: ws.generatedGuitar,
+    generatedPiano: ws.generatedPiano,
+    layerVisibility: {
+      __melody__: ensembleInputLayerVisibility.__melody__,
+      Guitar: ensembleInputLayerVisibility.Guitar,
+      PianoLH: ensembleInputLayerVisibility.PianoLH,
+      PianoRH: ensembleInputLayerVisibility.PianoRH,
+      PianoCompingLH: ensembleInputLayerVisibility.PianoCompingLH,
+    },
+  }), [ws.generatedAccompaniment, ws.generatedGuitar, ws.generatedPiano, workflowAppliedMusicAbc, ensembleInputLayerVisibility]);
+  const ensembleFoundationAbc = ensembleFoundationBuild.abc;
+  const activeEnsembleWorkflow = isEnsembleWorkflowSourceCurrent(ws.ensembleWorkflow, ensembleFoundationAbc)
+    ? ws.ensembleWorkflow
+    : null;
+  const appliedEnsembleSources = useMemo(() => (
+    activeEnsembleWorkflow?.appliedAt && ws.appliedEnsembleLayers
+      ? [ws.appliedEnsembleLayers.djembe, ws.appliedEnsembleLayers.flute, ws.appliedEnsembleLayers.violin]
+      : []
+  ), [activeEnsembleWorkflow?.appliedAt, ws.appliedEnsembleLayers]);
+  const ensembleBuild = useMemo(() => buildAccompanimentAbc({
+    baseAbc: workflowAppliedMusicAbc,
+    generatedAccompaniment: ws.generatedAccompaniment,
+    generatedGuitar: ws.generatedGuitar,
+    generatedPiano: ws.generatedPiano,
+    extraVoiceSources: appliedEnsembleSources,
+    layerVisibility: accompLayerVisibility,
+  }), [ws.generatedAccompaniment, ws.generatedGuitar, ws.generatedPiano, workflowAppliedMusicAbc, appliedEnsembleSources, accompLayerVisibility]);
+
   const appliedWorkflowStep = useMemo(() => getLatestSelectedWorkflowStep(activeWorkflow), [activeWorkflow]);
   const workflowAnnotationAbc = useMemo(
     () => buildAccompanimentWorkflowAbcAnnotation(activeWorkflow),
     [activeWorkflow]
   );
+  const ensembleAnnotationAbc = useMemo(
+    () => buildEnsembleWorkflowAbcAnnotation(activeEnsembleWorkflow),
+    [activeEnsembleWorkflow]
+  );
   const accompanimentAbc = workflowAnnotationAbc
     ? `${accompanimentBuild.abc.trimEnd()}\n\n${workflowAnnotationAbc}`
     : accompanimentBuild.abc;
+  const ensembleAbc = [ensembleBuild.abc, workflowAnnotationAbc, ensembleAnnotationAbc]
+    .filter((block) => block.trim().length > 0)
+    .join("\n\n");
 
   const accompanimentVoiceNames = useMemo(
     () => getAccompanimentVoiceNames(ws.generatedAccompaniment, ws.generatedGuitar, ws.generatedPiano),
     [ws.generatedAccompaniment, ws.generatedGuitar, ws.generatedPiano]
   );
-  const guitarTabEnabled = Boolean(ws.generatedGuitar && accompLayerVisibility["__guitar_tab__"] === true);
+  const ensembleVoiceNames = useMemo(
+    () => getAccompanimentVoiceNames(ws.generatedAccompaniment, ws.generatedGuitar, ws.generatedPiano, appliedEnsembleSources),
+    [ws.generatedAccompaniment, ws.generatedGuitar, ws.generatedPiano, appliedEnsembleSources]
+  );
+  const availableEnsembleInputLayers = useMemo(() => {
+    const names = getAccompanimentVoiceNames(ws.generatedAccompaniment, ws.generatedGuitar, ws.generatedPiano);
+    return [
+      { key: "__melody__", label: "🎵 Melody", available: true },
+      { key: "Guitar", label: "🎸 Guitar", available: names.includes("Guitar") },
+      { key: "PianoLH", label: "🎹 Piano L H", available: names.includes("PianoLH") },
+      { key: "PianoRH", label: "🎹 Piano R H", available: names.includes("PianoRH") },
+      { key: "PianoCompingLH", label: "🎹 Piano Comping L H", available: names.includes("PianoCompingLH") },
+    ];
+  }, [ws.generatedAccompaniment, ws.generatedGuitar, ws.generatedPiano]);
+  const hasGuitarVoice = accompanimentBuild.visibleVoiceNames.includes("Guitar");
+  const guitarTabEnabled = Boolean(hasGuitarVoice && accompLayerVisibility["__guitar_tab__"] === true);
   // abcjs tablature is positionally mapped: tablature[i] renders under staff[i].
-  // The Guitar voice is NOT at staff index 0 (that's Melody), so we pad with
-  // { instrument: '' } placeholders for all preceding staves.
-  const guitarStaffIndex = accompanimentBuild.visibleVoiceNames.indexOf("Guitar") + 1; // +1 for Melody at index 0
+  // Melody and Guitar are merged onto a single staff, so Guitar is always staff index 0.
+  const guitarStaffIndex = 0;
   const accompanimentPreviewProps = useMemo(() => ({
     ...ACCOMPANIMENT_PREVIEW_PROPS,
     renderOptions: {
       ...ACCOMPANIMENT_PREVIEW_RENDER_OPTIONS,
-      ...(guitarTabEnabled && guitarStaffIndex > 0
+      ...(guitarTabEnabled && guitarStaffIndex >= 0
         ? {
             tablature: [
               ...Array.from({ length: guitarStaffIndex }, () => ({ instrument: "" as const })),
               {
                 instrument: "guitar" as const,
                 label: "GUITAR TAB (%T)",
-                tuning: ["E,", "A,", "D", "G", "B", "e"],
+                tuning: ["E,,", "A,,", "D,", "G,", "B,", "E"],
                 capo: 0,
                 hideTabSymbol: false,
               },
@@ -497,6 +574,19 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
                   workflow={ws.accompanimentWorkflow}
                   onWorkflowChange={(accompanimentWorkflow) => updateState({ accompanimentWorkflow })}
                   onGuitarProfileSelected={(profile) => {
+                    if (profile === null) {
+                      updateState({
+                        generatedGuitar: null,
+                        guitarAccompanimentData: null,
+                        selectedGuitarIndex: null,
+                        aiGuitarSuggestions: [],
+                        ensembleWorkflow: null,
+                        stagedEnsembleLayers: null,
+                        appliedEnsembleLayers: null,
+                      });
+                      return;
+                    }
+
                     const guitarProfiles: FingerstyleComposerProfileId[] = ["strict-pima", "folk-travis"];
                     const pickingProfile = guitarProfiles.includes(profile as FingerstyleComposerProfileId)
                       ? profile as FingerstyleComposerProfileId
@@ -505,6 +595,19 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
                     updateState({ generatedGuitar: integration.composerLayer.abc, guitarAccompanimentData: integration });
                   }}
                   onPianoProfileSelected={(profile) => {
+                    if (profile === null) {
+                      updateState({
+                        generatedPiano: null,
+                        pianoAccompanimentData: null,
+                        selectedPianoIndex: null,
+                        aiPianoSuggestions: [],
+                        ensembleWorkflow: null,
+                        stagedEnsembleLayers: null,
+                        appliedEnsembleLayers: null,
+                      });
+                      return;
+                    }
+
                     const pianoStyles: PianoCompingProfileId[] = ["pop-ballad", "rock-rnb", "classical-folk"];
                     const compingProfile = pianoStyles.includes(profile as PianoCompingProfileId)
                       ? profile as PianoCompingProfileId
@@ -550,7 +653,7 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
                       🎶 Original Chords
                     </label>
                     {/* Guitar tablature toggle */}
-                    {ws.generatedGuitar && (
+                    {hasGuitarVoice && (
                       <label className="flex items-center gap-2 text-xs font-semibold text-zinc-800 dark:text-zinc-200 cursor-pointer">
                         <input
                           type="checkbox"
@@ -692,30 +795,63 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
   }
 
   if (step === "ensemble") {
-    const proposals = pipeline ? buildArrangementLayerProposals(pipeline) : [];
-    const ensembleAbc = pipeline?.finalAbc ?? (proposals.map((proposal) => proposal.abc).join("\n\n") || activeAbc);
-
     return (
       <ComposerNotationPreviewLayout
         source={(
           <>
             <section className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950/60">
-              <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Enable Layers</h2>
+              <h2 className="mb-3 text-lg font-bold text-zinc-900 dark:text-zinc-100">Input Layers for Ensemble Composing</h2>
+              <p className="text-xs leading-5 text-zinc-600 dark:text-zinc-400">
+                Choose which existing layers are sent as context for Djembe, Flute, and Violin generation.
+              </p>
               <div className="mt-3 flex flex-wrap gap-3 text-sm">
-                {(["djembe", "flute", "violin"] as const).map((layer) => (
-                  <label key={layer} className="rounded-xl border border-zinc-200 bg-white px-3 py-2 capitalize dark:border-zinc-800 dark:bg-zinc-900">
+                {availableEnsembleInputLayers.map((layer) => (
+                  <label key={layer.key} className={`rounded-xl border px-3 py-2 text-xs font-semibold ${layer.available ? "border-zinc-200 bg-white text-zinc-800 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200" : "border-zinc-200 bg-zinc-100 text-zinc-400 dark:border-zinc-800 dark:bg-zinc-900/50"}`}>
                     <input
                       type="checkbox"
-                      checked={ensembleEnabled[layer]}
-                      onChange={() => setEnsembleEnabled((current) => ({ ...current, [layer]: !current[layer] }))}
-                    /> {layer}
+                      className="mr-2 rounded border-zinc-300 text-emerald-500 focus:ring-emerald-500"
+                      disabled={!layer.available}
+                      checked={layer.available && ensembleInputLayers[layer.key] !== false}
+                      onChange={() => setEnsembleInputLayers((current) => ({
+                        ...current,
+                        [layer.key]: !(current[layer.key] !== false),
+                      }))}
+                    />
+                    {layer.label}
                   </label>
                 ))}
               </div>
             </section>
+            <section className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950/60">
+              <h2 className="mb-4 text-lg font-bold text-zinc-900 dark:text-zinc-100">AI Ensemble Generation</h2>
+              <EnsembleWorkflowWizard
+                sourceAbc={ensembleFoundationAbc}
+                melodyAbc={workflowAppliedMusicAbc}
+                accompaniment={workflowAppliedPipeline?.accompaniment ?? null}
+                metadata={{
+                  key: workflowAppliedPipeline?.harmonization.key ?? "Unknown",
+                  scale: workflowAppliedPipeline?.harmonization.scale ?? "Unknown",
+                  timeSignature: workflowAppliedPipeline?.harmonization.timeSignature ?? "4/4",
+                }}
+                workflow={ws.ensembleWorkflow}
+                stagedLayers={ws.stagedEnsembleLayers}
+                appliedLayers={ws.appliedEnsembleLayers}
+                onWorkflowChange={(ensembleWorkflow) => updateState({ ensembleWorkflow })}
+                onStagedLayersChange={(stagedEnsembleLayers) => updateState({ stagedEnsembleLayers })}
+                onAppliedLayersChange={(appliedEnsembleLayers) => updateState({ appliedEnsembleLayers })}
+              />
+            </section>
             <section className="rounded-2xl border border-indigo-200 bg-indigo-50 p-4 dark:border-indigo-900/70 dark:bg-indigo-950/30">
               <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Conflict Resolution Hierarchy Log</h2>
-              <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">Flute yielded in m.8 due to active melody; Djembe follows bass/kick alignment.</p>
+              {ws.appliedEnsembleLayers?.conflictReport?.length ? (
+                <ul className="mt-2 list-disc space-y-1 pl-4 text-sm text-zinc-700 dark:text-zinc-300">
+                  {ws.appliedEnsembleLayers.conflictReport.slice(0, 5).map((entry) => (
+                    <li key={`${entry.measureIndex}-${entry.startMs}`}>m.{entry.measureIndex + 1} beat {entry.beat}: {entry.actions.join(", ") || "no action needed"}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">Build and apply the final ensemble preview to see concrete Djembe/Flute/Violin conflict decisions.</p>
+              )}
             </section>
             <section className="rounded-2xl border border-dashed border-zinc-300 bg-white/70 p-4 dark:border-zinc-700 dark:bg-zinc-950/50">
               <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Multi-track ABC Source</h2>
@@ -727,17 +863,49 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
         )}
         preview={(
           <>
+            {(ws.generatedAccompaniment || ws.generatedGuitar || ws.generatedPiano || ws.appliedEnsembleLayers) && (
+              <section className="mb-4 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950/60">
+                <h2 className="mb-2 text-sm font-bold text-zinc-900 dark:text-zinc-100">Layer Visibility</h2>
+                <div className="flex flex-wrap gap-3">
+                  {ensembleVoiceNames.map((voiceName) => {
+                    const isVisible = accompLayerVisibility[voiceName] !== false;
+                    const friendlyName = voiceName
+                      .replace(/([A-Z])/g, " $1")
+                      .replace(/^\s/, "")
+                      .replace("Piano", "🎹 Piano")
+                      .replace("Guitar", "🎸 Guitar")
+                      .replace("Djembe", "🪘 Djembe")
+                      .replace("Flute", "🪈 Flute")
+                      .replace("Violin", "🎻 Violin");
+                    return (
+                      <label key={voiceName} className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-zinc-800 dark:text-zinc-200">
+                        <input
+                          type="checkbox"
+                          className="rounded border-zinc-300 text-emerald-500 focus:ring-emerald-500"
+                          checked={isVisible}
+                          onChange={() => setAccompLayerVisibility((prev) => ({
+                            ...prev,
+                            [voiceName]: !isVisible,
+                          }))}
+                        />
+                        {friendlyName}
+                      </label>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
             <div className="flex items-center justify-between gap-3">
               <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Multi-track ABCJS Render (Full Score View)</h3>
               <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
-                Bounded preview
+                {activeEnsembleWorkflow?.appliedAt ? "Applied ensemble" : "Foundation preview"}
               </span>
             </div>
             <AbcjsPlaybackController
               abcString={ensembleAbc}
               title="Multi-track Full Score Playback"
               canvasId="composer-ensemble-preview"
-              {...COMPOSER_PREVIEW_PROPS}
+              {...ACCOMPANIMENT_PREVIEW_PROPS}
             />
           </>
         )}
@@ -745,8 +913,8 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
     );
   }
 
-  const markdown = `---\ntitle: "${slug}"\nslug: "${slug}"\nabcNotations:\n  - type: "melody"\n    label: "Melody Music Sheet"\n---\n\n## Lyrics\n\nDraft lyrics...\n\n## ABC\n\n\`\`\`abc\n${activeAbc}\n\`\`\``;
-  const reviewAbc = pipeline?.finalAbc ?? activeAbc;
+  const reviewAbc = activeEnsembleWorkflow?.appliedAt ? ensembleAbc : (accompanimentAbc || activeAbc);
+  const markdown = `---\ntitle: "${slug}"\nslug: "${slug}"\nabcNotations:\n  - type: "melody"\n    label: "Melody Music Sheet"\n---\n\n## Lyrics\n\nDraft lyrics...\n\n## ABC\n\n\`\`\`abc\n${reviewAbc}\n\`\`\``;
 
   const handleCopyMarkdown = () => {
     navigator.clipboard.writeText(markdown)

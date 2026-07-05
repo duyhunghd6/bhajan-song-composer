@@ -55,7 +55,8 @@ describe("accompaniment ABC alignment", () => {
       layerVisibility: {},
     });
 
-    expect(result.abc).toContain('%%score (Melody) (PianoLH)');
+    expect(result.voiceNames).toEqual(["PianoLH"]);
+    expect(result.visibleVoiceNames).toEqual(["PianoLH"]);
     expect(result.abc).toContain('V:Melody name="Original Melody"');
     expect(result.abc).toContain("w: Hap-py birth-day to you!");
 
@@ -66,5 +67,111 @@ describe("accompaniment ABC alignment", () => {
     expect(bars).toHaveLength(9);
     expect(measureDurationUnits(bars[0])).toBe(1);
     expect(bars.slice(1).every((bar) => measureDurationUnits(bar) === 3)).toBe(true);
+  });
+
+  it("aligns Layer 2 Guitar Accompaniment measures one-to-one with the Melody line", () => {
+    const melodyAbc = `X:1
+T:Aligned Guitar Test
+M:4/4
+L:1/8
+K:Em
+| E2 E2 G2 A2 | B4 B2 A2 | G2 A2 B2 G2 | E8 |`;
+    const shortGuitar = `V:Guitar clef=treble-8
+| E,2 B,2 E2 G2 | A,2 E2 A2 c2 |`;
+
+    const result = buildAccompanimentAbc({
+      baseAbc: melodyAbc,
+      generatedGuitar: shortGuitar,
+      layerVisibility: {},
+    });
+
+    expect(result.voiceNames).toEqual(["Guitar"]);
+    expect(result.visibleVoiceNames).toEqual(["Guitar"]);
+    expect(result.abc).toContain('V:Melody name="Original Melody"');
+    expect(result.abc).toContain('V:Guitar clef=treble-8 name="Layer 2 Guitar Accompaniment"');
+
+    const melodyBars = splitAbcMeasureSegments(getVoiceBody(result.abc, "Melody"));
+    const guitarBars = splitAbcMeasureSegments(getVoiceBody(result.abc, "Guitar"));
+
+    expect(guitarBars).toHaveLength(melodyBars.length);
+    expect(guitarBars.every((bar) => measureDurationUnits(bar) === 8)).toBe(true);
+  });
+
+  it("truncates extra guitar measures so Layer 2 Guitar stays visually aligned with Melody", () => {
+    const melodyAbc = `X:1
+T:Aligned Guitar Truncation Test
+M:3/4
+L:1/8
+K:C
+| C2 E2 G2 | A2 G2 F2 | E6 |`;
+    const longGuitar = `V:Guitar clef=treble-8
+| C,2 G,2 C2 | F,2 C2 F2 | G,2 D2 G2 | C,2 G2 C2 | F,2 C2 F2 |`;
+
+    const result = buildAccompanimentAbc({
+      baseAbc: melodyAbc,
+      generatedGuitar: longGuitar,
+      layerVisibility: {},
+    });
+
+    const melodyBars = splitAbcMeasureSegments(getVoiceBody(result.abc, "Melody"));
+    const guitarBars = splitAbcMeasureSegments(getVoiceBody(result.abc, "Guitar"));
+
+    expect(melodyBars).toHaveLength(3);
+    expect(guitarBars).toHaveLength(3);
+    expect(guitarBars.every((bar) => measureDurationUnits(bar) === 6)).toBe(true);
+  });
+
+  it("merges extra Layer 3 ensemble voice sources into the score after final apply", () => {
+    const melodyAbc = `X:1
+T:Layer 3 Merge Test
+M:4/4
+L:1/8
+K:Em
+| E2 G2 z4 | B4 z2 A2 |`;
+    const djembe = `V:Djembe clef=perc name="Layer 3 Djembe Interlock"
+| C, z G z c z G z | C, z G z c z G z |`;
+    const flute = `V:Flute name="Layer 3 Flute Support"
+| g2 z2 z4 | b2 z2 a2 z2 |`;
+    const violin = `V:Violin name="Layer 3 Violin Support"
+| E2 z2 E2 z2 | B,2 z2 A,2 z2 |`;
+
+    const result = buildAccompanimentAbc({
+      baseAbc: melodyAbc,
+      extraVoiceSources: [djembe, flute, violin],
+      layerVisibility: {},
+    });
+
+    expect(result.abc).toContain("V:Djembe");
+    expect(result.abc).toContain("V:Flute");
+    expect(result.abc).toContain("V:Violin");
+    expect(result.voiceNames).toEqual(["Djembe", "Flute", "Violin"]);
+    expect(result.visibleVoiceNames).toEqual(["Djembe", "Flute", "Violin"]);
+    expect(getVoiceBody(result.abc, "Djembe")).toBeTruthy();
+    expect(getVoiceBody(result.abc, "Flute")).toBeTruthy();
+    expect(getVoiceBody(result.abc, "Violin")).toBeTruthy();
+  });
+
+  it("hides extra ensemble voices through layer visibility without removing other layers", () => {
+    const melodyAbc = `X:1
+T:Layer 3 Visibility Test
+M:4/4
+L:1/8
+K:Em
+| E2 G2 z4 | B4 z2 A2 |`;
+    const djembe = `V:Djembe clef=perc name="Layer 3 Djembe Interlock"
+| C, z G z c z G z | C, z G z c z G z |`;
+    const flute = `V:Flute name="Layer 3 Flute Support"
+| g2 z2 z4 | b2 z2 a2 z2 |`;
+
+    const result = buildAccompanimentAbc({
+      baseAbc: melodyAbc,
+      extraVoiceSources: [djembe, flute],
+      layerVisibility: { Flute: false },
+    });
+
+    expect(result.voiceNames).toEqual(["Djembe", "Flute"]);
+    expect(result.abc).toContain("V:Djembe");
+    expect(result.abc).not.toContain("V:Flute");
+    expect(result.visibleVoiceNames).toEqual(["Djembe"]);
   });
 });

@@ -20,7 +20,7 @@ test.describe("playback module", () => {
     await expect(page.getByRole("heading", { name: "Music Sheet Playback" })).toBeVisible();
     await expect(page.locator("#midi-btn-play")).toBeVisible();
     await expect(page.locator("#midi-btn-stop")).toBeVisible();
-    await expect(page.locator("#midi-tempo-input")).toHaveValue("120");
+    await expect(page.locator("#midi-tempo-value")).toHaveText("120");
     await expect(page.locator("#youtube-iframe-player")).toHaveCount(0);
 
     await page.getByRole("button", { name: /video view/i }).click();

@@ -53,7 +53,7 @@ body {
 }
 
 /* Pull abcjs tablature up so it sits tightly under the lyrics */
-g.abcjs-staff:not(.abcjs-v0),
+g.abcjs-tablature-staff,
 g.abcjs-tabNumber,
 g.abcjs-symbol:has(path[data-name="tab.big"]) {
   transform: translateY(-50px);

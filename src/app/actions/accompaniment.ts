@@ -1,17 +1,8 @@
 "use server";
 
-import fs from "fs/promises";
-import path from "path";
+import { requestOpenAiCompatibleTool } from "./ai-config";
 
-import type { AccompanimentOption, AccompanimentResult } from "@/lib/theory/accompaniment-candidates";
-
-async function loadAiConfig() {
-  const configPath = path.join(process.cwd(), "ai-config.json");
-  const rawConfig = await fs.readFile(configPath, "utf-8");
-  const encoded = JSON.parse(rawConfig).encoded;
-  const decoded = Buffer.from(encoded, "base64").toString("utf-8");
-  return JSON.parse(decoded) as { url: string; apiKey: string; model: string };
-}
+import type { AccompanimentResult } from "@/lib/theory/accompaniment-candidates";
 
 async function callLlmForAccompaniment(
   systemPrompt: string,
@@ -20,91 +11,61 @@ async function callLlmForAccompaniment(
   toolDescription: string,
   optionConstraints: { instruments: string[]; styles: string[] }
 ): Promise<AccompanimentResult> {
-  const config = await loadAiConfig();
-
-  const res = await fetch(`${config.url}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${config.apiKey}`,
-    },
-    body: JSON.stringify({
-      model: config.model,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt }
-      ],
-      tools: [
-        {
-          type: "function",
-          function: {
-            name: toolName,
-            description: toolDescription,
-            parameters: {
+  const toolSchema = {
+    type: "function",
+    function: {
+      name: toolName,
+      description: toolDescription,
+      parameters: {
+        type: "object",
+        properties: {
+          options: {
+            type: "array",
+            description: "Exactly 5 different accompaniment options.",
+            minItems: 5,
+            maxItems: 5,
+            items: {
               type: "object",
               properties: {
-                options: {
-                  type: "array",
-                  description: "Exactly 5 different accompaniment options.",
-                  minItems: 5,
-                  maxItems: 5,
-                  items: {
-                    type: "object",
-                    properties: {
-                      id: {
-                        type: "string",
-                        description: "A short, unique identifier for this option."
-                      },
-                      label: {
-                        type: "string",
-                        description: "A descriptive name for this arrangement style."
-                      },
-                      instrument: {
-                        type: "string",
-                        enum: optionConstraints.instruments,
-                        description: "The primary instrument for this accompaniment."
-                      },
-                      style: {
-                        type: "string",
-                        enum: optionConstraints.styles,
-                        description: "The specific rule engine profile to use."
-                      },
-                      explanation: {
-                        type: "string",
-                        description: "A 2-sentence theoretical explanation for this choice."
-                      }
-                    },
-                    required: ["id", "label", "instrument", "style", "explanation"]
-                  }
+                id: {
+                  type: "string",
+                  description: "A short, unique identifier for this option."
+                },
+                label: {
+                  type: "string",
+                  description: "A descriptive name for this arrangement style."
+                },
+                instrument: {
+                  type: "string",
+                  enum: optionConstraints.instruments,
+                  description: "The primary instrument for this accompaniment."
+                },
+                style: {
+                  type: "string",
+                  enum: optionConstraints.styles,
+                  description: "The specific rule engine profile to use."
+                },
+                explanation: {
+                  type: "string",
+                  description: "A 2-sentence theoretical explanation for this choice."
                 }
               },
-              required: ["options"]
+              required: ["id", "label", "instrument", "style", "explanation"]
             }
           }
-        }
-      ],
-      tool_choice: {
-        type: "function",
-        function: { name: toolName }
-      },
-      temperature: 0.3,
-    }),
-  });
+        },
+        required: ["options"]
+      }
+    }
+  };
 
-  if (!res.ok) {
-    const err = await res.text();
-    console.error("LLM API Error:", err);
-    throw new Error(`LLM API returned status: ${res.status}`);
-  }
-
-  const data = await res.json();
-  const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
-
-  if (!toolCall || toolCall.function.name !== toolName) {
-    throw new Error("LLM did not return the expected tool call");
-  }
-
-  return JSON.parse(toolCall.function.arguments) as AccompanimentResult;
+  return requestOpenAiCompatibleTool({
+    systemPrompt,
+    userPrompt,
+    toolSchema,
+    toolName,
+    temperature: 0.3,
+  }) as Promise<AccompanimentResult>;
 }
 
 export async function generateAccompanimentOptions(

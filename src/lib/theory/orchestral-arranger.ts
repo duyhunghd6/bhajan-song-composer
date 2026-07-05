@@ -1,6 +1,7 @@
 import { AccompanimentStage, AccompanimentMeasure } from "./accompaniment-stage";
 import { EnsembleIntegrationHandshake, generateEnsembleIntegrationHandshake } from "./ensemble-expander";
 import { getNoteValue } from "./scales";
+import type { EnsembleGenerationPlan } from "./ensemble-workflow";
 
 export type OrchestralInstrument = "flute" | "violin";
 export type OrchestralSupportMode = "background" | "fill" | "silent";
@@ -10,6 +11,10 @@ export type OrchestralSupportSource = "layer1-active" | "melodic-gap";
 export interface OrchestralSupportOptions {
   accompaniment: AccompanimentStage;
   handshake?: EnsembleIntegrationHandshake;
+  plan?: {
+    flute?: EnsembleGenerationPlan["flute"];
+    violin?: EnsembleGenerationPlan["violin"];
+  };
 }
 
 export interface OrchestralSupportEvent {
@@ -185,10 +190,23 @@ function buildSupportEvent(
   };
 }
 
-function isPreBreathSlice(slice: EnsembleIntegrationHandshake["rhythmicDensityGrid"][number], totalMeasures: number): boolean {
-  return totalMeasures >= FLUTE_BREATH_INTERVAL_MEASURES &&
-    (slice.measureIndex + 1) % FLUTE_BREATH_INTERVAL_MEASURES === 0 &&
+function isPreBreathSlice(
+  slice: EnsembleIntegrationHandshake["rhythmicDensityGrid"][number],
+  totalMeasures: number,
+  breathEveryMeasures = FLUTE_BREATH_INTERVAL_MEASURES
+): boolean {
+  return totalMeasures >= breathEveryMeasures &&
+    (slice.measureIndex + 1) % breathEveryMeasures === 0 &&
     slice.beat === 4;
+}
+
+function shouldUseFill(density: EnsembleGenerationPlan["flute"]["fillDensity"] | undefined, measureIndex: number): boolean {
+  if (density === "minimal") return measureIndex % 2 === 0;
+  return true;
+}
+
+function shouldUseBackground(yieldWhenMelodyActive: boolean | undefined): boolean {
+  return yieldWhenMelodyActive !== false;
 }
 
 function buildFluteBreathEvent(slice: EnsembleIntegrationHandshake["rhythmicDensityGrid"][number]): FluteBreathEvent {
@@ -242,6 +260,8 @@ export function generateOrchestralSupport(
 ): OrchestralSupportArrangement {
   const accompaniment = options.accompaniment;
   const handshake = options.handshake ?? generateEnsembleIntegrationHandshake(melodyAbc, { accompaniment });
+  const flutePlan = options.plan?.flute;
+  const violinPlan = options.plan?.violin;
   const fluteSupportMap: OrchestralSupportEvent[] = [];
   const violinSupportMap: OrchestralSupportEvent[] = [];
   const fluteBreathMap: FluteBreathEvent[] = [];
@@ -254,38 +274,46 @@ export function generateOrchestralSupport(
       gap.measureIndex === slice.measureIndex && gap.beat === slice.beat
     );
 
-    if (fillZone) {
+    if (fillZone && shouldUseFill(flutePlan?.fillDensity, slice.measureIndex)) {
       const measure = findMeasure(accompaniment, slice.measureIndex);
-      const preBreathVelocityDip = isPreBreathSlice(slice, totalMeasures);
+      const preBreathVelocityDip = isPreBreathSlice(slice, totalMeasures, flutePlan?.breathEveryMeasures);
       if (preBreathVelocityDip) fluteBreathMap.push(buildFluteBreathEvent(slice));
-      fluteSupportMap.push(buildSupportEvent("flute", measure, fillZone.beat, fillZone.startMs, fillZone.durationMs, "fill", "melodic-gap", preBreathVelocityDip));
-      const violinEvent = buildSupportEvent("violin", measure, fillZone.beat, fillZone.startMs, fillZone.durationMs, "fill", "melodic-gap");
+      if (flutePlan?.role !== "sustained-pad") {
+        fluteSupportMap.push(buildSupportEvent("flute", measure, fillZone.beat, fillZone.startMs, fillZone.durationMs, "fill", "melodic-gap", preBreathVelocityDip));
+      }
+      const violinMode = violinPlan?.role === "drone-pad" ? "background" : "fill";
+      const violinEvent = buildSupportEvent("violin", measure, fillZone.beat, fillZone.startMs, fillZone.durationMs, violinMode, violinMode === "fill" ? "melodic-gap" : "layer1-active");
       violinSupportMap.push(violinEvent);
-      violinExpressionMap.push(...buildViolinExpressionEvents(violinEvent));
+      if (violinPlan?.expressionProfile !== "plain") violinExpressionMap.push(...buildViolinExpressionEvents(violinEvent));
       yieldDecisions.push({
         measureIndex: slice.measureIndex,
         beat: slice.beat,
         startMs: slice.startMs,
         layer1Active: slice.layer1Active,
-        fluteMode: "fill",
-        violinMode: "fill",
+        fluteMode: flutePlan?.role === "sustained-pad" ? "background" : "fill",
+        violinMode,
         reason: "Melodic Fill Zone available; auxiliary instruments may answer the singer with short counter-melodies",
       });
-    } else if (slice.layer1Active) {
+    } else if (slice.layer1Active && (shouldUseBackground(flutePlan?.yieldWhenMelodyActive) || shouldUseBackground(violinPlan?.yieldWhenMelodyActive))) {
       const measure = findMeasure(accompaniment, slice.measureIndex);
-      const preBreathVelocityDip = isPreBreathSlice(slice, totalMeasures);
+      const preBreathVelocityDip = isPreBreathSlice(slice, totalMeasures, flutePlan?.breathEveryMeasures);
       if (preBreathVelocityDip) fluteBreathMap.push(buildFluteBreathEvent(slice));
-      fluteSupportMap.push(buildSupportEvent("flute", measure, slice.beat, slice.startMs, slice.durationMs, "background", "layer1-active", preBreathVelocityDip));
-      const violinEvent = buildSupportEvent("violin", measure, slice.beat, slice.startMs, slice.durationMs, "background", "layer1-active");
-      violinSupportMap.push(violinEvent);
-      violinExpressionMap.push(...buildViolinExpressionEvents(violinEvent));
+      if (shouldUseBackground(flutePlan?.yieldWhenMelodyActive)) {
+        fluteSupportMap.push(buildSupportEvent("flute", measure, slice.beat, slice.startMs, slice.durationMs, "background", "layer1-active", preBreathVelocityDip));
+      }
+      let violinEvent: OrchestralSupportEvent | null = null;
+      if (shouldUseBackground(violinPlan?.yieldWhenMelodyActive)) {
+        violinEvent = buildSupportEvent("violin", measure, slice.beat, slice.startMs, slice.durationMs, "background", "layer1-active");
+        violinSupportMap.push(violinEvent);
+        if (violinPlan?.expressionProfile !== "plain") violinExpressionMap.push(...buildViolinExpressionEvents(violinEvent));
+      }
       yieldDecisions.push({
         measureIndex: slice.measureIndex,
         beat: slice.beat,
         startMs: slice.startMs,
         layer1Active: true,
-        fluteMode: "background",
-        violinMode: "background",
+        fluteMode: shouldUseBackground(flutePlan?.yieldWhenMelodyActive) ? "background" : "silent",
+        violinMode: shouldUseBackground(violinPlan?.yieldWhenMelodyActive) ? "background" : "silent",
         reason: "Layer 1 melody active; auxiliary melodic instruments yield into sustained chord tones",
       });
     } else {

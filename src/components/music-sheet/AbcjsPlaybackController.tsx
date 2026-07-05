@@ -160,8 +160,48 @@ function postProcessBeats(container: HTMLDivElement | null) {
     container.classList.remove("has-lyrics");
   }
 
+  // Identify tablature staves by finding the closest g.abcjs-staff to the TAB clef symbol
+  const tabPaths = Array.from(container.querySelectorAll('path[data-name="tab.big"]'));
+  tabPaths.forEach((path) => {
+    try {
+      const pathBox = (path as unknown as SVGGraphicsElement).getBBox();
+      const pathY = pathBox.y + pathBox.height / 2;
+
+      let closestStaff: Element | null = null;
+      let minDistance = Infinity;
+
+      staves.forEach((staff) => {
+        try {
+          const staffBox = (staff as unknown as SVGGraphicsElement).getBBox();
+          const staffY = staffBox.y + staffBox.height / 2;
+          const dist = Math.abs(staffY - pathY);
+          if (dist < minDistance) {
+            minDistance = dist;
+            closestStaff = staff;
+          }
+        } catch {
+          // ignore
+        }
+      });
+
+      if (closestStaff) {
+        (closestStaff as Element).classList.add("abcjs-tablature-staff");
+      }
+    } catch {
+      // ignore
+    }
+  });
+
+  interface StaffDataItem {
+    element: Element;
+    y: number;
+    height: number;
+    bottom: number;
+    lyricY: number | null;
+  }
+
   // 1. Group staves and get their vertical boundaries
-  const staffData = staves
+  const staffData = (staves
     .map((staff) => {
       try {
         const svgPath = staff as unknown as SVGGraphicsElement;
@@ -177,35 +217,29 @@ function postProcessBeats(container: HTMLDivElement | null) {
         return null;
       }
     })
-    .filter(Boolean) as {
-    element: Element;
-    y: number;
-    height: number;
-    bottom: number;
-    lyricY: number | null;
-  }[];
+    .filter(Boolean) as unknown) as StaffDataItem[];
 
   // 2. Find the lyric Y coordinate for each staff system
-  lyrics.forEach((lyric) => {
+  for (const lyric of lyrics) {
     const lyricY = parseFloat(lyric.getAttribute("y") || "0");
-    let bestStaff: typeof staffData[0] | null = null;
+    let bestStaff: StaffDataItem | null = null;
     let minDiff = Infinity;
-    staffData.forEach((sd) => {
+    for (const sd of staffData) {
       const diff = lyricY - sd.bottom;
       if (diff > 0 && diff < 150 && diff < minDiff) {
         minDiff = diff;
         bestStaff = sd;
       }
-    });
+    }
     if (bestStaff) {
       if (bestStaff.lyricY === null || lyricY > bestStaff.lyricY) {
         bestStaff.lyricY = lyricY;
       }
     }
-  });
+  }
 
   // 3. Position and style the beat indicators below lyrics
-  textNodes.forEach((node) => {
+  for (const node of Array.from(textNodes)) {
     const val = (node.textContent || "").trim();
     if (val === "⬤" || val === "●" || val === "•" || val === "·") {
       if (val === "⬤") {
@@ -223,15 +257,15 @@ function postProcessBeats(container: HTMLDivElement | null) {
       const nodeY = parseFloat(node.getAttribute("y") || "0");
 
       // Find the corresponding staff system
-      let bestStaff: typeof staffData[0] | null = null;
+      let bestStaff: StaffDataItem | null = null;
       let minStaffDist = Infinity;
-      staffData.forEach((sd) => {
+      for (const sd of staffData) {
         const dist = Math.abs(sd.y + sd.height / 2 - nodeY);
         if (dist < minStaffDist) {
           minStaffDist = dist;
           bestStaff = sd;
         }
-      });
+      }
 
       if (bestStaff) {
         let targetY;
@@ -245,7 +279,7 @@ function postProcessBeats(container: HTMLDivElement | null) {
         node.setAttribute("y", String(nodeY + 12)); // Fallback shift
       }
     }
-  });
+  }
 }
 
 export default function AbcjsPlaybackController({
@@ -910,28 +944,28 @@ export default function AbcjsPlaybackController({
         }
 
         /* Pull tablature staff up when beat indicators AND lyrics are present */
-        #${resolvedCanvasId}.has-beat-indicators.has-lyrics g.abcjs-staff:not(.abcjs-v0),
+        #${resolvedCanvasId}.has-beat-indicators.has-lyrics g.abcjs-tablature-staff,
         #${resolvedCanvasId}.has-beat-indicators.has-lyrics g.abcjs-tabNumber,
         #${resolvedCanvasId}.has-beat-indicators.has-lyrics g.abcjs-symbol:has(path[data-name="tab.big"]) {
           transform: translateY(-60px);
         }
 
         /* Pull tablature staff up less when beat indicators are present but NO lyrics */
-        #${resolvedCanvasId}.has-beat-indicators.no-lyrics g.abcjs-staff:not(.abcjs-v0),
+        #${resolvedCanvasId}.has-beat-indicators.no-lyrics g.abcjs-tablature-staff,
         #${resolvedCanvasId}.has-beat-indicators.no-lyrics g.abcjs-tabNumber,
         #${resolvedCanvasId}.has-beat-indicators.no-lyrics g.abcjs-symbol:has(path[data-name="tab.big"]) {
           transform: translateY(-25px);
         }
 
         /* Pull tablature staff up when NO beat indicators are present but lyrics are present */
-        #${resolvedCanvasId}:not(.has-beat-indicators).has-lyrics g.abcjs-staff:not(.abcjs-v0),
+        #${resolvedCanvasId}:not(.has-beat-indicators).has-lyrics g.abcjs-tablature-staff,
         #${resolvedCanvasId}:not(.has-beat-indicators).has-lyrics g.abcjs-tabNumber,
         #${resolvedCanvasId}:not(.has-beat-indicators).has-lyrics g.abcjs-symbol:has(path[data-name="tab.big"]) {
           transform: translateY(-50px);
         }
 
         /* Keep default spacing (no pull up) when NO beat indicators and NO lyrics are present */
-        #${resolvedCanvasId}:not(.has-beat-indicators).no-lyrics g.abcjs-staff:not(.abcjs-v0),
+        #${resolvedCanvasId}:not(.has-beat-indicators).no-lyrics g.abcjs-tablature-staff,
         #${resolvedCanvasId}:not(.has-beat-indicators).no-lyrics g.abcjs-tabNumber,
         #${resolvedCanvasId}:not(.has-beat-indicators).no-lyrics g.abcjs-symbol:has(path[data-name="tab.big"]) {
           transform: translateY(0);

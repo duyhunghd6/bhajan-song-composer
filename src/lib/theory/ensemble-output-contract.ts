@@ -22,6 +22,7 @@ import {
   OrchestralSupportMode,
   ViolinExpressionEvent,
 } from "./orchestral-arranger";
+import type { EnsembleGenerationPlan } from "./ensemble-workflow";
 
 export type EnsemblePlaybackInstrument = "djembe" | "flute" | "violin";
 export type EnsembleVisualInstrument = EnsemblePlaybackInstrument;
@@ -31,6 +32,7 @@ export interface EnsembleExpansionOutputOptions {
   handshake?: EnsembleIntegrationHandshake;
   djembe?: DjembeArrangement;
   orchestral?: OrchestralSupportArrangement;
+  plan?: EnsembleGenerationPlan;
 }
 
 export interface EnsembleEventMaps {
@@ -362,10 +364,10 @@ export function generateEnsembleExpansionOutput(
   melodyAbc: string,
   options: EnsembleExpansionOutputOptions
 ): EnsembleExpansionOutput {
-  const { accompaniment } = options;
+  const { accompaniment, plan } = options;
   const handshake = options.handshake ?? generateEnsembleIntegrationHandshake(melodyAbc, { accompaniment });
-  const sourceDjembe = options.djembe ?? generateDjembeArrangement(melodyAbc, { accompaniment, handshake });
-  const sourceOrchestral = options.orchestral ?? generateOrchestralSupport(melodyAbc, { accompaniment, handshake });
+  const sourceDjembe = options.djembe ?? generateDjembeArrangement(melodyAbc, { accompaniment, handshake, plan: plan?.djembe });
+  const sourceOrchestral = options.orchestral ?? generateOrchestralSupport(melodyAbc, { accompaniment, handshake, plan: plan ? { flute: plan.flute, violin: plan.violin } : undefined });
   const conflicts = resolveEnsembleConflicts({
     handshake,
     djembe: sourceDjembe,

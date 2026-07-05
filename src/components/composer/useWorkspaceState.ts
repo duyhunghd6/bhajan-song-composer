@@ -4,6 +4,22 @@ import type { AccompanimentOption } from "@/lib/theory/accompaniment-candidates"
 import type { PianoAccompaniment } from "@/lib/theory/piano-accompaniment";
 import type { FingerstyleComposerIntegration } from "./fingerstyle-integration";
 import type { TheoryAssistantLayerProposal } from "./theory-assistant-layer";
+import type { AccompanimentWorkflowSession } from "@/lib/theory/accompaniment-workflow";
+import type { EnsembleWorkflowSession } from "@/lib/theory/ensemble-workflow";
+import type { EnsembleExpansionValidation } from "@/lib/theory/ensemble-output-contract";
+import type { EnsembleConflictReportEntry } from "@/lib/theory/ensemble-conflicts";
+
+export interface EnsembleLayerAbcBundle {
+  djembe: string | null;
+  flute: string | null;
+  violin: string | null;
+  combined: string | null;
+  sourceFingerprint: string;
+  selectionFingerprint: string;
+  appliedAt: string | null;
+  validation?: EnsembleExpansionValidation;
+  conflictReport?: EnsembleConflictReportEntry[];
+}
 
 export interface WorkspaceState {
   aiSuggestions: HarmonizationOption[];
@@ -21,6 +37,10 @@ export interface WorkspaceState {
   selectedPianoIndex: number | null;
   generatedGuitar: string | null;
   generatedPiano: string | null;
+  accompanimentWorkflow: AccompanimentWorkflowSession | null;
+  ensembleWorkflow: EnsembleWorkflowSession | null;
+  stagedEnsembleLayers: EnsembleLayerAbcBundle | null;
+  appliedEnsembleLayers: EnsembleLayerAbcBundle | null;
 }
 
 const DEFAULT_STATE: WorkspaceState = {
@@ -39,6 +59,10 @@ const DEFAULT_STATE: WorkspaceState = {
   selectedPianoIndex: null,
   generatedGuitar: null,
   generatedPiano: null,
+  accompanimentWorkflow: null,
+  ensembleWorkflow: null,
+  stagedEnsembleLayers: null,
+  appliedEnsembleLayers: null,
 };
 
 export function useWorkspaceState(slug: string) {
@@ -53,6 +77,7 @@ export function useWorkspaceState(slug: string) {
       const saved = window.localStorage.getItem(storageKey);
       if (saved) {
         const parsed = JSON.parse(saved);
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- workspace state must hydrate from localStorage after mount to avoid SSR/localStorage mismatches.
         setState({
           ...DEFAULT_STATE,
           ...parsed,

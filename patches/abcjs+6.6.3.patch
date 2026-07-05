@@ -1,0 +1,13 @@
+diff --git a/node_modules/abcjs/src/tablatures/abc_tablatures.js b/node_modules/abcjs/src/tablatures/abc_tablatures.js
+index 1d247ea..937f43d 100644
+--- a/node_modules/abcjs/src/tablatures/abc_tablatures.js
++++ b/node_modules/abcjs/src/tablatures/abc_tablatures.js
+@@ -142,7 +142,7 @@ var abcTablatures = {
+ 				if (tabs && (tabs.length > 0)) {
+ 					var nTabs = tabs.length;
+ 					for (var kk = 0; kk < nTabs; ++kk) {
+-						if (tabs[kk].params.firstStaffOnly) {
++						if (tabs[kk] && tabs[kk].params.firstStaffOnly) {
+ 							// Set the staff draw suppression flag
+ 							tabs[kk].params.suppress = true;
+ 						}

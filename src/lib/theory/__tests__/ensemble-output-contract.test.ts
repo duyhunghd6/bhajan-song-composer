@@ -96,4 +96,47 @@ describe("Ensemble expansion output contract", () => {
       playbackSyncGroupsReady: true,
     });
   });
+
+  it("uses an ensemble generation plan to reduce Djembe density and suppress Violin expression controls", () => {
+    const accompaniment = generateAccompanimentStage(sampleAbc, {
+      instrument: "piano",
+      progression: ["Em", "Bm"],
+      compingPattern: "arpeggio",
+    });
+
+    const defaultOutput = generateEnsembleExpansionOutput(sampleAbc, { accompaniment });
+    const sparseOutput = generateEnsembleExpansionOutput(sampleAbc, {
+      accompaniment,
+      plan: {
+        djembe: {
+          grooveProfile: "sparse",
+          density: "minimal",
+          bassSync: true,
+          backbeatSlaps: false,
+          fillPolicy: "none",
+        },
+        flute: {
+          role: "halo",
+          fillDensity: "minimal",
+          preferredRegister: "C5-C6",
+          breathEveryMeasures: 4,
+          yieldWhenMelodyActive: true,
+        },
+        violin: {
+          role: "harmonic-bed",
+          registerStrategy: "below-melody",
+          doubleStopPolicy: "single-note",
+          expressionProfile: "plain",
+          yieldWhenMelodyActive: true,
+        },
+      },
+    });
+
+    expect(sparseOutput.eventMaps.djembe.length).toBeLessThan(defaultOutput.eventMaps.djembe.length);
+    expect(sparseOutput.eventMaps.djembe.every((event) => event.stroke === "bass")).toBe(true);
+    expect(sparseOutput.midiControlEvents).toEqual([]);
+    expect(sparseOutput.abcLayers.layer3Djembe).toContain("V:Djembe");
+    expect(sparseOutput.abcLayers.layer3Flute).toContain("V:Flute");
+    expect(sparseOutput.abcLayers.layer3Violin).toContain("V:Violin");
+  });
 });

@@ -831,11 +831,12 @@ export default function LayerManager({
         <div className="space-y-4 min-w-0">
           <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-sm p-5 space-y-4">
             <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_180px]">
-              <label className="space-y-2">
+              <label htmlFor="active-layer-name-input" className="space-y-2">
                 <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                   Active layer name
                 </span>
                 <input
+                  id="active-layer-name-input"
                   type="text"
                   value={activeLayer.name}
                   onChange={(event) => updateLayer(activeLayer.id, { name: event.target.value })}

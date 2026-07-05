@@ -1,7 +1,6 @@
 "use server";
 
-import fs from "fs/promises";
-import path from "path";
+import { requestOpenAiCompatibleTool } from "./ai-config";
 import {
   HARMONIZATION_CANDIDATE_STYLES,
   HarmonizationValidationError,
@@ -12,37 +11,7 @@ import {
 
 export type { HarmonizationOption } from "@/lib/theory/harmonization-candidates";
 
-interface AiConfig {
-  url: string;
-  apiKey: string;
-  model: string;
-}
-
 const TOOL_NAME = "apply_harmonization";
-
-async function readAiConfig(): Promise<AiConfig> {
-  const envConfig = {
-    url: process.env.AI_API_URL,
-    apiKey: process.env.AI_API_KEY,
-    model: process.env.AI_MODEL,
-  };
-
-  if (envConfig.url && envConfig.apiKey && envConfig.model) {
-    return envConfig as AiConfig;
-  }
-
-  const configPath = path.join(process.cwd(), "ai-config.json");
-  const rawConfig = await fs.readFile(configPath, "utf-8");
-  const encoded = JSON.parse(rawConfig).encoded;
-  const decoded = Buffer.from(encoded, "base64").toString("utf-8");
-  const fileConfig = JSON.parse(decoded) as AiConfig;
-
-  return {
-    url: envConfig.url ?? fileConfig.url,
-    apiKey: envConfig.apiKey ?? fileConfig.apiKey,
-    model: envConfig.model ?? fileConfig.model,
-  };
-}
 
 function formatMetadata(metadata: HarmonizeMetadata): string {
   return [
@@ -194,72 +163,25 @@ function harmonizationToolSchema() {
   };
 }
 
-function parseToolArguments(data: unknown): unknown {
-  const response = data as {
-    choices?: Array<{
-      message?: {
-        tool_calls?: Array<{
-          function?: { name?: string; arguments?: unknown };
-        }>;
-      };
-    }>;
-  };
-  const toolCall = response.choices?.[0]?.message?.tool_calls?.[0];
-
-  if (!toolCall || toolCall.function?.name !== TOOL_NAME) {
-    throw new Error("LLM did not return the expected harmonization tool call");
-  }
-
-  const args = toolCall.function.arguments;
-  if (typeof args === "string") return JSON.parse(args);
-  if (args && typeof args === "object") return args;
-  throw new Error("LLM returned empty harmonization tool arguments");
-}
-
-async function requestHarmonization(config: AiConfig, abcString: string, metadata: HarmonizeMetadata, validationIssues: string[] = []): Promise<unknown> {
-  const systemPrompt = "You are an expert music theory assistant specialized in Indian classical, devotional, bhajan, and Western functional harmony. You preserve user melody exactly and only add inline ABC chord symbols during the harmonization step.";
-  const userPrompt = buildUserPrompt(abcString, metadata, validationIssues);
-
-  const res = await fetch(`${config.url}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${config.apiKey}`,
-    },
-    body: JSON.stringify({
-      model: config.model,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      tools: [harmonizationToolSchema()],
-      tool_choice: {
-        type: "function",
-        function: { name: TOOL_NAME },
-      },
-    }),
+async function requestHarmonization(abcString: string, metadata: HarmonizeMetadata, validationIssues: string[] = []): Promise<unknown> {
+  return requestOpenAiCompatibleTool({
+    systemPrompt: "You are an expert music theory assistant specialized in Indian classical, devotional, bhajan, and Western functional harmony. You preserve user melody exactly and only add inline ABC chord symbols during the harmonization step.",
+    userPrompt: buildUserPrompt(abcString, metadata, validationIssues),
+    toolSchema: harmonizationToolSchema(),
+    toolName: TOOL_NAME,
   });
-
-  if (!res.ok) {
-    const err = await res.text();
-    console.error("LLM API Error:", err);
-    throw new Error(`LLM API returned status: ${res.status}`);
-  }
-
-  return parseToolArguments(await res.json());
 }
 
 export async function harmonizeMelody(abcString: string, metadata: HarmonizeMetadata): Promise<HarmonizeResult> {
   try {
-    const config = await readAiConfig();
-    const raw = await requestHarmonization(config, abcString, metadata);
+    const raw = await requestHarmonization(abcString, metadata);
 
     try {
       return normalizeHarmonizeResult(raw, abcString, metadata);
     } catch (error) {
       if (!(error instanceof HarmonizationValidationError)) throw error;
 
-      const repairedRaw = await requestHarmonization(config, abcString, metadata, error.issues);
+      const repairedRaw = await requestHarmonization(abcString, metadata, error.issues);
       return normalizeHarmonizeResult(repairedRaw, abcString, metadata);
     }
   } catch (error) {

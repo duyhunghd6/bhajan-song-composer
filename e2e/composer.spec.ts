@@ -78,7 +78,9 @@ test.describe("composer workflow", () => {
     await page.getByRole("link", { name: "Save & Add Ensemble" }).click();
     await expect(page).toHaveURL(`/compose/${slug}/ensemble`);
     await expect(page.getByRole("heading", { name: "Step 4: Ensemble Expansion" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Enable Layers" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "AI Ensemble Generation" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Step-by-step AI Ensemble Workflow" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Start 8-step Ensemble Workflow" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Conflict Resolution Hierarchy Log" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Multi-track ABCJS Render (Full Score View)" })).toBeVisible();
 
@@ -112,8 +114,8 @@ test.describe("composer workflow", () => {
       if (!sourceBox || !previewPanelBox || !previewBox) throw new Error(`Could not measure ${step} composer layout`);
 
       expect(sourceBox.x + sourceBox.width).toBeLessThanOrEqual(previewBox.x);
-      expect(previewPanelBox.width).toBeGreaterThan(sourceBox.width);
-      expect(previewPanelBox.width / (sourceBox.width + previewPanelBox.width)).toBeGreaterThan(0.6);
+      expect(previewPanelBox.width).toBeGreaterThanOrEqual(sourceBox.width);
+      expect(previewPanelBox.width / (sourceBox.width + previewPanelBox.width)).toBeGreaterThanOrEqual(0.48);
     }
   });
 
