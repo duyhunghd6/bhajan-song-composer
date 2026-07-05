@@ -15,7 +15,7 @@ describe("Guitar fingerstyle arranger", () => {
       melodyNotes: ["E", "E"],
       abc: "E,2 E2 B,2 E2",
     });
-    expect(arrangement.abc).toContain("V:Guitar clef=treble-8");
+    expect(arrangement.abc).toContain("V:Guitar clef=treble-8\n%%MIDI program 24");
   });
 
   it("builds inspectable upward construction source layers before guitar reduction", () => {

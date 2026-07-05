@@ -131,9 +131,9 @@ function eventSort(a: DjembeEvent, b: DjembeEvent): number {
 }
 
 function strokeToAbc(stroke: DjembeStroke): string {
-  if (stroke === "bass") return "C,";
-  if (stroke === "slap") return "c";
-  return "G";
+  if (stroke === "bass") return "E";
+  if (stroke === "slap") return "D";
+  return "_E";
 }
 
 function buildDjembeAbc(eventMap: DjembeEvent[], measureCount: number, beatCount: number): string {
@@ -147,7 +147,7 @@ function buildDjembeAbc(eventMap: DjembeEvent[], measureCount: number, beatCount
     return tokens.join(" ");
   });
 
-  return `V:Djembe clef=perc name="Layer 3 Djembe Interlock"\n| ${measures.join(" | ")} |`;
+  return `V:Djembe clef=perc name="Layer 3 Djembe Interlock"\n%%MIDI channel 10\n| ${measures.join(" | ")} |`;
 }
 
 export function generateDjembeArrangement(

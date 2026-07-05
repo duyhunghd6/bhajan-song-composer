@@ -19,6 +19,13 @@ function getVoiceBody(abc: string, voiceName: string): string {
   return match?.[1].trim() ?? "";
 }
 
+function getVoiceMusicBody(abc: string, voiceName: string): string {
+  return getVoiceBody(abc, voiceName)
+    .split("\n")
+    .filter((line) => !line.trim().startsWith("%"))
+    .join("\n");
+}
+
 describe("accompaniment ABC alignment", () => {
   it("builds duration context from Happy Birthday's 3/4 L:1/4 meter", () => {
     expect(buildAbcDurationContext(HAPPY_BIRTHDAY_ABC)).toMatchObject({
@@ -32,15 +39,15 @@ describe("accompaniment ABC alignment", () => {
 
     expect(accompaniment.abc).not.toContain("G,,2 D,,2 G,2");
 
-    const leftHandBars = splitAbcMeasureSegments(getVoiceBody(accompaniment.abc, "PianoLH"));
+    const leftHandBars = splitAbcMeasureSegments(getVoiceMusicBody(accompaniment.abc, "PianoLH"));
     expect(leftHandBars.length).toBeGreaterThan(0);
     expect(leftHandBars.every((bar) => measureDurationUnits(bar) === 3)).toBe(true);
 
-    const rightHandBars = splitAbcMeasureSegments(getVoiceBody(accompaniment.abc, "PianoRH"));
+    const rightHandBars = splitAbcMeasureSegments(getVoiceMusicBody(accompaniment.abc, "PianoRH"));
     expect(rightHandBars.length).toBe(leftHandBars.length);
     expect(rightHandBars.every((bar) => measureDurationUnits(bar) === 3)).toBe(true);
 
-    const compingBars = splitAbcMeasureSegments(getVoiceBody(accompaniment.abc, "PianoCompingLH"));
+    const compingBars = splitAbcMeasureSegments(getVoiceMusicBody(accompaniment.abc, "PianoCompingLH"));
     expect(compingBars.length).toBe(leftHandBars.length);
     expect(compingBars.every((bar) => measureDurationUnits(bar) === 3)).toBe(true);
   });
@@ -77,6 +84,7 @@ L:1/8
 K:Em
 | E2 E2 G2 A2 | B4 B2 A2 | G2 A2 B2 G2 | E8 |`;
     const shortGuitar = `V:Guitar clef=treble-8
+%%MIDI program 24
 | E,2 B,2 E2 G2 | A,2 E2 A2 c2 |`;
 
     const result = buildAccompanimentAbc({
@@ -88,13 +96,59 @@ K:Em
     expect(result.voiceNames).toEqual(["Guitar"]);
     expect(result.visibleVoiceNames).toEqual(["Guitar"]);
     expect(result.abc).toContain('V:Melody name="Original Melody"');
-    expect(result.abc).toContain('V:Guitar clef=treble-8 name="Layer 2 Guitar Accompaniment"');
+    expect(result.abc).toContain('V:Guitar clef=treble-8 name="Layer 2 Guitar Accompaniment" stem=down\n%%MIDI program 24');
 
-    const melodyBars = splitAbcMeasureSegments(getVoiceBody(result.abc, "Melody"));
-    const guitarBars = splitAbcMeasureSegments(getVoiceBody(result.abc, "Guitar"));
+    const melodyBars = splitAbcMeasureSegments(getVoiceMusicBody(result.abc, "Melody"));
+    const guitarBars = splitAbcMeasureSegments(getVoiceMusicBody(result.abc, "Guitar"));
 
     expect(guitarBars).toHaveLength(melodyBars.length);
     expect(guitarBars.every((bar) => measureDurationUnits(bar) === 8)).toBe(true);
+  });
+
+  it("renames an exact Guitar Left Hand source voice to Harmonium without touching generic Guitar", () => {
+    const melodyAbc = `X:1
+T:Harmonium Retarget Test
+M:4/4
+L:1/8
+K:Em
+| E2 E2 G2 A2 | B4 B2 A2 |`;
+    const guitarLeftHand = `V:GuitarLeftHand clef=treble name="Guitar Left Hand"
+%%MIDI program 24
+| E2 B2 E2 G2 | B2 E2 G2 B2 |`;
+
+    const result = buildAccompanimentAbc({
+      baseAbc: melodyAbc,
+      generatedGuitar: guitarLeftHand,
+      layerVisibility: {},
+    });
+
+    expect(result.voiceNames).toEqual(["Harmonium"]);
+    expect(result.visibleVoiceNames).toEqual(["Harmonium"]);
+    expect(result.abc).toContain('V:Harmonium clef=treble name="Layer 2 Harmonium Accompaniment"\n%%MIDI program 20');
+    expect(result.abc).not.toContain("Guitar Left Hand");
+    expect(result.abc).not.toContain("%%MIDI program 24");
+  });
+
+  it("keeps similarly named Guitar LH Accompaniment sources as guitar", () => {
+    const melodyAbc = `X:1
+T:Guitar LH Non-target Test
+M:4/4
+L:1/8
+K:Em
+| E2 E2 G2 A2 | B4 B2 A2 |`;
+    const guitarLhAccompaniment = `V:GuitarLH clef=treble-8 name="Guitar LH Accompaniment"
+%%MIDI program 25
+| E,2 B,2 E2 G2 | B,2 E2 G2 B2 |`;
+
+    const result = buildAccompanimentAbc({
+      baseAbc: melodyAbc,
+      generatedGuitar: guitarLhAccompaniment,
+      layerVisibility: {},
+    });
+
+    expect(result.voiceNames).toEqual(["GuitarLH"]);
+    expect(result.abc).toContain('V:GuitarLH clef=treble-8 name="Guitar LH Accompaniment"\n%%MIDI program 24');
+    expect(result.abc).not.toContain("V:Harmonium");
   });
 
   it("truncates extra guitar measures so Layer 2 Guitar stays visually aligned with Melody", () => {
@@ -113,8 +167,8 @@ K:C
       layerVisibility: {},
     });
 
-    const melodyBars = splitAbcMeasureSegments(getVoiceBody(result.abc, "Melody"));
-    const guitarBars = splitAbcMeasureSegments(getVoiceBody(result.abc, "Guitar"));
+    const melodyBars = splitAbcMeasureSegments(getVoiceMusicBody(result.abc, "Melody"));
+    const guitarBars = splitAbcMeasureSegments(getVoiceMusicBody(result.abc, "Guitar"));
 
     expect(melodyBars).toHaveLength(3);
     expect(guitarBars).toHaveLength(3);
@@ -129,10 +183,13 @@ L:1/8
 K:Em
 | E2 G2 z4 | B4 z2 A2 |`;
     const djembe = `V:Djembe clef=perc name="Layer 3 Djembe Interlock"
-| C, z G z c z G z | C, z G z c z G z |`;
+%%MIDI channel 10
+| E z _E z D z _E z | E z _E z D z _E z |`;
     const flute = `V:Flute name="Layer 3 Flute Support"
+%%MIDI program 73
 | g2 z2 z4 | b2 z2 a2 z2 |`;
     const violin = `V:Violin name="Layer 3 Violin Support"
+%%MIDI program 40
 | E2 z2 E2 z2 | B,2 z2 A,2 z2 |`;
 
     const result = buildAccompanimentAbc({
@@ -141,9 +198,9 @@ K:Em
       layerVisibility: {},
     });
 
-    expect(result.abc).toContain("V:Djembe");
-    expect(result.abc).toContain("V:Flute");
-    expect(result.abc).toContain("V:Violin");
+    expect(result.abc).toContain('V:Djembe clef=perc name="Layer 3 Djembe Interlock"\n%%MIDI channel 10');
+    expect(result.abc).toContain('V:Flute name="Layer 3 Flute Support"\n%%MIDI program 73');
+    expect(result.abc).toContain('V:Violin name="Layer 3 Violin Support"\n%%MIDI program 40');
     expect(result.voiceNames).toEqual(["Djembe", "Flute", "Violin"]);
     expect(result.visibleVoiceNames).toEqual(["Djembe", "Flute", "Violin"]);
     expect(getVoiceBody(result.abc, "Djembe")).toBeTruthy();
@@ -210,6 +267,29 @@ K:Em
     expect(result.abc).toContain('"_•"E2');
     expect(result.abc).toContain('"G""_●"G2');
     expect(result.abc).toContain('"_•"A2');
+  });
+
+  it("adds Strong Beats annotations without changing the Melody music line count", () => {
+    const melodyAbc = `X:1
+T:Strong Beats Line Count Test
+M:4/4
+L:1/8
+K:Em
+| E2 E2 G2 A2 | B4 B2 A2 |
+w: Ha-ri Bol Ha-ri Bol
+| G2 A2 B2 G2 | E8 |
+w: Krish-na Krish-na`;
+
+    const result = buildAccompanimentAbc({
+      baseAbc: melodyAbc,
+      layerVisibility: { __strong_beats__: true },
+    });
+
+    const musicLines = result.abc.split("\n").filter((line) => line.trim().startsWith("|"));
+
+    expect(musicLines).toHaveLength(2);
+    expect(result.abc).toContain('"_⬤"E2');
+    expect(result.abc).toContain('"_●"G2');
   });
 
   it("keeps beat markers when chords are hidden but removes chord symbols", () => {

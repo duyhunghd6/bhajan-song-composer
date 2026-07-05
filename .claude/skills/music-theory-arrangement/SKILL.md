@@ -72,7 +72,8 @@ When outputting ABC notation for the arranged instruments, use these `%%MIDI` co
 
 | Instrument | MIDI Program / Channel | Key Techniques for Realism |
 | ---------- | ---------------------- | -------------------------- |
-| **Acoustic Guitar** | `%%MIDI program 25` | Use arpeggiated/staggered patterns (no block chords) to simulate fingerpicking. |
+| **Guitar Classic / Acoustic Guitar (nylon)** | `%%MIDI program 24` | Use arpeggiated/staggered patterns (no block chords) to simulate fingerpicking. |
+| **Harmonium / Reed Organ** | `%%MIDI program 20` | Use sustained chordal drones, root-fifth anchors, and devotional comping; this replaces only the exact `Guitar Left Hand` accompaniment target. |
 | **Violin** | `%%MIDI program 40` | Use slurs `()` to simulate smooth continuous bowing (legato). |
 | **Flute** | `%%MIDI program 73` | Use slurs `()` for legato, and insert 16th-note rests (`z/`) for breath. |
 | **Djembe** | `%%MIDI channel 10` | Map Bass (Dum) = `E`, Tone (Go) = `_E`, Slap (Pa) = `D` conga samples. |

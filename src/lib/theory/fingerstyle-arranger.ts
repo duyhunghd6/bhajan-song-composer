@@ -345,7 +345,7 @@ export function generateFingerstyleArrangement(
 
   const upwardConstruction = buildUpwardConstructionContext(abcString, resolvedProgression, melodyMeasures);
   const downwardCompression = compressFingerstyleArrangement(resolved.chords, melodyMeasures, options);
-  const abc = `V:Guitar clef=treble-8\n| ${measures.map((measure) => measure.abc).join(" | ")} |`;
+  const abc = `V:Guitar clef=treble-8\n%%MIDI program 24\n| ${measures.map((measure) => measure.abc).join(" | ")} |`;
 
   return {
     key: resolved.key,

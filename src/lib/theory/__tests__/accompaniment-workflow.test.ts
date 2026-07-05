@@ -6,12 +6,15 @@ import {
   buildAccompanimentWorkflowAbcAnnotation,
   buildAccompanimentWorkflowPrompt,
   clearAccompanimentWorkflowStepResults,
+  abcMatchesReferenceMeasureLinePattern,
   buildAccompanimentWorkflowToolSchema,
+  buildBreakMeasuresLineToolSchema,
   buildConsolidatedChordIngestionPrompt,
   buildConsolidatedChordIngestionToolSchema,
   break_measures_line,
   createAccompanimentWorkflowSession,
   extractLyricChordAnnotations,
+  getAccompanimentWorkflowLlmToolNames,
   getNextUncompletedWorkflowStepId,
   getSelectedWorkflowContext,
   getSelectedWorkflowOption,
@@ -30,6 +33,18 @@ M:3/4
 L:1/8
 K:C
 | C2 E2 G2 | A3 G F2 | E6 |`;
+
+interface WorkflowSchemaPropertyForTest {
+  description?: string;
+  required?: string[];
+  properties?: Record<string, WorkflowSchemaPropertyForTest>;
+  items?: WorkflowSchemaPropertyForTest;
+}
+
+interface WorkflowDataSchemaForTest {
+  required?: string[];
+  properties?: Record<string, WorkflowSchemaPropertyForTest>;
+}
 
 function selectOption(
   session: ReturnType<typeof createAccompanimentWorkflowSession>,
@@ -129,7 +144,18 @@ describe("accompaniment workflow", () => {
     expect(item.required).toEqual(["id", "label", "summary", "justification", "data", "warnings", "validationNotes"]);
   });
 
-  it("adds break_measures_line requirements to chord ABC prompts and schemas", () => {
+  it("lists every LLM-visible accompaniment workflow tool", () => {
+    const toolNames = getAccompanimentWorkflowLlmToolNames();
+
+    expect(toolNames).toContain("generate_melody_snapshot");
+    expect(toolNames).toContain("generate_chord_progression");
+    expect(toolNames).toContain("generate_piano_fills_pedal_validation");
+    expect(toolNames).toContain("generate_consolidated_chord_ingestion");
+    expect(toolNames).toContain("break_measures_line");
+    expect(toolNames).toContain("valid_guitar_tab");
+  });
+
+  it("adds break_measures_line tool-call requirements to chord ABC prompts and schemas", () => {
     const prompt = buildAccompanimentWorkflowPrompt({
       stepId: "chord-progression",
       sourceAbc: sampleAbc,
@@ -142,12 +168,16 @@ describe("accompaniment workflow", () => {
       previousSelections: [],
     });
     const schema = buildAccompanimentWorkflowToolSchema("chord-progression");
-    const data = schema.function.parameters.properties.options.items.properties.data as any;
+    const breakSchema = buildBreakMeasuresLineToolSchema();
+    const data = schema.function.parameters.properties.options.items.properties.data as WorkflowDataSchemaForTest;
 
-    expect(prompt).toContain("break_measures_line");
+    expect(prompt).toContain("call the break_measures_line tool");
+    expect(prompt).toContain("copy the returned abc exactly");
     expect(prompt).toContain("same number of measures per line");
-    expect(consolidatedPrompt).toContain("break_measures_line");
-    expect(data.properties.harmonizedAbc.description).toContain("break_measures_line");
+    expect(consolidatedPrompt).toContain("call the break_measures_line tool");
+    expect(breakSchema.function.name).toBe("break_measures_line");
+    expect(breakSchema.function.parameters.required).toEqual(["generatedAbc"]);
+    expect(data.properties?.harmonizedAbc.description).toContain("copied exactly from the break_measures_line tool result");
   });
 
   it("builds an ABC comment annotation for the latest applied workflow step", () => {
@@ -188,11 +218,14 @@ K:C
 V:Melody name="Melody"
 | "C"C2 D2 E2 F2 | "G"G2 A2 B2 c2 | "Am"c2 B2 A2 G2 | "F"F2 E2 D2 C2 | "C"C8 | "G"D8 |`;
 
+    expect(abcMatchesReferenceMeasureLinePattern(generatedAbc, referenceAbc)).toBe(false);
+
     const normalized = break_measures_line(generatedAbc, referenceAbc);
     const musicLines = normalized
       .split("\n")
       .filter((line) => line.trim().startsWith("|"));
 
+    expect(abcMatchesReferenceMeasureLinePattern(normalized, referenceAbc)).toBe(true);
     expect(musicLines).toHaveLength(3);
     expect(musicLines.map((line) => line.split("|").filter((part) => part.trim()).length)).toEqual([2, 2, 2]);
   });
@@ -274,11 +307,14 @@ K:C
 
   it("requires guitarTab events in guitar tab-bearing workflow schemas", () => {
     const schema = buildAccompanimentWorkflowToolSchema("guitar-voicing-bass");
-    const data = schema.function.parameters.properties.options.items.properties.data as any;
+    const data = schema.function.parameters.properties.options.items.properties.data as WorkflowDataSchemaForTest;
 
     expect(data.required).toEqual(["guitarTab"]);
-    expect(data.properties.guitarTab.required).toEqual(["events"]);
-    expect(data.properties.guitarTab.properties.events.items.required).toEqual([
+    const guitarTab = data.properties?.guitarTab;
+    const events = guitarTab?.properties?.events;
+
+    expect(guitarTab?.required).toEqual(["events"]);
+    expect(events?.items?.required).toEqual([
       "measureIndex",
       "beat",
       "note",

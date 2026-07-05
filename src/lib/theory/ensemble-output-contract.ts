@@ -129,9 +129,14 @@ export interface EnsembleExpansionOutput {
 }
 
 const DJEMBE_MIDI_BY_STROKE: Record<DjembeStroke, number> = {
-  bass: 36,
-  "mid-tone": 60,
+  bass: 64,
+  "mid-tone": 63,
   slap: 62,
+};
+
+const ORCHESTRAL_MIDI_PROGRAM_BY_VOICE: Record<"Flute" | "Violin", number> = {
+  Flute: 73,
+  Violin: 40,
 };
 
 function noteToAbc(note: string): string {
@@ -148,7 +153,7 @@ function noteToAbc(note: string): string {
 }
 
 function buildOrchestralLayerAbc(
-  voiceName: string,
+  voiceName: "Flute" | "Violin",
   events: OrchestralSupportEvent[],
   measureCount: number
 ): string {
@@ -161,7 +166,7 @@ function buildOrchestralLayerAbc(
     return notes.length > 0 ? notes.join(" ") : "z8";
   });
 
-  return `V:${voiceName} name="Layer 3 ${voiceName} Support"\n| ${measures.join(" | ")} |`;
+  return `V:${voiceName} name="Layer 3 ${voiceName} Support"\n%%MIDI program ${ORCHESTRAL_MIDI_PROGRAM_BY_VOICE[voiceName]}\n| ${measures.join(" | ")} |`;
 }
 
 function buildAbcLayers(

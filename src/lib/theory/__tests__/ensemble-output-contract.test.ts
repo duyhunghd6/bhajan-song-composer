@@ -50,13 +50,15 @@ describe("Ensemble expansion output contract", () => {
       },
     ]);
     expect(output.abcLayers).toMatchObject({
-      layer3Djembe: expect.stringContaining("V:Djembe"),
-      layer3Flute: expect.stringContaining("V:Flute"),
-      layer3Violin: expect.stringContaining("V:Violin"),
+      layer3Djembe: expect.stringContaining('V:Djembe clef=perc name="Layer 3 Djembe Interlock"\n%%MIDI channel 10'),
+      layer3Flute: expect.stringContaining('V:Flute name="Layer 3 Flute Support"\n%%MIDI program 73'),
+      layer3Violin: expect.stringContaining('V:Violin name="Layer 3 Violin Support"\n%%MIDI program 40'),
     });
     expect(output.abcLayers.combined).toContain(output.abcLayers.layer3Djembe);
     expect(output.playbackEvents).toEqual(expect.arrayContaining([
-      expect.objectContaining({ instrument: "djembe", source: "layer2-bass-transient", startMs: 0, midi: 36 }),
+      expect.objectContaining({ instrument: "djembe", note: "bass", source: "layer2-bass-transient", startMs: 0, midi: 64 }),
+      expect.objectContaining({ instrument: "djembe", note: "mid-tone", midi: 63 }),
+      expect.objectContaining({ instrument: "djembe", note: "slap", midi: 62 }),
       expect.objectContaining({ instrument: "flute", source: "layer1-active" }),
       expect.objectContaining({ instrument: "violin", source: "layer1-active" }),
     ]));

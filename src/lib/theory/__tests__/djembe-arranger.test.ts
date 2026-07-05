@@ -44,6 +44,8 @@ describe("Djembe rhythmic interlock", () => {
     ]);
     expect(arrangement.validation.bassStrokesFollowLayer2Bass).toBe(true);
     expect(arrangement.validation.velocityMetadataAssigned).toBe(true);
+    expect(arrangement.abc).toContain('V:Djembe clef=perc name="Layer 3 Djembe Interlock"\n%%MIDI channel 10');
+    expect(arrangement.abc).toContain("| E _E D _E z _E D z | E _E D _E z _E D z |");
   });
 
   it("weaves mid-tones into unused subdivisions and suppresses duplicate backbeat transients", () => {

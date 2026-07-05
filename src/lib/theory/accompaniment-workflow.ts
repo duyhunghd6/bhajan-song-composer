@@ -18,7 +18,9 @@ import {
 export * from "./accompaniment-workflow/definition";
 export {
   buildAccompanimentWorkflowToolSchema,
+  buildBreakMeasuresLineToolSchema,
   buildConsolidatedChordIngestionToolSchema,
+  getAccompanimentWorkflowLlmToolNames,
 } from "./accompaniment-workflow/tool-schema";
 
 
@@ -309,12 +311,37 @@ function isMusicBodyLine(line: string): boolean {
   return true;
 }
 
-function referenceMeasureLinePattern(referenceAbc: string): number[] {
-  return referenceAbc
-    .split(/\r?\n/)
+function measureLinePatternFromLines(lines: string[]): number[] {
+  return lines
     .filter(isMusicBodyLine)
     .map((line) => splitAbcMeasureSegments(line).length)
     .filter((count) => count > 0);
+}
+
+export function getAbcMeasureLinePattern(abcString: string): number[] {
+  const lines = abcString.split(/\r?\n/);
+  const melodyStart = lines.findIndex((line) => /^V:Melody\b/.test(line.trim()));
+
+  if (melodyStart >= 0) {
+    const nextVoiceOffset = lines.slice(melodyStart + 1).findIndex((line) => /^V:/.test(line.trim()));
+    const melodyEnd = nextVoiceOffset >= 0 ? melodyStart + 1 + nextVoiceOffset : lines.length;
+    return measureLinePatternFromLines(lines.slice(melodyStart + 1, melodyEnd));
+  }
+
+  return measureLinePatternFromLines(lines);
+}
+
+function referenceMeasureLinePattern(referenceAbc: string): number[] {
+  return getAbcMeasureLinePattern(referenceAbc);
+}
+
+export function abcMatchesReferenceMeasureLinePattern(generatedAbc: string, referenceAbc: string): boolean {
+  const expectedPattern = referenceMeasureLinePattern(referenceAbc);
+  if (expectedPattern.length === 0) return true;
+
+  const actualPattern = getAbcMeasureLinePattern(generatedAbc);
+  return actualPattern.length === expectedPattern.length
+    && actualPattern.every((count, index) => count === expectedPattern[index]);
 }
 
 function regroupMeasures(measures: string[], pattern: number[], fallbackLineCount: number): string[] {
@@ -428,9 +455,9 @@ export function buildAccompanimentWorkflowPrompt(input: {
   const userNote = input.userNote?.trim();
   const lyricChordAnnotations = extractLyricChordAnnotations(input.sourceAbc);
   const abcDataInstruction = input.stepId === "chord-progression"
-    ? "\nStep-specific data requirement: each option.data MUST include harmonizedAbc containing the full source ABC with the proposed chord symbols applied, so the user can immediately hear this progression in Music Staff Playback. Before returning harmonizedAbc, apply the break_measures_line formatting rule: the output ABC melody music body must have the same number of music lines and the same number of measures per line as the Source ABC. If Source ABC has 5 music lines of 4 measures each, harmonizedAbc must do the same."
+    ? "\nStep-specific data requirement: each option.data MUST include harmonizedAbc containing the full source ABC with the proposed chord symbols applied, so the user can immediately hear this progression in Music Staff Playback. Before calling the final generate_chord_progression tool, call the break_measures_line tool with the generated ABCNotation, then copy the returned abc exactly into option.data.harmonizedAbc. The output ABC Melody music body must have the same number of music lines and the same number of measures per line as the Source ABC. If Source ABC has 5 music lines of 4 measures each, harmonizedAbc must do the same."
     : input.stepId === "voice-leading-validation"
-      ? "\nStep-specific data requirement: each option.data MUST include validatedAbc or harmonizedAbc containing the full final chord-annotated ABC after voice-leading validation, so the user can immediately hear it in Music Staff Playback. Before returning validatedAbc or harmonizedAbc, apply the break_measures_line formatting rule: the output ABC melody music body must have the same number of music lines and the same number of measures per line as the Source ABC. Include a validation note confirming measure line breaks match the Source ABC."
+      ? "\nStep-specific data requirement: each option.data MUST include validatedAbc or harmonizedAbc containing the full final chord-annotated ABC after voice-leading validation, so the user can immediately hear it in Music Staff Playback. Before calling the final generate_voice_leading_validation tool, call the break_measures_line tool with the generated ABCNotation, then copy the returned abc exactly into option.data.validatedAbc or option.data.harmonizedAbc. The output ABC Melody music body must have the same number of music lines and the same number of measures per line as the Source ABC. Include a validation note confirming measure line breaks match the Source ABC."
       : "";
   const guitarTabInstruction = isGuitarTabValidationWorkflowStep(input.stepId)
     ? "\nGuitar tab validation requirement: each option.data MUST include guitarTab.events with measureIndex, beat, note, string, fret, and role. Before finalizing an option, call the valid_guitar_tab tool with those exact events. If valid_guitar_tab reports any issue, revise the tab and call valid_guitar_tab again. Hard physical rule: in any simultaneous group, a string number may appear only once; one guitar string cannot play E3 and G3 (or any two pitches) at the same time."
@@ -438,8 +465,9 @@ export function buildAccompanimentWorkflowPrompt(input: {
   const lyricChordInstruction = lyricChordAnnotations.length > 0 && isChordIngestionWorkflowStep(input.stepId)
     ? "\n- The source ABC has chord symbols embedded inside the lyric w: lines. Treat those lyric chord symbols as the user-supplied chord progression. Do not invent a different progression; map roles, progression, and validation around these chords."
     : "";
+  const midiInstruction = "\n- Any generated Guitar Classic/Classical Guitar ABC must include `%%MIDI program 24` immediately after the Guitar voice declaration.\n- Only an exact `Guitar Left Hand` target may be retargeted to Harmonium/Reed Organ, and it must use `%%MIDI program 20`; do not change `Guitar LH Accompaniment`, `Guitar Right Hand`, or generic Guitar layers.";
 
-  return `DEFAULT PROMPT — MUSIC ACCOMPANIMENT WORKFLOW STEP ${step.index}\n\nTask: ${step.label}\n${step.description}\n\nTheory reference to follow:\n${step.theoryReference}\n\nOutput focus:\n${step.outputFocus.map((item) => `- ${item}`).join("\n")}\n\nGlobal hard rules:\n- Return between 1 and 5 distinct options.\n- Every option must include a concise label, summary, justification, warnings, and validation notes.\n- Preserve the source melody ABC exactly unless this step explicitly asks for chord annotations.\n- Respect previously selected workflow decisions.\n- If a choice is musically risky, include a warning instead of hiding the risk.\n- Prefer devotional/bhajan-appropriate support unless the user's note asks otherwise.${abcDataInstruction}${guitarTabInstruction}${lyricChordInstruction}\n\nMetadata:\n${formatMetadata(input.metadata)}\n\nPreviously selected workflow context:\n${formatPreviousSelections(input.previousSelections)}\n\nLyric chord annotations:\n${formatLyricChordAnnotations(input.sourceAbc)}\n\nSource ABC:\n\`\`\`abc\n${input.sourceAbc}\n\`\`\`\n\nUSER NOTE TO ADD TO PROMPT:\n${userNote || "(none)"}`;
+  return `DEFAULT PROMPT — MUSIC ACCOMPANIMENT WORKFLOW STEP ${step.index}\n\nTask: ${step.label}\n${step.description}\n\nTheory reference to follow:\n${step.theoryReference}\n\nOutput focus:\n${step.outputFocus.map((item) => `- ${item}`).join("\n")}\n\nGlobal hard rules:\n- Return between 1 and 5 distinct options.\n- Every option must include a concise label, summary, justification, warnings, and validation notes.\n- Preserve the source melody ABC exactly unless this step explicitly asks for chord annotations.\n- Respect previously selected workflow decisions.\n- If a choice is musically risky, include a warning instead of hiding the risk.\n- Prefer devotional/bhajan-appropriate support unless the user's note asks otherwise.${midiInstruction}${abcDataInstruction}${guitarTabInstruction}${lyricChordInstruction}\n\nMetadata:\n${formatMetadata(input.metadata)}\n\nPreviously selected workflow context:\n${formatPreviousSelections(input.previousSelections)}\n\nLyric chord annotations:\n${formatLyricChordAnnotations(input.sourceAbc)}\n\nSource ABC:\n\`\`\`abc\n${input.sourceAbc}\n\`\`\`\n\nUSER NOTE TO ADD TO PROMPT:\n${userNote || "(none)"}`;
 }
 
 export function buildConsolidatedChordIngestionPrompt(input: {
@@ -450,5 +478,5 @@ export function buildConsolidatedChordIngestionPrompt(input: {
 }): string {
   const userNote = input.userNote?.trim();
 
-  return `DEFAULT PROMPT — MUSIC ACCOMPANIMENT WORKFLOW CONSOLIDATED CHORD INGESTION\n\nTask: The lyrics contain chord symbols like [Em]Hari Bol, Hari [D]Bol. In one LLM decision, ingest the lyric chord progression and produce reviewable results for these three workflow steps:\n1. Chord-tone Role Mapping\n2. Chord Progression Selection\n3. Voice-leading & Harmonized ABC Validation\n\nHard rules:\n- Use the lyric chord annotations below as the supplied chord progression. Do not invent a replacement progression.\n- Return between 1 and 5 options for each of the three result groups.\n- Chord-tone options explain how strong melody notes function over the supplied chords.\n- Progression options preserve the supplied chord order and provide roman numerals/function labels.\n- Validation options must include option.data.validatedAbc or option.data.harmonizedAbc containing the full source ABC with playable chord symbols applied outside the w: lyric lines, so Music Staff Playback can render the harmony.\n- Before returning any harmonizedAbc or validatedAbc, apply the break_measures_line formatting rule: the output ABC melody music body must have the same number of music lines and the same number of measures per line as the Source ABC. If Source ABC has 5 music lines of 4 measures each, returned ABC must do the same.\n- Preserve the source melody ABC exactly except for adding/moving chord annotations into playable ABC chord positions.\n- Include warnings for any lyric chord that conflicts with strong melody tones, raga/scale expectations, cadence support, or measure-line preservation.\n\nMetadata:\n${formatMetadata(input.metadata)}\n\nPreviously selected workflow context:\n${formatPreviousSelections(input.previousSelections)}\n\nLyric chord annotations to ingest:\n${formatLyricChordAnnotations(input.sourceAbc)}\n\nSource ABC:\n\`\`\`abc\n${input.sourceAbc}\n\`\`\`\n\nUSER NOTE TO ADD TO PROMPT:\n${userNote || "(none)"}`;
+  return `DEFAULT PROMPT — MUSIC ACCOMPANIMENT WORKFLOW CONSOLIDATED CHORD INGESTION\n\nTask: The lyrics contain chord symbols like [Em]Hari Bol, Hari [D]Bol. In one LLM decision, ingest the lyric chord progression and produce reviewable results for these three workflow steps:\n1. Chord-tone Role Mapping\n2. Chord Progression Selection\n3. Voice-leading & Harmonized ABC Validation\n\nHard rules:\n- Use the lyric chord annotations below as the supplied chord progression. Do not invent a replacement progression.\n- Return between 1 and 5 options for each of the three result groups.\n- Chord-tone options explain how strong melody notes function over the supplied chords.\n- Progression options preserve the supplied chord order and provide roman numerals/function labels.\n- Validation options must include option.data.validatedAbc or option.data.harmonizedAbc containing the full source ABC with playable chord symbols applied outside the w: lyric lines, so Music Staff Playback can render the harmony.\n- Before calling generate_consolidated_chord_ingestion, call the break_measures_line tool for every harmonizedAbc or validatedAbc candidate, then copy each returned abc exactly into the final tool payload.\n- The output ABC Melody music body must have the same number of music lines and the same number of measures per line as the Source ABC. If Source ABC has 5 music lines of 4 measures each, returned ABC must do the same.\n- Preserve the source melody ABC exactly except for adding/moving chord annotations into playable ABC chord positions.\n- Include warnings for any lyric chord that conflicts with strong melody tones, raga/scale expectations, cadence support, or measure-line preservation.\n\nMetadata:\n${formatMetadata(input.metadata)}\n\nPreviously selected workflow context:\n${formatPreviousSelections(input.previousSelections)}\n\nLyric chord annotations to ingest:\n${formatLyricChordAnnotations(input.sourceAbc)}\n\nSource ABC:\n\`\`\`abc\n${input.sourceAbc}\n\`\`\`\n\nUSER NOTE TO ADD TO PROMPT:\n${userNote || "(none)"}`;
 }

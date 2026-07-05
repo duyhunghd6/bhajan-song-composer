@@ -89,9 +89,31 @@ function stripGeneratedHeaders(generatedAccompaniment: string): string {
   });
 }
 
+function isGuitarLeftHandVoiceLine(voiceLine: string): boolean {
+  return /^V:GuitarLeftHand\b/.test(voiceLine) || /\bname="Guitar Left Hand"/.test(voiceLine);
+}
+
 function normalizeGeneratedVoiceLine(voiceLine: string): string {
+  if (isGuitarLeftHandVoiceLine(voiceLine)) {
+    return 'V:Harmonium clef=treble name="Layer 2 Harmonium Accompaniment"';
+  }
+
   if (!voiceLine.startsWith("V:Guitar") || voiceLine.includes("name=")) return voiceLine;
   return voiceLine.replace(/V:Guitar clef=treble-8/g, 'V:Guitar clef=treble-8 name="Layer 2 Guitar Accompaniment"');
+}
+
+function normalizeMidiDirectives(voiceLine: string, directives: string[]): string[] {
+  const nonProgramDirectives = directives.filter((line) => !/^%%MIDI\s+program\b/.test(line));
+
+  if (voiceLine.startsWith("V:Harmonium")) {
+    return ["%%MIDI program 20", ...nonProgramDirectives];
+  }
+
+  if (voiceLine.startsWith("V:Guitar")) {
+    return ["%%MIDI program 24", ...nonProgramDirectives];
+  }
+
+  return directives;
 }
 
 function splitVoiceBlocks(generatedAccompaniment: string): string[] {
@@ -127,10 +149,27 @@ function getMelodyMeasureInfo(baseAbc: string) {
   };
 }
 
+function splitVoiceBodyLines(lines: string[]): { directives: string[]; musicLines: string[] } {
+  return lines.reduce((acc, line) => {
+    const trimmed = line.trim();
+    if (!trimmed) return acc;
+
+    if (trimmed.startsWith("%")) {
+      acc.directives.push(trimmed);
+    } else {
+      acc.musicLines.push(trimmed);
+    }
+
+    return acc;
+  }, { directives: [] as string[], musicLines: [] as string[] });
+}
+
 function alignVoiceBlock(block: string, baseAbc: string): string {
   const lines = block.split("\n");
   const voiceLine = normalizeGeneratedVoiceLine(lines[0].trim());
-  const voiceBody = lines.slice(1).join(" ").trim();
+  const { directives, musicLines } = splitVoiceBodyLines(lines.slice(1));
+  const normalizedDirectives = normalizeMidiDirectives(voiceLine, directives);
+  const voiceBody = musicLines.join(" ").trim();
   const voiceBars = splitAbcMeasureSegments(voiceBody);
   const { durationContext, hasPickup, pickupUnits, fullMeasureCount } = getMelodyMeasureInfo(baseAbc);
   const fallbackMeasure = buildFullMeasureRest(durationContext.fullMeasureUnits);
@@ -147,12 +186,11 @@ function alignVoiceBlock(block: string, baseAbc: string): string {
   const normalizedFullMeasures = fullMeasureBars
     .slice(0, fullMeasureCount)
     .map((bar) => normalizeAbcMeasureDuration(bar, durationContext.fullMeasureUnits));
+  const alignedMusicLine = hasPickup
+    ? `${buildPickupRest(pickupUnits)} | ${normalizedFullMeasures.join(" | ")} |`
+    : `| ${normalizedFullMeasures.join(" | ")} |`;
 
-  if (hasPickup) {
-    return `${voiceLine}\n${buildPickupRest(pickupUnits)} | ${normalizedFullMeasures.join(" | ")} |`;
-  }
-
-  return `${voiceLine}\n| ${normalizedFullMeasures.join(" | ")} |`;
+  return [voiceLine, ...normalizedDirectives, alignedMusicLine].join("\n");
 }
 
 export function getLayerVoiceNames(...sources: Array<string | null | undefined>): string[] {

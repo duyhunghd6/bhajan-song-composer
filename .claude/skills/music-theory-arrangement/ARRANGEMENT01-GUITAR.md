@@ -39,14 +39,18 @@ The rhythm guitar is **Layer 2** — it supports the melody with harmonic and rh
 | **Avoid melody register** | If the melody sits in the high-E / B string range, use voicings that emphasize the lower 4 strings |
 | **Guide tones** | Ensure the 3rd and 7th of each chord are present — they define major/minor/dominant quality |
 
-### 2.3 Strumming Patterns (Comping Profiles)
+### 2.3 Harmonium Retarget for Exact `Guitar Left Hand`
+
+If a generation path or source layer is explicitly named `Guitar Left Hand`, treat that target as **Harmonium / Reed Organ accompaniment** instead of guitar. Emit `V:Harmonium` with `%%MIDI program 20`, use sustained devotional chord support, and do not retarget similarly named guitar layers such as `Guitar LH Accompaniment` or `Guitar Right Hand`.
+
+### 2.4 Strumming Patterns (Comping Profiles)
 
 #### Profile A: Ballad / Devotional (Fingerpicked Arpeggiation)
 
 Gentle, flowing patterns for bhajans and slow songs.
 
 ```abc
-%%MIDI program 25
+%%MIDI program 24
 V:Guitar clef=treble name="Guitar"
 K:C
 L:1/8
@@ -62,7 +66,7 @@ L:1/8
 Rhythmic strumming with accent patterns.
 
 ```abc
-%%MIDI program 25
+%%MIDI program 24
 V:Guitar clef=treble name="Guitar"
 K:G
 L:1/8
