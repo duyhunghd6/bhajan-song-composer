@@ -18,6 +18,7 @@ import {
   isAccompanimentWorkflowStepComplete,
   isAccompanimentWorkflowStepUnlocked,
   isChordIngestionWorkflowStep,
+  type AccompanimentWorkflowLlmLogEntry,
   type AccompanimentWorkflowMetadata,
   type AccompanimentWorkflowOption,
   type AccompanimentWorkflowRun,
@@ -27,6 +28,7 @@ import {
 } from "@/lib/theory/accompaniment-workflow";
 
 import {
+  LlmCallLogPanel,
   RunOptionList,
   SCOPE_CLASS,
   emptyStepState,
@@ -46,6 +48,34 @@ interface AccompanimentWorkflowWizardProps {
   onPianoProfileSelected: (profile: string | null) => void;
 }
 
+function makeClientLlmLog(input: {
+  stepId: AccompanimentWorkflowStepId;
+  status: AccompanimentWorkflowLlmLogEntry["status"];
+  message: string;
+}): AccompanimentWorkflowLlmLogEntry {
+  return {
+    id: `client-${input.stepId}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    createdAt: new Date().toISOString(),
+    stepId: input.stepId,
+    kind: input.status === "started" ? "chat-request" : "chat-error",
+    status: input.status,
+    message: input.message,
+  };
+}
+
+function logsFromRuns(runs: AccompanimentWorkflowRun[]): AccompanimentWorkflowLlmLogEntry[] {
+  const seen = new Set<string>();
+  const logs: AccompanimentWorkflowLlmLogEntry[] = [];
+  for (const run of runs) {
+    for (const log of run.diagnostics?.llmLogs ?? []) {
+      if (seen.has(log.id)) continue;
+      seen.add(log.id);
+      logs.push(log);
+    }
+  }
+  return logs;
+}
+
 export default function AccompanimentWorkflowWizard({
   sourceAbc,
   metadata,
@@ -58,6 +88,7 @@ export default function AccompanimentWorkflowWizard({
   const [userNotes, setUserNotes] = useState<Partial<Record<AccompanimentWorkflowStepId, string>>>({});
   const [savedNoteStepId, setSavedNoteStepId] = useState<AccompanimentWorkflowStepId | null>(null);
   const [generatingStepId, setGeneratingStepId] = useState<AccompanimentWorkflowStepId | null>(null);
+  const [liveLlmLogs, setLiveLlmLogs] = useState<AccompanimentWorkflowLlmLogEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
   const sourceCurrent = isAccompanimentWorkflowSourceCurrent(workflow, sourceAbc);
   const session = useMemo(() => workflow && sourceCurrent ? workflow : null, [workflow, sourceCurrent]);
@@ -90,6 +121,7 @@ export default function AccompanimentWorkflowWizard({
     setUserNotes({});
     setSavedNoteStepId(null);
     setGeneratingStepId(null);
+    setLiveLlmLogs([]);
     setError(null);
   };
 
@@ -112,7 +144,14 @@ export default function AccompanimentWorkflowWizard({
 
   const generateStep = async () => {
     if (!session) return;
-    setGeneratingStepId(activeStep.id);
+    const stepId = activeStep.id;
+    const startedLog = makeClientLlmLog({
+      stepId,
+      status: "started",
+      message: `LLM call started for Step ${activeStep.index}: ${activeStep.shortLabel}.`,
+    });
+    setGeneratingStepId(stepId);
+    setLiveLlmLogs((current) => [...current, startedLog]);
     setError(null);
     try {
       if (canConsolidateChordIngestion) {
@@ -122,21 +161,32 @@ export default function AccompanimentWorkflowWizard({
           previousSelections: getSelectedWorkflowContext(session, "chord-tone-mapping"),
           userNote: activeUserNote,
         });
+        setLiveLlmLogs((current) => [...current, ...logsFromRuns(runs)]);
         onWorkflowChange(mergeRuns(session, runs, activeUserNote));
         return;
       }
 
       const run = await generateAccompanimentWorkflowStep({
-        stepId: activeStep.id,
+        stepId,
         sourceAbc,
         metadata,
-        previousSelections: getSelectedWorkflowContext(session, activeStep.id),
+        previousSelections: getSelectedWorkflowContext(session, stepId),
         userNote: activeUserNote,
       });
+      setLiveLlmLogs((current) => [...current, ...logsFromRuns([run])]);
       onWorkflowChange(mergeRun(session, run, activeUserNote));
     } catch (err) {
       console.error(err);
-      setError(err instanceof Error ? err.message : "Failed to generate workflow options.");
+      const message = err instanceof Error ? err.message : "Failed to generate workflow options.";
+      setLiveLlmLogs((current) => [
+        ...current,
+        makeClientLlmLog({
+          stepId,
+          status: "failed",
+          message: `LLM call failed for Step ${activeStep.index}: ${message}`,
+        }),
+      ]);
+      setError(message);
     } finally {
       setGeneratingStepId(null);
     }
@@ -203,6 +253,11 @@ export default function AccompanimentWorkflowWizard({
   const canSkipPiano = activeUnlocked && activeStep.scope === "piano";
   const hasGuitarResults = hasWorkflowStepResults(session, ACCOMPANIMENT_WORKFLOW_GUITAR_STEP_IDS);
   const hasPianoResults = hasWorkflowStepResults(session, ACCOMPANIMENT_WORKFLOW_PIANO_STEP_IDS);
+  const persistedLlmLogs = logsFromRuns(activeStepState.runs);
+  const transientLlmLogs = liveLlmLogs.filter((log) =>
+    log.stepId === activeStep.id || (log.stepId === "consolidated-chord-ingestion" && isChordIngestionWorkflowStep(activeStep.id))
+  );
+  const activeLlmLogs = Array.from(new Map([...persistedLlmLogs, ...transientLlmLogs].map((log) => [log.id, log])).values());
 
   return (
     <div className="space-y-4 rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950/50">
@@ -357,6 +412,8 @@ export default function AccompanimentWorkflowWizard({
         </div>
 
         <RunOptionList workflow={session} stepId={activeStep.id} onSelect={handleSelectOption} />
+
+        <LlmCallLogPanel logs={activeLlmLogs} />
       </section>
     </div>
   );

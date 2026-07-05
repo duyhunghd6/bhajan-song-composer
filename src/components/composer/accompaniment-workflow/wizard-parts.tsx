@@ -1,6 +1,9 @@
+import { useState } from "react";
+
 import {
   ACCOMPANIMENT_WORKFLOW_STEPS,
   getNextUncompletedWorkflowStepId,
+  type AccompanimentWorkflowLlmLogEntry,
   type AccompanimentWorkflowOption,
   type AccompanimentWorkflowRun,
   type AccompanimentWorkflowScope,
@@ -150,6 +153,69 @@ export function hasWorkflowStepResults(
   });
 }
 
+function llmLogStatusClass(status: AccompanimentWorkflowLlmLogEntry["status"]): string {
+  switch (status) {
+    case "started":
+      return "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900/70 dark:bg-sky-950/40 dark:text-sky-300";
+    case "success":
+      return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-300";
+    case "warning":
+      return "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/70 dark:bg-amber-950/40 dark:text-amber-300";
+    case "failed":
+      return "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/40 dark:text-rose-300";
+  }
+}
+
+export function LlmCallLogPanel({ logs }: { logs: AccompanimentWorkflowLlmLogEntry[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const recentLogs = [...logs]
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+    .slice(-20)
+    .reverse();
+  const visibleLogs = expanded ? recentLogs : recentLogs.slice(0, 2);
+
+  return (
+    <div className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950/50">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs font-bold text-zinc-800 dark:text-zinc-100">LLM Call Log</p>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">{logs.length} event{logs.length === 1 ? "" : "s"}</span>
+          {recentLogs.length > 2 && (
+            <button
+              type="button"
+              onClick={() => setExpanded((current) => !current)}
+              className="rounded-md border border-zinc-200 px-2 py-1 text-[10px] font-bold text-zinc-600 transition hover:border-amber-300 hover:text-amber-700 dark:border-zinc-800 dark:text-zinc-300 dark:hover:text-amber-300"
+            >
+              {expanded ? "Collapse" : "Expand to 20"}
+            </button>
+          )}
+        </div>
+      </div>
+      {recentLogs.length === 0 ? (
+        <p className="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
+          No LLM calls have been recorded for this step yet. Generation start, success, validation, and failure events will appear here.
+        </p>
+      ) : (
+        <ol className={`mt-3 space-y-2 overflow-y-auto pr-1 ${expanded ? "max-h-96" : "max-h-28"}`}>
+          {visibleLogs.map((log) => (
+            <li key={log.id} className="rounded-lg border border-zinc-200 bg-zinc-50 p-2 text-[11px] leading-4 dark:border-zinc-800 dark:bg-zinc-900/60">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${llmLogStatusClass(log.status)}`}>{log.status}</span>
+                <span className="font-semibold text-zinc-700 dark:text-zinc-200">{log.kind}</span>
+                {typeof log.iteration === "number" && <span className="text-zinc-500 dark:text-zinc-400">iteration {log.iteration + 1}</span>}
+                <span className="text-zinc-400 dark:text-zinc-500">{new Date(log.createdAt).toLocaleTimeString()}</span>
+              </div>
+              <p className="mt-1 text-zinc-600 dark:text-zinc-300">{log.message}</p>
+              {log.validationMessage && <p className="mt-1 text-amber-700 dark:text-amber-300">Validation: {log.validationMessage}</p>}
+              {log.toolCallNames?.length ? <p className="mt-1 text-zinc-500 dark:text-zinc-400">Tools: {log.toolCallNames.join(", ")}</p> : null}
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
+  );
+}
+
 export function RunOptionList({
   workflow,
   stepId,
@@ -170,50 +236,80 @@ export function RunOptionList({
     );
   }
 
+  const optionRows = runs.flatMap((run) => run.options.map((option) => ({
+    run,
+    option,
+    value: `${run.id}::${option.id}`,
+  })));
+  const selectedValue = stepState.activeRunId && stepState.selectedOptionId
+    ? `${stepState.activeRunId}::${stepState.selectedOptionId}`
+    : "";
+  const selectedRow = optionRows.find((row) => row.value === selectedValue) ?? null;
+
   return (
-    <div className="space-y-4">
-      {runs.map((run) => (
-        <div key={run.id} className="rounded-2xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950/50">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
-            <span>Run stored {new Date(run.createdAt).toLocaleString()}</span>
-            {run.userNote && <span>User note: {run.userNote}</span>}
-          </div>
-          <div className="grid gap-2">
-            {run.options.map((option) => {
-              const isSelected = stepState.activeRunId === run.id && stepState.selectedOptionId === option.id;
-              return (
-                <button
-                  key={`${run.id}-${option.id}`}
-                  type="button"
-                  onClick={() => onSelect(option)}
-                  className={`rounded-xl border p-3 text-left transition-all focus:outline-none focus:ring-2 focus:ring-amber-500/50 ${
-                    isSelected
-                      ? "border-amber-400 bg-amber-500/10 shadow-sm"
-                      : "border-zinc-200 bg-zinc-50 hover:border-amber-300/60 dark:border-zinc-800 dark:bg-zinc-900/50"
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <h4 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">{option.label}</h4>
-                    {isSelected && <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-bold text-white">Selected</span>}
-                  </div>
-                  <p className="mt-1 text-xs leading-5 text-zinc-600 dark:text-zinc-400">{option.summary}</p>
-                  <p className="mt-2 text-xs leading-5 text-zinc-700 dark:text-zinc-300"><strong>Why:</strong> {option.justification}</p>
-                  {option.warnings.length > 0 && (
-                    <ul className="mt-2 list-disc space-y-1 pl-4 text-[11px] leading-4 text-amber-700 dark:text-amber-300">
-                      {option.warnings.map((warning) => <li key={warning}>{warning}</li>)}
-                    </ul>
-                  )}
-                  {option.validationNotes.length > 0 && (
-                    <ul className="mt-2 list-disc space-y-1 pl-4 text-[11px] leading-4 text-emerald-700 dark:text-emerald-300">
-                      {option.validationNotes.map((note) => <li key={note}>{note}</li>)}
-                    </ul>
-                  )}
-                </button>
-              );
-            })}
-          </div>
+    <div className="rounded-2xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950/50">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="text-xs font-bold text-zinc-800 dark:text-zinc-100">Generated Option</p>
+          <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">
+            {optionRows.length} option{optionRows.length === 1 ? "" : "s"} across {runs.length} run{runs.length === 1 ? "" : "s"}.
+          </p>
         </div>
-      ))}
+        {selectedRow && <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-bold text-white">Selected</span>}
+      </div>
+
+      <label className="mt-3 block text-xs font-bold text-zinc-700 dark:text-zinc-200">
+        Choose generated option
+        <select
+          value={selectedValue}
+          onChange={(event) => {
+            const row = optionRows.find((candidate) => candidate.value === event.target.value);
+            if (row) onSelect(row.option);
+          }}
+          className="mt-2 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs font-normal text-zinc-800 outline-none transition focus:border-amber-400 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100"
+        >
+          <option value="">Select an option...</option>
+          {optionRows.map(({ run, option, value }) => (
+            <option key={value} value={value}>
+              Run stored {new Date(run.createdAt).toLocaleString()} — {option.label}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      {selectedRow ? (
+        <details className="mt-3 rounded-xl border border-amber-200 bg-amber-50/70 p-3 dark:border-amber-900/70 dark:bg-amber-950/30">
+          <summary className="cursor-pointer text-xs font-bold text-zinc-900 dark:text-zinc-100">
+            {selectedRow.option.label} details
+          </summary>
+          <p className="mt-2 text-xs leading-5 text-zinc-600 dark:text-zinc-400">{selectedRow.option.summary}</p>
+          <p className="mt-2 text-xs leading-5 text-zinc-700 dark:text-zinc-300"><strong>Why:</strong> {selectedRow.option.justification}</p>
+          {selectedRow.option.warnings.length > 0 && (
+            <ul className="mt-2 list-disc space-y-1 pl-4 text-[11px] leading-4 text-amber-700 dark:text-amber-300">
+              {selectedRow.option.warnings.map((warning) => <li key={warning}>{warning}</li>)}
+            </ul>
+          )}
+          {selectedRow.option.validationNotes.length > 0 && (
+            <ul className="mt-2 list-disc space-y-1 pl-4 text-[11px] leading-4 text-emerald-700 dark:text-emerald-300">
+              {selectedRow.option.validationNotes.map((note) => <li key={note}>{note}</li>)}
+            </ul>
+          )}
+        </details>
+      ) : (
+        <p className="mt-3 rounded-xl border border-dashed border-zinc-300 p-3 text-xs text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
+          Select one generated option from the dropdown to apply it to this workflow step.
+        </p>
+      )}
+
+      {selectedRow?.run.diagnostics && (
+        <div className="mt-3 rounded-lg border border-sky-200 bg-sky-50 p-2 text-[11px] leading-4 text-sky-800 dark:border-sky-900/70 dark:bg-sky-950/40 dark:text-sky-300">
+          <p className="font-bold">Validation diagnostics</p>
+          <p>Attempts: {selectedRow.run.diagnostics.validationAttempts}/{selectedRow.run.diagnostics.maxValidationAttempts}</p>
+          <p>Log: {selectedRow.run.diagnostics.logPath}</p>
+          <p>Tools: {selectedRow.run.diagnostics.exposedTools.join(", ")}</p>
+          {selectedRow.run.diagnostics.llmLogs?.length ? <p>LLM log events: {selectedRow.run.diagnostics.llmLogs.length}</p> : null}
+        </div>
+      )}
     </div>
   );
 }

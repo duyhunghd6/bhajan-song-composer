@@ -43,6 +43,26 @@ export interface ToolLoopValidationResult {
   toolResult?: unknown;
 }
 
+export type ToolDiagnosticEvent =
+  | { type: "chat-request"; iteration?: number; messageCount: number; toolChoice: unknown; toolNames: string[] }
+  | { type: "chat-response"; iteration?: number; toolCallNames: string[] }
+  | { type: "chat-error"; iteration?: number; status?: number; message: string }
+  | { type: "tool-call"; iteration: number; toolName: string; toolCallId: string; local: boolean; final: boolean }
+  | { type: "tool-result"; iteration: number; toolName: string; toolCallId: string; result: unknown }
+  | { type: "final-validation"; iteration: number; toolName: string; valid: boolean; failedValidationAttempts: number; maxValidationAttempts: number; message?: string; toolResult?: unknown }
+  | { type: "loop-exhausted"; maxIterations: number; failedValidationAttempts: number; maxValidationAttempts: number; lastValidationMessage: string };
+
+export type ToolDiagnosticRecorder = (event: ToolDiagnosticEvent) => void | Promise<void>;
+
+async function emitDiagnostic(onDiagnostic: ToolDiagnosticRecorder | undefined, event: ToolDiagnosticEvent): Promise<void> {
+  if (!onDiagnostic) return;
+  try {
+    await onDiagnostic(event);
+  } catch (error) {
+    console.error("AI diagnostic recorder failed:", error);
+  }
+}
+
 export async function readAiConfig(): Promise<AiConfig> {
   const envConfig = {
     url: process.env.AI_API_URL,
@@ -94,33 +114,59 @@ async function requestChatCompletion(input: {
   tools: unknown[];
   toolChoice: unknown;
   temperature?: number;
+  iteration?: number;
+  onDiagnostic?: ToolDiagnosticRecorder;
 }): Promise<ToolCallMessage> {
   const config = await readAiConfig();
-
-  const res = await fetch(`${config.url}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${config.apiKey}`,
-    },
-    body: JSON.stringify({
-      model: config.model,
-      messages: input.messages,
-      tools: input.tools,
-      tool_choice: input.toolChoice,
-      ...(typeof input.temperature === "number" ? { temperature: input.temperature } : {}),
-    }),
+  await emitDiagnostic(input.onDiagnostic, {
+    type: "chat-request",
+    iteration: input.iteration,
+    messageCount: input.messages.length,
+    toolChoice: input.toolChoice,
+    toolNames: input.tools.map((tool) => (tool as { function?: { name?: string } }).function?.name).filter((name): name is string => Boolean(name)),
   });
+
+  let res: Response;
+  try {
+    res = await fetch(`${config.url}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${config.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: config.model,
+        messages: input.messages,
+        tools: input.tools,
+        tool_choice: input.toolChoice,
+        ...(typeof input.temperature === "number" ? { temperature: input.temperature } : {}),
+      }),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "LLM request failed before receiving a response";
+    console.error("LLM API request failed:", error);
+    await emitDiagnostic(input.onDiagnostic, { type: "chat-error", iteration: input.iteration, message });
+    throw error;
+  }
 
   if (!res.ok) {
     const err = await res.text();
     console.error("LLM API Error:", err);
+    await emitDiagnostic(input.onDiagnostic, { type: "chat-error", iteration: input.iteration, status: res.status, message: err });
     throw new Error(`LLM API returned status: ${res.status}`);
   }
 
   const data = await res.json() as ToolCallResponse;
   const message = data.choices?.[0]?.message;
-  if (!message) throw new Error("LLM returned no chat message");
+  if (!message) {
+    await emitDiagnostic(input.onDiagnostic, { type: "chat-error", iteration: input.iteration, message: "LLM returned no chat message" });
+    throw new Error("LLM returned no chat message");
+  }
+  await emitDiagnostic(input.onDiagnostic, {
+    type: "chat-response",
+    iteration: input.iteration,
+    toolCallNames: (message.tool_calls ?? []).map((toolCall) => toolCall.function?.name).filter((name): name is string => Boolean(name)),
+  });
   return message;
 }
 
@@ -130,6 +176,7 @@ export async function requestOpenAiCompatibleTool(input: {
   toolSchema: unknown;
   toolName: string;
   temperature?: number;
+  onDiagnostic?: ToolDiagnosticRecorder;
 }): Promise<unknown> {
   const message = await requestChatCompletion({
     messages: [
@@ -142,11 +189,33 @@ export async function requestOpenAiCompatibleTool(input: {
       function: { name: input.toolName },
     },
     temperature: input.temperature,
+    onDiagnostic: input.onDiagnostic,
   });
 
   const toolCall = message.tool_calls?.[0];
-  if (!toolCall) throw new Error(`LLM did not return the expected ${input.toolName} tool call`);
-  return parseToolCallArguments(toolCall, input.toolName);
+  if (!toolCall) {
+    await emitDiagnostic(input.onDiagnostic, { type: "chat-error", iteration: 0, message: `LLM did not return the expected ${input.toolName} tool call` });
+    throw new Error(`LLM did not return the expected ${input.toolName} tool call`);
+  }
+  await emitDiagnostic(input.onDiagnostic, {
+    type: "tool-call",
+    iteration: 0,
+    toolName: toolCall.function?.name ?? input.toolName,
+    toolCallId: toolCall.id ?? `${input.toolName}-0`,
+    local: false,
+    final: true,
+  });
+  const args = parseToolCallArguments(toolCall, input.toolName);
+  await emitDiagnostic(input.onDiagnostic, {
+    type: "final-validation",
+    iteration: 0,
+    toolName: input.toolName,
+    valid: true,
+    failedValidationAttempts: 0,
+    maxValidationAttempts: 0,
+    toolResult: { acceptedWithoutLocalValidation: true },
+  });
+  return args;
 }
 
 export async function requestOpenAiCompatibleToolLoop(input: {
@@ -158,6 +227,8 @@ export async function requestOpenAiCompatibleToolLoop(input: {
   validateFinalResult: (args: unknown) => ToolLoopValidationResult;
   temperature?: number;
   maxIterations?: number;
+  maxValidationAttempts?: number;
+  onDiagnostic?: ToolDiagnosticRecorder;
 }): Promise<unknown> {
   const messages: ChatMessage[] = [
     { role: "system", content: input.systemPrompt },
@@ -165,6 +236,8 @@ export async function requestOpenAiCompatibleToolLoop(input: {
   ];
   const localTools = new Map(input.localTools.map((tool) => [tool.name, tool]));
   const maxIterations = input.maxIterations ?? 8;
+  const maxValidationAttempts = input.maxValidationAttempts ?? maxIterations;
+  let failedValidationAttempts = 0;
   let lastValidationMessage = "The LLM did not call a validation tool before the loop ended.";
 
   for (let iteration = 0; iteration < maxIterations; iteration += 1) {
@@ -173,10 +246,13 @@ export async function requestOpenAiCompatibleToolLoop(input: {
       tools: input.tools,
       toolChoice: "auto",
       temperature: input.temperature,
+      iteration,
+      onDiagnostic: input.onDiagnostic,
     });
     const toolCalls = message.tool_calls ?? [];
 
     if (toolCalls.length === 0) {
+      await emitDiagnostic(input.onDiagnostic, { type: "chat-error", iteration, message: `LLM did not call ${input.finalToolName} or a local validation tool` });
       throw new Error(`LLM did not call ${input.finalToolName} or a local validation tool`);
     }
 
@@ -201,12 +277,36 @@ export async function requestOpenAiCompatibleToolLoop(input: {
         continue;
       }
 
+      await emitDiagnostic(input.onDiagnostic, {
+        type: "tool-call",
+        iteration,
+        toolName,
+        toolCallId,
+        local: localTools.has(toolName),
+        final: toolName === input.finalToolName,
+      });
+
       if (toolName === input.finalToolName) {
         const args = parseToolCallArguments(toolCall, input.finalToolName);
         const validation = input.validateFinalResult(args);
+        if (!validation.valid) failedValidationAttempts += 1;
+        await emitDiagnostic(input.onDiagnostic, {
+          type: "final-validation",
+          iteration,
+          toolName,
+          valid: validation.valid,
+          failedValidationAttempts,
+          maxValidationAttempts,
+          message: validation.message,
+          toolResult: validation.toolResult,
+        });
         if (validation.valid) return args;
 
         lastValidationMessage = validation.message ?? "Final tool result did not pass local validation.";
+        if (failedValidationAttempts >= maxValidationAttempts) {
+          await emitDiagnostic(input.onDiagnostic, { type: "loop-exhausted", maxIterations, failedValidationAttempts, maxValidationAttempts, lastValidationMessage });
+          throw new Error(`LLM did not produce validated ${input.finalToolName} output after ${maxValidationAttempts} validation attempt${maxValidationAttempts === 1 ? "" : "s"}. Last validation: ${lastValidationMessage}`);
+        }
         // The loop stops only after the final tool payload passes local validation.
         // A model claim like "this is valid" is not authoritative; the local
         // validator must approve the concrete guitar tab events first.
@@ -232,6 +332,7 @@ export async function requestOpenAiCompatibleToolLoop(input: {
 
       const args = parseToolCallArguments(toolCall, toolName);
       const result = await localTool.execute(args);
+      await emitDiagnostic(input.onDiagnostic, { type: "tool-result", iteration, toolName, toolCallId, result });
       if (typeof result === "object" && result && "valid" in result && (result as { valid?: boolean }).valid === false) {
         lastValidationMessage = JSON.stringify(result);
       }
@@ -246,5 +347,6 @@ export async function requestOpenAiCompatibleToolLoop(input: {
     messages.push(...toolResults);
   }
 
-  throw new Error(`LLM did not produce validated ${input.finalToolName} output after ${maxIterations} iterations. Last validation: ${lastValidationMessage}`);
+  await emitDiagnostic(input.onDiagnostic, { type: "loop-exhausted", maxIterations, failedValidationAttempts, maxValidationAttempts, lastValidationMessage });
+  throw new Error(`LLM did not produce validated ${input.finalToolName} output after ${maxIterations} loop iteration${maxIterations === 1 ? "" : "s"}. Failed final validation attempts: ${failedValidationAttempts}/${maxValidationAttempts}. Last validation: ${lastValidationMessage}`);
 }

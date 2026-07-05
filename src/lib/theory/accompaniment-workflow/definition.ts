@@ -67,6 +67,42 @@ export interface AccompanimentWorkflowOption {
   validationNotes: string[];
 }
 
+export type AccompanimentWorkflowLlmLogStatus = "started" | "success" | "warning" | "failed";
+
+export type AccompanimentWorkflowLlmLogKind =
+  | "chat-request"
+  | "chat-response"
+  | "chat-error"
+  | "tool-call"
+  | "tool-result"
+  | "final-validation"
+  | "loop-exhausted";
+
+export interface AccompanimentWorkflowLlmLogEntry {
+  id: string;
+  createdAt: string;
+  stepId: AccompanimentWorkflowStepId | "consolidated-chord-ingestion";
+  kind: AccompanimentWorkflowLlmLogKind;
+  status: AccompanimentWorkflowLlmLogStatus;
+  message: string;
+  iteration?: number;
+  toolName?: string;
+  toolCallNames?: string[];
+  validationMessage?: string;
+  logPath?: string;
+}
+
+export interface AccompanimentWorkflowRunDiagnostics {
+  logId: string;
+  logPath: string;
+  exposedTools: string[];
+  validationAttempts: number;
+  maxValidationAttempts: number;
+  finalValidationValid?: boolean;
+  finalValidationMessage?: string;
+  llmLogs?: AccompanimentWorkflowLlmLogEntry[];
+}
+
 export interface AccompanimentWorkflowRun {
   id: string;
   createdAt: string;
@@ -75,6 +111,7 @@ export interface AccompanimentWorkflowRun {
   userNote: string;
   options: AccompanimentWorkflowOption[];
   rawResult?: unknown;
+  diagnostics?: AccompanimentWorkflowRunDiagnostics;
 }
 
 export interface AccompanimentWorkflowStepState {
