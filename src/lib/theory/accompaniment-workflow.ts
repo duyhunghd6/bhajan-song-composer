@@ -282,7 +282,7 @@ export function createAccompanimentWorkflowSession(
     version: ACCOMPANIMENT_WORKFLOW_VERSION,
     sourceAbc,
     sourceAbcFingerprint: fingerprintAccompanimentSource(sourceAbc),
-    currentStepId: enabledStepIds[0] ?? "melody-snapshot",
+    currentStepId: enabledStepIds[0] ?? "key-scale-cadence",
     steps: getInitialAccompanimentWorkflowSteps(),
     guitarProfileHint: null,
     pianoProfileHint: null,
@@ -715,6 +715,28 @@ export function normalizeWorkflowOptionDataLineBreaks(
   }, { ...data });
 }
 
+export function getAppliedMusicAbcFromSelections(
+  previousSelections: AccompanimentWorkflowSelectedContext[],
+  fallbackAbc: string
+): string {
+  const validation = previousSelections.find((s) => s.stepId === "voice-leading-validation");
+  const progression = previousSelections.find((s) => s.stepId === "chord-progression");
+
+  const optionString = (selection: AccompanimentWorkflowSelectedContext | undefined, keys: string[]) => {
+    if (!selection) return null;
+    for (const key of keys) {
+      const val = selection.data[key];
+      if (typeof val === "string" && val.trim()) return val.trim();
+    }
+    return null;
+  };
+
+  const appliedAbc = optionString(validation, ["harmonizedAbc", "chordAnnotatedAbc", "abc", "validatedAbc"])
+    ?? optionString(progression, ["harmonizedAbc", "chordAnnotatedAbc", "abc"]);
+
+  return appliedAbc ?? fallbackAbc;
+}
+
 export function buildAccompanimentWorkflowPrompt(input: {
   stepId: AccompanimentWorkflowStepId;
   sourceAbc: string;
@@ -725,7 +747,15 @@ export function buildAccompanimentWorkflowPrompt(input: {
 }): string {
   const step = getAccompanimentWorkflowStep(input.stepId);
   const userNote = input.userNote?.trim();
-  const lyricChordAnnotations = extractLyricChordAnnotations(input.sourceAbc);
+
+  // Resolve the actual source ABC to present to the LLM
+  // If we are past the harmony validation step, we should present the chord-annotated ABC
+  const isBranchStep = step.scope !== "shared";
+  const effectiveSourceAbc = isBranchStep
+    ? getAppliedMusicAbcFromSelections(input.previousSelections, input.sourceAbc)
+    : input.sourceAbc;
+
+  const lyricChordAnnotations = extractLyricChordAnnotations(effectiveSourceAbc);
   const abcDataInstruction = input.stepId === "chord-progression"
     ? "\nStep-specific data requirement: each option.data MUST include harmonizedAbc containing the full source ABC with the proposed chord symbols applied, so the user can immediately hear this progression in Music Staff Playback. Before calling the final generate_chord_progression tool, call the break_measures_line tool with the generated ABCNotation, then copy the returned abc exactly into option.data.harmonizedAbc. The output ABC Melody music body must have the same number of music lines and the same number of measures per line as the Source ABC. If Source ABC has 5 music lines of 4 measures each, harmonizedAbc must do the same."
     : input.stepId === "voice-leading-validation"
@@ -746,7 +776,7 @@ export function buildAccompanimentWorkflowPrompt(input: {
   const midiInstruction = "\n- Any generated Guitar Classic/Classical Guitar ABC must include `%%MIDI program 24` immediately after the Guitar voice declaration.\n- Only an exact `Guitar Left Hand` target may be retargeted to Harmonium/Reed Organ, and it must use `%%MIDI program 20`; do not change `Guitar LH Accompaniment`, `Guitar Right Hand`, or generic Guitar layers.";
   const staffSystemInstruction = "\n- Multi-voice ABC line grouping requirement: when returning ABC with Melody plus Guitar/Piano/etc., preserve the source Melody visual staff systems/sentences. Emit/validate each staff-system group as Melody line N, then lyric/helper rows for that Melody line, then every instrument's line N for the same measure range before moving to Melody line N+1. Do not write all Melody lines first and all accompaniment lines later when the final ABC contains multiple instruments.";
 
-  return `DEFAULT PROMPT — MUSIC ACCOMPANIMENT WORKFLOW STEP ${step.index}\n\nTask: ${step.label}\n${step.description}\n\nTheory reference to follow:\n${step.theoryReference}\n\nOutput focus:\n${step.outputFocus.map((item) => `- ${item}`).join("\n")}\n\nGlobal hard rules:\n- Return between 1 and 5 distinct options.\n- Every option must include a concise label, summary, justification, warnings, and validation notes.\n- Preserve the source melody ABC exactly unless this step explicitly asks for chord annotations.\n- Respect previously selected workflow decisions.\n- If a choice is musically risky, include a warning instead of hiding the risk.\n- Prefer devotional/bhajan-appropriate support unless the user's note asks otherwise.${midiInstruction}${staffSystemInstruction}${abcDataInstruction}${strongBeatInstruction}${guitarTabInstruction}${guitarFingerstyleInstruction}${lyricChordInstruction}\n\nMetadata:\n${formatMetadata(input.metadata)}\n\nWorkflow setup:\n${formatWorkflowSetup(input.setup)}\n\nPreviously selected workflow context:\n${formatPreviousSelections(input.previousSelections)}\n\nLyric chord annotations:\n${formatLyricChordAnnotations(input.sourceAbc)}\n\nSource ABC:\n\`\`\`abc\n${input.sourceAbc}\n\`\`\`\n\nUSER NOTE TO ADD TO PROMPT:\n${userNote || "(none)"}`;
+  return `DEFAULT PROMPT — MUSIC ACCOMPANIMENT WORKFLOW STEP ${step.index}\n\nTask: ${step.label}\n${step.description}\n\nTheory reference to follow:\n${step.theoryReference}\n\nOutput focus:\n${step.outputFocus.map((item) => `- ${item}`).join("\n")}\n\nGlobal hard rules:\n- Return between 1 and 5 distinct options.\n- Every option must include a concise label, summary, justification, warnings, and validation notes.\n- Preserve the source melody ABC exactly unless this step explicitly asks for chord annotations.\n- Respect previously selected workflow decisions.\n- If a choice is musically risky, include a warning instead of hiding the risk.\n- Prefer devotional/bhajan-appropriate support unless the user's note asks otherwise.${midiInstruction}${staffSystemInstruction}${abcDataInstruction}${strongBeatInstruction}${guitarTabInstruction}${guitarFingerstyleInstruction}${lyricChordInstruction}\n\nMetadata:\n${formatMetadata(input.metadata)}\n\nWorkflow setup:\n${formatWorkflowSetup(input.setup)}\n\nPreviously selected workflow context:\n${formatPreviousSelections(input.previousSelections)}\n\nLyric chord annotations:\n${formatLyricChordAnnotations(effectiveSourceAbc)}\n\nSource ABC:\n\`\`\`abc\n${effectiveSourceAbc}\n\`\`\`\n\nUSER NOTE TO ADD TO PROMPT:\n${userNote || "(none)"}`;
 }
 
 export function buildConsolidatedChordIngestionPrompt(input: {

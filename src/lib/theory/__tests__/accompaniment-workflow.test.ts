@@ -96,7 +96,6 @@ function selectOption(
 describe("accompaniment workflow", () => {
   it("defines the instrument-aware human-in-loop order with Guitar Fingerstyle", () => {
     expect(ACCOMPANIMENT_WORKFLOW_STEP_IDS).toEqual([
-      "melody-snapshot",
       "key-scale-cadence",
       "strong-beat-targets",
       "chord-tone-mapping",
@@ -118,7 +117,7 @@ describe("accompaniment workflow", () => {
       "violin-bed-register",
       "violin-expression-validation",
     ]);
-    expect(ACCOMPANIMENT_WORKFLOW_STEPS).toHaveLength(21);
+    expect(ACCOMPANIMENT_WORKFLOW_STEPS).toHaveLength(20);
   });
 
   it("keeps legacy session creation backward-compatible with Guitar + Piano", () => {
@@ -191,8 +190,8 @@ describe("accompaniment workflow", () => {
     };
     const stepIds = getVisibleAccompanimentWorkflowStepsForSetup(setup).map((step) => step.id);
 
-    expect(stepIds.slice(0, 6)).toEqual(Array.from(ACCOMPANIMENT_WORKFLOW_STEP_IDS.slice(0, 6)));
-    expect(stepIds.slice(6)).toEqual([
+    expect(stepIds.slice(0, 5)).toEqual(Array.from(ACCOMPANIMENT_WORKFLOW_STEP_IDS.slice(0, 5)));
+    expect(stepIds.slice(5)).toEqual([
       "violin-bed-register",
       "violin-expression-validation",
       "djembe-groove-interlock",
@@ -213,7 +212,7 @@ describe("accompaniment workflow", () => {
 
     expect(isAccompanimentWorkflowStepEnabled(session, "piano-comping-bass")).toBe(false);
     expect(isAccompanimentWorkflowStepUnlocked(session, "piano-comping-bass")).toBe(false);
-    for (const stepId of session.enabledStepIds.slice(0, 6)) selectOption(session, stepId);
+    for (const stepId of session.enabledStepIds.slice(0, 5)) selectOption(session, stepId);
     expect(getNextUncompletedWorkflowStepId(session)).toBe("guitar-comping-profile");
   });
 
@@ -257,12 +256,11 @@ describe("accompaniment workflow", () => {
   it("locks branch steps until the shared harmonic foundation is selected", () => {
     const session = createAccompanimentWorkflowSession(sampleAbc);
 
-    expect(isAccompanimentWorkflowStepUnlocked(session, "melody-snapshot")).toBe(true);
-    expect(isAccompanimentWorkflowStepUnlocked(session, "key-scale-cadence")).toBe(false);
+    expect(isAccompanimentWorkflowStepUnlocked(session, "key-scale-cadence")).toBe(true);
     expect(isAccompanimentWorkflowStepUnlocked(session, "guitar-comping-profile")).toBe(false);
     expect(isAccompanimentWorkflowStepUnlocked(session, "piano-comping-bass")).toBe(false);
 
-    for (const stepId of ACCOMPANIMENT_WORKFLOW_STEP_IDS.slice(0, 6)) {
+    for (const stepId of ACCOMPANIMENT_WORKFLOW_STEP_IDS.slice(0, 5)) {
       selectOption(session, stepId);
     }
 
@@ -273,7 +271,6 @@ describe("accompaniment workflow", () => {
 
   it("builds prompts with default rules, user notes, strong-beat guidance, and previous selections", () => {
     const session = createAccompanimentWorkflowSession(sampleAbc);
-    selectOption(session, "melody-snapshot");
     selectOption(session, "key-scale-cadence");
 
     const prompt = buildAccompanimentWorkflowPrompt({
@@ -289,7 +286,7 @@ describe("accompaniment workflow", () => {
     expect(prompt).toContain("Return between 1 and 5 distinct options");
     expect(prompt).toContain("beat 1 in 3/4");
     expect(prompt).toContain("Prefer very simple bhajan support.");
-    expect(prompt).toContain("melody-snapshot Choice");
+    expect(prompt).toContain("key-scale-cadence Choice");
     expect(prompt).toContain("Workflow setup");
     expect(prompt).toContain("Accompaniment (combined instruments)");
     expect(prompt).toContain("Guitar Classic");
@@ -310,7 +307,6 @@ describe("accompaniment workflow", () => {
   it("lists every LLM-visible accompaniment workflow tool", () => {
     const toolNames = getAccompanimentWorkflowLlmToolNames();
 
-    expect(toolNames).toContain("generate_melody_snapshot");
     expect(toolNames).toContain("generate_chord_progression");
     expect(toolNames).toContain("generate_piano_fills_pedal_validation");
     expect(toolNames).toContain("generate_harmonium_drone_register");
@@ -462,15 +458,15 @@ describe("accompaniment workflow", () => {
 
   it("builds an ABC comment annotation for the latest applied workflow step", () => {
     const session = createAccompanimentWorkflowSession(sampleAbc);
-    selectOption(session, "melody-snapshot");
     selectOption(session, "key-scale-cadence");
+    selectOption(session, "strong-beat-targets");
 
     const annotation = buildAccompanimentWorkflowAbcAnnotation(session);
 
     expect(annotation).toContain("% --- Human-in-the-loop Accompaniment Workflow Applied ---");
-    expect(annotation).toContain("% ABCNotation applied after Step 2: Key, Scale & Cadence Analysis");
-    expect(annotation).toContain("% Step 1 Melody Snapshot & Metadata: melody-snapshot Choice");
-    expect(annotation).toContain("% Step 2 Key, Scale & Cadence Analysis: key-scale-cadence Choice");
+    expect(annotation).toContain("% ABCNotation applied after Step 2: Strong-beat Target Notes");
+    expect(annotation).toContain("% Step 1 Key, Scale & Cadence Analysis: key-scale-cadence Choice");
+    expect(annotation).toContain("% Step 2 Strong-beat Target Notes: strong-beat-targets Choice");
   });
 
   it("applies selected chord progression ABC as the playable music staff source", () => {
@@ -663,9 +659,9 @@ K:C
 
   it("advances to the next unlocked incomplete step", () => {
     const session = createAccompanimentWorkflowSession(sampleAbc);
-    expect(getNextUncompletedWorkflowStepId(session)).toBe("melody-snapshot");
+    expect(getNextUncompletedWorkflowStepId(session)).toBe("key-scale-cadence");
 
-    for (const stepId of ACCOMPANIMENT_WORKFLOW_STEP_IDS.slice(0, 6)) {
+    for (const stepId of ACCOMPANIMENT_WORKFLOW_STEP_IDS.slice(0, 5)) {
       selectOption(session, stepId);
     }
 
@@ -676,7 +672,7 @@ K:C
     const session = createAccompanimentWorkflowSession(sampleAbc);
     const validatedAbc = `${sampleAbc}\n% shared harmony stays applied`;
 
-    for (const stepId of ACCOMPANIMENT_WORKFLOW_STEP_IDS.slice(0, 6)) {
+    for (const stepId of ACCOMPANIMENT_WORKFLOW_STEP_IDS.slice(0, 5)) {
       selectOption(session, stepId, stepId === "voice-leading-validation" ? { validatedAbc } : { style: "shared" });
     }
     for (const stepId of ACCOMPANIMENT_WORKFLOW_GUITAR_STEP_IDS) {

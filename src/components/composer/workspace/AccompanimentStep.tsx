@@ -91,6 +91,7 @@ export function AccompanimentStep({
 
 
                 <AccompanimentWorkflowWizard
+                  mode="accompaniment"
                   sourceAbc={activeAbc}
                   metadata={{
                     key: pipeline?.harmonization.key ?? "Unknown",

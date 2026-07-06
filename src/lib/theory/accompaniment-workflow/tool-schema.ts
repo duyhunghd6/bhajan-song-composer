@@ -107,7 +107,7 @@ function buildWorkflowOptionDataProperty(stepId?: AccompanimentWorkflowStepId) {
     return buildGuitarFingerstyleDataProperty();
   }
 
-  if (isGuitarTabValidationWorkflowStep(stepId ?? "melody-snapshot")) {
+  if (isGuitarTabValidationWorkflowStep(stepId ?? "key-scale-cadence")) {
     return {
       type: "object",
       description: "Step-specific structured decision data. Must include guitarTab.events and those events must pass the valid_guitar_tab tool before final output.",

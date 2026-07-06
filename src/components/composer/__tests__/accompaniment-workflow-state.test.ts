@@ -13,7 +13,7 @@ function makeRun(id: string, optionIds: string[]): AccompanimentWorkflowRun {
   return {
     id,
     createdAt: "2026-07-06T00:00:00.000Z",
-    stepId: "melody-snapshot",
+    stepId: "key-scale-cadence",
     requestPrompt: "test prompt",
     userNote: "",
     options: optionIds.map((optionId) => ({
@@ -35,13 +35,13 @@ describe("accompaniment workflow wizard state", () => {
     const secondRun = makeRun("run-2", ["option-c", "option-d"]);
 
     const generated = mergeRun(session, firstRun, "first prompt");
-    const selected = selectOption(generated, "melody-snapshot", firstRun.options[1], "first prompt", firstRun.id);
+    const selected = selectOption(generated, "key-scale-cadence", firstRun.options[1], "first prompt", firstRun.id);
     const regenerated = mergeRun(selected, secondRun, "second prompt");
 
-    expect(regenerated.steps["melody-snapshot"].runs).toHaveLength(2);
-    expect(regenerated.steps["melody-snapshot"].runs[0].options.map((option) => option.id)).toEqual(["option-a", "option-b"]);
-    expect(regenerated.steps["melody-snapshot"].runs[1].options.map((option) => option.id)).toEqual(["option-c", "option-d"]);
-    expect(regenerated.steps["melody-snapshot"].activeRunId).toBe("run-1");
-    expect(regenerated.steps["melody-snapshot"].selectedOptionId).toBe("option-b");
+    expect(regenerated.steps["key-scale-cadence"].runs).toHaveLength(2);
+    expect(regenerated.steps["key-scale-cadence"].runs[0].options.map((option) => option.id)).toEqual(["option-a", "option-b"]);
+    expect(regenerated.steps["key-scale-cadence"].runs[1].options.map((option) => option.id)).toEqual(["option-c", "option-d"]);
+    expect(regenerated.steps["key-scale-cadence"].activeRunId).toBe("run-1");
+    expect(regenerated.steps["key-scale-cadence"].selectedOptionId).toBe("option-b");
   });
 });

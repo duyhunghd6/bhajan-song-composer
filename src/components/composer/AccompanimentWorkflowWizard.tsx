@@ -47,14 +47,15 @@ import WorkflowSetupPanel from "./accompaniment-workflow/WorkflowSetupPanel";
 type BranchScope = Exclude<AccompanimentWorkflowScope, "shared">;
 
 interface AccompanimentWorkflowWizardProps {
+  mode?: "harmony" | "accompaniment";
   sourceAbc: string;
   metadata: AccompanimentWorkflowMetadata;
   workflow: AccompanimentWorkflowSession | null;
   workflowSetup: AccompanimentWorkflowSetup | null;
   onWorkflowChange: (workflow: AccompanimentWorkflowSession | null) => void;
   onWorkflowSetupChange: (setup: AccompanimentWorkflowSetup) => void;
-  onGuitarProfileSelected: (profile: string | null) => void;
-  onPianoProfileSelected: (profile: string | null) => void;
+  onGuitarProfileSelected?: (profile: string | null) => void;
+  onPianoProfileSelected?: (profile: string | null) => void;
 }
 
 const BRANCH_LABELS: Record<BranchScope, string> = {
@@ -145,6 +146,7 @@ function enabledBranchScopes(session: AccompanimentWorkflowSession): BranchScope
 }
 
 export default function AccompanimentWorkflowWizard({
+  mode = "accompaniment",
   sourceAbc,
   metadata,
   workflow,
@@ -168,13 +170,25 @@ export default function AccompanimentWorkflowWizard({
       : getVisibleAccompanimentWorkflowStepsForSetup(editableSetup),
     [session, editableSetup]
   );
-  const [activeStepId, setActiveStepId] = useState<AccompanimentWorkflowStepId>(session?.currentStepId ?? visibleSteps[0]?.id ?? "melody-snapshot");
+  const filteredSteps = useMemo(() => {
+    if (mode === "harmony") {
+      return visibleSteps.filter((s) => s.scope === "shared");
+    } else {
+      return visibleSteps.filter((s) => s.scope !== "shared");
+    }
+  }, [visibleSteps, mode]);
+
+  const [activeStepId, setActiveStepId] = useState<AccompanimentWorkflowStepId>(
+    session && filteredSteps.some((s) => s.id === session.currentStepId)
+      ? session.currentStepId
+      : filteredSteps[0]?.id ?? "key-scale-cadence"
+  );
   const [userNotes, setUserNotes] = useState<Partial<Record<AccompanimentWorkflowStepId, string>>>({});
   const [savedNoteStepId, setSavedNoteStepId] = useState<AccompanimentWorkflowStepId | null>(null);
   const [generatingStepId, setGeneratingStepId] = useState<AccompanimentWorkflowStepId | null>(null);
   const [liveLlmLogs, setLiveLlmLogs] = useState<AccompanimentWorkflowLlmLogEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const activeStep = visibleSteps.find((step) => step.id === activeStepId) ?? visibleSteps[0];
+  const activeStep = filteredSteps.find((step) => step.id === activeStepId) ?? filteredSteps[0];
   const activeStepState = activeStep && session ? session.steps[activeStep.id] ?? emptyStepState() : emptyStepState();
   const activeUserNote = activeStep ? userNotes[activeStep.id] ?? activeStepState.promptNote : "";
   const lyricChordAnnotations = useMemo(() => extractLyricChordAnnotations(sourceAbc), [sourceAbc]);
@@ -190,15 +204,18 @@ export default function AccompanimentWorkflowWizard({
 
   useEffect(() => {
     if (!session?.currentStepId) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- active wizard step must hydrate from the persisted workflow session after localStorage restore.
-    setActiveStepId((current) => current === session.currentStepId ? current : session.currentStepId);
-  }, [session?.currentStepId]);
+    if (filteredSteps.some((s) => s.id === session.currentStepId)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setActiveStepId((current) => current === session.currentStepId ? current : session.currentStepId);
+    }
+  }, [session?.currentStepId, filteredSteps]);
 
   useEffect(() => {
-    if (visibleSteps.some((step) => step.id === activeStepId)) return;
-    const fallback = visibleSteps[0]?.id;
+    if (filteredSteps.some((step) => step.id === activeStepId)) return;
+    const fallback = filteredSteps[0]?.id;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (fallback) setActiveStepId(fallback);
-  }, [activeStepId, visibleSteps]);
+  }, [activeStepId, filteredSteps]);
 
   const beginWorkflow = (setup: AccompanimentWorkflowSetup = editableSetup) => {
     const normalizedSetup = normalizeAccompanimentWorkflowSetup(setup);
@@ -206,8 +223,8 @@ export default function AccompanimentWorkflowWizard({
     onWorkflowSetupChange(normalizedSetup);
     onWorkflowChange(next);
     setActiveStepId(next.currentStepId);
-    onGuitarProfileSelected(null);
-    onPianoProfileSelected(null);
+    onGuitarProfileSelected?.(null);
+    onPianoProfileSelected?.(null);
     setUserNotes({});
     setSavedNoteStepId(null);
     setGeneratingStepId(null);
@@ -289,8 +306,8 @@ export default function AccompanimentWorkflowWizard({
   };
 
   const clearProfilesForScope = (scope: BranchScope) => {
-    if (scope === "guitar") onGuitarProfileSelected(null);
-    if (scope === "piano") onPianoProfileSelected(null);
+    if (scope === "guitar") onGuitarProfileSelected?.(null);
+    if (scope === "piano") onPianoProfileSelected?.(null);
   };
 
   const handleSkipBranch = (scope: BranchScope) => {
@@ -320,22 +337,28 @@ export default function AccompanimentWorkflowWizard({
     if (!session || !activeStep) return;
     const next = selectOption(session, activeStep.id, option, activeUserNote, runId);
     onWorkflowChange(next);
-    if (activeStep.id === "guitar-fingerstyle") onGuitarProfileSelected(extractProfile(option));
-    if (activeStep.id === "piano-fills-pedal-validation") onPianoProfileSelected(extractProfile(option));
+    if (activeStep.id === "guitar-fingerstyle") onGuitarProfileSelected?.(extractProfile(option));
+    if (activeStep.id === "piano-fills-pedal-validation") onPianoProfileSelected?.(extractProfile(option));
   };
 
   if (!session) {
     return (
       <div className="space-y-4 rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950/50">
-        <WorkflowSetupPanel
-          setup={editableSetup}
-          disabled={Boolean(generatingStepId)}
-          onSetupChange={handleSetupChange}
-        />
+        {mode === "accompaniment" && (
+          <WorkflowSetupPanel
+            setup={editableSetup}
+            disabled={Boolean(generatingStepId)}
+            onSetupChange={handleSetupChange}
+          />
+        )}
         <div>
-          <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">Step-by-step AI Accompaniment Workflow</h3>
+          <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 font-sans">
+            {mode === "harmony" ? "Step-by-step AI Harmony Workflow" : "Step-by-step AI Accompaniment Workflow"}
+          </h3>
           <p className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
-            {visibleSteps.length} planned review points will be created from the selected style and instruments. Change the setup above to preview the exact workflow before starting.
+            {mode === "harmony"
+              ? `${filteredSteps.length} planned review points for the shared harmonic foundation. Configure your instruments above before starting.`
+              : `${filteredSteps.length} planned review points will be created from the selected style and instruments. Change the setup above to preview the exact workflow before starting.`}
           </p>
           {workflow && !sourceCurrent && (
             <p className="mt-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900/70 dark:bg-amber-950/40 dark:text-amber-300">
@@ -344,7 +367,7 @@ export default function AccompanimentWorkflowWizard({
           )}
         </div>
         <WorkflowStepGrid
-          steps={visibleSteps}
+          steps={filteredSteps}
           session={null}
           activeStepId={activeStep?.id ?? activeStepId}
           onStepClick={setActiveStepId}
@@ -366,7 +389,11 @@ export default function AccompanimentWorkflowWizard({
           </section>
         )}
         <button type="button" onClick={() => beginWorkflow()} className="rounded-xl bg-amber-500 px-4 py-2 text-xs font-bold text-white transition hover:bg-amber-600">
-          {workflow && !sourceCurrent ? "Reset Workflow for Current ABC" : `Start ${visibleSteps.length}-step ${editableSetup.style === "solo-fingerstyle" ? "Solo/Fingerstyle" : "Accompaniment"} Workflow`}
+          {workflow && !sourceCurrent 
+            ? "Reset Workflow for Current ABC" 
+            : mode === "harmony"
+              ? `Start ${filteredSteps.length}-step Harmony Workflow`
+              : `Start ${filteredSteps.length}-step ${editableSetup.style === "solo-fingerstyle" ? "Solo/Fingerstyle" : "Accompaniment"} Workflow`}
         </button>
       </div>
     );
@@ -385,19 +412,25 @@ export default function AccompanimentWorkflowWizard({
 
   return (
     <div className="space-y-4 rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950/50">
-      <WorkflowSetupPanel
-        setup={editableSetup}
-        sessionSetup={session.setup}
-        disabled={Boolean(generatingStepId)}
-        onSetupChange={handleSetupChange}
-        onResetWithSetup={() => beginWorkflow(editableSetup)}
-      />
+      {mode === "accompaniment" && (
+        <WorkflowSetupPanel
+          setup={editableSetup}
+          sessionSetup={session.setup}
+          disabled={Boolean(generatingStepId)}
+          onSetupChange={handleSetupChange}
+          onResetWithSetup={() => beginWorkflow(editableSetup)}
+        />
+      )}
 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">Step-by-step AI Accompaniment Workflow</h3>
+          <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 font-sans">
+            {mode === "harmony" ? "Step-by-step AI Harmony Workflow" : "Step-by-step AI Accompaniment Workflow"}
+          </h3>
           <p className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
-            {visibleSteps.length} review points: shared harmonic foundation first, then enabled instrument branches.
+            {mode === "harmony"
+              ? `${filteredSteps.length} shared harmonic foundation steps.`
+              : `${filteredSteps.length} review points: shared harmonic foundation first, then enabled instrument branches.`}
           </p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
@@ -418,7 +451,7 @@ export default function AccompanimentWorkflowWizard({
       </div>
 
       <WorkflowStepGrid
-        steps={visibleSteps}
+        steps={filteredSteps}
         session={session}
         activeStepId={activeStepId}
         onStepClick={setActiveStepId}

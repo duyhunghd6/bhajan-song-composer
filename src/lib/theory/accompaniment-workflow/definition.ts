@@ -1,7 +1,6 @@
 export const ACCOMPANIMENT_WORKFLOW_VERSION = 2;
 
 export const ACCOMPANIMENT_WORKFLOW_SHARED_STEP_IDS = [
-  "melody-snapshot",
   "key-scale-cadence",
   "strong-beat-targets",
   "chord-tone-mapping",
@@ -223,30 +222,19 @@ const SHARED_DEPENDENCIES = [...ACCOMPANIMENT_WORKFLOW_SHARED_STEP_IDS] as const
 
 export const ACCOMPANIMENT_WORKFLOW_STEPS: AccompanimentWorkflowStepDefinition[] = [
   {
-    id: "melody-snapshot",
-    index: 1,
-    label: "Melody Snapshot & Metadata",
-    shortLabel: "Melody",
-    scope: "shared",
-    description: "Confirm the immutable source ABC, key/meter metadata, mood, and melody-preservation constraints.",
-    dependencies: [],
-    outputFocus: ["confirmed source ABC summary", "key and meter assumptions", "melody preservation risks"],
-    theoryReference: "THEORY.md §6.4 Step 1 and §6.2 validation rules.",
-  },
-  {
     id: "key-scale-cadence",
-    index: 2,
+    index: 1,
     label: "Key, Scale & Cadence Analysis",
     shortLabel: "Key/Cadence",
     scope: "shared",
     description: "Analyze K: header, pitch content, scale/raga context, phrase endings, and cadence targets.",
-    dependencies: ["melody-snapshot"],
+    dependencies: [],
     outputFocus: ["detected key/scale", "cadence measures", "phrase boundary notes"],
     theoryReference: "THEORY.md §1, §3, §5, and ARRANGEMENT02-PIANO.md §1.1 cadence parsing.",
   },
   {
     id: "strong-beat-targets",
-    index: 3,
+    index: 2,
     label: "Strong-beat Target Notes",
     shortLabel: "Strong Beats",
     scope: "shared",
@@ -257,7 +245,7 @@ export const ACCOMPANIMENT_WORKFLOW_STEPS: AccompanimentWorkflowStepDefinition[]
   },
   {
     id: "chord-tone-mapping",
-    index: 4,
+    index: 3,
     label: "Chord-tone Role Mapping",
     shortLabel: "Chord Roles",
     scope: "shared",
@@ -268,7 +256,7 @@ export const ACCOMPANIMENT_WORKFLOW_STEPS: AccompanimentWorkflowStepDefinition[]
   },
   {
     id: "chord-progression",
-    index: 5,
+    index: 4,
     label: "Chord Progression Selection",
     shortLabel: "Progression",
     scope: "shared",
@@ -279,7 +267,7 @@ export const ACCOMPANIMENT_WORKFLOW_STEPS: AccompanimentWorkflowStepDefinition[]
   },
   {
     id: "voice-leading-validation",
-    index: 6,
+    index: 5,
     label: "Voice-leading & Harmonized ABC Validation",
     shortLabel: "Validate Harmony",
     scope: "shared",
@@ -290,7 +278,7 @@ export const ACCOMPANIMENT_WORKFLOW_STEPS: AccompanimentWorkflowStepDefinition[]
   },
   {
     id: "guitar-comping-profile",
-    index: 7,
+    index: 6,
     label: "Guitar Comping Profile",
     shortLabel: "Guitar Profile",
     scope: "guitar",
@@ -301,7 +289,7 @@ export const ACCOMPANIMENT_WORKFLOW_STEPS: AccompanimentWorkflowStepDefinition[]
   },
   {
     id: "guitar-voicing-bass",
-    index: 8,
+    index: 7,
     label: "Guitar Voicing & Bass Plan",
     shortLabel: "Guitar Voicing",
     scope: "guitar",
@@ -312,7 +300,7 @@ export const ACCOMPANIMENT_WORKFLOW_STEPS: AccompanimentWorkflowStepDefinition[]
   },
   {
     id: "guitar-fills-validation",
-    index: 9,
+    index: 8,
     label: "Guitar Fills / Intro / Interlude / Outro / Validation",
     shortLabel: "Guitar Polish",
     scope: "guitar",
@@ -323,7 +311,7 @@ export const ACCOMPANIMENT_WORKFLOW_STEPS: AccompanimentWorkflowStepDefinition[]
   },
   {
     id: "guitar-fingerstyle",
-    index: 10,
+    index: 9,
     label: "Guitar Fingerstyle",
     shortLabel: "Guitar Fingerstyle",
     scope: "guitar",
@@ -334,7 +322,7 @@ export const ACCOMPANIMENT_WORKFLOW_STEPS: AccompanimentWorkflowStepDefinition[]
   },
   {
     id: "piano-comping-bass",
-    index: 11,
+    index: 10,
     label: "Piano Comping + LH Bass Anchoring",
     shortLabel: "Piano Bass",
     scope: "piano",
@@ -345,7 +333,7 @@ export const ACCOMPANIMENT_WORKFLOW_STEPS: AccompanimentWorkflowStepDefinition[]
   },
   {
     id: "piano-rh-voicing",
-    index: 12,
+    index: 11,
     label: "Piano RH Voicing + Voice-leading",
     shortLabel: "Piano RH",
     scope: "piano",
@@ -356,7 +344,7 @@ export const ACCOMPANIMENT_WORKFLOW_STEPS: AccompanimentWorkflowStepDefinition[]
   },
   {
     id: "piano-fills-pedal-validation",
-    index: 13,
+    index: 12,
     label: "Piano Fills / Pedal / Validation",
     shortLabel: "Piano Polish",
     scope: "piano",
@@ -367,7 +355,7 @@ export const ACCOMPANIMENT_WORKFLOW_STEPS: AccompanimentWorkflowStepDefinition[]
   },
   {
     id: "harmonium-drone-register",
-    index: 14,
+    index: 13,
     label: "Harmonium Drone & Register Plan",
     shortLabel: "Harmonium Drone",
     scope: "harmonium",
@@ -378,7 +366,7 @@ export const ACCOMPANIMENT_WORKFLOW_STEPS: AccompanimentWorkflowStepDefinition[]
   },
   {
     id: "harmonium-chord-voicing-validation",
-    index: 15,
+    index: 14,
     label: "Harmonium Chord Voicing & Validation",
     shortLabel: "Harmonium Voice",
     scope: "harmonium",
@@ -389,7 +377,7 @@ export const ACCOMPANIMENT_WORKFLOW_STEPS: AccompanimentWorkflowStepDefinition[]
   },
   {
     id: "djembe-groove-interlock",
-    index: 16,
+    index: 15,
     label: "Djembe Groove Interlock",
     shortLabel: "Djembe Groove",
     scope: "djembe",
@@ -400,7 +388,7 @@ export const ACCOMPANIMENT_WORKFLOW_STEPS: AccompanimentWorkflowStepDefinition[]
   },
   {
     id: "djembe-fill-validation",
-    index: 17,
+    index: 16,
     label: "Djembe Fill & Transient Validation",
     shortLabel: "Djembe Fills",
     scope: "djembe",
@@ -411,7 +399,7 @@ export const ACCOMPANIMENT_WORKFLOW_STEPS: AccompanimentWorkflowStepDefinition[]
   },
   {
     id: "flute-yield-register",
-    index: 18,
+    index: 17,
     label: "Flute Yield & Register Plan",
     shortLabel: "Flute Register",
     scope: "flute",
@@ -422,7 +410,7 @@ export const ACCOMPANIMENT_WORKFLOW_STEPS: AccompanimentWorkflowStepDefinition[]
   },
   {
     id: "flute-breath-fill-validation",
-    index: 19,
+    index: 18,
     label: "Flute Breath, Fill & Validation",
     shortLabel: "Flute Fills",
     scope: "flute",
@@ -433,7 +421,7 @@ export const ACCOMPANIMENT_WORKFLOW_STEPS: AccompanimentWorkflowStepDefinition[]
   },
   {
     id: "violin-bed-register",
-    index: 20,
+    index: 19,
     label: "Violin Bed & Register Plan",
     shortLabel: "Violin Bed",
     scope: "violin",
@@ -444,7 +432,7 @@ export const ACCOMPANIMENT_WORKFLOW_STEPS: AccompanimentWorkflowStepDefinition[]
   },
   {
     id: "violin-expression-validation",
-    index: 21,
+    index: 20,
     label: "Violin Expression & Validation",
     shortLabel: "Violin Polish",
     scope: "violin",
