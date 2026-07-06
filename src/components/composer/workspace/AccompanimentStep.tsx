@@ -1,4 +1,4 @@
-import { useEffect, type Dispatch, type SetStateAction } from "react";
+import { type Dispatch, type SetStateAction } from "react";
 import AbcjsPlaybackController from "@/components/music-sheet/AbcjsPlaybackController";
 import type { ArrangementPipelineResult } from "@/lib/theory/arrangement-pipeline";
 import { generatePianoAccompaniment } from "@/lib/theory/piano-accompaniment";
@@ -60,14 +60,7 @@ export function AccompanimentStep({
     const hasGeneratedAccompanimentLayer = Boolean(ws.generatedAccompaniment || ws.generatedGuitar || ws.generatedPiano);
     const hasLayerVisibilityControls = strongBeatsStepComplete || hasGeneratedAccompanimentLayer;
 
-    useEffect(() => {
-      if (strongBeatsStepComplete || accompLayerVisibility["__strong_beats__"] !== true) return;
 
-      setAccompLayerVisibility((prev) => ({
-        ...prev,
-        __strong_beats__: false,
-      }));
-    }, [accompLayerVisibility, setAccompLayerVisibility, strongBeatsStepComplete]);
 
     return (
       <div className="space-y-6">
@@ -83,7 +76,7 @@ export function AccompanimentStep({
                         type="button"
                         onClick={() => {
                           setMelodyAbc(initialMelodyAbc);
-                          updateState({ aiSuggestions: [], selectedCandidateId: null, acceptedHarmony: null, aiAccompanimentSuggestions: [], selectedAccompanimentIndex: null, pianoAccompanimentData: null, guitarAccompanimentData: null, generatedAccompaniment: null, aiGuitarSuggestions: [], aiPianoSuggestions: [], selectedGuitarIndex: null, selectedPianoIndex: null, generatedGuitar: null, generatedPiano: null, accompanimentWorkflow: null });
+                          updateState({ aiSuggestions: [], selectedCandidateId: null, acceptedHarmony: null, aiAccompanimentSuggestions: [], selectedAccompanimentIndex: null, pianoAccompanimentData: null, guitarAccompanimentData: null, generatedAccompaniment: null, aiGuitarSuggestions: [], aiPianoSuggestions: [], selectedGuitarIndex: null, selectedPianoIndex: null, generatedGuitar: null, generatedPiano: null, accompanimentWorkflowSetup: null, accompanimentWorkflow: null });
                           setAccompLayerVisibility({});
                         }}
                         title="Restore Original Melody"
@@ -105,7 +98,9 @@ export function AccompanimentStep({
                     timeSignature: pipeline?.harmonization.timeSignature ?? "4/4",
                   }}
                   workflow={ws.accompanimentWorkflow}
+                  workflowSetup={ws.accompanimentWorkflowSetup}
                   onWorkflowChange={(accompanimentWorkflow) => updateState({ accompanimentWorkflow })}
+                  onWorkflowSetupChange={(accompanimentWorkflowSetup) => updateState({ accompanimentWorkflowSetup })}
                   onGuitarProfileSelected={(profile) => {
                     if (profile === null) {
                       updateState({
@@ -126,6 +121,7 @@ export function AccompanimentStep({
                       : "strict-pima";
                     const integration = buildFingerstyleComposerIntegration(workflowAppliedMusicAbc, undefined, { pickingProfile });
                     updateState({ generatedGuitar: integration.composerLayer.abc, guitarAccompanimentData: integration });
+                    setAccompLayerVisibility((prev) => ({ ...prev, __guitar_tab__: true }));
                   }}
                   onPianoProfileSelected={(profile) => {
                     if (profile === null) {
@@ -177,10 +173,10 @@ export function AccompanimentStep({
                       <input
                         type="checkbox"
                         className="rounded border-zinc-300 text-amber-500 focus:ring-amber-500"
-                        checked={accompLayerVisibility['__chords__'] !== false}
+                        checked={accompLayerVisibility['__chords__'] === true}
                         onChange={() => setAccompLayerVisibility(prev => ({
                           ...prev,
-                          ['__chords__']: !(prev['__chords__'] !== false)
+                          ['__chords__']: !(prev['__chords__'] === true)
                         }))}
                       />
                       🎶 Original Chords
@@ -191,10 +187,10 @@ export function AccompanimentStep({
                         <input
                           type="checkbox"
                           className="rounded border-zinc-300 text-amber-500 focus:ring-amber-500"
-                          checked={accompLayerVisibility['__strong_beats__'] === true}
+                          checked={accompLayerVisibility['__strong_beats__'] !== false}
                           onChange={() => setAccompLayerVisibility(prev => ({
                             ...prev,
-                            ['__strong_beats__']: !(prev['__strong_beats__'] === true)
+                            ['__strong_beats__']: !(prev['__strong_beats__'] !== false)
                           }))}
                         />
                         ⬤ Strong Beats
@@ -222,7 +218,11 @@ export function AccompanimentStep({
                         .replace(/([A-Z])/g, ' $1')
                         .replace(/^\s/, '')
                         .replace('Piano', '🎹 Piano')
-                        .replace('Guitar', '🎸 Guitar');
+                        .replace('Guitar', '🎸 Guitar')
+                        .replace('Harmonium', '🪗 Harmonium')
+                        .replace('Djembe', '🪘 Djembe')
+                        .replace('Flute', '🪈 Flute')
+                        .replace('Violin', '🎻 Violin');
                       return (
                         <label key={voiceName} className="flex items-center gap-2 text-xs font-semibold text-zinc-800 dark:text-zinc-200 cursor-pointer">
                           <input

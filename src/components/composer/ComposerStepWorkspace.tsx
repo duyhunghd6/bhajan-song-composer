@@ -6,6 +6,7 @@ import AbcjsPlaybackController from "@/components/music-sheet/AbcjsPlaybackContr
 import PianoPedalIndicator from "@/components/instruments/PianoPedalIndicator";
 import { generateArrangementPipeline } from "@/lib/theory/arrangement-pipeline";
 import { buildAccompanimentAbc, getAccompanimentVoiceNames } from "@/lib/theory/accompaniment-abc";
+import { generateAccompanimentSupportLayers } from "@/lib/theory/accompaniment-workflow/support-layers";
 import {
   buildAccompanimentWorkflowAbcAnnotation,
   getLatestSelectedWorkflowStep,
@@ -47,7 +48,12 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
   const [isHarmonizing, setIsHarmonizing] = useState(false);
   const { state: ws, updateState } = useWorkspaceState(slug);
   const [layerVisibility, setLayerVisibility] = useState({ melody: true, harmony: true });
-  const [accompLayerVisibility, setAccompLayerVisibility] = useState<Record<string, boolean>>({});
+  const [accompLayerVisibility, setAccompLayerVisibility] = useState<Record<string, boolean>>({
+    __melody__: true,
+    __strong_beats__: true,
+    __chords__: false,
+    __guitar_tab__: false,
+  });
   const [ensembleInputLayers, setEnsembleInputLayers] = useState<Record<string, boolean>>({
     __melody__: true,
     Guitar: true,
@@ -124,15 +130,25 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
     const option = activeWorkflow ? getSelectedWorkflowOption(activeWorkflow, "strong-beat-targets") : null;
     return (option?.data?.strongBeatDirectives as StrongBeatDirective[]) ?? undefined;
   }, [activeWorkflow]);
+  const accompanimentSupportLayers = useMemo(() => generateAccompanimentSupportLayers(workflowAppliedMusicAbc, {
+    accompaniment: workflowAppliedPipeline?.accompaniment ?? null,
+    workflow: activeWorkflow,
+  }), [activeWorkflow, workflowAppliedMusicAbc, workflowAppliedPipeline]);
+  const accompanimentSupportSources = useMemo(() => [
+    accompanimentSupportLayers.djembe,
+    accompanimentSupportLayers.flute,
+    accompanimentSupportLayers.violin,
+  ], [accompanimentSupportLayers]);
 
   const accompanimentBuild = useMemo(() => buildAccompanimentAbc({
     baseAbc: workflowAppliedMusicAbc,
     generatedAccompaniment: ws.generatedAccompaniment,
     generatedGuitar: ws.generatedGuitar,
     generatedPiano: ws.generatedPiano,
+    extraVoiceSources: accompanimentSupportSources,
     layerVisibility: effectiveAccompLayerVisibility,
     strongBeatDirectives,
-  }), [ws.generatedAccompaniment, ws.generatedGuitar, ws.generatedPiano, workflowAppliedMusicAbc, effectiveAccompLayerVisibility, strongBeatDirectives]);
+  }), [ws.generatedAccompaniment, ws.generatedGuitar, ws.generatedPiano, accompanimentSupportSources, workflowAppliedMusicAbc, effectiveAccompLayerVisibility, strongBeatDirectives]);
 
   const ensembleInputLayerVisibility = useMemo(() => ({
     __melody__: ensembleInputLayers.__melody__ !== false,
@@ -191,8 +207,8 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
     .join("\n\n");
 
   const accompanimentVoiceNames = useMemo(
-    () => getAccompanimentVoiceNames(ws.generatedAccompaniment, ws.generatedGuitar, ws.generatedPiano),
-    [ws.generatedAccompaniment, ws.generatedGuitar, ws.generatedPiano]
+    () => getAccompanimentVoiceNames(ws.generatedAccompaniment, ws.generatedGuitar, ws.generatedPiano, accompanimentSupportSources),
+    [ws.generatedAccompaniment, ws.generatedGuitar, ws.generatedPiano, accompanimentSupportSources]
   );
   const ensembleVoiceNames = useMemo(
     () => getAccompanimentVoiceNames(ws.generatedAccompaniment, ws.generatedGuitar, ws.generatedPiano, appliedEnsembleSources),
@@ -250,11 +266,9 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
           },
         ],
       };
-      console.log("[DEBUG] getRenderOptionsFor returns:", JSON.stringify(result));
       return result;
     }
 
-    console.log("[DEBUG] getRenderOptionsFor fallback. guitarIndex:", guitarIndex);
     return baseOptions;
   }, [guitarTabEnabled]);
 
