@@ -14,7 +14,6 @@ import {
 
 interface HarmonyStepProps {
   melodyAbc: string;
-  setMelodyAbc: Dispatch<SetStateAction<string>>;
   initialMelodyAbc?: string;
   hasMounted: boolean;
   pipeline: ArrangementPipelineResult | null;
@@ -24,11 +23,11 @@ interface HarmonyStepProps {
   setLayerVisibility: Dispatch<SetStateAction<{ melody: boolean; harmony: boolean }>>;
   ws: WorkspaceState;
   updateState: (updates: Partial<WorkspaceState>) => void;
+  onRestore: () => void;
 }
 
 export function HarmonyStep({
   melodyAbc,
-  setMelodyAbc,
   initialMelodyAbc,
   hasMounted,
   pipeline,
@@ -38,6 +37,7 @@ export function HarmonyStep({
   setLayerVisibility,
   ws,
   updateState,
+  onRestore,
 }: HarmonyStepProps) {
   const harmonySynthOptions: { voicesOff?: boolean; chordsOff?: boolean } = {};
   if (!layerVisibility.melody) {
@@ -63,21 +63,12 @@ export function HarmonyStep({
                   {hasMounted && initialMelodyAbc && melodyAbc !== initialMelodyAbc && (
                     <button
                       type="button"
-                      onClick={() => {
-                        setMelodyAbc(initialMelodyAbc);
-                        updateState({
-                          accompanimentWorkflowSetup: null,
-                          accompanimentWorkflow: null,
-                          ensembleWorkflow: null,
-                          stagedEnsembleLayers: null,
-                          appliedEnsembleLayers: null,
-                        });
-                      }}
-                      title="Restore Original Melody"
+                      onClick={onRestore}
+                      title="Reset Original Melody"
                       className="inline-flex items-center gap-1 rounded-lg border border-rose-400/30 bg-rose-500/10 px-2.5 py-1.5 text-xs font-bold text-rose-600 transition hover:bg-rose-500/20 dark:text-rose-400"
                     >
                       <span className="text-sm">↺</span>
-                      <span className="hidden sm:inline font-sans">Restore Original Melody</span>
+                      <span className="hidden sm:inline font-sans">Reset Original Melody</span>
                     </button>
                   )}
                 </div>
@@ -95,6 +86,7 @@ export function HarmonyStep({
                 workflowSetup={ws.accompanimentWorkflowSetup}
                 onWorkflowChange={(accompanimentWorkflow) => updateState({ accompanimentWorkflow })}
                 onWorkflowSetupChange={(accompanimentWorkflowSetup) => updateState({ accompanimentWorkflowSetup })}
+                onReset={onRestore}
               />
             </section>
           </>

@@ -8,6 +8,7 @@ import type { AccompanimentWorkflowSession, AccompanimentWorkflowSetup } from "@
 import type { EnsembleWorkflowSession } from "@/lib/theory/ensemble-workflow";
 import type { EnsembleExpansionValidation } from "@/lib/theory/ensemble-output-contract";
 import type { EnsembleConflictReportEntry } from "@/lib/theory/ensemble-conflicts";
+import { getComposerWorkspaceStorageKey } from "./workspace/storage";
 
 export interface EnsembleLayerAbcBundle {
   djembe: string | null;
@@ -44,7 +45,7 @@ export interface WorkspaceState {
   appliedEnsembleLayers: EnsembleLayerAbcBundle | null;
 }
 
-const DEFAULT_STATE: WorkspaceState = {
+export const DEFAULT_WORKSPACE_STATE: WorkspaceState = {
   aiSuggestions: [],
   selectedCandidateId: null,
   acceptedHarmony: null,
@@ -68,9 +69,9 @@ const DEFAULT_STATE: WorkspaceState = {
 };
 
 export function useWorkspaceState(slug: string) {
-  const storageKey = `bhajan-song-composer:compose:${slug}:workspace`;
+  const storageKey = getComposerWorkspaceStorageKey(slug);
 
-  const [state, setState] = useState<WorkspaceState>(DEFAULT_STATE);
+  const [state, setState] = useState<WorkspaceState>(DEFAULT_WORKSPACE_STATE);
   const [isHydrated, setIsHydrated] = useState(false);
 
   // Load from local storage on mount
@@ -81,7 +82,7 @@ export function useWorkspaceState(slug: string) {
         const parsed = JSON.parse(saved);
         // eslint-disable-next-line react-hooks/set-state-in-effect -- workspace state must hydrate from localStorage after mount to avoid SSR/localStorage mismatches.
         setState({
-          ...DEFAULT_STATE,
+          ...DEFAULT_WORKSPACE_STATE,
           ...parsed,
         });
       }
@@ -92,11 +93,17 @@ export function useWorkspaceState(slug: string) {
     }
   }, [storageKey]);
 
-  // Save to local storage whenever state changes, but ONLY if hydrated
+  // Save to local storage whenever state changes, but ONLY if hydrated.
+  // The fully reset state removes the per-song workspace key instead of keeping
+  // an inert JSON copy that can later rehydrate stale ABC-affecting choices.
   useEffect(() => {
     if (!isHydrated) return;
     try {
-      window.localStorage.setItem(storageKey, JSON.stringify(state));
+      if (state === DEFAULT_WORKSPACE_STATE) {
+        window.localStorage.removeItem(storageKey);
+      } else {
+        window.localStorage.setItem(storageKey, JSON.stringify(state));
+      }
     } catch (e) {
       console.error("Failed to save workspace state", e);
     }
@@ -106,9 +113,14 @@ export function useWorkspaceState(slug: string) {
     setState((prev) => ({ ...prev, ...updates }));
   }, []);
 
+  const resetState = useCallback(() => {
+    setState(DEFAULT_WORKSPACE_STATE);
+  }, []);
+
   return {
     state,
     updateState,
+    resetState,
     isHydrated,
   };
 }

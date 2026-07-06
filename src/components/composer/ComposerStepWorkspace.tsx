@@ -25,6 +25,7 @@ import {
   COMPOSER_PREVIEW_RENDER_OPTIONS,
   ComposerNotationPreviewLayout,
 } from "./workspace/preview";
+import { clearComposerSongStorage, getComposerMelodyStorageKey } from "./workspace/storage";
 
 interface ComposerStepWorkspaceProps {
   slug: string;
@@ -37,7 +38,7 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
   // localStorage restoration happens in useEffect below.
   const [melodyAbc, setMelodyAbc] = useState(initialMelodyAbc ?? DEFAULT_ABC);
   const [hasMounted, setHasMounted] = useState(false);
-  const { state: ws, updateState } = useWorkspaceState(slug);
+  const { state: ws, updateState, resetState: resetWorkspaceState } = useWorkspaceState(slug);
   const [layerVisibility, setLayerVisibility] = useState({ melody: true, harmony: true });
   const [accompLayerVisibility, setAccompLayerVisibility] = useState<Record<string, boolean>>({
     __melody__: true,
@@ -50,7 +51,7 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
   // Hydrate melodyAbc from localStorage after mount (client-only)
   useEffect(() => {
     try {
-      const savedMelody = window.localStorage.getItem(`bhajan-song-composer:compose:${slug}:melody`);
+      const savedMelody = window.localStorage.getItem(getComposerMelodyStorageKey(slug));
       const isDefault = savedMelody === DEFAULT_ABC || (savedMelody && savedMelody.includes("T:New Bhajan Arrangement"));
       if (savedMelody && !isDefault) {
         // eslint-disable-next-line react-hooks/set-state-in-effect -- melody must hydrate from localStorage after mount to avoid SSR/localStorage mismatches.
@@ -187,6 +188,19 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
     return baseOptions;
   }, [guitarTabEnabled]);
 
+  const handleRestoreHarmony = useCallback(() => {
+    const originalMelodyAbc = initialMelodyAbc ?? DEFAULT_ABC;
+    setMelodyAbc(originalMelodyAbc);
+    resetWorkspaceState();
+    try {
+      clearComposerSongStorage(window.localStorage, slug);
+    } catch (e) {
+      console.error("Failed to clear composer state from localStorage", e);
+    }
+    setLayerVisibility({ melody: true, harmony: true });
+    setAccompLayerVisibility({});
+  }, [initialMelodyAbc, resetWorkspaceState, slug]);
+
   if (step === "melody") {
     return (
       <div className="space-y-5">
@@ -194,7 +208,7 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
           title="ABC Notation Editor"
           value={melodyAbc}
           initialAbc={initialMelodyAbc ?? DEFAULT_ABC}
-          storageKey={`bhajan-song-composer:compose:${slug}:melody`}
+          storageKey={getComposerMelodyStorageKey(slug)}
           onChange={setMelodyAbc}
         />
       </div>
@@ -205,7 +219,6 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
     return (
       <HarmonyStep
         melodyAbc={melodyAbc}
-        setMelodyAbc={setMelodyAbc}
         initialMelodyAbc={initialMelodyAbc}
         hasMounted={hasMounted}
         pipeline={pipeline}
@@ -215,6 +228,7 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
         setLayerVisibility={setLayerVisibility}
         ws={ws}
         updateState={updateState}
+        onRestore={handleRestoreHarmony}
       />
     );
   }
