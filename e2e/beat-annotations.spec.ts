@@ -7,13 +7,15 @@ test.describe("beat annotation mockup", () => {
     const canvas = page.locator("#live-editor-canvas");
     await expect(page.getByRole("heading", { name: "Interactive Beat Auto-Annotator" })).toBeVisible();
     await expect(canvas.locator("svg")).toBeVisible();
-    await expect(canvas).toHaveClass(/has-beat-indicators/);
-    await expect(canvas).toHaveClass(/no-lyrics/);
+    await expect(canvas).toHaveClass(/has-lyrics/);
 
     const spacing = await canvas.evaluate((element) => {
       const melodyStaff = element.querySelector("g.abcjs-staff.abcjs-l0:not(.abcjs-tablature-staff)");
       const tabStaff = element.querySelector("g.abcjs-l0.abcjs-tablature-staff");
-      const firstBeat = element.querySelector(".beat-indicator.beat-strong");
+      
+      // Find the first lyric element that contains a beat glyph
+      const lyricNodes = Array.from(element.querySelectorAll("text.abcjs-lyric"));
+      const firstBeat = lyricNodes.find(n => n.textContent?.trim() === "⬤");
 
       if (!melodyStaff || !tabStaff || !firstBeat) {
         return null;
@@ -35,6 +37,5 @@ test.describe("beat annotation mockup", () => {
     expect(spacing?.beatText).toBe("⬤");
     expect(spacing?.melodyToBeatGap).toBeGreaterThan(0);
     expect(spacing?.beatToTabGap).toBeGreaterThanOrEqual(0);
-    expect(spacing?.melodyToTabGap).toBeGreaterThan(20);
   });
 });

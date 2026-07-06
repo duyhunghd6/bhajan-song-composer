@@ -11,17 +11,20 @@ Composer screens live under `src/components/composer/`.
 - `ComposerStepWorkspace.tsx` is the step router for melody, harmony, accompaniment, ensemble, and review flows.
 - `workspace/` contains step-specific modules:
   - `HarmonyStep.tsx` handles harmonization selection and preview.
-  - `AccompanimentStep.tsx` handles accompaniment workflow review, layer visibility, and instrument previews.
+  - `AccompanimentStep.tsx` handles accompaniment workflow review, setup persistence, layer visibility, and instrument previews.
   - `preview.tsx` contains shared preview layout, render options, and harmonization display helpers.
 - `LayerManager.tsx` remains the public layer-stack entrypoint.
 - `layers/layer-manager-parts.tsx` contains layer stack defaults, layer parsing/combining utilities, and the extracted pipeline/fingerstyle panels.
 - `AccompanimentWorkflowWizard.tsx` and `EnsembleWorkflowWizard.tsx` are workflow shells.
+- `accompaniment-workflow/WorkflowSetupPanel.tsx` contains the setup UI for accompaniment style, ordered instrument stack, native drag/drop, and accessible up/down reordering.
 - `accompaniment-workflow/wizard-parts.tsx` and `ensemble-workflow/wizard-parts.tsx` contain reusable wizard state transitions and option-list UI.
 - `SongForm.tsx` is the metadata form shell.
 - `song-form/metadata.ts` contains metadata defaults and YAML serialization.
 - `song-form/TextField.tsx` contains the shared text field module.
 
 The Composer UI owns React state, persistence hooks, and user interaction. It delegates music decisions and ABC construction to theory modules.
+
+The accompaniment workflow is intentionally a single-page wizard under the existing dynamic route `/compose/[slug]/[step]`; `/compose/hari-bol/accompaniment` is handled by `step=accompaniment`, not by a dedicated route folder. Internal accompaniment substeps live in persisted workflow state rather than route segments.
 
 ### Music sheet / ABCJS playback
 
@@ -43,10 +46,11 @@ Music-theory logic lives under `src/lib/theory/`.
 - `piano-accompaniment/types.ts` contains the exported piano accompaniment contract.
 - `piano-accompaniment/pedal-automation.ts` contains sustain pedal automation and UI metadata generation.
 - `piano-accompaniment/output-contract.ts` contains piano key highlights, fingering metadata, and physical hand events.
-- `fingerstyle-arranger.ts` remains the public fingerstyle arrangement interface.
-- `fingerstyle-arranger/types.ts` contains the exported fingerstyle source-layer, playability, artifact, and output contract types.
-- `accompaniment-workflow.ts` remains the public accompaniment workflow interface.
-- `accompaniment-workflow/definition.ts` contains workflow ids, types, constants, and step definitions.
+- `fingerstyle-arranger.ts` remains the public fingerstyle arrangement interface. It generates solo Guitar Fingerstyle parts that carry melody, add chord-derived bass, and emit intro/interlude/outro section markers for staff-system assembly.
+- `fingerstyle-arranger/types.ts` contains the exported fingerstyle source-layer, playability, section metadata, validation-compatible guitar tab events, artifact, and output contract types.
+- `accompaniment-workflow.ts` remains the public accompaniment workflow interface. It owns setup normalization, legacy setup fallback, ordered-instrument role hints, and enabled-step planning for Solo/Fingerstyle versus combined Accompaniment instrument stacks.
+- `accompaniment-workflow/definition.ts` contains workflow ids, setup types, instrument branch scopes, constants, and step definitions for shared, Guitar, Piano, Harmonium, Djembe, Flute, and Violin branches.
+- `accompaniment-workflow/support-layers.ts` adapts completed Djembe, Flute, and Violin accompaniment workflow decisions into playable ABC support layers for the accompaniment page preview.
 - `accompaniment-workflow/tool-schema.ts` contains structured LLM tool schemas for accompaniment workflow generation.
 - `ensemble-workflow.ts` remains the public ensemble workflow interface.
 - `ensemble-workflow/definition.ts` contains ensemble workflow ids, types, default generation plan, and step definitions.
@@ -77,6 +81,7 @@ The main seams are:
 3. **Workflow shells → workflow definitions**
    - Wizard shells manage local UI state and action calls.
    - Workflow definition modules own step ids, labels, dependency rules, prompts, and schemas.
+   - Accompaniment wizard setup is persisted before session start; the setup-driven planned step grid previews the exact branch list before start/reset. Once a workflow begins, the normalized setup is embedded in `AccompanimentWorkflowSession` so prompt generation, visible steps, and next-step traversal share one source of truth.
 
 4. **Public entrypoints → extracted implementation modules**
    - Large historical files remain stable import points.

@@ -26,7 +26,19 @@ describe("fingerstyle Composer integration", () => {
       visible: true,
     });
     expect(integration.composerLayer.abc).toContain("T:Fingerstyle Guitar (Folk / Travis Override)");
-    expect(integration.composerLayer.abc).toContain("V:Guitar clef=treble-8");
+    expect(integration.composerLayer.abc).toContain('V:Guitar clef=treble-8 name="Layer 2 Guitar Fingerstyle"');
+    expect(integration.arrangement.outputContract.artifacts.formPlan.sections.map((section) => section.kind)).toEqual([
+      "intro",
+      "body",
+      "interlude",
+      "outro",
+    ]);
+    expect(integration.arrangement.outputContract.artifacts.guitarTabEvents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ role: "melody" }),
+        expect.objectContaining({ role: "bass" }),
+      ])
+    );
 
     expect(integration.playability).toMatchObject({
       status: "ready_for_integration",

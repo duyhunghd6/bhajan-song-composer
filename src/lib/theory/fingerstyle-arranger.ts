@@ -21,6 +21,8 @@ import type {
   FingerstyleBasslineSourceLayer,
   FingerstyleCounterMelodySourceLayer,
   FingerstyleFailedConstraint,
+  FingerstyleFormPlan,
+  FingerstyleFormSection,
   FingerstyleGeneratedArtifacts,
   FingerstyleHarmonizationSourceLayer,
   FingerstyleMeasure,
@@ -35,6 +37,7 @@ import type {
   FingerstyleTablatureMeasure,
   FingerstyleUpwardConstructionContext,
 } from "./fingerstyle-arranger/types";
+import type { GuitarTabEvent } from "./guitar-tab-validation";
 export type * from "./fingerstyle-arranger/types";
 
 
@@ -229,7 +232,122 @@ function isStringedEvent(event: FingerstylePhysicalHandEvent): event is Fingerst
   return event.string !== null;
 }
 
-function buildGeneratedArtifacts(compression: FingerstyleDownwardCompression, finalAbc: string): FingerstyleGeneratedArtifacts {
+function buildFingerstyleFormPlan(bodyMeasureCount: number): FingerstyleFormPlan {
+  const interludeIndex = Math.max(1, Math.ceil(bodyMeasureCount / 2));
+  const sections: FingerstyleFormSection[] = [
+    {
+      kind: "intro",
+      label: "Intro",
+      startMeasureIndex: 0,
+      measureCount: 1,
+      source: "tonic-to-dominant arpeggio motive from the opening chord area",
+      placement: "before the melody body",
+    },
+    {
+      kind: "body",
+      label: "Melody Body",
+      startMeasureIndex: 1,
+      measureCount: bodyMeasureCount,
+      source: "source melody compressed onto guitar with chord-derived bass",
+      placement: "main song body",
+    },
+    {
+      kind: "interlude",
+      label: "Interlude",
+      startMeasureIndex: 1 + interludeIndex,
+      measureCount: 1,
+      source: "phrase-boundary chord turnaround using the current bass strategy",
+      placement: `after body measure ${interludeIndex}`,
+    },
+    {
+      kind: "outro",
+      label: "Outro",
+      startMeasureIndex: bodyMeasureCount + 2,
+      measureCount: 1,
+      source: "final tonic cadence arpeggio ending with stable root bass",
+      placement: "after the melody body",
+    },
+  ];
+
+  return { sections };
+}
+
+function buildGuitarTabEvents(compression: FingerstyleDownwardCompression, _formPlan: FingerstyleFormPlan): GuitarTabEvent[] {
+  return compression.physicalHandMapping.flatMap((measure) =>
+    measure.events.filter(isStringedEvent).flatMap((event) => {
+      if (!event.note) return [];
+      return [{
+        measureIndex: measure.measureIndex,
+        beat: event.beat,
+        subdivision: Number.isInteger(event.beat) ? undefined : event.beat,
+        simultaneousGroupId: `${measure.measureIndex}:${event.beat}`,
+        note: event.note,
+        string: event.string,
+        fret: event.fret,
+        role: event.role,
+      }];
+    })
+  );
+}
+
+function firstBodyMeasure(measures: FingerstyleMeasure[]): FingerstyleMeasure | null {
+  return measures[0] ?? null;
+}
+
+function lastBodyMeasure(measures: FingerstyleMeasure[]): FingerstyleMeasure | null {
+  return measures.at(-1) ?? null;
+}
+
+function buildIntroMeasure(measures: FingerstyleMeasure[]): string {
+  const first = firstBodyMeasure(measures);
+  if (!first) return "z8";
+  const bass = first.bassNotes[0] ?? "E,";
+  const fifth = first.bassNotes[1] ?? bass;
+  const melody = first.melodyNotes[0] ? noteNameToAbc(first.melodyNotes[0]) : "E";
+  return `${bass}2 ${fifth}2 ${melody}2 ${fifth}2`;
+}
+
+function buildInterludeMeasure(measures: FingerstyleMeasure[]): string {
+  const pivot = measures[Math.max(0, Math.floor(measures.length / 2) - 1)] ?? firstBodyMeasure(measures);
+  if (!pivot) return "z8";
+  const bass = pivot.bassNotes[0] ?? "E,";
+  const fifth = pivot.bassNotes[1] ?? bass;
+  const melody = pivot.melodyNotes.at(-1) ? noteNameToAbc(pivot.melodyNotes.at(-1)!) : "G";
+  return `${bass}2 ${melody}2 ${fifth}2 ${melody}2`;
+}
+
+function buildOutroMeasure(measures: FingerstyleMeasure[]): string {
+  const last = lastBodyMeasure(measures);
+  if (!last) return "z8";
+  const bass = last.bassNotes[0] ?? "E,";
+  const melody = last.melodyNotes.at(-1) ? noteNameToAbc(last.melodyNotes.at(-1)!) : "E";
+  return `${bass}2 ${melody}2 ${bass}4`;
+}
+
+function buildFingerstyleAbc(measures: FingerstyleMeasure[]): string {
+  const interludeAfter = Math.max(1, Math.ceil(measures.length / 2));
+  const beforeInterlude = measures.slice(0, interludeAfter).map((measure) => measure.abc);
+  const afterInterlude = measures.slice(interludeAfter).map((measure) => measure.abc);
+  const lines = [
+    'V:Guitar clef=treble-8 name="Layer 2 Guitar Fingerstyle"',
+    "%%MIDI program 24",
+    "% @fingerstyle-section intro",
+    `| ${buildIntroMeasure(measures)} |`,
+    "% @fingerstyle-section body",
+    `| ${beforeInterlude.join(" | ")} |`,
+    "% @fingerstyle-section interlude",
+    `| ${buildInterludeMeasure(measures)} |`,
+  ];
+
+  if (afterInterlude.length > 0) {
+    lines.push("% @fingerstyle-section body", `| ${afterInterlude.join(" | ")} |`);
+  }
+
+  lines.push("% @fingerstyle-section outro", `| ${buildOutroMeasure(measures)} |`);
+  return lines.join("\n");
+}
+
+function buildGeneratedArtifacts(compression: FingerstyleDownwardCompression, finalAbc: string, formPlan: FingerstyleFormPlan): FingerstyleGeneratedArtifacts {
   const tablatureMeasures = compression.physicalHandMapping.map((measure): FingerstyleTablatureMeasure => ({
     measureIndex: measure.measureIndex,
     positions: measure.events.filter(isStringedEvent).map((event) => ({
@@ -284,6 +402,8 @@ function buildGeneratedArtifacts(compression: FingerstyleDownwardCompression, fi
 
   return {
     finalAbc,
+    formPlan,
+    guitarTabEvents: buildGuitarTabEvents(compression, formPlan),
     tablature: { measures: tablatureMeasures },
     fretboardHighlightEvents,
     noteMarkerEvents,
@@ -293,7 +413,8 @@ function buildGeneratedArtifacts(compression: FingerstyleDownwardCompression, fi
 function buildOutputContract(
   upwardConstruction: FingerstyleUpwardConstructionContext,
   downwardCompression: FingerstyleDownwardCompression,
-  finalAbc: string
+  finalAbc: string,
+  formPlan: FingerstyleFormPlan
 ): FingerstyleOutputContract {
   return {
     sourceLayers: upwardConstruction.layers,
@@ -303,7 +424,7 @@ function buildOutputContract(
     innerVoiceReduction: downwardCompression.innerVoiceReduction,
     rhythmicEventMap: buildRhythmicEventMap(downwardCompression),
     profileMetadata: buildProfileMetadata(downwardCompression),
-    artifacts: buildGeneratedArtifacts(downwardCompression, finalAbc),
+    artifacts: buildGeneratedArtifacts(downwardCompression, finalAbc, formPlan),
   };
 }
 
@@ -345,14 +466,15 @@ export function generateFingerstyleArrangement(
 
   const upwardConstruction = buildUpwardConstructionContext(abcString, resolvedProgression, melodyMeasures);
   const downwardCompression = compressFingerstyleArrangement(resolved.chords, melodyMeasures, options);
-  const abc = `V:Guitar clef=treble-8\n%%MIDI program 24\n| ${measures.map((measure) => measure.abc).join(" | ")} |`;
+  const formPlan = buildFingerstyleFormPlan(measures.length);
+  const abc = buildFingerstyleAbc(measures);
 
   return {
     key: resolved.key,
     timeSignature: resolved.timeSignature,
     upwardConstruction,
     downwardCompression,
-    outputContract: buildOutputContract(upwardConstruction, downwardCompression, abc),
+    outputContract: buildOutputContract(upwardConstruction, downwardCompression, abc, formPlan),
     measures,
     abc,
   };

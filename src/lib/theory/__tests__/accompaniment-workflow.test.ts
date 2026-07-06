@@ -1,9 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  ACCOMPANIMENT_INSTRUMENT_LABELS,
   ACCOMPANIMENT_WORKFLOW_GUITAR_STEP_IDS,
   ACCOMPANIMENT_WORKFLOW_STEP_IDS,
   ACCOMPANIMENT_WORKFLOW_STEPS,
   buildAccompanimentWorkflowAbcAnnotation,
+  getDefaultAccompanimentWorkflowSetup,
+  getEnabledAccompanimentWorkflowStepIds,
+  getVisibleAccompanimentWorkflowSteps,
+  getVisibleAccompanimentWorkflowStepsForSetup,
   buildAccompanimentWorkflowPrompt,
   clearAccompanimentWorkflowStepResults,
   abcMatchesReferenceMeasureLinePattern,
@@ -21,11 +26,15 @@ import {
   getSelectedWorkflowOption,
   getWorkflowAppliedMusicAbc,
   hasLyricChordAnnotations,
+  isAccompanimentWorkflowStepEnabled,
   isAccompanimentWorkflowStepUnlocked,
   isGuitarTabValidationWorkflowStep,
+  normalizeAccompanimentWorkflowSetup,
   normalizeWorkflowOptionDataLineBreaks,
   type AccompanimentWorkflowOption,
 } from "../accompaniment-workflow";
+import { generateAccompanimentSupportLayers } from "../accompaniment-workflow/support-layers";
+import { generateAccompanimentStage } from "../accompaniment-stage";
 import { requestOpenAiCompatibleToolLoop, type ToolDiagnosticEvent } from "../../../app/actions/ai-config";
 import { buildValidGuitarTabToolSchema } from "../guitar-tab-validation";
 
@@ -85,7 +94,7 @@ function selectOption(
 }
 
 describe("accompaniment workflow", () => {
-  it("defines the exact 12-step Guitar + Piano human-in-loop order", () => {
+  it("defines the instrument-aware human-in-loop order with Guitar Fingerstyle", () => {
     expect(ACCOMPANIMENT_WORKFLOW_STEP_IDS).toEqual([
       "melody-snapshot",
       "key-scale-cadence",
@@ -96,11 +105,153 @@ describe("accompaniment workflow", () => {
       "guitar-comping-profile",
       "guitar-voicing-bass",
       "guitar-fills-validation",
+      "guitar-fingerstyle",
       "piano-comping-bass",
       "piano-rh-voicing",
       "piano-fills-pedal-validation",
+      "harmonium-drone-register",
+      "harmonium-chord-voicing-validation",
+      "djembe-groove-interlock",
+      "djembe-fill-validation",
+      "flute-yield-register",
+      "flute-breath-fill-validation",
+      "violin-bed-register",
+      "violin-expression-validation",
     ]);
-    expect(ACCOMPANIMENT_WORKFLOW_STEPS).toHaveLength(12);
+    expect(ACCOMPANIMENT_WORKFLOW_STEPS).toHaveLength(21);
+  });
+
+  it("keeps legacy session creation backward-compatible with Guitar + Piano", () => {
+    const session = createAccompanimentWorkflowSession(sampleAbc);
+
+    expect(session.setup.style).toBe("accompaniment");
+    expect(session.enabledStepIds).toContain("guitar-fingerstyle");
+    expect(session.enabledStepIds).toContain("piano-fills-pedal-validation");
+    expect(session.enabledStepIds).not.toContain("djembe-groove-interlock");
+    expect(session.enabledStepIds).not.toContain("violin-bed-register");
+    expect(getVisibleAccompanimentWorkflowSteps(session).map((step) => step.id)).toEqual(session.enabledStepIds);
+  });
+
+  it("includes Flute, Djembe, and Violin in new default setup", () => {
+    const setup = getDefaultAccompanimentWorkflowSetup();
+    const instrumentIds = setup.instruments.map((instrument) => instrument.id);
+
+    expect(instrumentIds).toEqual(["guitar-classic", "guitar-acoustic", "piano", "indian-harmonium", "flute", "djembe", "violin"]);
+    expect(ACCOMPANIMENT_INSTRUMENT_LABELS.flute).toBe("Flute");
+    expect(ACCOMPANIMENT_INSTRUMENT_LABELS.djembe).toBe("Djembe");
+    expect(ACCOMPANIMENT_INSTRUMENT_LABELS.violin).toBe("Violin");
+  });
+
+  it("normalizes older setup data with disabled missing support instruments", () => {
+    const normalized = normalizeAccompanimentWorkflowSetup({
+      style: "accompaniment",
+      instruments: [{ id: "guitar-classic", enabled: true, order: 0 }],
+    });
+
+    expect(normalized.instruments.find((instrument) => instrument.id === "flute")?.enabled).toBe(false);
+    expect(normalized.instruments.find((instrument) => instrument.id === "djembe")?.enabled).toBe(false);
+    expect(normalized.instruments.find((instrument) => instrument.id === "violin")?.enabled).toBe(false);
+  });
+
+  it("derives solo fingerstyle steps from the selected setup", () => {
+    const setup = {
+      ...getDefaultAccompanimentWorkflowSetup(),
+      style: "solo-fingerstyle" as const,
+    };
+    const stepIds = getEnabledAccompanimentWorkflowStepIds(setup);
+
+    expect(stepIds).toContain("guitar-fingerstyle");
+    expect(stepIds).not.toContain("piano-comping-bass");
+    expect(stepIds).not.toContain("harmonium-drone-register");
+    expect(stepIds).not.toContain("djembe-groove-interlock");
+    expect(stepIds).not.toContain("flute-yield-register");
+    expect(stepIds).not.toContain("violin-bed-register");
+  });
+
+  it("derives combined accompaniment steps for every enabled instrument", () => {
+    const setup = getDefaultAccompanimentWorkflowSetup();
+    const stepIds = getEnabledAccompanimentWorkflowStepIds(setup);
+
+    expect(stepIds).toContain("guitar-fingerstyle");
+    expect(stepIds).toContain("piano-fills-pedal-validation");
+    expect(stepIds).toContain("harmonium-chord-voicing-validation");
+    expect(stepIds).toContain("djembe-fill-validation");
+    expect(stepIds).toContain("flute-breath-fill-validation");
+    expect(stepIds).toContain("violin-expression-validation");
+  });
+
+  it("previews visible steps from setup and preserves instrument order", () => {
+    const setup = {
+      ...getDefaultAccompanimentWorkflowSetup(),
+      instruments: getDefaultAccompanimentWorkflowSetup().instruments.map((instrument, index) => ({
+        ...instrument,
+        enabled: instrument.id === "violin" || instrument.id === "djembe" || instrument.id === "flute",
+        order: instrument.id === "violin" ? 0 : instrument.id === "djembe" ? 1 : instrument.id === "flute" ? 2 : index + 3,
+      })),
+    };
+    const stepIds = getVisibleAccompanimentWorkflowStepsForSetup(setup).map((step) => step.id);
+
+    expect(stepIds.slice(0, 6)).toEqual(Array.from(ACCOMPANIMENT_WORKFLOW_STEP_IDS.slice(0, 6)));
+    expect(stepIds.slice(6)).toEqual([
+      "violin-bed-register",
+      "violin-expression-validation",
+      "djembe-groove-interlock",
+      "djembe-fill-validation",
+      "flute-yield-register",
+      "flute-breath-fill-validation",
+    ]);
+  });
+
+  it("ignores disabled branch steps when unlocking and finding next work", () => {
+    const session = createAccompanimentWorkflowSession(sampleAbc, {
+      ...getDefaultAccompanimentWorkflowSetup(),
+      instruments: getDefaultAccompanimentWorkflowSetup().instruments.map((instrument) => ({
+        ...instrument,
+        enabled: instrument.id === "guitar-classic",
+      })),
+    });
+
+    expect(isAccompanimentWorkflowStepEnabled(session, "piano-comping-bass")).toBe(false);
+    expect(isAccompanimentWorkflowStepUnlocked(session, "piano-comping-bass")).toBe(false);
+    for (const stepId of session.enabledStepIds.slice(0, 6)) selectOption(session, stepId);
+    expect(getNextUncompletedWorkflowStepId(session)).toBe("guitar-comping-profile");
+  });
+
+  it("generates accompaniment support layers only after enabled support branches are complete", () => {
+    const setup = {
+      ...getDefaultAccompanimentWorkflowSetup(),
+      instruments: getDefaultAccompanimentWorkflowSetup().instruments.map((instrument) => ({
+        ...instrument,
+        enabled: instrument.id === "djembe" || instrument.id === "flute" || instrument.id === "violin",
+      })),
+    };
+    const session = createAccompanimentWorkflowSession(sampleAbc, setup);
+    const accompaniment = generateAccompanimentStage(sampleAbc);
+
+    expect(generateAccompanimentSupportLayers(sampleAbc, { workflow: session, accompaniment }).combined).toBeNull();
+
+    selectOption(session, "djembe-fill-validation", { grooveProfile: "devotional", density: "moderate" });
+    selectOption(session, "flute-breath-fill-validation", { role: "gap-fills", fillDensity: "minimal" });
+    selectOption(session, "violin-expression-validation", { role: "harmonic-bed", doubleStopPolicy: "safe-double-stops" });
+
+    const layers = generateAccompanimentSupportLayers(sampleAbc, { workflow: session, accompaniment });
+    expect(layers.djembe).toContain("V:Djembe");
+    expect(layers.flute).toContain("V:Flute");
+    expect(layers.violin).toContain("V:Violin");
+    expect(layers.combined).toContain("Layer 2");
+  });
+
+  it("does not generate support layers for solo fingerstyle workflows", () => {
+    const session = createAccompanimentWorkflowSession(sampleAbc, {
+      ...getDefaultAccompanimentWorkflowSetup(),
+      style: "solo-fingerstyle",
+    });
+    const accompaniment = generateAccompanimentStage(sampleAbc);
+    selectOption(session, "djembe-fill-validation");
+    selectOption(session, "flute-breath-fill-validation");
+    selectOption(session, "violin-expression-validation");
+
+    expect(generateAccompanimentSupportLayers(sampleAbc, { workflow: session, accompaniment }).combined).toBeNull();
   });
 
   it("locks branch steps until the shared harmonic foundation is selected", () => {
@@ -130,6 +281,7 @@ describe("accompaniment workflow", () => {
       sourceAbc: sampleAbc,
       metadata: { key: "C", scale: "major", timeSignature: "3/4" },
       previousSelections: getSelectedWorkflowContext(session, "strong-beat-targets"),
+      setup: session.setup,
       userNote: "Prefer very simple bhajan support.",
     });
 
@@ -138,6 +290,10 @@ describe("accompaniment workflow", () => {
     expect(prompt).toContain("beat 1 in 3/4");
     expect(prompt).toContain("Prefer very simple bhajan support.");
     expect(prompt).toContain("melody-snapshot Choice");
+    expect(prompt).toContain("Workflow setup");
+    expect(prompt).toContain("Accompaniment (combined instruments)");
+    expect(prompt).toContain("Guitar Classic");
+    expect(prompt).toContain("Piano");
     expect(prompt).toContain(sampleAbc);
   });
 
@@ -157,6 +313,11 @@ describe("accompaniment workflow", () => {
     expect(toolNames).toContain("generate_melody_snapshot");
     expect(toolNames).toContain("generate_chord_progression");
     expect(toolNames).toContain("generate_piano_fills_pedal_validation");
+    expect(toolNames).toContain("generate_harmonium_drone_register");
+    expect(toolNames).toContain("generate_djembe_groove_interlock");
+    expect(toolNames).toContain("generate_flute_breath_fill_validation");
+    expect(toolNames).toContain("generate_violin_bed_register");
+    expect(toolNames).toContain("generate_violin_expression_validation");
     expect(toolNames).toContain("generate_consolidated_chord_ingestion");
     expect(toolNames).toContain("break_measures_line");
     expect(toolNames).toContain("add_strong_beat_icons");
@@ -349,6 +510,34 @@ V:Melody name="Melody"
     expect(musicLines.map((line) => line.split("|").filter((part) => part.trim()).length)).toEqual([2, 2, 2]);
   });
 
+  it("repairs malformed voice ids in ABC-shaped workflow option data", () => {
+    const referenceAbc = `X:1
+T:Hari Bol Reference
+M:4/4
+L:1/8
+K:Em
+| E E2 F (GB) A G | (FE) DF E4 |`;
+    const malformedGeneratedAbc = `X:1
+T:Hari Bol Generated
+M:4/4
+L:1/8
+%%score (Melody) (Melody]) (GuitarClassic])
+K:Em
+V:Melody] | "Em"E E2 F (GB) A G | "D"(FE) DF "Em"E4 |
+V:GuitarClassic] | E,2 B,2 E2 G2 | D,2 A,2 E,2 B,2 |`;
+
+    const normalized = break_measures_line(malformedGeneratedAbc, referenceAbc);
+
+    expect(normalized).toContain("%%score (Melody) (Guitar)");
+    expect(normalized).toContain("[V:Melody] | \"Em\"E E2 F (GB) A G | \"D\"(FE) DF \"Em\"E4 |");
+    expect(normalized).toContain("[V:Guitar] | E,2 B,2 E2 G2 | D,2 A,2 E,2 B,2 |");
+    expect(normalized).not.toContain("Melody])");
+    expect(normalized).not.toContain("GuitarClassic])");
+    expect(normalized).not.toMatch(/^V:Melody\]/m);
+    expect(normalized).not.toMatch(/^V:GuitarClassic\]/m);
+    expect(abcMatchesReferenceMeasureLinePattern(normalized, referenceAbc)).toBe(true);
+  });
+
   it("normalizes ABC-shaped workflow option data while preserving unrelated fields", () => {
     const referenceAbc = `X:1
 T:Line Pattern
@@ -405,10 +594,11 @@ K:C
     expect(schema.function.parameters.required).toEqual(["chordToneMapping", "chordProgression", "voiceLeadingValidation"]);
   });
 
-  it("marks guitar voicing and polish as tab-validation steps", () => {
+  it("marks guitar voicing, polish, and fingerstyle as tab-validation steps", () => {
     expect(isGuitarTabValidationWorkflowStep("guitar-comping-profile")).toBe(false);
     expect(isGuitarTabValidationWorkflowStep("guitar-voicing-bass")).toBe(true);
     expect(isGuitarTabValidationWorkflowStep("guitar-fills-validation")).toBe(true);
+    expect(isGuitarTabValidationWorkflowStep("guitar-fingerstyle")).toBe(true);
   });
 
   it("builds guitar prompts that require valid_guitar_tab before final output", () => {
@@ -441,6 +631,27 @@ K:C
       "fret",
       "role",
     ]);
+  });
+
+  it("requires solo fingerstyle data for the Guitar Fingerstyle workflow schema and prompt", () => {
+    const prompt = buildAccompanimentWorkflowPrompt({
+      stepId: "guitar-fingerstyle",
+      sourceAbc: sampleAbc,
+      metadata: { key: "Em", scale: "minor", timeSignature: "4/4" },
+      previousSelections: [],
+    });
+    const schema = buildAccompanimentWorkflowToolSchema("guitar-fingerstyle");
+    const data = schema.function.parameters.properties.options.items.properties.data as WorkflowDataSchemaForTest;
+
+    expect(prompt).toContain("solo guitar fingerstyle");
+    expect(prompt).toContain("play the melody itself");
+    expect(prompt).toContain("chord-derived bass");
+    expect(prompt).toContain("formPlan.intro");
+    expect(prompt).toContain("formPlan.interlude");
+    expect(prompt).toContain("formPlan.outro");
+    expect(data.required).toEqual(["mode", "carriesMelody", "pickingProfile", "bassStrategy", "formPlan", "guitarTab"]);
+    expect(data.properties?.formPlan?.required).toEqual(["intro", "interlude", "outro"]);
+    expect(data.properties?.guitarTab?.required).toEqual(["events"]);
   });
 
   it("exposes the valid_guitar_tab schema for the LLM tool loop", () => {

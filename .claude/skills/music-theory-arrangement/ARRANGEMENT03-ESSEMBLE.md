@@ -3,6 +3,18 @@
 > **Scope:** This module expands a completed two-layer foundation — **Layer 1: Melody** + **Layer 2: Piano/Guitar Accompaniment** — into a full multi-instrument ensemble. It generates layers for **Djembe** (rhythm/percussion), **Flute** (melodic highlight), and **Violin** (harmonic bed/counterpoint).
 >
 > **Central Rule:** All auxiliary layers follow **Yield Logic** — they enhance the arrangement through rhythmic interlocking, frequency stratification, and counterpoint, but they must **never fight** the primary melody or accompaniment.
+>
+> **Accompaniment Setup Reuse:** The `/compose/:slug/accompaniment` setup can enable Djembe, Flute, and Violin before the later Ensemble step. In that context, reuse this module's Djembe interlock, Flute yield/breath, and Violin bed/expression rules through accompaniment branch steps (`djembe-groove-interlock`, `djembe-fill-validation`, `flute-yield-register`, `flute-breath-fill-validation`, `violin-bed-register`, `violin-expression-validation`). The later Ensemble workflow remains available for separate Layer 3 expansion and final conflict review.
+
+---
+
+## Role Summary
+
+| Instrument | Accompaniment/ensemble role | Yield rule |
+| ---------- | --------------------------- | ---------- |
+| **Djembe** | Bass/Dum sync, Tone/Slap transient color, devotional groove interlock | Reinforce existing bass/transient events; soften or remove fills before disturbing melody/accompaniment. |
+| **Flute** | High-register halo, breath-shaped gap fills, short melodic responses | Enter in rests/sustains and leave 16th-note breath gaps; never double or obscure the lead melody. |
+| **Violin** | Warm harmonic bed, drone, counterline, expressive swells | Stay below/around melody unless explicitly featured; yield before Flute and Djembe fills in conflict review. |
 
 ---
 

@@ -4,7 +4,7 @@ import type { AccompanimentOption } from "@/lib/theory/accompaniment-candidates"
 import type { PianoAccompaniment } from "@/lib/theory/piano-accompaniment";
 import type { FingerstyleComposerIntegration } from "./fingerstyle-integration";
 import type { TheoryAssistantLayerProposal } from "./theory-assistant-layer";
-import type { AccompanimentWorkflowSession } from "@/lib/theory/accompaniment-workflow";
+import type { AccompanimentWorkflowSession, AccompanimentWorkflowSetup } from "@/lib/theory/accompaniment-workflow";
 import type { EnsembleWorkflowSession } from "@/lib/theory/ensemble-workflow";
 import type { EnsembleExpansionValidation } from "@/lib/theory/ensemble-output-contract";
 import type { EnsembleConflictReportEntry } from "@/lib/theory/ensemble-conflicts";
@@ -37,6 +37,7 @@ export interface WorkspaceState {
   selectedPianoIndex: number | null;
   generatedGuitar: string | null;
   generatedPiano: string | null;
+  accompanimentWorkflowSetup: AccompanimentWorkflowSetup | null;
   accompanimentWorkflow: AccompanimentWorkflowSession | null;
   ensembleWorkflow: EnsembleWorkflowSession | null;
   stagedEnsembleLayers: EnsembleLayerAbcBundle | null;
@@ -59,6 +60,7 @@ const DEFAULT_STATE: WorkspaceState = {
   selectedPianoIndex: null,
   generatedGuitar: null,
   generatedPiano: null,
+  accompanimentWorkflowSetup: null,
   accompanimentWorkflow: null,
   ensembleWorkflow: null,
   stagedEnsembleLayers: null,

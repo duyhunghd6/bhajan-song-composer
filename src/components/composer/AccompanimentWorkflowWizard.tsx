@@ -3,27 +3,30 @@
 import { useEffect, useMemo, useState } from "react";
 import { generateAccompanimentWorkflowStep, generateConsolidatedChordIngestionWorkflowSteps } from "@/app/actions/accompaniment-workflow";
 import {
-  ACCOMPANIMENT_WORKFLOW_GUITAR_STEP_IDS,
-  ACCOMPANIMENT_WORKFLOW_PIANO_STEP_IDS,
-  ACCOMPANIMENT_WORKFLOW_STEPS,
+  ACCOMPANIMENT_WORKFLOW_BRANCH_STEP_IDS,
   buildAccompanimentWorkflowPrompt,
   clearAccompanimentWorkflowStepResults,
   createAccompanimentWorkflowSession,
   extractLyricChordAnnotations,
   getAccompanimentWorkflowPromptSummary,
-  getNextUncompletedWorkflowStepId,
+  getDefaultAccompanimentWorkflowSetup,
   getSelectedWorkflowContext,
   getSelectedWorkflowOption,
+  getVisibleAccompanimentWorkflowSteps,
+  getVisibleAccompanimentWorkflowStepsForSetup,
   isAccompanimentWorkflowSourceCurrent,
   isAccompanimentWorkflowStepComplete,
   isAccompanimentWorkflowStepUnlocked,
   isChordIngestionWorkflowStep,
+  normalizeAccompanimentWorkflowSetup,
   type AccompanimentWorkflowLlmLogEntry,
   type AccompanimentWorkflowMetadata,
   type AccompanimentWorkflowOption,
   type AccompanimentWorkflowRun,
   type AccompanimentWorkflowScope,
   type AccompanimentWorkflowSession,
+  type AccompanimentWorkflowSetup,
+  type AccompanimentWorkflowStepDefinition,
   type AccompanimentWorkflowStepId,
 } from "@/lib/theory/accompaniment-workflow";
 
@@ -39,13 +42,72 @@ import {
   selectOption,
   skipWorkflowSteps,
 } from "./accompaniment-workflow/wizard-parts";
+import WorkflowSetupPanel from "./accompaniment-workflow/WorkflowSetupPanel";
+
+type BranchScope = Exclude<AccompanimentWorkflowScope, "shared">;
+
 interface AccompanimentWorkflowWizardProps {
   sourceAbc: string;
   metadata: AccompanimentWorkflowMetadata;
   workflow: AccompanimentWorkflowSession | null;
+  workflowSetup: AccompanimentWorkflowSetup | null;
   onWorkflowChange: (workflow: AccompanimentWorkflowSession | null) => void;
+  onWorkflowSetupChange: (setup: AccompanimentWorkflowSetup) => void;
   onGuitarProfileSelected: (profile: string | null) => void;
   onPianoProfileSelected: (profile: string | null) => void;
+}
+
+const BRANCH_LABELS: Record<BranchScope, string> = {
+  guitar: "Guitar",
+  piano: "Piano",
+  harmonium: "Harmonium",
+  djembe: "Djembe",
+  flute: "Flute",
+  violin: "Violin",
+};
+
+interface WorkflowStepGridProps {
+  steps: AccompanimentWorkflowStepDefinition[];
+  session: AccompanimentWorkflowSession | null;
+  activeStepId: AccompanimentWorkflowStepId;
+  onStepClick: (stepId: AccompanimentWorkflowStepId) => void;
+}
+
+function WorkflowStepGrid({ steps, session, activeStepId, onStepClick }: WorkflowStepGridProps) {
+  return (
+    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+      {steps.map((step) => {
+        const complete = session ? isAccompanimentWorkflowStepComplete(session, step.id) : false;
+        const unlocked = session ? isAccompanimentWorkflowStepUnlocked(session, step.id) : true;
+        const selected = session ? getSelectedWorkflowOption(session, step.id) : null;
+        return (
+          <button
+            key={step.id}
+            type="button"
+            disabled={session ? !unlocked : false}
+            onClick={() => onStepClick(step.id)}
+            className={`rounded-xl border p-3 text-left transition ${
+              activeStepId === step.id
+                ? "border-amber-400 bg-amber-500/10"
+                : complete
+                  ? "border-emerald-200 bg-emerald-50 dark:border-emerald-900/70 dark:bg-emerald-950/30"
+                  : unlocked
+                    ? "border-zinc-200 bg-zinc-50 hover:border-amber-300/60 dark:border-zinc-800 dark:bg-zinc-900/50"
+                    : "border-zinc-200 bg-zinc-100 opacity-60 dark:border-zinc-800 dark:bg-zinc-900"
+            }`}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">{step.index}. {step.shortLabel}</span>
+              <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${SCOPE_CLASS[step.scope]}`}>{step.scope}</span>
+            </div>
+            <p className="mt-1 text-[11px] leading-4 text-zinc-500 dark:text-zinc-400">
+              {selected?.label ?? (session ? (unlocked ? "Ready" : "Locked") : "Planned")}
+            </p>
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 function makeClientLlmLog(input: {
@@ -76,44 +138,72 @@ function logsFromRuns(runs: AccompanimentWorkflowRun[]): AccompanimentWorkflowLl
   return logs;
 }
 
+function enabledBranchScopes(session: AccompanimentWorkflowSession): BranchScope[] {
+  const visibleScopes = new Set(getVisibleAccompanimentWorkflowSteps(session).map((step) => step.scope));
+  return (Object.keys(ACCOMPANIMENT_WORKFLOW_BRANCH_STEP_IDS) as BranchScope[])
+    .filter((scope) => visibleScopes.has(scope));
+}
+
 export default function AccompanimentWorkflowWizard({
   sourceAbc,
   metadata,
   workflow,
+  workflowSetup,
   onWorkflowChange,
+  onWorkflowSetupChange,
   onGuitarProfileSelected,
   onPianoProfileSelected,
 }: AccompanimentWorkflowWizardProps) {
-  const [activeStepId, setActiveStepId] = useState<AccompanimentWorkflowStepId>(workflow?.currentStepId ?? "melody-snapshot");
+  const sourceCurrent = isAccompanimentWorkflowSourceCurrent(workflow, sourceAbc);
+  const session = useMemo(() => workflow && sourceCurrent ? workflow : null, [workflow, sourceCurrent]);
+  const editableSetup = useMemo(
+    () => workflowSetup || session?.setup
+      ? normalizeAccompanimentWorkflowSetup(workflowSetup ?? session?.setup)
+      : getDefaultAccompanimentWorkflowSetup(),
+    [workflowSetup, session?.setup]
+  );
+  const visibleSteps = useMemo(
+    () => session
+      ? getVisibleAccompanimentWorkflowSteps(session)
+      : getVisibleAccompanimentWorkflowStepsForSetup(editableSetup),
+    [session, editableSetup]
+  );
+  const [activeStepId, setActiveStepId] = useState<AccompanimentWorkflowStepId>(session?.currentStepId ?? visibleSteps[0]?.id ?? "melody-snapshot");
   const [userNotes, setUserNotes] = useState<Partial<Record<AccompanimentWorkflowStepId, string>>>({});
   const [savedNoteStepId, setSavedNoteStepId] = useState<AccompanimentWorkflowStepId | null>(null);
   const [generatingStepId, setGeneratingStepId] = useState<AccompanimentWorkflowStepId | null>(null);
   const [liveLlmLogs, setLiveLlmLogs] = useState<AccompanimentWorkflowLlmLogEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const sourceCurrent = isAccompanimentWorkflowSourceCurrent(workflow, sourceAbc);
-  const session = useMemo(() => workflow && sourceCurrent ? workflow : null, [workflow, sourceCurrent]);
-  const persistedCurrentStepId = session?.currentStepId;
-  const activeStep = ACCOMPANIMENT_WORKFLOW_STEPS.find((step) => step.id === activeStepId) ?? ACCOMPANIMENT_WORKFLOW_STEPS[0];
-  const activeStepState = session?.steps[activeStep.id] ?? emptyStepState();
-  const activeUserNote = userNotes[activeStep.id] ?? activeStepState.promptNote;
+  const activeStep = visibleSteps.find((step) => step.id === activeStepId) ?? visibleSteps[0];
+  const activeStepState = activeStep && session ? session.steps[activeStep.id] ?? emptyStepState() : emptyStepState();
+  const activeUserNote = activeStep ? userNotes[activeStep.id] ?? activeStepState.promptNote : "";
   const lyricChordAnnotations = useMemo(() => extractLyricChordAnnotations(sourceAbc), [sourceAbc]);
-  const canConsolidateChordIngestion = lyricChordAnnotations.length > 0 && isChordIngestionWorkflowStep(activeStep.id);
-  const promptPreview = buildAccompanimentWorkflowPrompt({
+  const canConsolidateChordIngestion = Boolean(activeStep && lyricChordAnnotations.length > 0 && isChordIngestionWorkflowStep(activeStep.id));
+  const promptPreview = activeStep ? buildAccompanimentWorkflowPrompt({
     stepId: activeStep.id,
     sourceAbc,
     metadata,
     previousSelections: session ? getSelectedWorkflowContext(session, activeStep.id) : [],
+    setup: session?.setup ?? editableSetup,
     userNote: activeUserNote,
-  });
+  }) : "";
 
   useEffect(() => {
-    if (!persistedCurrentStepId) return;
+    if (!session?.currentStepId) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- active wizard step must hydrate from the persisted workflow session after localStorage restore.
-    setActiveStepId((current) => current === persistedCurrentStepId ? current : persistedCurrentStepId);
-  }, [persistedCurrentStepId]);
+    setActiveStepId((current) => current === session.currentStepId ? current : session.currentStepId);
+  }, [session?.currentStepId]);
 
-  const beginWorkflow = () => {
-    const next = createAccompanimentWorkflowSession(sourceAbc);
+  useEffect(() => {
+    if (visibleSteps.some((step) => step.id === activeStepId)) return;
+    const fallback = visibleSteps[0]?.id;
+    if (fallback) setActiveStepId(fallback);
+  }, [activeStepId, visibleSteps]);
+
+  const beginWorkflow = (setup: AccompanimentWorkflowSetup = editableSetup) => {
+    const normalizedSetup = normalizeAccompanimentWorkflowSetup(setup);
+    const next = createAccompanimentWorkflowSession(sourceAbc, normalizedSetup);
+    onWorkflowSetupChange(normalizedSetup);
     onWorkflowChange(next);
     setActiveStepId(next.currentStepId);
     onGuitarProfileSelected(null);
@@ -125,8 +215,12 @@ export default function AccompanimentWorkflowWizard({
     setError(null);
   };
 
+  const handleSetupChange = (setup: AccompanimentWorkflowSetup) => {
+    onWorkflowSetupChange(normalizeAccompanimentWorkflowSetup(setup));
+  };
+
   const savePromptNote = () => {
-    if (!session) return;
+    if (!session || !activeStep) return;
     const stepState = session.steps[activeStep.id] ?? emptyStepState();
     onWorkflowChange({
       ...session,
@@ -143,7 +237,7 @@ export default function AccompanimentWorkflowWizard({
   };
 
   const generateStep = async () => {
-    if (!session) return;
+    if (!session || !activeStep) return;
     const stepId = activeStep.id;
     const startedLog = makeClientLlmLog({
       stepId,
@@ -159,6 +253,7 @@ export default function AccompanimentWorkflowWizard({
           sourceAbc,
           metadata,
           previousSelections: getSelectedWorkflowContext(session, "chord-tone-mapping"),
+          setup: session.setup,
           userNote: activeUserNote,
         });
         setLiveLlmLogs((current) => [...current, ...logsFromRuns(runs)]);
@@ -171,6 +266,7 @@ export default function AccompanimentWorkflowWizard({
         sourceAbc,
         metadata,
         previousSelections: getSelectedWorkflowContext(session, stepId),
+        setup: session.setup,
         userNote: activeUserNote,
       });
       setLiveLlmLogs((current) => [...current, ...logsFromRuns([run])]);
@@ -192,48 +288,54 @@ export default function AccompanimentWorkflowWizard({
     }
   };
 
-  const handleSkipInstrument = (instrument: "Guitar" | "Piano") => {
+  const clearProfilesForScope = (scope: BranchScope) => {
+    if (scope === "guitar") onGuitarProfileSelected(null);
+    if (scope === "piano") onPianoProfileSelected(null);
+  };
+
+  const handleSkipBranch = (scope: BranchScope) => {
     if (!session) return;
-    const stepIds = instrument === "Guitar" ? ACCOMPANIMENT_WORKFLOW_GUITAR_STEP_IDS : ACCOMPANIMENT_WORKFLOW_PIANO_STEP_IDS;
-    const next = skipWorkflowSteps(session, stepIds, instrument, activeUserNote);
+    const next = skipWorkflowSteps(session, ACCOMPANIMENT_WORKFLOW_BRANCH_STEP_IDS[scope], BRANCH_LABELS[scope], activeUserNote);
     onWorkflowChange(next);
     setActiveStepId(next.currentStepId);
-    if (instrument === "Guitar") onGuitarProfileSelected(null);
-    if (instrument === "Piano") onPianoProfileSelected(null);
+    clearProfilesForScope(scope);
     setError(null);
   };
 
-  const handleClearInstrument = (instrument: "Guitar" | "Piano") => {
+  const handleClearBranch = (scope: BranchScope) => {
     if (!session) return;
-    const stepIds = instrument === "Guitar" ? ACCOMPANIMENT_WORKFLOW_GUITAR_STEP_IDS : ACCOMPANIMENT_WORKFLOW_PIANO_STEP_IDS;
-    const clearedWorkflow = clearAccompanimentWorkflowStepResults(session, stepIds);
+    const clearedWorkflow = clearAccompanimentWorkflowStepResults(session, ACCOMPANIMENT_WORKFLOW_BRANCH_STEP_IDS[scope]);
     const next = {
       ...clearedWorkflow,
-      guitarProfileHint: instrument === "Guitar" ? null : clearedWorkflow.guitarProfileHint,
-      pianoProfileHint: instrument === "Piano" ? null : clearedWorkflow.pianoProfileHint,
+      guitarProfileHint: scope === "guitar" ? null : clearedWorkflow.guitarProfileHint,
+      pianoProfileHint: scope === "piano" ? null : clearedWorkflow.pianoProfileHint,
     };
     onWorkflowChange(next);
     setActiveStepId(next.currentStepId);
-    if (instrument === "Guitar") onGuitarProfileSelected(null);
-    if (instrument === "Piano") onPianoProfileSelected(null);
+    clearProfilesForScope(scope);
     setError(null);
   };
 
   const handleSelectOption = (option: AccompanimentWorkflowOption, runId: string) => {
-    if (!session) return;
+    if (!session || !activeStep) return;
     const next = selectOption(session, activeStep.id, option, activeUserNote, runId);
     onWorkflowChange(next);
-    if (activeStep.id === "guitar-fills-validation") onGuitarProfileSelected(extractProfile(option));
+    if (activeStep.id === "guitar-fingerstyle") onGuitarProfileSelected(extractProfile(option));
     if (activeStep.id === "piano-fills-pedal-validation") onPianoProfileSelected(extractProfile(option));
   };
 
   if (!session) {
     return (
       <div className="space-y-4 rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950/50">
+        <WorkflowSetupPanel
+          setup={editableSetup}
+          disabled={Boolean(generatingStepId)}
+          onSetupChange={handleSetupChange}
+        />
         <div>
           <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">Step-by-step AI Accompaniment Workflow</h3>
           <p className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
-            Start a persisted human-in-the-loop session for the current harmonized ABC. Each step stores LLM options and your selected choice.
+            {visibleSteps.length} planned review points will be created from the selected style and instruments. Change the setup above to preview the exact workflow before starting.
           </p>
           {workflow && !sourceCurrent && (
             <p className="mt-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900/70 dark:bg-amber-950/40 dark:text-amber-300">
@@ -241,18 +343,40 @@ export default function AccompanimentWorkflowWizard({
             </p>
           )}
         </div>
-        <button type="button" onClick={beginWorkflow} className="rounded-xl bg-amber-500 px-4 py-2 text-xs font-bold text-white transition hover:bg-amber-600">
-          {workflow && !sourceCurrent ? "Reset Workflow for Current ABC" : "Start 12-step Workflow"}
+        <WorkflowStepGrid
+          steps={visibleSteps}
+          session={null}
+          activeStepId={activeStep?.id ?? activeStepId}
+          onStepClick={setActiveStepId}
+        />
+        {activeStep && (
+          <section className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/50">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h4 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">{activeStep.index}. {activeStep.label}</h4>
+                <p className="mt-1 text-xs leading-5 text-zinc-600 dark:text-zinc-400">{activeStep.description}</p>
+              </div>
+              <span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase ${SCOPE_CLASS[activeStep.scope]}`}>{activeStep.scope}</span>
+            </div>
+            <details className="mt-3 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950/50">
+              <summary className="cursor-pointer text-xs font-bold text-zinc-700 dark:text-zinc-200">Default prompt preview</summary>
+              <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-zinc-500 dark:text-zinc-400">{getAccompanimentWorkflowPromptSummary(activeStep.id)}</p>
+              <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap rounded-lg bg-zinc-50 p-3 text-[11px] leading-5 text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">{promptPreview}</pre>
+            </details>
+          </section>
+        )}
+        <button type="button" onClick={() => beginWorkflow()} className="rounded-xl bg-amber-500 px-4 py-2 text-xs font-bold text-white transition hover:bg-amber-600">
+          {workflow && !sourceCurrent ? "Reset Workflow for Current ABC" : `Start ${visibleSteps.length}-step ${editableSetup.style === "solo-fingerstyle" ? "Solo/Fingerstyle" : "Accompaniment"} Workflow`}
         </button>
       </div>
     );
   }
 
+  if (!activeStep) return null;
+
   const activeUnlocked = isAccompanimentWorkflowStepUnlocked(session, activeStep.id);
-  const canSkipGuitar = activeUnlocked && activeStep.scope === "guitar";
-  const canSkipPiano = activeUnlocked && activeStep.scope === "piano";
-  const hasGuitarResults = hasWorkflowStepResults(session, ACCOMPANIMENT_WORKFLOW_GUITAR_STEP_IDS);
-  const hasPianoResults = hasWorkflowStepResults(session, ACCOMPANIMENT_WORKFLOW_PIANO_STEP_IDS);
+  const branchScopes = enabledBranchScopes(session);
+  const canSkipActiveBranch = activeUnlocked && activeStep.scope !== "shared";
   const persistedLlmLogs = logsFromRuns(activeStepState.runs);
   const transientLlmLogs = liveLlmLogs.filter((log) =>
     log.stepId === activeStep.id || (log.stepId === "consolidated-chord-ingestion" && isChordIngestionWorkflowStep(activeStep.id))
@@ -261,68 +385,44 @@ export default function AccompanimentWorkflowWizard({
 
   return (
     <div className="space-y-4 rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950/50">
+      <WorkflowSetupPanel
+        setup={editableSetup}
+        sessionSetup={session.setup}
+        disabled={Boolean(generatingStepId)}
+        onSetupChange={handleSetupChange}
+        onResetWithSetup={() => beginWorkflow(editableSetup)}
+      />
+
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">Step-by-step AI Accompaniment Workflow</h3>
           <p className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
-            12 review points: shared harmonic foundation first, then Guitar and Piano branches.
+            {visibleSteps.length} review points: shared harmonic foundation first, then enabled instrument branches.
           </p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
-          {hasGuitarResults && (
+          {branchScopes.map((scope) => hasWorkflowStepResults(session, ACCOMPANIMENT_WORKFLOW_BRANCH_STEP_IDS[scope]) && (
             <button
+              key={scope}
               type="button"
-              onClick={() => handleClearInstrument("Guitar")}
-              className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-2.5 py-1.5 text-xs font-bold text-amber-700 transition hover:bg-amber-500/20 dark:text-amber-300"
+              onClick={() => handleClearBranch(scope)}
+              className={`rounded-lg border px-2.5 py-1.5 text-xs font-bold transition hover:bg-zinc-100 dark:hover:bg-zinc-900 ${SCOPE_CLASS[scope]}`}
             >
-              Clear Guitar Result Set
+              Clear {BRANCH_LABELS[scope]} Result Set
             </button>
-          )}
-          {hasPianoResults && (
-            <button
-              type="button"
-              onClick={() => handleClearInstrument("Piano")}
-              className="rounded-lg border border-violet-400/40 bg-violet-500/10 px-2.5 py-1.5 text-xs font-bold text-violet-700 transition hover:bg-violet-500/20 dark:text-violet-300"
-            >
-              Clear Piano Result Set
-            </button>
-          )}
-          <button type="button" onClick={beginWorkflow} className="rounded-lg border border-rose-400/30 bg-rose-500/10 px-2.5 py-1.5 text-xs font-bold text-rose-600 transition hover:bg-rose-500/20 dark:text-rose-400">
+          ))}
+          <button type="button" onClick={() => beginWorkflow(session.setup)} className="rounded-lg border border-rose-400/30 bg-rose-500/10 px-2.5 py-1.5 text-xs font-bold text-rose-600 transition hover:bg-rose-500/20 dark:text-rose-400">
             Reset
           </button>
         </div>
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-        {ACCOMPANIMENT_WORKFLOW_STEPS.map((step) => {
-          const complete = isAccompanimentWorkflowStepComplete(session, step.id);
-          const unlocked = isAccompanimentWorkflowStepUnlocked(session, step.id);
-          const selected = getSelectedWorkflowOption(session, step.id);
-          return (
-            <button
-              key={step.id}
-              type="button"
-              disabled={!unlocked}
-              onClick={() => setActiveStepId(step.id)}
-              className={`rounded-xl border p-3 text-left transition ${
-                activeStepId === step.id
-                  ? "border-amber-400 bg-amber-500/10"
-                  : complete
-                    ? "border-emerald-200 bg-emerald-50 dark:border-emerald-900/70 dark:bg-emerald-950/30"
-                    : unlocked
-                      ? "border-zinc-200 bg-zinc-50 hover:border-amber-300/60 dark:border-zinc-800 dark:bg-zinc-900/50"
-                      : "border-zinc-200 bg-zinc-100 opacity-60 dark:border-zinc-800 dark:bg-zinc-900"
-              }`}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">{step.index}. {step.shortLabel}</span>
-                <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${SCOPE_CLASS[step.scope]}`}>{step.scope}</span>
-              </div>
-              <p className="mt-1 text-[11px] leading-4 text-zinc-500 dark:text-zinc-400">{selected?.label ?? (unlocked ? "Ready" : "Locked")}</p>
-            </button>
-          );
-        })}
-      </div>
+      <WorkflowStepGrid
+        steps={visibleSteps}
+        session={session}
+        activeStepId={activeStepId}
+        onStepClick={setActiveStepId}
+      />
 
       <section className="space-y-3 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/50">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -388,24 +488,14 @@ export default function AccompanimentWorkflowWizard({
                 ? "Generate 3 Harmony Steps from Lyrics Chords"
                 : "Generate / Regenerate Options"}
           </button>
-          {canSkipGuitar && (
+          {canSkipActiveBranch && (
             <button
               type="button"
               disabled={generatingStepId === activeStep.id}
-              onClick={() => handleSkipInstrument("Guitar")}
-              className="rounded-xl border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-xs font-bold text-amber-700 transition hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50 dark:text-amber-300"
+              onClick={() => handleSkipBranch(activeStep.scope as BranchScope)}
+              className={`rounded-xl border px-3 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50 ${SCOPE_CLASS[activeStep.scope]}`}
             >
-              Skip Guitar Branch
-            </button>
-          )}
-          {canSkipPiano && (
-            <button
-              type="button"
-              disabled={generatingStepId === activeStep.id}
-              onClick={() => handleSkipInstrument("Piano")}
-              className="rounded-xl border border-violet-400/40 bg-violet-500/10 px-3 py-2 text-xs font-bold text-violet-700 transition hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-50 dark:text-violet-300"
-            >
-              Skip Piano Branch
+              Skip {BRANCH_LABELS[activeStep.scope as BranchScope]} Branch
             </button>
           )}
           {!activeUnlocked && <span className="self-center text-xs text-zinc-500 dark:text-zinc-400">Select required previous steps before generating this one.</span>}

@@ -101,9 +101,16 @@ Expected small decisions:
 
 ### Accompaniment workflow small steps
 
-Accompaniment is a human-in-the-loop workflow. Use the small workflow steps defined in `src/lib/theory/accompaniment-workflow/definition.ts`:
+Accompaniment is a human-in-the-loop workflow hosted on the existing single composer URL `/compose/:slug/accompaniment` (for example `/compose/hari-bol/accompaniment`). Do not add a separate route for internal accompaniment substeps unless a later task explicitly requests deep links.
 
-1. `melody-snapshot` — confirm source ABC, key/meter metadata, mood, and melody-preservation constraints.
+Before small-step generation, capture the setup defined in `src/lib/theory/accompaniment-workflow/definition.ts`:
+
+- Style: `solo-fingerstyle` or `accompaniment`.
+- Ordered instrument stack: Guitar Classic, Guitar Acoustic, Piano, Indian Harmonium, Flute, Djembe, Violin.
+- Role hints derive from order: bottom/foundation instruments bias bass/drone/transient support; middle instruments bias comping and sustained support; top instruments bias treble fills, breath, halo, sustained strings, or light rhythmic color.
+- New workflows default to combined `accompaniment` with all seven instruments enabled; legacy restored sessions without setup normalize to Guitar Classic + Piano combined accompaniment.
+
+Use the small workflow steps defined in `src/lib/theory/accompaniment-workflow/definition.ts`:
 2. `key-scale-cadence` — analyze key, scale/raga context, phrase endings, and cadence targets.
 3. `strong-beat-targets` — identify structurally strong melody notes.
 4. `chord-tone-mapping` — map strong notes to chord-tone roles, suspensions, or tensions.
@@ -112,16 +119,35 @@ Accompaniment is a human-in-the-loop workflow. Use the small workflow steps defi
 7. `guitar-comping-profile` — choose guitar comping/picking profile.
 8. `guitar-voicing-bass` — plan guitar voicings, bass anchors, and walking motion.
 9. `guitar-fills-validation` — validate guitar fills and tablature playability.
-10. `piano-comping-bass` — choose piano comping profile and left-hand/bass foundation.
-11. `piano-rh-voicing` — plan right-hand guide tones and voice-leading.
-12. `piano-fills-pedal-validation` — validate gap fills, sustain pedal automation, and piano playability.
+10. `guitar-fingerstyle` — generate solo guitar fingerstyle that carries the melody, adds chord-derived bass, and plans intro/interlude/outro form sections.
+11. `piano-comping-bass` — choose piano comping profile and left-hand/bass foundation.
+12. `piano-rh-voicing` — plan right-hand guide tones and voice-leading.
+13. `piano-fills-pedal-validation` — validate gap fills, sustain pedal automation, and piano playability.
+14. `harmonium-drone-register` — choose devotional harmonium drone tones, register, sustain density, and melody-yield behavior.
+15. `harmonium-chord-voicing-validation` — validate harmonium chord voicings, root-fifth anchors, and collision-safe sustained support.
+16. `djembe-groove-interlock` — choose Djembe groove profile and interlock Bass/Tone/Slap strokes with accompaniment transients.
+17. `djembe-fill-validation` — validate Djembe fill policy, backbeat/slap behavior, and transient conflict limits.
+18. `flute-yield-register` — choose Flute role, register, and melody-yield behavior.
+19. `flute-breath-fill-validation` — validate Flute breath intervals, playable gap fills, slurs, and rest policy.
+20. `violin-bed-register` — choose Violin harmonic bed, counterline, drone-pad strategy, and register relationship.
+21. `violin-expression-validation` — validate Violin bow expression, vibrato/swell, double-stop policy, and melody-safe support.
+
+Dynamic step gating:
+
+- Shared steps 1–6 are always enabled.
+- `solo-fingerstyle` enables only shared steps plus the Guitar branch; Piano, Harmonium, Djembe, Flute, and Violin branches are disabled for that workflow run.
+- Combined `accompaniment` enables branch steps only for enabled instruments in the ordered stack, and the planned step grid must react before workflow start/reset.
+- Guitar Classic and Guitar Acoustic share the Guitar branch initially; setup context decides tone/role and prevents duplicate branch execution.
+- Disabled branches must not block `getNextUncompletedWorkflowStepId` or step unlock checks.
 
 Important accompaniment rules:
 
 - Preserve the melody ABC exactly unless the specific step allows chord annotations.
 - For chord ingestion from lyric `w:` lines, treat embedded `[Chord]` symbols as user-supplied progression context.
 - Guitar tab validation steps must provide concrete tab events with measure, beat, note, string, fret, and role.
+- Guitar Fingerstyle must be a solo guitar plan: the Guitar voice carries the melody itself, adds bass from chord progression roots/fifths/approaches, exposes intro/interlude/outro section metadata, and renders GUITAR TAB.
 - Piano output should expose pedal automation, key highlights, fingering metadata, and physical validation where available.
+- Djembe, Flute, and Violin accompaniment branches may render support ABC layers directly on the accompaniment page once their validation/polish branch step is selected.
 - Keep generated ABC previewable with `AbcjsPlaybackController`.
 - For multi-instrument ABC, preserve Melody visual line breaks and group by staff system: `[V:Melody]` line N, then each Guitar/Piano/etc. line N for the same measure range, before moving to line N+1.
 

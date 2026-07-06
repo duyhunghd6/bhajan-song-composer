@@ -24,7 +24,18 @@ K:G
 
 ---
 
-## 2. Mode A: Rhythm Guitar Accompaniment
+## 2. Setup-driven Mode Selection
+
+The `/compose/:slug/accompaniment` setup chooses whether guitar participates as a combined accompaniment branch or as the terminal `solo-fingerstyle` route.
+
+- In `solo-fingerstyle`, enable the Guitar branch only. The final `guitar-fingerstyle` step must carry the melody on the Guitar voice, add chord-derived bass from roots/fifths/approach notes, expose intro/interlude/outro section metadata, and render GUITAR TAB.
+- In combined `accompaniment`, Guitar Classic and Guitar Acoustic share the Guitar branch initially. Use setup order and role notes to decide whether the guitar emphasizes foundation/bass arpeggios, middle comping, or treble fills.
+- Do not combine Solo/Fingerstyle compression with Piano/Harmonium/Djembe/Flute branches in the same workflow run unless the user explicitly asks for separate outputs.
+- If both Guitar Classic and Guitar Acoustic are enabled, avoid duplicate generic `V:Guitar` responsibilities; treat the setup as one guitar branch until unique voice policies are implemented.
+
+---
+
+## 3. Mode A: Rhythm Guitar Accompaniment
 
 ### 2.1 Role Definition
 
@@ -196,10 +207,12 @@ Thread 2 (Asynchronous Events):    Fingers execute melody events in two states:
 
 ### 3.5 ABC Output Template for Fingerstyle
 
+For analysis, fingerstyle can be reasoned about as separate melody and bass threads:
+
 ```abc
 %abc-2.1
 X:1
-T:Fingerstyle Arrangement
+T:Fingerstyle Arrangement Analysis
 M:4/4
 L:1/8
 Q:1/4=100
@@ -213,11 +226,64 @@ K:C
 [V:Bass]    C,  G,  C,  G,  C,  G,  C,  G, |  G,,  D,  G,,  D,  G,,  D,  G,,  D, |
 ```
 
+In the app, final playable fingerstyle output is emitted as one physical Guitar voice so abcjs can render GUITAR TAB from that staff:
+
+```abc
+V:Guitar clef=treble-8 name="Layer 2 Guitar Fingerstyle"
+%%MIDI program 24
+% @fingerstyle-section intro
+| E,2 B,2 E2 B,2 |
+% @fingerstyle-section body
+| E,2 E2 B,2 E2 | B,2 B2 F,2 A2 |
+% @fingerstyle-section interlude
+| B,2 A2 F,2 A2 |
+% @fingerstyle-section outro
+| E,2 E2 E,4 |
+```
+
+When this Guitar voice is combined with the original Melody staff, preserve the original Melody body systems exactly. Add intro/interlude/outro as extra staff systems where Melody contains full-measure rests and Guitar contains the form material.
+
+### 3.6 Intro, Interlude, Outro, and Fill Policy
+
+Fingerstyle polish sections support the devotional melody; they must not become a competing second song.
+
+| Section | Placement | Source Material | Density Rule | Cadence Behavior |
+| ------- | --------- | --------------- | ------------ | ---------------- |
+| **Intro** | Before the first Melody system | Tonic/dominant arpeggio or the opening `Sthayi` motive | 1–2 measures by default | Establish key and picking profile before the singer enters |
+| **Interlude** | At phrase/cadence boundaries, commonly between `Sthayi` and `Antara` | Short turnaround from the preceding cadence or a recognizable melodic fragment | Keep below melody density; avoid fast runs unless melody is resting | Reconnect smoothly to the next phrase's first chord/root |
+| **Outro** | After the final Melody system | Final cadence arpeggio using tonic/root bass and stable top voice | 1–2 measures, thinning toward final note | End on tonic/root bass with consonant top voice |
+| **Fill** | Inside vocal gaps only | Neighbor tones, chord tones, or brief motive echo | Yield immediately when melody resumes | Never obscure phrase-ending melody notes |
+
+Hard rules:
+
+1. Derive bass from the selected chord progression: root on beat 1, fifth/root/approach on stronger internal beats.
+2. Reuse `Sthayi`/`Antara` motives or cadence targets rather than inventing unrelated new melodies.
+3. Put fills in rests or long-note gaps; if the melody is active, simplify to bass + guide tone.
+4. Validate every concrete intro/interlude/outro/fill tab event with the same tab-event schema as the main body.
+5. If a form section cannot be made playable within fret-span/string rules, shorten it before changing the source melody.
+
 ---
 
 ## 4. Validation Checklist
 
 Before outputting any guitar arrangement:
+
+Concrete tab events must use the app/tool schema below whenever a workflow step validates voicings, fills, intro, interlude, outro, or final fingerstyle output:
+
+```ts
+type GuitarTabEvent = {
+  measureIndex: number;
+  beat: number;
+  subdivision?: string | number;
+  simultaneousGroupId?: string;
+  note: string;
+  string: 1 | 2 | 3 | 4 | 5 | 6;
+  fret: number;
+  role: "melody" | "bass" | "root" | "third" | "seventh" | "fill" | "percussion" | string;
+};
+```
+
+Events sharing `measureIndex + beat + subdivision` or the same `simultaneousGroupId` are simultaneous. A simultaneous group must never assign two pitches to the same physical string.
 
 | Check | Rule |
 | ----- | ---- |

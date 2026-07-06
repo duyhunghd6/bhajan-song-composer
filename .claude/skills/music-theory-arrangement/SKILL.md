@@ -1,5 +1,5 @@
 ---
-name: music-theory
+name: music-theory-arrangement
 description: Comprehensive music theory knowledge graph for algorithmic composition, harmonic analysis, and arrangement. Use when examining music theory, composing or harmonizing music, analyzing chord progressions, applying voice leading rules, working with scales/modes/keys, generating multi-voice arrangements, or arranging for guitar, piano, or ensemble instruments. Triggers on tasks involving chord progressions, voice leading, key signatures, scales, modes, intervals, cadences, song form, rhythmic analysis, harmonization pipelines, guitar fingerstyle arrangement, piano accompaniment, ensemble orchestration, or any music generation that requires theoretical validation.
 argument-hint: <key-or-progression-or-melody>
 metadata:
@@ -60,11 +60,54 @@ Read these when the task requires **generating arrangement parts** for specific 
 When arranging from a melody-only input, follow this document reading order:
 
 ```
-1. THEORY.md §6.4          →  Harmonize the melody (find chords)
-2. ARRANGEMENT01-GUITAR.md  →  If guitar arrangement is needed
-   OR ARRANGEMENT02-PIANO.md →  If piano arrangement is needed
-3. ARRANGEMENT03-ESSEMBLE.md →  If expanding to full ensemble
+1. THEORY.md §6.4           →  Harmonize the melody (find chords)
+2. Initial setup            →  Choose style and ordered instrument stack
+3. ARRANGEMENT01-GUITAR.md  →  If Guitar Classic/Acoustic or Solo/Fingerstyle is enabled
+   OR ARRANGEMENT02-PIANO.md →  If Piano is enabled
+   OR harmonium guidance     →  If Indian Harmonium is enabled
+4. ARRANGEMENT03-ESSEMBLE.md →  If Djembe/Flute/Violin support or later ensemble expansion is enabled
 ```
+
+### Initial Accompaniment Setup
+
+The accompaniment workflow starts on the single route `/compose/:slug/accompaniment` (for example `/compose/hari-bol/accompaniment`). Before small-step generation, capture:
+
+1. **Style**
+   - `Solo/Fingerstyle` — compress melody, chord support, and chord-derived bass onto the top enabled guitar. Disable Piano, Harmonium, Djembe, Flute, and Violin branches so the solo guitar remains clear.
+   - `Accompaniment (combined instruments)` — combine enabled instruments while preserving the devotional melody first.
+2. **Ordered instrument stack**
+   - Guitar Classic
+   - Guitar Acoustic
+   - Piano
+   - Indian Harmonium
+   - Flute
+   - Djembe
+   - Violin
+
+Use the order as orchestration priority:
+
+- Lower/bottom instruments should take foundation, bass, drone, or transient-support duties.
+- Middle instruments should provide comping, guide tones, or sustained support.
+- Upper/top instruments should provide treble fills, breath, halo, sustained strings, or light rhythmic color.
+- Djembe can support low Bass/Dum events when placed lower, or Tone/Slap transient color when placed higher.
+- Violin can provide harmonic bed, drone-pad, or restrained counterline support and should yield before it covers the devotional melody.
+
+Conditional step planning:
+
+- Always run the shared harmonic foundation steps: `melody-snapshot`, `key-scale-cadence`, `strong-beat-targets`, `chord-tone-mapping`, `chord-progression`, and `voice-leading-validation`.
+- Enable Guitar steps when Guitar Classic or Guitar Acoustic is active: `guitar-comping-profile`, `guitar-voicing-bass`, `guitar-fills-validation`, and `guitar-fingerstyle`.
+- Enable Piano steps only when Piano is active and the style is combined Accompaniment: `piano-comping-bass`, `piano-rh-voicing`, and `piano-fills-pedal-validation`.
+- Enable Harmonium steps only when Indian Harmonium is active and the style is combined Accompaniment: `harmonium-drone-register` and `harmonium-chord-voicing-validation`.
+- Enable Djembe steps only when Djembe is active and the style is combined Accompaniment: `djembe-groove-interlock` and `djembe-fill-validation`.
+- Enable Flute steps only when Flute is active and the style is combined Accompaniment: `flute-yield-register` and `flute-breath-fill-validation`.
+- Enable Violin steps only when Violin is active and the style is combined Accompaniment: `violin-bed-register` and `violin-expression-validation`.
+
+Implementation behavior:
+
+- The setup is persisted with the composer workspace and embedded in each accompaniment workflow session.
+- New workflows default to combined Accompaniment with all seven setup instruments enabled in the order listed above.
+- Legacy restored sessions without a setup are normalized to the older Guitar Classic + Piano combined-accompaniment behavior so existing localStorage drafts continue to unlock and render predictably.
+- Do not create a separate `/music-theory-arrangement` app page for this workflow; this is a Claude skill and a theory reference, not a Next.js route.
 
 ### 🎹 MIDI Instrument Mapping Guide
 
@@ -72,7 +115,7 @@ When outputting ABC notation for the arranged instruments, use these `%%MIDI` co
 
 | Instrument | MIDI Program / Channel | Key Techniques for Realism |
 | ---------- | ---------------------- | -------------------------- |
-| **Guitar Classic / Acoustic Guitar (nylon)** | `%%MIDI program 24` | Use arpeggiated/staggered patterns (no block chords) to simulate fingerpicking. |
+| **Guitar Classic / Guitar Acoustic** | `%%MIDI program 24` | Use arpeggiated/staggered patterns (no block chords). Guitar Classic favors nylon/fingerstyle warmth; Guitar Acoustic favors brighter folk strum/arpeggio support. |
 | **Harmonium / Reed Organ** | `%%MIDI program 20` | Use sustained chordal drones, root-fifth anchors, and devotional comping; this replaces only the exact `Guitar Left Hand` accompaniment target. |
 | **Violin** | `%%MIDI program 40` | Use slurs `()` to simulate smooth continuous bowing (legato). |
 | **Flute** | `%%MIDI program 73` | Use slurs `()` for legato, and insert 16th-note rests (`z/`) for breath. |

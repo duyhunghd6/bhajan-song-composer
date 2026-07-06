@@ -92,6 +92,34 @@ test.describe("composer workflow", () => {
     await expect(page.getByRole("button", { name: "Copy Markdown" })).toBeVisible();
   });
 
+  test("reacts accompaniment workflow plan to style and instrument setup", async ({ page }) => {
+    await page.goto("/compose/hari-bol/accompaniment");
+
+    await expect(page.getByRole("heading", { name: "Accompaniment setup" })).toBeVisible();
+    await expect(page.getByRole("checkbox", { name: /Flute/ })).toBeVisible();
+    await expect(page.getByRole("checkbox", { name: /Djembe/ })).toBeVisible();
+    await expect(page.getByRole("checkbox", { name: /Violin/ })).toBeVisible();
+    await expect(page.getByText("Djembe Groove")).toBeVisible();
+    await expect(page.getByText("Flute Register")).toBeVisible();
+    await expect(page.getByText("Violin Bed")).toBeVisible();
+
+    await page.getByRole("button", { name: /Solo\/Fingerstyle/ }).click();
+    await expect(page.getByText("Djembe Groove")).toHaveCount(0);
+    await expect(page.getByText("Flute Register")).toHaveCount(0);
+    await expect(page.getByText("Violin Bed")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /Guitar Fingerstyle/ })).toBeVisible();
+
+    await page.getByRole("button", { name: /Accompaniment \(combined instruments\)/ }).click();
+    await page.getByRole("checkbox", { name: /Flute/ }).uncheck();
+    await expect(page.getByText("Flute Register")).toHaveCount(0);
+    await expect(page.getByText("Djembe Groove")).toBeVisible();
+    await expect(page.getByText("Violin Bed")).toBeVisible();
+
+    await page.getByRole("button", { name: /Start \d+-step Accompaniment Workflow/ }).click();
+    await page.getByRole("checkbox", { name: /Flute/ }).check();
+    await expect(page.getByText("Setup changed after this workflow started.")).toBeVisible();
+  });
+
   test("places source on the left and playback on the right at widescreen", async ({ page }) => {
     await page.setViewportSize({ width: 1920, height: 1080 });
 

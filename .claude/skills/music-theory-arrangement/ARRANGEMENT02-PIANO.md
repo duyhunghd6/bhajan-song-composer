@@ -3,6 +3,8 @@
 > **Scope:** This module expands a single baseline melody (Layer 1) into a fully realized two-handed piano accompaniment. Unlike guitar fingerstyle compression, piano generation is an **expansion** problem: it distributes harmony, bass, rhythm, counterpoint, and sustain behavior across 10 fingers and the 88-key frequency spectrum.
 >
 > **Prerequisite:** The harmonic framework must exist before piano textures are generated. If the input is melody-only, run the Harmonization Pipeline from [`THEORY.md`](./THEORY.md) §6.4 first.
+>
+> **Route Participation:** Piano participates only in the combined `accompaniment` setup when Piano is enabled in the ordered stack. Skip Piano steps for `solo-fingerstyle`, guitar-only, harmonium-only, djembe-only, or flute-only workflows. Piano order controls whether LH bass should dominate the foundation or yield to lower-ordered instruments.
 
 ---
 

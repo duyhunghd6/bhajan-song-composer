@@ -15,7 +15,10 @@ describe("Guitar fingerstyle arranger", () => {
       melodyNotes: ["E", "E"],
       abc: "E,2 E2 B,2 E2",
     });
-    expect(arrangement.abc).toContain("V:Guitar clef=treble-8\n%%MIDI program 24");
+    expect(arrangement.abc).toContain('V:Guitar clef=treble-8 name="Layer 2 Guitar Fingerstyle"\n%%MIDI program 24');
+    expect(arrangement.abc).toContain("% @fingerstyle-section intro");
+    expect(arrangement.abc).toContain("% @fingerstyle-section interlude");
+    expect(arrangement.abc).toContain("% @fingerstyle-section outro");
   });
 
   it("builds inspectable upward construction source layers before guitar reduction", () => {
@@ -262,6 +265,18 @@ K:C
     });
     expect(arrangement.outputContract.artifacts).toMatchObject({
       finalAbc: arrangement.abc,
+      formPlan: {
+        sections: expect.arrayContaining([
+          expect.objectContaining({ kind: "intro", label: "Intro" }),
+          expect.objectContaining({ kind: "body", label: "Melody Body" }),
+          expect.objectContaining({ kind: "interlude", label: "Interlude" }),
+          expect.objectContaining({ kind: "outro", label: "Outro" }),
+        ]),
+      },
+      guitarTabEvents: expect.arrayContaining([
+        expect.objectContaining({ measureIndex: 0, role: "bass", string: 6, fret: 0 }),
+        expect.objectContaining({ measureIndex: 0, role: "melody" }),
+      ]),
       tablature: {
         measures: expect.arrayContaining([
           expect.objectContaining({
@@ -290,7 +305,8 @@ K:C
   it("exposes a line-only helper for direct ABC output", () => {
     const line = generateFingerstyleLine(sampleAbc, ["Em", "Bm", "G", "Em"]);
 
-    expect(line.startsWith("V:Guitar clef=treble-8")).toBe(true);
+    expect(line.startsWith('V:Guitar clef=treble-8 name="Layer 2 Guitar Fingerstyle"')).toBe(true);
     expect(line).toContain("E,2 E2 B,2 E2");
+    expect(line).toContain("% @fingerstyle-section body");
   });
 });

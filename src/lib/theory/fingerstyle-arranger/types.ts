@@ -2,6 +2,7 @@ import type { AccompanimentStage } from "../accompaniment-stage";
 import type { FingerstyleDownwardCompression, FingerstylePhysicalHandEvent, GuitarStringNumber } from "../fingerstyle-compressor";
 import type { FullTrackExpansionStage } from "../full-track-expansion-stage";
 import type { CadenceRole } from "../harmonizer";
+import type { GuitarTabEvent } from "../guitar-tab-validation";
 
 export interface FingerstyleMeasure {
   measureIndex: number;
@@ -167,8 +168,25 @@ export interface FingerstyleNoteMarkerEvent {
   fret: number;
 }
 
+export type FingerstyleFormSectionKind = "intro" | "body" | "interlude" | "outro";
+
+export interface FingerstyleFormSection {
+  kind: FingerstyleFormSectionKind;
+  label: string;
+  startMeasureIndex: number;
+  measureCount: number;
+  source: string;
+  placement: string;
+}
+
+export interface FingerstyleFormPlan {
+  sections: FingerstyleFormSection[];
+}
+
 export interface FingerstyleGeneratedArtifacts {
   finalAbc: string;
+  formPlan: FingerstyleFormPlan;
+  guitarTabEvents: GuitarTabEvent[];
   tablature: {
     measures: FingerstyleTablatureMeasure[];
   };

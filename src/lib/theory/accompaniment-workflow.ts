@@ -1,16 +1,25 @@
 import { splitAbcMeasureSegments } from "./abc-duration";
+import { normalizeAbcVoiceSyntax } from "./abc-voice-normalization";
 import {
   ACCOMPANIMENT_CHORD_INGESTION_STEP_IDS,
   ACCOMPANIMENT_GUITAR_TAB_VALIDATION_STEP_IDS,
+  ACCOMPANIMENT_INSTRUMENT_LABELS,
+  ACCOMPANIMENT_STYLE_LABELS,
+  ACCOMPANIMENT_WORKFLOW_BRANCH_STEP_IDS,
+  ACCOMPANIMENT_WORKFLOW_SHARED_STEP_IDS,
   ACCOMPANIMENT_WORKFLOW_STEPS,
   ACCOMPANIMENT_WORKFLOW_STEP_IDS,
   ACCOMPANIMENT_WORKFLOW_VERSION,
+  type AccompanimentInstrumentId,
+  type AccompanimentInstrumentSelection,
   type AccompanimentLyricChordAnnotation,
   type AccompanimentWorkflowMetadata,
   type AccompanimentWorkflowOption,
   type AccompanimentWorkflowRun,
+  type AccompanimentWorkflowScope,
   type AccompanimentWorkflowSelectedContext,
   type AccompanimentWorkflowSession,
+  type AccompanimentWorkflowSetup,
   type AccompanimentWorkflowStepDefinition,
   type AccompanimentWorkflowStepId,
   type AccompanimentWorkflowStepState,
@@ -28,6 +37,157 @@ export {
 const STEP_BY_ID = new Map(ACCOMPANIMENT_WORKFLOW_STEPS.map((step) => [step.id, step]));
 const LYRIC_CHORD_PATTERN = /\[([A-G](?:#|b)?(?:(?:maj|min|m|dim|aug|sus|add)\d*|\d+)?(?:[#b]\d+)*(?:\/[A-G](?:#|b)?)?)\]/g;
 const LYRIC_CHORD_STRIP_PATTERN = /\[[^\]]+\]/g;
+
+const DEFAULT_INSTRUMENT_ORDER: AccompanimentInstrumentId[] = [
+  "guitar-classic",
+  "guitar-acoustic",
+  "piano",
+  "indian-harmonium",
+  "flute",
+  "djembe",
+  "violin",
+];
+
+const LEGACY_ENABLED_INSTRUMENTS = new Set<AccompanimentInstrumentId>(["guitar-classic", "piano"]);
+const NEW_WORKFLOW_ENABLED_INSTRUMENTS = new Set<AccompanimentInstrumentId>(DEFAULT_INSTRUMENT_ORDER);
+
+function makeSetup(enabled: Set<AccompanimentInstrumentId>, style: AccompanimentWorkflowSetup["style"]): AccompanimentWorkflowSetup {
+  return {
+    style,
+    instruments: DEFAULT_INSTRUMENT_ORDER.map((id, index) => ({
+      id,
+      enabled: enabled.has(id),
+      order: index,
+      roleNote: defaultInstrumentRoleNote(id, index, DEFAULT_INSTRUMENT_ORDER.length),
+    })),
+  };
+}
+
+export function getDefaultAccompanimentWorkflowSetup(): AccompanimentWorkflowSetup {
+  return makeSetup(NEW_WORKFLOW_ENABLED_INSTRUMENTS, "accompaniment");
+}
+
+export function getLegacyAccompanimentWorkflowSetup(): AccompanimentWorkflowSetup {
+  return makeSetup(LEGACY_ENABLED_INSTRUMENTS, "accompaniment");
+}
+
+function instrumentScope(id: AccompanimentInstrumentId): Exclude<AccompanimentWorkflowScope, "shared"> {
+  if (id === "piano") return "piano";
+  if (id === "indian-harmonium") return "harmonium";
+  if (id === "djembe") return "djembe";
+  if (id === "flute") return "flute";
+  if (id === "violin") return "violin";
+  return "guitar";
+}
+
+function isAccompanimentStyleId(value: unknown): value is AccompanimentWorkflowSetup["style"] {
+  return value === "solo-fingerstyle" || value === "accompaniment";
+}
+
+function isAccompanimentInstrumentId(value: unknown): value is AccompanimentInstrumentId {
+  return DEFAULT_INSTRUMENT_ORDER.some((id) => id === value);
+}
+
+export function orderedAccompanimentInstruments(setup: AccompanimentWorkflowSetup): AccompanimentInstrumentSelection[] {
+  return [...setup.instruments].sort((a, b) => a.order - b.order);
+}
+
+export function defaultInstrumentRoleNote(id: AccompanimentInstrumentId, order: number, total: number): string {
+  const altitude = order <= 1
+    ? "bottom/foundation priority"
+    : order >= total - 2
+      ? "top/treble or transient color"
+      : "middle comping/support lane";
+
+  if (id === "djembe") return `${altitude}; Bass (Dum) supports low transients, Tone/Slap support upper rhythmic color.`;
+  if (id === "flute") return `${altitude}; breathe between melody phrases and yield while vocals are active.`;
+  if (id === "violin") return `${altitude}; sustain harmonic beds, counterlines, or drone pads while yielding to the melody.`;
+  if (id === "indian-harmonium") return `${altitude}; sustain devotional drones, root-fifth anchors, and soft chordal support.`;
+  if (id === "piano") return `${altitude}; split LH foundation and RH guide-tone/response duties.`;
+  return `${altitude}; arpeggiate/stagger notes and avoid block-chord clutter.`;
+}
+
+export function normalizeAccompanimentWorkflowSetup(setup?: Partial<AccompanimentWorkflowSetup> | null): AccompanimentWorkflowSetup {
+  if (!setup) return getLegacyAccompanimentWorkflowSetup();
+
+  const byId = new Map<AccompanimentInstrumentId, Partial<AccompanimentInstrumentSelection>>();
+  for (const instrument of Array.isArray(setup.instruments) ? setup.instruments : []) {
+    if (isAccompanimentInstrumentId(instrument?.id)) byId.set(instrument.id, instrument);
+  }
+
+  const normalized = DEFAULT_INSTRUMENT_ORDER.map((id, defaultOrder) => {
+    const candidate = byId.get(id);
+    const order = typeof candidate?.order === "number" && Number.isFinite(candidate.order)
+      ? candidate.order
+      : defaultOrder;
+    return {
+      id,
+      enabled: typeof candidate?.enabled === "boolean" ? candidate.enabled : false,
+      order,
+      roleNote: typeof candidate?.roleNote === "string" && candidate.roleNote.trim()
+        ? candidate.roleNote.trim()
+        : defaultInstrumentRoleNote(id, order, DEFAULT_INSTRUMENT_ORDER.length),
+    };
+  });
+
+  return {
+    style: isAccompanimentStyleId(setup.style) ? setup.style : "accompaniment",
+    instruments: normalized
+      .sort((a, b) => a.order - b.order)
+      .map((instrument, order) => ({
+        ...instrument,
+        order,
+        roleNote: instrument.roleNote || defaultInstrumentRoleNote(instrument.id, order, normalized.length),
+      })),
+  };
+}
+
+export function getEnabledAccompanimentWorkflowStepIds(setupInput?: Partial<AccompanimentWorkflowSetup> | null): AccompanimentWorkflowStepId[] {
+  const setup = normalizeAccompanimentWorkflowSetup(setupInput);
+  const stepIds: AccompanimentWorkflowStepId[] = [...ACCOMPANIMENT_WORKFLOW_SHARED_STEP_IDS];
+  const seenScopes = new Set<AccompanimentWorkflowScope>(["shared"]);
+  const enabledInstruments = orderedAccompanimentInstruments(setup).filter((instrument) => instrument.enabled);
+
+  if (setup.style === "solo-fingerstyle") {
+    const hasGuitar = enabledInstruments.some((instrument) => instrumentScope(instrument.id) === "guitar");
+    if (hasGuitar) stepIds.push(...ACCOMPANIMENT_WORKFLOW_BRANCH_STEP_IDS.guitar);
+    return stepIds;
+  }
+
+  for (const instrument of enabledInstruments) {
+    const scope = instrumentScope(instrument.id);
+    if (seenScopes.has(scope)) continue;
+    seenScopes.add(scope);
+    stepIds.push(...ACCOMPANIMENT_WORKFLOW_BRANCH_STEP_IDS[scope]);
+  }
+
+  return stepIds;
+}
+
+function sessionSetup(session: AccompanimentWorkflowSession): AccompanimentWorkflowSetup {
+  return normalizeAccompanimentWorkflowSetup((session as Partial<AccompanimentWorkflowSession>).setup);
+}
+
+function sessionEnabledStepIds(session: AccompanimentWorkflowSession): AccompanimentWorkflowStepId[] {
+  const enabledStepIds = (session as Partial<AccompanimentWorkflowSession>).enabledStepIds;
+  if (Array.isArray(enabledStepIds) && enabledStepIds.length > 0) {
+    return enabledStepIds.filter((stepId): stepId is AccompanimentWorkflowStepId => ACCOMPANIMENT_WORKFLOW_STEP_IDS.some((candidate) => candidate === stepId));
+  }
+  return getEnabledAccompanimentWorkflowStepIds(sessionSetup(session));
+}
+
+export function isAccompanimentWorkflowStepEnabled(session: AccompanimentWorkflowSession, stepId: AccompanimentWorkflowStepId): boolean {
+  return sessionEnabledStepIds(session).some((candidate) => candidate === stepId);
+}
+
+export function getVisibleAccompanimentWorkflowStepsForSetup(setupInput?: Partial<AccompanimentWorkflowSetup> | null): AccompanimentWorkflowStepDefinition[] {
+  return getEnabledAccompanimentWorkflowStepIds(setupInput).map((stepId) => getAccompanimentWorkflowStep(stepId));
+}
+
+export function getVisibleAccompanimentWorkflowSteps(session: AccompanimentWorkflowSession | null): AccompanimentWorkflowStepDefinition[] {
+  if (!session) return ACCOMPANIMENT_WORKFLOW_STEPS;
+  return sessionEnabledStepIds(session).map((stepId) => getAccompanimentWorkflowStep(stepId));
+}
 
 export function getAccompanimentWorkflowStep(stepId: AccompanimentWorkflowStepId): AccompanimentWorkflowStepDefinition {
   const step = STEP_BY_ID.get(stepId);
@@ -112,15 +272,22 @@ export function fingerprintAccompanimentSource(sourceAbc: string): string {
   return (hash >>> 0).toString(16).padStart(8, "0");
 }
 
-export function createAccompanimentWorkflowSession(sourceAbc: string): AccompanimentWorkflowSession {
+export function createAccompanimentWorkflowSession(
+  sourceAbc: string,
+  setupInput?: Partial<AccompanimentWorkflowSetup> | null
+): AccompanimentWorkflowSession {
+  const setup = setupInput ? normalizeAccompanimentWorkflowSetup(setupInput) : getLegacyAccompanimentWorkflowSetup();
+  const enabledStepIds = getEnabledAccompanimentWorkflowStepIds(setup);
   return {
     version: ACCOMPANIMENT_WORKFLOW_VERSION,
     sourceAbc,
     sourceAbcFingerprint: fingerprintAccompanimentSource(sourceAbc),
-    currentStepId: "melody-snapshot",
+    currentStepId: enabledStepIds[0] ?? "melody-snapshot",
     steps: getInitialAccompanimentWorkflowSteps(),
     guitarProfileHint: null,
     pianoProfileHint: null,
+    setup,
+    enabledStepIds,
   };
 }
 
@@ -128,8 +295,8 @@ export function isAccompanimentWorkflowSourceCurrent(session: AccompanimentWorkf
   return Boolean(session && session.sourceAbcFingerprint === fingerprintAccompanimentSource(sourceAbc));
 }
 
-export function getWorkflowRun(stepState: AccompanimentWorkflowStepState, runId: string | null): AccompanimentWorkflowRun | null {
-  if (!runId) return null;
+export function getWorkflowRun(stepState: AccompanimentWorkflowStepState | undefined | null, runId: string | null): AccompanimentWorkflowRun | null {
+  if (!stepState || !runId) return null;
   return stepState.runs.find((run) => run.id === runId) ?? null;
 }
 
@@ -138,6 +305,7 @@ export function getSelectedWorkflowOption(
   stepId: AccompanimentWorkflowStepId
 ): AccompanimentWorkflowOption | null {
   const stepState = session.steps[stepId];
+  if (!stepState) return null;
   const activeRun = getWorkflowRun(stepState, stepState.activeRunId);
   if (!activeRun || !stepState.selectedOptionId) return null;
   return activeRun.options.find((option) => option.id === stepState.selectedOptionId) ?? null;
@@ -154,13 +322,15 @@ export function isAccompanimentWorkflowStepUnlocked(
   session: AccompanimentWorkflowSession,
   stepId: AccompanimentWorkflowStepId
 ): boolean {
-  return getAccompanimentWorkflowStep(stepId).dependencies.every((dependency) =>
-    isAccompanimentWorkflowStepComplete(session, dependency)
-  );
+  if (!isAccompanimentWorkflowStepEnabled(session, stepId)) return false;
+  const enabled = new Set(sessionEnabledStepIds(session));
+  return getAccompanimentWorkflowStep(stepId).dependencies
+    .filter((dependency) => enabled.has(dependency))
+    .every((dependency) => isAccompanimentWorkflowStepComplete(session, dependency));
 }
 
 export function getNextUncompletedWorkflowStepId(session: AccompanimentWorkflowSession): AccompanimentWorkflowStepId | null {
-  return ACCOMPANIMENT_WORKFLOW_STEP_IDS.find((stepId) =>
+  return sessionEnabledStepIds(session).find((stepId) =>
     isAccompanimentWorkflowStepUnlocked(session, stepId) && !isAccompanimentWorkflowStepComplete(session, stepId)
   ) ?? null;
 }
@@ -180,7 +350,13 @@ export function clearAccompanimentWorkflowStepResults(
           selectedAt: null,
           promptNote: stepState?.promptNote ?? "",
         }
-      : stepState;
+      : (stepState || {
+          runs: [],
+          activeRunId: null,
+          selectedOptionId: null,
+          selectedAt: null,
+          promptNote: "",
+        });
     return acc;
   }, {} as Record<AccompanimentWorkflowStepId, AccompanimentWorkflowStepState>);
   const clearedSession: AccompanimentWorkflowSession = {
@@ -198,8 +374,9 @@ export function getSelectedWorkflowContext(
   session: AccompanimentWorkflowSession,
   upToStepId?: AccompanimentWorkflowStepId
 ): AccompanimentWorkflowSelectedContext[] {
-  const stopIndex = upToStepId ? ACCOMPANIMENT_WORKFLOW_STEP_IDS.indexOf(upToStepId) : ACCOMPANIMENT_WORKFLOW_STEP_IDS.length;
-  const stepIds = ACCOMPANIMENT_WORKFLOW_STEP_IDS.slice(0, Math.max(stopIndex, 0));
+  const orderedStepIds = sessionEnabledStepIds(session);
+  const stopIndex = upToStepId ? orderedStepIds.indexOf(upToStepId) : orderedStepIds.length;
+  const stepIds = orderedStepIds.slice(0, Math.max(stopIndex, 0));
 
   return stepIds.flatMap((stepId) => {
     const option = getSelectedWorkflowOption(session, stepId);
@@ -217,7 +394,7 @@ export function getSelectedWorkflowContext(
 export function getLatestSelectedWorkflowStep(session: AccompanimentWorkflowSession | null): AccompanimentWorkflowStepDefinition | null {
   if (!session) return null;
 
-  for (const stepId of [...ACCOMPANIMENT_WORKFLOW_STEP_IDS].reverse()) {
+  for (const stepId of [...sessionEnabledStepIds(session)].reverse()) {
     if (getSelectedWorkflowOption(session, stepId)) return getAccompanimentWorkflowStep(stepId);
   }
 
@@ -292,6 +469,25 @@ function formatMetadata(metadata: AccompanimentWorkflowMetadata): string {
   ].filter(Boolean).join("\n");
 }
 
+function formatWorkflowSetup(setupInput?: Partial<AccompanimentWorkflowSetup> | null): string {
+  const setup = normalizeAccompanimentWorkflowSetup(setupInput ?? getLegacyAccompanimentWorkflowSetup());
+  const enabled = orderedAccompanimentInstruments(setup).filter((instrument) => instrument.enabled);
+  const disabled = orderedAccompanimentInstruments(setup).filter((instrument) => !instrument.enabled);
+  const lines = [
+    `- Style: ${ACCOMPANIMENT_STYLE_LABELS[setup.style]}`,
+    `- Enabled instrument order: ${enabled.length ? enabled.map((instrument) => ACCOMPANIMENT_INSTRUMENT_LABELS[instrument.id]).join(" → ") : "none selected"}`,
+    "- Role hints:",
+    ...enabled.map((instrument, index) => `  ${index + 1}. ${ACCOMPANIMENT_INSTRUMENT_LABELS[instrument.id]} — ${instrument.roleNote ?? defaultInstrumentRoleNote(instrument.id, instrument.order, setup.instruments.length)}`),
+    disabled.length ? `- Disabled/skipped instruments: ${disabled.map((instrument) => ACCOMPANIMENT_INSTRUMENT_LABELS[instrument.id]).join(", ")}` : "- Disabled/skipped instruments: none",
+  ];
+  if (setup.style === "solo-fingerstyle") {
+    lines.push("- Solo/Fingerstyle rule: compress accompaniment onto the top enabled guitar and do not propose piano, harmonium, djembe, or flute arrangement branches.");
+  } else {
+    lines.push("- Combined accompaniment rule: respect the ordered stack; lower instruments carry foundation/bass duties, upper instruments carry treble fills or transient color while yielding to melody.");
+  }
+  return lines.join("\n");
+}
+
 function formatPreviousSelections(previousSelections: AccompanimentWorkflowSelectedContext[]): string {
   if (previousSelections.length === 0) return "No previous selections yet. Treat this as the first workflow decision.";
 
@@ -324,7 +520,7 @@ function stripInlineVoicePrefix(line: string): string {
 }
 
 export function getAbcMeasureLinePattern(abcString: string): number[] {
-  const lines = abcString.split(/\r?\n/);
+  const lines = normalizeAbcVoiceSyntax(abcString).split(/\r?\n/);
   const inlineMelodyLines = lines
     .map((line) => line.trim())
     .filter((line) => /^\[V:Melody\]\s*/.test(line));
@@ -480,10 +676,11 @@ function regroupInlineVoiceLines(lines: string[], pattern: number[]): string[] {
 }
 
 export function break_measures_line(generatedAbc: string, referenceAbc: string): string {
+  const normalizedGeneratedAbc = normalizeAbcVoiceSyntax(generatedAbc);
   const pattern = referenceMeasureLinePattern(referenceAbc);
-  if (pattern.length === 0) return generatedAbc;
+  if (pattern.length === 0) return normalizedGeneratedAbc;
 
-  const lines = generatedAbc.split(/\r?\n/);
+  const lines = normalizedGeneratedAbc.split(/\r?\n/);
   if (lines.some((line) => /^\[V:Melody\]\s*/.test(line.trim()))) {
     return regroupInlineVoiceLines(lines, pattern).join("\n");
   }
@@ -523,6 +720,7 @@ export function buildAccompanimentWorkflowPrompt(input: {
   sourceAbc: string;
   metadata: AccompanimentWorkflowMetadata;
   previousSelections: AccompanimentWorkflowSelectedContext[];
+  setup?: Partial<AccompanimentWorkflowSetup> | null;
   userNote?: string;
 }): string {
   const step = getAccompanimentWorkflowStep(input.stepId);
@@ -539,22 +737,26 @@ export function buildAccompanimentWorkflowPrompt(input: {
   const guitarTabInstruction = isGuitarTabValidationWorkflowStep(input.stepId)
     ? "\nGuitar tab validation requirement: each option.data MUST include guitarTab.events with measureIndex, beat, note, string, fret, and role. Before finalizing an option, call the valid_guitar_tab tool with those exact events. If valid_guitar_tab reports any issue, revise the tab and call valid_guitar_tab again. Hard physical rule: in any simultaneous group, a string number may appear only once; one guitar string cannot play E3 and G3 (or any two pitches) at the same time."
     : "";
+  const guitarFingerstyleInstruction = input.stepId === "guitar-fingerstyle"
+    ? "\nGuitar Fingerstyle step-specific requirement: finalize a solo guitar fingerstyle plan, not a rhythm-only accompaniment. Each option.data MUST include mode=\"solo-fingerstyle\", carriesMelody=true, pickingProfile (strict-pima or folk-travis), bassStrategy derived from the selected chord progression roots/fifths/approaches, formPlan.intro, formPlan.interlude, and formPlan.outro. The Guitar Fingerstyle part must play the melody itself while adding chord-derived bass. Include tab roles for both melody and bass. Do not hand-write final ABC in this step; the local arranger will render ABC and GUITAR TAB from the selected profile/form plan."
+    : "";
   const lyricChordInstruction = lyricChordAnnotations.length > 0 && isChordIngestionWorkflowStep(input.stepId)
     ? "\n- The source ABC has chord symbols embedded inside the lyric w: lines. Treat those lyric chord symbols as the user-supplied chord progression. Do not invent a different progression; map roles, progression, and validation around these chords."
     : "";
   const midiInstruction = "\n- Any generated Guitar Classic/Classical Guitar ABC must include `%%MIDI program 24` immediately after the Guitar voice declaration.\n- Only an exact `Guitar Left Hand` target may be retargeted to Harmonium/Reed Organ, and it must use `%%MIDI program 20`; do not change `Guitar LH Accompaniment`, `Guitar Right Hand`, or generic Guitar layers.";
   const staffSystemInstruction = "\n- Multi-voice ABC line grouping requirement: when returning ABC with Melody plus Guitar/Piano/etc., preserve the source Melody visual staff systems/sentences. Emit/validate each staff-system group as Melody line N, then lyric/helper rows for that Melody line, then every instrument's line N for the same measure range before moving to Melody line N+1. Do not write all Melody lines first and all accompaniment lines later when the final ABC contains multiple instruments.";
 
-  return `DEFAULT PROMPT — MUSIC ACCOMPANIMENT WORKFLOW STEP ${step.index}\n\nTask: ${step.label}\n${step.description}\n\nTheory reference to follow:\n${step.theoryReference}\n\nOutput focus:\n${step.outputFocus.map((item) => `- ${item}`).join("\n")}\n\nGlobal hard rules:\n- Return between 1 and 5 distinct options.\n- Every option must include a concise label, summary, justification, warnings, and validation notes.\n- Preserve the source melody ABC exactly unless this step explicitly asks for chord annotations.\n- Respect previously selected workflow decisions.\n- If a choice is musically risky, include a warning instead of hiding the risk.\n- Prefer devotional/bhajan-appropriate support unless the user's note asks otherwise.${midiInstruction}${staffSystemInstruction}${abcDataInstruction}${strongBeatInstruction}${guitarTabInstruction}${lyricChordInstruction}\n\nMetadata:\n${formatMetadata(input.metadata)}\n\nPreviously selected workflow context:\n${formatPreviousSelections(input.previousSelections)}\n\nLyric chord annotations:\n${formatLyricChordAnnotations(input.sourceAbc)}\n\nSource ABC:\n\`\`\`abc\n${input.sourceAbc}\n\`\`\`\n\nUSER NOTE TO ADD TO PROMPT:\n${userNote || "(none)"}`;
+  return `DEFAULT PROMPT — MUSIC ACCOMPANIMENT WORKFLOW STEP ${step.index}\n\nTask: ${step.label}\n${step.description}\n\nTheory reference to follow:\n${step.theoryReference}\n\nOutput focus:\n${step.outputFocus.map((item) => `- ${item}`).join("\n")}\n\nGlobal hard rules:\n- Return between 1 and 5 distinct options.\n- Every option must include a concise label, summary, justification, warnings, and validation notes.\n- Preserve the source melody ABC exactly unless this step explicitly asks for chord annotations.\n- Respect previously selected workflow decisions.\n- If a choice is musically risky, include a warning instead of hiding the risk.\n- Prefer devotional/bhajan-appropriate support unless the user's note asks otherwise.${midiInstruction}${staffSystemInstruction}${abcDataInstruction}${strongBeatInstruction}${guitarTabInstruction}${guitarFingerstyleInstruction}${lyricChordInstruction}\n\nMetadata:\n${formatMetadata(input.metadata)}\n\nWorkflow setup:\n${formatWorkflowSetup(input.setup)}\n\nPreviously selected workflow context:\n${formatPreviousSelections(input.previousSelections)}\n\nLyric chord annotations:\n${formatLyricChordAnnotations(input.sourceAbc)}\n\nSource ABC:\n\`\`\`abc\n${input.sourceAbc}\n\`\`\`\n\nUSER NOTE TO ADD TO PROMPT:\n${userNote || "(none)"}`;
 }
 
 export function buildConsolidatedChordIngestionPrompt(input: {
   sourceAbc: string;
   metadata: AccompanimentWorkflowMetadata;
   previousSelections: AccompanimentWorkflowSelectedContext[];
+  setup?: Partial<AccompanimentWorkflowSetup> | null;
   userNote?: string;
 }): string {
   const userNote = input.userNote?.trim();
 
-  return `DEFAULT PROMPT — MUSIC ACCOMPANIMENT WORKFLOW CONSOLIDATED CHORD INGESTION\n\nTask: The lyrics contain chord symbols like [Em]Hari Bol, Hari [D]Bol. In one LLM decision, ingest the lyric chord progression and produce reviewable results for these three workflow steps:\n1. Chord-tone Role Mapping\n2. Chord Progression Selection\n3. Voice-leading & Harmonized ABC Validation\n\nHard rules:\n- Use the lyric chord annotations below as the supplied chord progression. Do not invent a replacement progression.\n- Return between 1 and 5 options for each of the three result groups.\n- Chord-tone options explain how strong melody notes function over the supplied chords.\n- Progression options preserve the supplied chord order and provide roman numerals/function labels.\n- Validation options must include option.data.validatedAbc or option.data.harmonizedAbc containing the full source ABC with playable chord symbols applied outside the w: lyric lines, so Music Staff Playback can render the harmony.\n- Before calling generate_consolidated_chord_ingestion, call the break_measures_line tool for every harmonizedAbc or validatedAbc candidate, then copy each returned abc exactly into the final tool payload.\n- The output ABC Melody music body must have the same number of music lines and the same number of measures per line as the Source ABC. If Source ABC has 5 music lines of 4 measures each, returned ABC must do the same.\n- For any multi-voice returned ABC, group by visual staff system: [V:Melody] source line N, then every instrument line N for the same measure range, then move to Melody line N+1.\n- Preserve the source melody ABC exactly except for adding/moving chord annotations into playable ABC chord positions.\n- Include warnings for any lyric chord that conflicts with strong melody tones, raga/scale expectations, cadence support, or measure-line preservation.\n\nMetadata:\n${formatMetadata(input.metadata)}\n\nPreviously selected workflow context:\n${formatPreviousSelections(input.previousSelections)}\n\nLyric chord annotations to ingest:\n${formatLyricChordAnnotations(input.sourceAbc)}\n\nSource ABC:\n\`\`\`abc\n${input.sourceAbc}\n\`\`\`\n\nUSER NOTE TO ADD TO PROMPT:\n${userNote || "(none)"}`;
+  return `DEFAULT PROMPT — MUSIC ACCOMPANIMENT WORKFLOW CONSOLIDATED CHORD INGESTION\n\nTask: The lyrics contain chord symbols like [Em]Hari Bol, Hari [D]Bol. In one LLM decision, ingest the lyric chord progression and produce reviewable results for these three workflow steps:\n1. Chord-tone Role Mapping\n2. Chord Progression Selection\n3. Voice-leading & Harmonized ABC Validation\n\nHard rules:\n- Use the lyric chord annotations below as the supplied chord progression. Do not invent a replacement progression.\n- Return between 1 and 5 options for each of the three result groups.\n- Chord-tone options explain how strong melody notes function over the supplied chords.\n- Progression options preserve the supplied chord order and provide roman numerals/function labels.\n- Validation options must include option.data.validatedAbc or option.data.harmonizedAbc containing the full source ABC with playable chord symbols applied outside the w: lyric lines, so Music Staff Playback can render the harmony.\n- Before calling generate_consolidated_chord_ingestion, call the break_measures_line tool for every harmonizedAbc or validatedAbc candidate, then copy each returned abc exactly into the final tool payload.\n- The output ABC Melody music body must have the same number of music lines and the same number of measures per line as the Source ABC. If Source ABC has 5 music lines of 4 measures each, returned ABC must do the same.\n- For any multi-voice returned ABC, group by visual staff system: [V:Melody] source line N, then every instrument line N for the same measure range, then move to Melody line N+1.\n- Preserve the source melody ABC exactly except for adding/moving chord annotations into playable ABC chord positions.\n- Include warnings for any lyric chord that conflicts with strong melody tones, raga/scale expectations, cadence support, or measure-line preservation.\n\nMetadata:\n${formatMetadata(input.metadata)}\n\nWorkflow setup:\n${formatWorkflowSetup(input.setup)}\n\nPreviously selected workflow context:\n${formatPreviousSelections(input.previousSelections)}\n\nLyric chord annotations to ingest:\n${formatLyricChordAnnotations(input.sourceAbc)}\n\nSource ABC:\n\`\`\`abc\n${input.sourceAbc}\n\`\`\`\n\nUSER NOTE TO ADD TO PROMPT:\n${userNote || "(none)"}`;
 }

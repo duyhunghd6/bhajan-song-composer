@@ -45,7 +45,68 @@ function buildGuitarTabDataProperty() {
   };
 }
 
+function buildFingerstyleFormPlanProperty() {
+  const sectionProperty = (description: string) => ({
+    type: "object",
+    description,
+    additionalProperties: true,
+    properties: {
+      measureCount: { type: "number", description: "Planned number of measures for this fingerstyle form section." },
+      source: { type: "string", description: "Musical source material: tonic/dominant arpeggio, first motive, cadence turnaround, etc." },
+      placement: { type: "string", description: "Where this section appears relative to the melody body or phrase boundary." },
+      cadence: { type: "string", description: "Cadence or arrival target for this section." },
+    },
+  });
+
+  return {
+    type: "object",
+    description: "Solo fingerstyle form plan for guitar-only intro, interlude, and outro material.",
+    additionalProperties: false,
+    properties: {
+      intro: sectionProperty("Intro plan before the melody body."),
+      interlude: sectionProperty("Interlude plan at a phrase or cadence boundary."),
+      outro: sectionProperty("Outro plan after the melody body."),
+    },
+    required: ["intro", "interlude", "outro"],
+  };
+}
+
+function buildGuitarFingerstyleDataProperty() {
+  return {
+    type: "object",
+    description: "Final solo guitar fingerstyle decision. The local arranger generates final ABC from this profile/form plan; the LLM must provide playable, validated tab events.",
+    additionalProperties: true,
+    properties: {
+      mode: {
+        type: "string",
+        enum: ["solo-fingerstyle"],
+        description: "Must be solo-fingerstyle: the Guitar voice carries the melody itself.",
+      },
+      carriesMelody: {
+        type: "boolean",
+        description: "Must be true; this fingerstyle part plays the melody, not only accompaniment.",
+      },
+      pickingProfile: {
+        type: "string",
+        enum: ["strict-pima", "folk-travis"],
+        description: "Fingerstyle picking profile for local generation.",
+      },
+      bassStrategy: {
+        type: "string",
+        description: "How roots/fifths/approaches from the selected chord progression become bass events on strings 6/5/4.",
+      },
+      formPlan: buildFingerstyleFormPlanProperty(),
+      guitarTab: buildGuitarTabDataProperty(),
+    },
+    required: ["mode", "carriesMelody", "pickingProfile", "bassStrategy", "formPlan", "guitarTab"],
+  };
+}
+
 function buildWorkflowOptionDataProperty(stepId?: AccompanimentWorkflowStepId) {
+  if (stepId === "guitar-fingerstyle") {
+    return buildGuitarFingerstyleDataProperty();
+  }
+
   if (isGuitarTabValidationWorkflowStep(stepId ?? "melody-snapshot")) {
     return {
       type: "object",

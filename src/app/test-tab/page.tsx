@@ -1,15 +1,84 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import PocHandoffChecklist from "@/components/mockups/PocHandoffChecklist";
 
 const AbcjsPlaybackController = dynamic(() => import("@/components/music-sheet/AbcjsPlaybackController"), { ssr: false });
 
+const userBugAbc = `X: 1
+T: Hari Bol
+M: 4/4
+L: 1/8
+Q: 1/4=65
+K: Em
+V:Melody
+V:Guitar
+%%SCORE_PLACEHOLDER
+%%vocalspace 10
+%%botmargin 80
+V:Melody stem=up
+V:Guitar stem=down
+%%MIDI program 24
+% Line 1
+% Staff system 1: Melody and visible instruments share this measure range.
+% Staff system 1: Melody and visible instruments share this measure range.
+% Staff system 2: Melody and visible instruments share this measure range.
+% Staff system 3: Melody and visible instruments share this measure range.
+% Staff system 4: Melody and visible instruments share this measure range.
+% Line 2
+% Line 3
+% Line 4
+% Staff system 1: Melody and visible instruments share this measure range.
+[V:Melody] | E E (EB,) E E (EB,) | E F G F2 (G2F) | E E (EB,) E E (EB,) | E F G F2 (G2F) |
+[V:Guitar] | E,,2 B,,2 E,2 G,2 | D,,2 A,,2 D,2 F,2 | E,,2 B,,2 E,2 G,2 | D,,2 A,,2 D,2 F,2 |
+% Staff system 2: Melody and visible instruments share this measure range.
+[V:Melody] | E E2 F (GB) A G | (FE) D F E4 | E E2 F (GB) A G | (FE) D F E4 |
+[V:Guitar] | E,,2 B,,2 E,2 G,2 | D,,2 A,,2 E,,2 B,,2 | E,,2 B,,2 E,2 G,2 | D,,2 A,,2 E,,2 B,,2 |
+% Staff system 3: Melody and visible instruments share this measure range.
+[V:Melody] | B B B (Bd) c B | (AG) A B A4 | B B2 B (Bd) c B | (AG) A B A2 B2 |
+[V:Guitar] | G,,2 D,2 G,2 B,2 | D,,2 A,,2 D,2 F,2 | G,,2 D,2 G,2 B,2 | D,,2 A,,2 B,,2 ^D,2 |
+% Staff system 4: Melody and visible instruments share this measure range.
+[V:Melody] | E E2 F (GB) A G | (FE) DF E4 | E E2 F (GB) A G | (FE) D F E4 |
+[V:Guitar] | E,,2 B,,2 E,2 G,2 | D,,2 A,,2 E,,2 B,,2 | E,,2 B,,2 E,2 G,2 | D,,2 A,,2 E,,4 |`;
+
 const EXAMPLES = [
   {
-    title: "1. Full Fingerstyle with Lyrics (Hari Bol)",
+    title: "1. test-abcjs-full-song1 (Hari Bol with Guitar track)",
+    description: "Melody with lyrics and beat indicators, plus Layer 2 Guitar Accompaniment on a separate staff.",
+    renderOptions: {}, // Standard rendering, no auto-tab
+    abc: `X: 1
+T: Hari Bol
+M: 4/4
+L: 1/8
+Q: 1/4=65
+K: Em
+%%score (Melody Guitar)
+%%vocalspace 10
+%%botmargin 80
+V:Melody name="Original Melody" stem=up
+V:Guitar clef=treble-8 name="Layer 2 Guitar Accompaniment" stem=down
+%%MIDI program 24
+% Staff system 1: Melody and visible instruments share this measure range.
+[V:Melody] | E E (EB,) E E (EB,) | E F G F2 (G2F) | E E (EB,) E E (EB,) | E F G F2 (G2F) |
+w: Ha-ri Bol _ Ha-ri Bol _ | Ha-ri Ha-ri Bol _ | Ha-ri Bol _ Ha-ri Bol _ | Ha-ri Ha-ri Bol _
+[V:Guitar] | E,2 E2 B,2 E2 | E,2 E2 B,2 E2 | E,2 E2 B,2 E2 | E,2 E2 B,2 E2 |
+% Staff system 2: Melody and visible instruments share this measure range.
+[V:Melody] | E E2 F (GB) A G | (FE) D F E4 | E E2 F (GB) A G | (FE) D F E4 |
+w: Mu-kun-da Ma- _ dha-va | Go- _ vin-da Bol | Mu-kun-da Ma- _ dha-va | Go- _ vin-da Bol
+[V:Guitar] | E,2 E2 B,2 E2 | D,2 D2 A,2 F2 | E,2 E2 B,2 E2 | D,2 D2 A,2 F2 |
+% Staff system 3: Melody and visible instruments share this measure range.
+[V:Melody] | B B B (Bd) c B | (AG) A B A4 | B B2 B (Bd) c B | (AG) A B A2 B2 |
+w: Ke-sha-va Ma- _ dha-va | Go- _ vin-da Bol | Ke-sha-va Ma- _ dha-va | Go- _ vin-da Bol _
+[V:Guitar] | G,2 G2 D,2 B2 | D,2 D2 A,2 A2 | G,2 G2 D,2 B2 | D,2 D2 A,2 A2 |
+% Staff system 4: Melody and visible instruments share this measure range.
+[V:Melody] | E E2 F (GB) A G | (FE) DF E4 | E E2 F (GB) A G | (FE) D F E4 |
+w: Mu-kun-da Ma- _ dha-va | Go- _ vin-da Bol | Mu-kun-da Ma- _ dha-va | Go- _ vin-da Bol
+[V:Guitar] | E,2 E2 B,2 E2 | D,2 D2 A,2 F2 | E,2 E2 B,2 E2 | D,2 D2 A,2 F2 |`
+  },
+  {
+    title: "2. Full Fingerstyle with Lyrics (Hari Bol)",
     description: "Melody (stems up) with lyrics, layered over Bass Accompaniment (stems down) on a single combined staff.",
     abc: `X: 1
 T: Hari Bol (Fingerstyle Arrangement)
@@ -28,7 +97,7 @@ V:Guitar clef=treble-8 name="Layer 2 Guitar Accompaniment" stem=down
 | E,2 E2 B,2 E2 | E,2 E2 B,2 E2 | E,2 E2 B,2 E2 | E,2 E2 B,2 E2 |`
   },
   {
-    title: "2. Melody Only (No Lyrics)",
+    title: "3. Melody Only (No Lyrics)",
     description: "A simple melody rendered directly to tablature. Notice how clean it is when there are no lyrics or bass stems to clear.",
     abc: `X: 2
 T: Simple Folk Melody
@@ -41,7 +110,7 @@ V:Guitar clef=treble-8
 G A B c | d2 B2 | c e d c | B4 |`
   },
   {
-    title: "3. Polyphonic Block Chords (Strumming)",
+    title: "4. Polyphonic Block Chords (Strumming)",
     description: "Multiple notes stacked vertically in brackets [ ] to create chords. The tablature correctly identifies the strings for each note.",
     abc: `X: 3
 T: G Major Chord Progression
@@ -54,7 +123,7 @@ V:Guitar clef=treble-8
 [G,B,DGB] [C,G,CEG] | [D,A,DFA] [G,B,DGB] |`
   },
   {
-    title: "4. Rapid Scale Run (Arpeggios)",
+    title: "5. Rapid Scale Run (Arpeggios)",
     description: "Fast 16th notes spanning multiple strings to demonstrate fret mapping across the neck.",
     abc: `X: 4
 T: E Minor Arpeggio Run
@@ -69,6 +138,10 @@ E,G,B,E GBeB GEDB, G,4 |`
 ];
 
 export default function TestTabPage() {
+  const [showMelody, setShowMelody] = useState(true);
+  const [showGuitar, setShowGuitar] = useState(true);
+  const [showGuitarTab, setShowGuitarTab] = useState(true);
+
   const renderOptions = useMemo(() => ({
     tablature: [
       {
@@ -77,6 +150,32 @@ export default function TestTabPage() {
       },
     ],
   }), []);
+
+  const noTabRenderOptions = useMemo(() => ({}), []);
+
+  const userBugScoreLine = useMemo(() => {
+    const voices = [];
+    if (showMelody) voices.push("Melody");
+    if (showGuitar) voices.push("Guitar");
+    if (voices.length === 0) return "%%score ()";
+    return `%%score (${voices.join(" ")})`;
+  }, [showMelody, showGuitar]);
+
+  const userBugCase = useMemo(() => {
+    let abc = userBugAbc.replace("%%SCORE_PLACEHOLDER", userBugScoreLine);
+    if (!showMelody) {
+      abc = abc
+        .split("\n")
+        .filter((line) => !line.trim().startsWith("w:"))
+        .join("\n");
+    }
+    return {
+      title: "User Provided Bug Case",
+      description: "Bug rendering issue - with toggles",
+      abc,
+      renderOptions: showGuitarTab ? renderOptions : noTabRenderOptions,
+    };
+  }, [showMelody, userBugScoreLine, showGuitarTab, renderOptions, noTabRenderOptions]);
 
   return (
     <main className="w-full min-h-screen bg-zinc-950 px-4 py-12 text-zinc-100 sm:px-6 lg:px-8">
@@ -102,6 +201,35 @@ export default function TestTabPage() {
         </header>
 
         <section className="space-y-8">
+          <article className="rounded-3xl border border-zinc-800 bg-zinc-900/60 p-6 shadow-xl space-y-4 border-amber-500/30">
+            <div>
+              <h2 className="text-xl font-bold text-zinc-100">{userBugCase.title}</h2>
+              <p className="text-xs text-zinc-400 mt-1">{userBugCase.description}</p>
+            </div>
+            <div className="flex flex-wrap gap-4 p-4 bg-zinc-950 rounded-xl border border-zinc-800">
+              <label className="flex items-center gap-2 text-sm font-semibold text-zinc-300">
+                <input type="checkbox" checked={showMelody} onChange={(e) => setShowMelody(e.target.checked)} className="rounded border-zinc-700 bg-zinc-900 text-amber-500 focus:ring-amber-500" />
+                Show Melody Line
+              </label>
+              <label className="flex items-center gap-2 text-sm font-semibold text-zinc-300">
+                <input type="checkbox" checked={showGuitar} onChange={(e) => setShowGuitar(e.target.checked)} className="rounded border-zinc-700 bg-zinc-900 text-amber-500 focus:ring-amber-500" />
+                Show Guitar Classic Line
+              </label>
+              <label className="flex items-center gap-2 text-sm font-semibold text-zinc-300">
+                <input type="checkbox" checked={showGuitarTab} onChange={(e) => setShowGuitarTab(e.target.checked)} className="rounded border-zinc-700 bg-zinc-900 text-amber-500 focus:ring-amber-500" />
+                Show GUITAR TAB Line
+              </label>
+            </div>
+            <div className="border border-zinc-800 rounded-2xl bg-white text-zinc-950 overflow-hidden">
+              <AbcjsPlaybackController
+                abcString={userBugCase.abc}
+                title={userBugCase.title}
+                canvasId="test-tab-canvas-user-bug"
+                renderOptions={userBugCase.renderOptions}
+              />
+            </div>
+          </article>
+
           {EXAMPLES.map((ex, index) => (
             <article key={index} className="rounded-3xl border border-zinc-800 bg-zinc-900/60 p-6 shadow-xl space-y-4">
               <div>
@@ -113,7 +241,7 @@ export default function TestTabPage() {
                   abcString={ex.abc}
                   title={ex.title}
                   canvasId={`test-tab-canvas-${index}`}
-                  renderOptions={renderOptions}
+                  renderOptions={ex.renderOptions !== undefined ? ex.renderOptions : renderOptions}
                 />
               </div>
             </article>

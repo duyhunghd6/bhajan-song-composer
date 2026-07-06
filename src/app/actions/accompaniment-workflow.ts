@@ -29,6 +29,7 @@ import {
   type AccompanimentWorkflowOption,
   type AccompanimentWorkflowRun,
   type AccompanimentWorkflowSelectedContext,
+  type AccompanimentWorkflowSetup,
   type AccompanimentWorkflowStepId,
 } from "@/lib/theory/accompaniment-workflow";
 import {
@@ -58,6 +59,7 @@ export interface GenerateAccompanimentWorkflowStepInput {
   sourceAbc: string;
   metadata: AccompanimentWorkflowMetadata;
   previousSelections: AccompanimentWorkflowSelectedContext[];
+  setup?: Partial<AccompanimentWorkflowSetup> | null;
   userNote?: string;
 }
 
@@ -278,7 +280,47 @@ function guitarTabEventsFromOption(option: Partial<AccompanimentWorkflowOption>)
   return Array.isArray(events) ? events as GuitarTabEvent[] : null;
 }
 
-function validateGuitarWorkflowResult(raw: unknown): ToolLoopValidationResult {
+function hasObjectProperty(value: unknown, key: string): boolean {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value) && key in value);
+}
+
+function validateGuitarFingerstyleOption(optionId: string, option: Partial<AccompanimentWorkflowOption>, events: GuitarTabEvent[], messages: string[]): void {
+  const data = optionData(option);
+  if (!data) {
+    messages.push(`${optionId} is missing fingerstyle option data.`);
+    return;
+  }
+
+  if (data.mode !== "solo-fingerstyle") {
+    messages.push(`${optionId} must set data.mode to "solo-fingerstyle".`);
+  }
+  if (data.carriesMelody !== true) {
+    messages.push(`${optionId} must set data.carriesMelody=true because Guitar Fingerstyle plays the melody itself.`);
+  }
+  if (data.pickingProfile !== "strict-pima" && data.pickingProfile !== "folk-travis") {
+    messages.push(`${optionId} must choose data.pickingProfile as strict-pima or folk-travis.`);
+  }
+  if (typeof data.bassStrategy !== "string" || data.bassStrategy.trim().length === 0) {
+    messages.push(`${optionId} must describe a chord-derived data.bassStrategy.`);
+  }
+
+  const formPlan = data.formPlan;
+  for (const section of ["intro", "interlude", "outro"]) {
+    if (!hasObjectProperty(formPlan, section)) {
+      messages.push(`${optionId} is missing data.formPlan.${section}.`);
+    }
+  }
+
+  const roles = new Set(events.map((event) => event.role.toLowerCase()));
+  if (!roles.has("melody")) {
+    messages.push(`${optionId} guitarTab.events must include melody role events.`);
+  }
+  if (!roles.has("bass")) {
+    messages.push(`${optionId} guitarTab.events must include bass role events.`);
+  }
+}
+
+function validateGuitarWorkflowResult(raw: unknown, stepId?: AccompanimentWorkflowStepId): ToolLoopValidationResult {
   const result = raw as RawWorkflowStepResult;
   const options = Array.isArray(result.options) ? result.options.slice(0, 5) : [];
   const validations: Array<{ optionId: string; validation: GuitarTabValidationResult }> = [];
@@ -294,6 +336,10 @@ function validateGuitarWorkflowResult(raw: unknown): ToolLoopValidationResult {
     if (!events || events.length === 0) {
       messages.push(`${optionId} is missing data.guitarTab.events.`);
       continue;
+    }
+
+    if (stepId === "guitar-fingerstyle") {
+      validateGuitarFingerstyleOption(optionId, option, events, messages);
     }
 
     const validation = validateGuitarTab(events);
@@ -598,7 +644,7 @@ export async function generateAccompanimentWorkflowStep(
             return validateGuitarTab(Array.isArray(events) ? events as GuitarTabEvent[] : []);
           },
         }],
-        validateFinalResult: validateGuitarWorkflowResult,
+        validateFinalResult: (args) => validateGuitarWorkflowResult(args, input.stepId),
         temperature: 0.25,
         maxIterations: MAX_TOOL_LOOP_ITERATIONS,
         maxValidationAttempts: MAX_VALIDATION_REPAIR_ATTEMPTS,
