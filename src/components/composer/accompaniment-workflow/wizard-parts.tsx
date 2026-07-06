@@ -1,11 +1,9 @@
 import { useState } from "react";
 
 import {
-  ACCOMPANIMENT_WORKFLOW_STEPS,
-  getNextUncompletedWorkflowStepId,
+  emptyStepState,
   type AccompanimentWorkflowLlmLogEntry,
   type AccompanimentWorkflowOption,
-  type AccompanimentWorkflowRun,
   type AccompanimentWorkflowScope,
   type AccompanimentWorkflowSession,
   type AccompanimentWorkflowStepId,
@@ -20,155 +18,6 @@ export const SCOPE_CLASS: Record<AccompanimentWorkflowScope, string> = {
   flute: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-300",
   violin: "border-fuchsia-200 bg-fuchsia-50 text-fuchsia-700 dark:border-fuchsia-900/70 dark:bg-fuchsia-950/40 dark:text-fuchsia-300",
 };
-
-export function emptyStepState() {
-  return { runs: [], activeRunId: null, selectedOptionId: null, selectedAt: null, promptNote: "" };
-}
-
-export function mergeRun(workflow: AccompanimentWorkflowSession, run: AccompanimentWorkflowRun, promptNote: string): AccompanimentWorkflowSession {
-  const stepState = workflow.steps[run.stepId] ?? emptyStepState();
-  const existingRunIndex = stepState.runs.findIndex((candidate) => candidate.id === run.id);
-  const nextRuns = existingRunIndex >= 0
-    ? stepState.runs.map((candidate, index) => index === existingRunIndex ? run : candidate)
-    : [...stepState.runs, run];
-  const hasSelectedOption = Boolean(
-    stepState.activeRunId
-      && stepState.selectedOptionId
-      && nextRuns.some((candidate) => candidate.id === stepState.activeRunId && candidate.options.some((option) => option.id === stepState.selectedOptionId))
-  );
-
-  return {
-    ...workflow,
-    currentStepId: run.stepId,
-    steps: {
-      ...workflow.steps,
-      [run.stepId]: {
-        ...stepState,
-        runs: nextRuns,
-        activeRunId: hasSelectedOption ? stepState.activeRunId : run.id,
-        selectedOptionId: hasSelectedOption ? stepState.selectedOptionId : null,
-        selectedAt: hasSelectedOption ? stepState.selectedAt : null,
-        promptNote,
-      },
-    },
-  };
-}
-
-export function mergeRuns(workflow: AccompanimentWorkflowSession, runs: AccompanimentWorkflowRun[], promptNote: string): AccompanimentWorkflowSession {
-  const next = runs.reduce((current, run) => mergeRun(current, run, promptNote), workflow);
-  return {
-    ...next,
-    currentStepId: runs[0]?.stepId ?? next.currentStepId,
-  };
-}
-
-export function selectOption(
-  workflow: AccompanimentWorkflowSession,
-  stepId: AccompanimentWorkflowStepId,
-  option: AccompanimentWorkflowOption,
-  promptNote: string,
-  runId?: string
-): AccompanimentWorkflowSession {
-  const stepState = workflow.steps[stepId] ?? emptyStepState();
-  const selectedWorkflow = {
-    ...workflow,
-    steps: {
-      ...workflow.steps,
-      [stepId]: {
-        ...stepState,
-        activeRunId: runId ?? stepState.activeRunId,
-        selectedOptionId: option.id,
-        selectedAt: new Date().toISOString(),
-        promptNote,
-      },
-    },
-  };
-  const nextStepId = getNextUncompletedWorkflowStepId(selectedWorkflow) ?? stepId;
-
-  return {
-    ...selectedWorkflow,
-    currentStepId: nextStepId,
-    guitarProfileHint: stepId === "guitar-fingerstyle" ? extractProfile(option) : workflow.guitarProfileHint,
-    pianoProfileHint: stepId === "piano-fills-pedal-validation" ? extractProfile(option) : workflow.pianoProfileHint,
-  };
-}
-
-export function extractProfile(option: AccompanimentWorkflowOption): string | null {
-  const candidates = [
-    option.data.profileId,
-    option.data.compingProfile,
-    option.data.pickingProfile,
-    option.data.style,
-    option.data.profile,
-    option.id,
-  ];
-  const match = candidates.find((candidate): candidate is string => typeof candidate === "string" && candidate.trim().length > 0);
-  return match?.trim() ?? null;
-}
-
-export function makeSkippedOption(stepId: AccompanimentWorkflowStepId, instrumentLabel: string): AccompanimentWorkflowOption {
-  const step = ACCOMPANIMENT_WORKFLOW_STEPS.find((candidate) => candidate.id === stepId);
-  return {
-    id: `skip-${stepId}`,
-    label: `Skip ${step?.shortLabel ?? instrumentLabel}`,
-    summary: `${instrumentLabel} accompaniment is intentionally skipped for this workflow step.`,
-    justification: `The user chose to skip ${instrumentLabel}, so no ${instrumentLabel.toLowerCase()} profile, voicing, bass, fill, or polish decision is required.`,
-    data: { skipped: true, instrument: instrumentLabel.toLowerCase(), skippedStepId: stepId },
-    warnings: [],
-    validationNotes: [`Skipped by user; downstream ${instrumentLabel.toLowerCase()} generation should not require this step.`],
-  };
-}
-
-export function skipWorkflowSteps(
-  workflow: AccompanimentWorkflowSession,
-  stepIds: readonly AccompanimentWorkflowStepId[],
-  instrumentLabel: string,
-  promptNote: string
-): AccompanimentWorkflowSession {
-  const timestamp = new Date().toISOString();
-  const next = stepIds.reduce((current, stepId, index) => {
-    const option = makeSkippedOption(stepId, instrumentLabel);
-    const runId = `${stepId}-skip-${Date.now()}-${index}`;
-    return {
-      ...current,
-      steps: {
-        ...current.steps,
-        [stepId]: {
-          runs: [{
-            id: runId,
-            createdAt: timestamp,
-            stepId,
-            requestPrompt: `User skipped ${instrumentLabel} branch.`,
-            userNote: promptNote,
-            options: [option],
-          }],
-          activeRunId: runId,
-          selectedOptionId: option.id,
-          selectedAt: timestamp,
-          promptNote,
-        },
-      },
-    };
-  }, workflow);
-
-  return {
-    ...next,
-    currentStepId: getNextUncompletedWorkflowStepId(next) ?? next.currentStepId,
-    guitarProfileHint: instrumentLabel === "Guitar" ? null : next.guitarProfileHint,
-    pianoProfileHint: instrumentLabel === "Piano" ? null : next.pianoProfileHint,
-  };
-}
-
-export function hasWorkflowStepResults(
-  workflow: AccompanimentWorkflowSession | null | undefined,
-  stepIds: readonly AccompanimentWorkflowStepId[]
-): boolean {
-  if (!workflow) return false;
-  return stepIds.some((stepId) => {
-    const stepState = workflow.steps[stepId];
-    return Boolean(stepState?.runs.length || stepState?.activeRunId || stepState?.selectedOptionId || stepState?.selectedAt);
-  });
-}
 
 function llmLogStatusClass(status: AccompanimentWorkflowLlmLogEntry["status"]): string {
   switch (status) {

@@ -93,6 +93,7 @@ export const ACCOMPANIMENT_STYLE_LABELS: Record<AccompanimentStyleId, string> = 
 };
 
 export const ACCOMPANIMENT_GUITAR_TAB_VALIDATION_STEP_IDS = [
+  "guitar-comping-profile",
   "guitar-voicing-bass",
   "guitar-fills-validation",
   "guitar-fingerstyle",
@@ -282,10 +283,10 @@ export const ACCOMPANIMENT_WORKFLOW_STEPS: AccompanimentWorkflowStepDefinition[]
     label: "Guitar Comping Profile",
     shortLabel: "Guitar Profile",
     scope: "guitar",
-    description: "Choose the rhythm-guitar profile: ballad arpeggio, folk strum, Travis/PIMA, or rock/power support.",
+    description: "Choose the rhythm-guitar profile: ballad arpeggio, folk strum, Travis/PIMA, or rock/power support, with a representative one-guitar tab sample.",
     dependencies: [...SHARED_DEPENDENCIES],
-    outputFocus: ["guitar style", "picking/strumming profile", "melody avoidance strategy"],
-    theoryReference: "ARRANGEMENT01-GUITAR.md §2.1–2.3.",
+    outputFocus: ["guitar style", "picking/strumming profile", "melody avoidance strategy", "representative one-guitar validation sample"],
+    theoryReference: "ARRANGEMENT01-GUITAR.md §2.1–2.3 and §4 one-guitar validation checklist.",
   },
   {
     id: "guitar-voicing-bass",
@@ -293,9 +294,9 @@ export const ACCOMPANIMENT_WORKFLOW_STEPS: AccompanimentWorkflowStepDefinition[]
     label: "Guitar Voicing & Bass Plan",
     shortLabel: "Guitar Voicing",
     scope: "guitar",
-    description: "Plan open/barre voicings, guide tones, root/fifth anchors, and walking bass transitions.",
+    description: "Plan open/barre voicings, guide tones, root/fifth anchors, and walking bass transitions that one guitarist can fret.",
     dependencies: ["guitar-comping-profile"],
-    outputFocus: ["voicing map", "bass anchors", "walking bass notes", "fret/register warnings"],
+    outputFocus: ["voicing map", "bass anchors", "walking bass notes", "fret/register warnings", "one-left-hand validation"],
     theoryReference: "ARRANGEMENT01-GUITAR.md §2.2, §2.4, and §4 validation checklist.",
   },
   {
@@ -304,9 +305,9 @@ export const ACCOMPANIMENT_WORKFLOW_STEPS: AccompanimentWorkflowStepDefinition[]
     label: "Guitar Fills / Intro / Interlude / Outro / Validation",
     shortLabel: "Guitar Polish",
     scope: "guitar",
-    description: "Choose fills, intro/interlude/outro behavior, and validate playability before final guitar rendering.",
+    description: "Choose fills, intro/interlude/outro behavior, and validate one-physical-guitar playability before final guitar rendering.",
     dependencies: ["guitar-voicing-bass"],
-    outputFocus: ["intro plan", "fill rules", "interlude/outro plan", "final guitar profile id"],
+    outputFocus: ["intro plan", "fill rules", "interlude/outro plan", "final guitar profile id", "one-guitar tab validation"],
     theoryReference: "ARRANGEMENT01-GUITAR.md §4 plus rhythm-guitar support rules.",
   },
   {
@@ -315,9 +316,9 @@ export const ACCOMPANIMENT_WORKFLOW_STEPS: AccompanimentWorkflowStepDefinition[]
     label: "Guitar Fingerstyle",
     shortLabel: "Guitar Fingerstyle",
     scope: "guitar",
-    description: "Finalize a solo fingerstyle guitar plan that carries the melody while adding chord-derived bass, intro, interlude, outro, and validated tablature.",
+    description: "Finalize a solo fingerstyle guitar plan that carries the melody while adding chord-derived bass, intro, interlude, outro, and one-physical-guitar validated tablature.",
     dependencies: ["guitar-fills-validation"],
-    outputFocus: ["solo melody-on-guitar routing", "chord-derived bass and alternating-bass plan", "intro/interlude/outro form plan", "validated melody and bass tab events", "final fingerstyle picking profile id"],
+    outputFocus: ["solo melody-on-guitar routing", "chord-derived bass and alternating-bass plan", "intro/interlude/outro form plan", "validated melody and bass tab events", "final fingerstyle picking profile id", "one-left-hand feasibility"],
     theoryReference: "ARRANGEMENT01-GUITAR.md §3 Mode B solo fingerstyle compression and §4 validation checklist.",
   },
   {

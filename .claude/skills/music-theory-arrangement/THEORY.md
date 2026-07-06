@@ -338,6 +338,7 @@ When generating music based on a user prompt, apply these validation rules:
 | **Melody on Strong Beats** | Chord tones on beats 1 and 3 (in 4/4); passing/neighbor tones on weak beats. |
 | **Voice Leading** | Apply counterpoint rules from §3.3 for multi-voice textures. |
 | **Accidentals** | Spell enharmonically correct for the key (§1.1). |
+| **Instrument Physical Playability** | After generic harmony validation, apply the instrument module's physical validator. Guitar parts must pass `ARRANGEMENT01-GUITAR.md §4` one-physical-guitar checks for string assignment, fretboard range, and left-hand reach. |
 
 ### 6.3 ABC Output Format
 
@@ -373,6 +374,7 @@ Step 5: Apply voice leading rules (§3.3) to smooth transitions
 Step 6: Add chord symbols as ABC annotations ("Am", "G7", etc.)
 Step 7: Generate bass line (root → 5th → root movement)
 Step 8: Validate beat counts and pitch alignment (§6.2)
+Step 9: Apply instrument-specific physical validation before final arrangement output; guitar fingerstyle may revoice/drop nonessential chord tones (drop 5ths first, preserve 3rds/7ths when possible) to satisfy one-guitar constraints.
 ```
 
 ---

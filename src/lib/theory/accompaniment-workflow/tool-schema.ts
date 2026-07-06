@@ -17,13 +17,22 @@ function isGuitarTabValidationWorkflowStep(stepId: AccompanimentWorkflowStepId):
 function buildGuitarTabDataProperty() {
   return {
     type: "object",
-    description: "Validated guitar tab event data required for physical playability checks.",
+    description: "Validated one-physical-guitar tab event data required for string assignment, fretboard range, and left-hand reach checks.",
     additionalProperties: false,
     properties: {
+      profileId: {
+        type: "string",
+        enum: ["guitar-classic", "guitar-acoustic", "standard-six-string"],
+        description: "Physical guitar profile used for max-fret range and left-hand validation.",
+      },
+      voicingProfileId: {
+        type: "string",
+        description: "Voicing/playability profile such as open-position, barre, fingerstyle-melody-bass, or power-chord.",
+      },
       events: {
         type: "array",
         minItems: 1,
-        description: "Concrete guitar tab events. Events sharing measureIndex + beat + subdivision or simultaneousGroupId are simultaneous and must not reuse a string.",
+        description: "Concrete guitar tab events. Events sharing measureIndex + beat + subdivision or simultaneousGroupId are simultaneous; each source event must map to one string and each physical string may appear only once per simultaneous group.",
         items: {
           type: "object",
           additionalProperties: false,
@@ -32,16 +41,17 @@ function buildGuitarTabDataProperty() {
             beat: { type: "number", description: "Beat or subdivision time within the measure." },
             subdivision: { type: ["string", "number"], description: "Optional subdivision label." },
             simultaneousGroupId: { type: "string", description: "Optional explicit id for notes that sound together." },
-            note: { type: "string", description: "Sounding pitch label, e.g. E3 or G3." },
+            sourceEventId: { type: "string", description: "Stable id for the musical source note/event. The same source event must not be assigned to multiple strings in one simultaneous group." },
+            note: { type: "string", description: "Sounding pitch with octave/register, e.g. E2, B3, or F#4." },
             string: { type: "integer", enum: [1, 2, 3, 4, 5, 6], description: "Guitar string number, 1 high E through 6 low E." },
-            fret: { type: "number", description: "Fret number, 0 for open string." },
+            fret: { type: "number", description: "Fret number, 0 for open string and no higher than the selected guitar profile allows." },
             role: { type: "string", description: "Musical role: melody, bass, root, third, seventh, fill, percussion, etc." },
           },
           required: ["measureIndex", "beat", "note", "string", "fret", "role"],
         },
       },
     },
-    required: ["events"],
+    required: ["profileId", "events"],
   };
 }
 

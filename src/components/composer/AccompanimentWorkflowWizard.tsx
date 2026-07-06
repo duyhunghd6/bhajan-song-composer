@@ -14,11 +14,18 @@ import {
   getSelectedWorkflowOption,
   getVisibleAccompanimentWorkflowSteps,
   getVisibleAccompanimentWorkflowStepsForSetup,
+  hasWorkflowStepResults,
   isAccompanimentWorkflowSourceCurrent,
   isAccompanimentWorkflowStepComplete,
   isAccompanimentWorkflowStepUnlocked,
   isChordIngestionWorkflowStep,
+  mergeRun,
+  mergeRuns,
   normalizeAccompanimentWorkflowSetup,
+  selectOption,
+  skipWorkflowSteps,
+  extractProfile,
+  emptyStepState,
   type AccompanimentWorkflowLlmLogEntry,
   type AccompanimentWorkflowMetadata,
   type AccompanimentWorkflowOption,
@@ -34,13 +41,6 @@ import {
   LlmCallLogPanel,
   RunOptionList,
   SCOPE_CLASS,
-  emptyStepState,
-  extractProfile,
-  hasWorkflowStepResults,
-  mergeRun,
-  mergeRuns,
-  selectOption,
-  skipWorkflowSteps,
 } from "./accompaniment-workflow/wizard-parts";
 import WorkflowSetupPanel from "./accompaniment-workflow/WorkflowSetupPanel";
 
@@ -56,6 +56,7 @@ interface AccompanimentWorkflowWizardProps {
   onWorkflowSetupChange: (setup: AccompanimentWorkflowSetup) => void;
   onGuitarProfileSelected?: (profile: string | null) => void;
   onPianoProfileSelected?: (profile: string | null) => void;
+  onReset?: () => void;
 }
 
 const BRANCH_LABELS: Record<BranchScope, string> = {
@@ -89,7 +90,7 @@ function WorkflowStepGrid({ steps, session, activeStepId, onStepClick }: Workflo
             onClick={() => onStepClick(step.id)}
             className={`rounded-xl border p-3 text-left transition ${
               activeStepId === step.id
-                ? "border-amber-400 bg-amber-500/10"
+                ? "border-amber-400 bg-amber-50/10"
                 : complete
                   ? "border-emerald-200 bg-emerald-50 dark:border-emerald-900/70 dark:bg-emerald-950/30"
                   : unlocked
@@ -155,6 +156,7 @@ export default function AccompanimentWorkflowWizard({
   onWorkflowSetupChange,
   onGuitarProfileSelected,
   onPianoProfileSelected,
+  onReset,
 }: AccompanimentWorkflowWizardProps) {
   const sourceCurrent = isAccompanimentWorkflowSourceCurrent(workflow, sourceAbc);
   const session = useMemo(() => workflow && sourceCurrent ? workflow : null, [workflow, sourceCurrent]);
@@ -444,7 +446,17 @@ export default function AccompanimentWorkflowWizard({
               Clear {BRANCH_LABELS[scope]} Result Set
             </button>
           ))}
-          <button type="button" onClick={() => beginWorkflow(session.setup)} className="rounded-lg border border-rose-400/30 bg-rose-500/10 px-2.5 py-1.5 text-xs font-bold text-rose-600 transition hover:bg-rose-500/20 dark:text-rose-400">
+          <button
+            type="button"
+            onClick={() => {
+              if (onReset) {
+                onReset();
+              } else {
+                beginWorkflow(session.setup);
+              }
+            }}
+            className="rounded-lg border border-rose-400/30 bg-rose-500/10 px-2.5 py-1.5 text-xs font-bold text-rose-600 transition hover:bg-rose-500/20 dark:text-rose-400"
+          >
             Reset
           </button>
         </div>

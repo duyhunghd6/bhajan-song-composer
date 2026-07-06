@@ -95,7 +95,7 @@ Use the order as orchestration priority:
 Conditional step planning:
 
 - Always run the shared harmonic foundation steps: `melody-snapshot`, `key-scale-cadence`, `strong-beat-targets`, `chord-tone-mapping`, `chord-progression`, and `voice-leading-validation`.
-- Enable Guitar steps when Guitar Classic or Guitar Acoustic is active: `guitar-comping-profile`, `guitar-voicing-bass`, `guitar-fills-validation`, and `guitar-fingerstyle`.
+- Enable Guitar steps when Guitar Classic or Guitar Acoustic is active: `guitar-comping-profile`, `guitar-voicing-bass`, `guitar-fills-validation`, and `guitar-fingerstyle`. Each Guitar step that proposes concrete notes must validate representative or final `guitarTab.events` against the one-physical-guitar rules in `ARRANGEMENT01-GUITAR.md §4`: one source note maps to one string, every note is within the selected fretboard range, and one left hand can fret the target shape.
 - Enable Piano steps only when Piano is active and the style is combined Accompaniment: `piano-comping-bass`, `piano-rh-voicing`, and `piano-fills-pedal-validation`.
 - Enable Harmonium steps only when Indian Harmonium is active and the style is combined Accompaniment: `harmonium-drone-register` and `harmonium-chord-voicing-validation`.
 - Enable Djembe steps only when Djembe is active and the style is combined Accompaniment: `djembe-groove-interlock` and `djembe-fill-validation`.

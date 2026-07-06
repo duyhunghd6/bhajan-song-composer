@@ -4,28 +4,40 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useWorkspaceState } from "./useWorkspaceState";
 import AbcjsPlaybackController from "@/components/music-sheet/AbcjsPlaybackController";
 import PianoPedalIndicator from "@/components/instruments/PianoPedalIndicator";
-import { generateArrangementPipeline } from "@/lib/theory/arrangement-pipeline";
-import { buildAccompanimentAbc, getAccompanimentVoiceNames } from "@/lib/theory/accompaniment-abc";
-import { generateAccompanimentSupportLayers } from "@/lib/theory/accompaniment-workflow/support-layers";
-import {
-  buildAccompanimentWorkflowAbcAnnotation,
-  getLatestSelectedWorkflowStep,
-  getSelectedWorkflowOption,
-  getWorkflowAppliedMusicAbc,
-  isAccompanimentWorkflowSourceCurrent,
-  isAccompanimentWorkflowStepComplete,
-} from "@/lib/theory/accompaniment-workflow";
 import AbcEditor, { DEFAULT_ABC } from "./AbcEditor";
 import type { ComposerStepId } from "./composer-steps";
 import { AccompanimentStep } from "./workspace/AccompanimentStep";
-import { HarmonyStep } from "./workspace/HarmonyStep";
-import type { StrongBeatDirective } from "@/lib/theory/abc-beat-annotations";
 import {
-  ACCOMPANIMENT_PREVIEW_RENDER_OPTIONS,
+  buildAccompanimentGuitarBranchResetState,
+  hasAccompanimentGuitarBranchWork,
+} from "./workspace/accompaniment-guitar-reset";
+import { buildArrangementPreviewModel } from "./workspace/arrangement-preview-model";
+import { HarmonyStep } from "./workspace/HarmonyStep";
+import {
   COMPOSER_PREVIEW_RENDER_OPTIONS,
   ComposerNotationPreviewLayout,
 } from "./workspace/preview";
 import { clearComposerSongStorage, getComposerMelodyStorageKey } from "./workspace/storage";
+
+const DEFAULT_HARMONY_LAYER_VISIBILITY: Record<string, boolean> = {
+  ChordProgression: true,
+  Lyrics: true,
+  Melody: true,
+  TAB: false,
+};
+
+const DEFAULT_ACCOMPANIMENT_LAYER_VISIBILITY: Record<string, boolean> = {
+  ChordProgression: true,
+  Lyrics: true,
+  StrongBeats: true,
+  Melody: true,
+  TAB: false,
+};
+
+const DEFAULT_LAYER_VOLUMES: Record<string, number> = {
+  ChordProgression: 100,
+  Melody: 100,
+};
 
 interface ComposerStepWorkspaceProps {
   slug: string;
@@ -39,13 +51,10 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
   const [melodyAbc, setMelodyAbc] = useState(initialMelodyAbc ?? DEFAULT_ABC);
   const [hasMounted, setHasMounted] = useState(false);
   const { state: ws, updateState, resetState: resetWorkspaceState } = useWorkspaceState(slug);
-  const [layerVisibility, setLayerVisibility] = useState({ melody: true, harmony: true });
-  const [accompLayerVisibility, setAccompLayerVisibility] = useState<Record<string, boolean>>({
-    __melody__: true,
-    __strong_beats__: true,
-    __chords__: false,
-    __guitar_tab__: false,
-  });
+  const [layerVisibility, setLayerVisibility] = useState<Record<string, boolean>>(DEFAULT_HARMONY_LAYER_VISIBILITY);
+  const [layerVolumes, setLayerVolumes] = useState<Record<string, number>>(DEFAULT_LAYER_VOLUMES);
+  const [accompLayerVisibility, setAccompLayerVisibility] = useState<Record<string, boolean>>(DEFAULT_ACCOMPANIMENT_LAYER_VISIBILITY);
+  const [accompLayerVolumes, setAccompLayerVolumes] = useState<Record<string, number>>(DEFAULT_LAYER_VOLUMES);
   const [copyStatus, setCopyStatus] = useState("Copy Markdown");
 
   // Hydrate melodyAbc from localStorage after mount (client-only)
@@ -66,127 +75,29 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
   // The baseline ABC is the pure melody
   const activeAbc = melodyAbc;
 
-  const pipeline = useMemo(() => {
-    try {
-      return generateArrangementPipeline(activeAbc);
-    } catch {
-      return null;
-    }
-  }, [activeAbc]);
-
-  const activeWorkflow = isAccompanimentWorkflowSourceCurrent(ws.accompanimentWorkflow, activeAbc)
-    ? ws.accompanimentWorkflow
-    : null;
-  const strongBeatsStepComplete = Boolean(
-    activeWorkflow && isAccompanimentWorkflowStepComplete(activeWorkflow, "strong-beat-targets")
-  );
-  const effectiveAccompLayerVisibility = useMemo(() => {
-    if (!strongBeatsStepComplete) {
-      return {
-        ...accompLayerVisibility,
-        __strong_beats__: false,
-      };
-    }
-
-    return {
-      ...accompLayerVisibility,
-      __strong_beats__: accompLayerVisibility.__strong_beats__ !== false,
-    };
-  }, [accompLayerVisibility, strongBeatsStepComplete]);
-  const workflowAppliedMusicAbc = useMemo(
-    () => getWorkflowAppliedMusicAbc(activeWorkflow, activeAbc),
-    [activeWorkflow, activeAbc]
-  );
-  const workflowAppliedPipeline = useMemo(() => {
-    try {
-      return generateArrangementPipeline(workflowAppliedMusicAbc);
-    } catch {
-      return pipeline;
-    }
-  }, [workflowAppliedMusicAbc, pipeline]);
-
-  const strongBeatDirectives = useMemo(() => {
-    const option = activeWorkflow ? getSelectedWorkflowOption(activeWorkflow, "strong-beat-targets") : null;
-    return (option?.data?.strongBeatDirectives as StrongBeatDirective[]) ?? undefined;
-  }, [activeWorkflow]);
-  const accompanimentSupportLayers = useMemo(() => generateAccompanimentSupportLayers(workflowAppliedMusicAbc, {
-    accompaniment: workflowAppliedPipeline?.accompaniment ?? null,
-    workflow: activeWorkflow,
-  }), [activeWorkflow, workflowAppliedMusicAbc, workflowAppliedPipeline]);
-  const accompanimentSupportSources = useMemo(() => [
-    accompanimentSupportLayers.djembe,
-    accompanimentSupportLayers.flute,
-    accompanimentSupportLayers.violin,
-  ], [accompanimentSupportLayers]);
-
-  const accompanimentBuild = useMemo(() => buildAccompanimentAbc({
-    baseAbc: workflowAppliedMusicAbc,
+  const previewModel = useMemo(() => buildArrangementPreviewModel({
+    activeAbc,
+    workflow: ws.accompanimentWorkflow,
     generatedAccompaniment: ws.generatedAccompaniment,
     generatedGuitar: ws.generatedGuitar,
     generatedPiano: ws.generatedPiano,
-    extraVoiceSources: accompanimentSupportSources,
-    layerVisibility: effectiveAccompLayerVisibility,
-    strongBeatDirectives,
-  }), [ws.generatedAccompaniment, ws.generatedGuitar, ws.generatedPiano, accompanimentSupportSources, workflowAppliedMusicAbc, effectiveAccompLayerVisibility, strongBeatDirectives]);
+    harmonyLayerVisibility: layerVisibility,
+    harmonyLayerVolumes: layerVolumes,
+    accompanimentLayerVisibility: accompLayerVisibility,
+    accompanimentLayerVolumes: accompLayerVolumes,
+  }), [
+    activeAbc,
+    ws.accompanimentWorkflow,
+    ws.generatedAccompaniment,
+    ws.generatedGuitar,
+    ws.generatedPiano,
+    layerVisibility,
+    layerVolumes,
+    accompLayerVisibility,
+    accompLayerVolumes,
+  ]);
 
-  const appliedWorkflowStep = useMemo(() => getLatestSelectedWorkflowStep(activeWorkflow), [activeWorkflow]);
-  const workflowAnnotationAbc = useMemo(
-    () => buildAccompanimentWorkflowAbcAnnotation(activeWorkflow),
-    [activeWorkflow]
-  );
-  const accompanimentAbc = workflowAnnotationAbc
-    ? `${accompanimentBuild.abc.trimEnd()}\n\n${workflowAnnotationAbc}`
-    : accompanimentBuild.abc;
-
-  const accompanimentVoiceNames = useMemo(
-    () => getAccompanimentVoiceNames(ws.generatedAccompaniment, ws.generatedGuitar, ws.generatedPiano, accompanimentSupportSources),
-    [ws.generatedAccompaniment, ws.generatedGuitar, ws.generatedPiano, accompanimentSupportSources]
-  );
-
-  const hasGuitarVoice = accompanimentBuild.visibleVoiceNames.includes("Guitar");
-  const guitarTabEnabled = Boolean(hasGuitarVoice && accompLayerVisibility["__guitar_tab__"] === true);
-
-  const getRenderOptionsFor = useCallback((abc: string, baseOptions: typeof ACCOMPANIMENT_PREVIEW_RENDER_OPTIONS | typeof COMPOSER_PREVIEW_RENDER_OPTIONS) => {
-    if (!guitarTabEnabled) return baseOptions;
-
-    let guitarIndex = -1;
-    const scoreMatch = abc.match(/^%%score\s+(.+)$/m);
-    
-    if (scoreMatch) {
-      const scoreLine = scoreMatch[1];
-      const staffGroups = scoreLine.match(/(\([^)]+\)|\[[^\]]+\]|\{[^}]+\}|\S+)/g);
-      if (staffGroups) {
-        guitarIndex = staffGroups.findIndex(group => group.includes("Guitar"));
-      }
-    }
-    
-    if (guitarIndex === -1) {
-      const matches = [...abc.matchAll(/^V:([^\s=]+)/gm)];
-      const voiceNames = [...new Set(matches.map(m => m[1]))];
-      guitarIndex = voiceNames.indexOf("Guitar");
-    }
-
-    if (guitarIndex >= 0) {
-      const result = {
-        staffwidth: baseOptions.staffwidth,
-        paddingright: baseOptions.paddingright,
-        stafftopmargin: 35,
-        tablature: [
-          ...Array.from({ length: guitarIndex }, () => ({ instrument: "" as const })),
-          {
-            instrument: "guitar" as const,
-            label: "",
-            tuning: ["E,,", "A,,", "D,", "G,", "B,", "E"],
-            capo: 0,
-            hideTabSymbol: false,
-          },
-        ],
-      };
-      return result;
-    }
-
-    return baseOptions;
-  }, [guitarTabEnabled]);
+  const { pipeline, activeWorkflow, workflowAppliedMusicAbc } = previewModel;
 
   const handleRestoreHarmony = useCallback(() => {
     const originalMelodyAbc = initialMelodyAbc ?? DEFAULT_ABC;
@@ -197,9 +108,24 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
     } catch (e) {
       console.error("Failed to clear composer state from localStorage", e);
     }
-    setLayerVisibility({ melody: true, harmony: true });
-    setAccompLayerVisibility({});
+    setLayerVisibility(DEFAULT_HARMONY_LAYER_VISIBILITY);
+    setLayerVolumes(DEFAULT_LAYER_VOLUMES);
+    setAccompLayerVisibility(DEFAULT_ACCOMPANIMENT_LAYER_VISIBILITY);
+    setAccompLayerVolumes(DEFAULT_LAYER_VOLUMES);
   }, [initialMelodyAbc, resetWorkspaceState, slug]);
+
+  const hasGuitarBranchWork = hasAccompanimentGuitarBranchWork(ws);
+
+  const handleResetGuitarBranchWork = useCallback(() => {
+    updateState(buildAccompanimentGuitarBranchResetState(ws));
+    setAccompLayerVisibility((current) => ({
+      ...current,
+      TAB: false,
+    }));
+  }, [ws, updateState]);
+  const accompanimentAbc = previewModel.accompaniment.abc;
+  const accompanimentVoiceNames = previewModel.accompaniment.voiceNames;
+  const getRenderOptionsFor = previewModel.getRenderOptionsFor;
 
   if (step === "melody") {
     return (
@@ -222,10 +148,11 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
         initialMelodyAbc={initialMelodyAbc}
         hasMounted={hasMounted}
         pipeline={pipeline}
-        workflowAppliedMusicAbc={workflowAppliedMusicAbc}
-        activeWorkflow={activeWorkflow}
+        harmonyPreview={previewModel.harmony}
         layerVisibility={layerVisibility}
         setLayerVisibility={setLayerVisibility}
+        layerVolumes={layerVolumes}
+        setLayerVolumes={setLayerVolumes}
         ws={ws}
         updateState={updateState}
         onRestore={handleRestoreHarmony}
@@ -237,22 +164,19 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
     return (
       <AccompanimentStep
         activeAbc={activeAbc}
-        setMelodyAbc={setMelodyAbc}
-        initialMelodyAbc={initialMelodyAbc}
         hasMounted={hasMounted}
         pipeline={pipeline}
         workflowAppliedMusicAbc={workflowAppliedMusicAbc}
-        activeWorkflow={activeWorkflow}
-        accompanimentAbc={accompanimentAbc}
-        accompanimentVoiceNames={accompanimentVoiceNames}
+        accompanimentPreview={previewModel.accompaniment}
         accompLayerVisibility={accompLayerVisibility}
         setAccompLayerVisibility={setAccompLayerVisibility}
-        hasGuitarVoice={hasGuitarVoice}
-        guitarTabEnabled={guitarTabEnabled}
-        appliedWorkflowStep={appliedWorkflowStep}
+        accompLayerVolumes={accompLayerVolumes}
+        setAccompLayerVolumes={setAccompLayerVolumes}
         getRenderOptionsFor={getRenderOptionsFor}
         ws={ws}
         updateState={updateState}
+        canResetGuitarBranchWork={hasGuitarBranchWork}
+        onResetGuitarBranchWork={handleResetGuitarBranchWork}
       />
     );
   }

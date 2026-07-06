@@ -3,11 +3,9 @@ import AbcjsPlaybackController from "@/components/music-sheet/AbcjsPlaybackContr
 import type { ArrangementPipelineResult } from "@/lib/theory/arrangement-pipeline";
 import { generatePianoAccompaniment } from "@/lib/theory/piano-accompaniment";
 import type { PianoCompingProfileId } from "@/lib/theory/piano-comping-profiles";
-import {
-  isAccompanimentWorkflowStepComplete,
-  type AccompanimentWorkflowSession,
-} from "@/lib/theory/accompaniment-workflow";
 import type { WorkspaceState } from "../useWorkspaceState";
+import type { AccompanimentPreviewModel, ComposerPreviewRenderOptions } from "./arrangement-preview-model";
+import { LayerVisibilityControls } from "./LayerVisibilityControls";
 import { buildFingerstyleComposerIntegration, type FingerstyleComposerProfileId } from "../fingerstyle-integration";
 import AccompanimentWorkflowWizard from "../AccompanimentWorkflowWizard";
 import {
@@ -17,50 +15,44 @@ import {
 
 interface AccompanimentStepProps {
   activeAbc: string;
-  setMelodyAbc: Dispatch<SetStateAction<string>>;
-  initialMelodyAbc?: string;
   hasMounted: boolean;
   pipeline: ArrangementPipelineResult | null;
   workflowAppliedMusicAbc: string;
-  activeWorkflow: AccompanimentWorkflowSession | null;
-  accompanimentAbc: string;
-  accompanimentVoiceNames: string[];
+  accompanimentPreview: AccompanimentPreviewModel;
   accompLayerVisibility: Record<string, boolean>;
   setAccompLayerVisibility: Dispatch<SetStateAction<Record<string, boolean>>>;
-  hasGuitarVoice: boolean;
-  guitarTabEnabled: boolean;
-  appliedWorkflowStep: { index: number; label: string } | null;
-  getRenderOptionsFor: (abc: string, baseOptions: typeof ACCOMPANIMENT_PREVIEW_RENDER_OPTIONS) => Record<string, unknown>;
+  accompLayerVolumes: Record<string, number>;
+  setAccompLayerVolumes: Dispatch<SetStateAction<Record<string, number>>>;
+  getRenderOptionsFor: (abc: string, baseOptions: ComposerPreviewRenderOptions) => Record<string, unknown>;
   ws: WorkspaceState;
   updateState: (updates: Partial<WorkspaceState>) => void;
+  canResetGuitarBranchWork: boolean;
+  onResetGuitarBranchWork: () => void;
 }
 
 export function AccompanimentStep({
   activeAbc,
-  setMelodyAbc,
-  initialMelodyAbc,
   hasMounted,
   pipeline,
   workflowAppliedMusicAbc,
-  activeWorkflow,
-  accompanimentAbc,
-  accompanimentVoiceNames,
+  accompanimentPreview,
   accompLayerVisibility,
   setAccompLayerVisibility,
-  hasGuitarVoice,
-  guitarTabEnabled,
-  appliedWorkflowStep,
+  accompLayerVolumes,
+  setAccompLayerVolumes,
   getRenderOptionsFor,
   ws,
   updateState,
+  canResetGuitarBranchWork,
+  onResetGuitarBranchWork,
 }: AccompanimentStepProps) {
-    const strongBeatsStepComplete = Boolean(
-      activeWorkflow && isAccompanimentWorkflowStepComplete(activeWorkflow, "strong-beat-targets")
-    );
-    const hasGeneratedAccompanimentLayer = Boolean(ws.generatedAccompaniment || ws.generatedGuitar || ws.generatedPiano);
-    const hasLayerVisibilityControls = strongBeatsStepComplete || hasGeneratedAccompanimentLayer;
-
-
+    const {
+      abc: accompanimentAbc,
+      rawAbc: rawAccompanimentAbc,
+      layerVisibilityItems,
+      appliedWorkflowStep,
+      hasLayerVisibilityControls,
+    } = accompanimentPreview;
 
     return (
       <div className="space-y-6">
@@ -71,15 +63,11 @@ export function AccompanimentStep({
                 <div className="flex items-center justify-between gap-2 mb-4">
                   <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">AI Accompaniment Generation</h2>
                   <div className="flex items-center gap-1.5">
-                    {hasMounted && initialMelodyAbc && activeAbc !== initialMelodyAbc && (
+                    {hasMounted && canResetGuitarBranchWork && (
                       <button
                         type="button"
-                        onClick={() => {
-                          setMelodyAbc(initialMelodyAbc);
-                          updateState({ aiSuggestions: [], selectedCandidateId: null, acceptedHarmony: null, aiAccompanimentSuggestions: [], selectedAccompanimentIndex: null, pianoAccompanimentData: null, guitarAccompanimentData: null, generatedAccompaniment: null, aiGuitarSuggestions: [], aiPianoSuggestions: [], selectedGuitarIndex: null, selectedPianoIndex: null, generatedGuitar: null, generatedPiano: null, accompanimentWorkflowSetup: null, accompanimentWorkflow: null });
-                          setAccompLayerVisibility({});
-                        }}
-                        title="Restore Original Melody"
+                        onClick={onResetGuitarBranchWork}
+                        title="Clear Guitar Branch Work"
                         className="inline-flex items-center gap-1 rounded-lg border border-rose-400/30 bg-rose-500/10 px-2.5 py-1.5 text-xs font-bold text-rose-600 transition hover:bg-rose-500/20 dark:text-rose-400"
                       >
                         <span className="text-sm">↺</span>
@@ -102,6 +90,7 @@ export function AccompanimentStep({
                   workflowSetup={ws.accompanimentWorkflowSetup}
                   onWorkflowChange={(accompanimentWorkflow) => updateState({ accompanimentWorkflow })}
                   onWorkflowSetupChange={(accompanimentWorkflowSetup) => updateState({ accompanimentWorkflowSetup })}
+                  onReset={onResetGuitarBranchWork}
                   onGuitarProfileSelected={(profile) => {
                     if (profile === null) {
                       updateState({
@@ -122,7 +111,7 @@ export function AccompanimentStep({
                       : "strict-pima";
                     const integration = buildFingerstyleComposerIntegration(workflowAppliedMusicAbc, undefined, { pickingProfile });
                     updateState({ generatedGuitar: integration.composerLayer.abc, guitarAccompanimentData: integration });
-                    setAccompLayerVisibility((prev) => ({ ...prev, __guitar_tab__: true }));
+                    setAccompLayerVisibility((prev) => ({ ...prev, TAB: true }));
                   }}
                   onPianoProfileSelected={(profile) => {
                     if (profile === null) {
@@ -151,95 +140,16 @@ export function AccompanimentStep({
           )}
           preview={(
             <>
-              {/* Layer Visibility Toggles — shown once Strong Beats are complete or accompaniment layers exist */}
               {hasLayerVisibilityControls && (
                 <section className="mb-4 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950/60">
                   <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 mb-2">Layer Visibility</h2>
-                  <div className="flex flex-wrap gap-3">
-                    {/* Melody toggle */}
-                    <label className="flex items-center gap-2 text-xs font-semibold text-zinc-800 dark:text-zinc-200 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        className="rounded border-zinc-300 text-amber-500 focus:ring-amber-500"
-                        checked={accompLayerVisibility['__melody__'] !== false}
-                        onChange={() => setAccompLayerVisibility(prev => ({
-                          ...prev,
-                          ['__melody__']: !(prev['__melody__'] !== false)
-                        }))}
-                      />
-                      🎵 Melody
-                    </label>
-                    {/* Original Chords toggle */}
-                    <label className="flex items-center gap-2 text-xs font-semibold text-zinc-800 dark:text-zinc-200 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        className="rounded border-zinc-300 text-amber-500 focus:ring-amber-500"
-                        checked={accompLayerVisibility['__chords__'] === true}
-                        onChange={() => setAccompLayerVisibility(prev => ({
-                          ...prev,
-                          ['__chords__']: !(prev['__chords__'] === true)
-                        }))}
-                      />
-                      🎶 Original Chords
-                    </label>
-                    {/* Strong beats toggle */}
-                    {strongBeatsStepComplete && (
-                      <label className="flex items-center gap-2 text-xs font-semibold text-zinc-800 dark:text-zinc-200 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          className="rounded border-zinc-300 text-amber-500 focus:ring-amber-500"
-                          checked={accompLayerVisibility['__strong_beats__'] !== false}
-                          onChange={() => setAccompLayerVisibility(prev => ({
-                            ...prev,
-                            ['__strong_beats__']: !(prev['__strong_beats__'] !== false)
-                          }))}
-                        />
-                        ⬤ Strong Beats
-                      </label>
-                    )}
-                    {/* Guitar tablature toggle */}
-                    {hasGuitarVoice && (
-                      <label className="flex items-center gap-2 text-xs font-semibold text-zinc-800 dark:text-zinc-200 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          className="rounded border-zinc-300 text-amber-500 focus:ring-amber-500"
-                          checked={guitarTabEnabled}
-                          onChange={() => setAccompLayerVisibility(prev => ({
-                            ...prev,
-                            ['__guitar_tab__']: !guitarTabEnabled
-                          }))}
-                        />
-                        🎸 GUITAR TAB
-                      </label>
-                    )}
-                    {/* Accompaniment voice toggles */}
-                    {accompanimentVoiceNames.map(voiceName => {
-                      const isVisible = accompLayerVisibility[voiceName] !== false;
-                      const friendlyName = voiceName
-                        .replace(/([A-Z])/g, ' $1')
-                        .replace(/^\s/, '')
-                        .replace('Piano', '🎹 Piano')
-                        .replace('Guitar', '🎸 Guitar')
-                        .replace('Harmonium', '🪗 Harmonium')
-                        .replace('Djembe', '🪘 Djembe')
-                        .replace('Flute', '🪈 Flute')
-                        .replace('Violin', '🎻 Violin');
-                      return (
-                        <label key={voiceName} className="flex items-center gap-2 text-xs font-semibold text-zinc-800 dark:text-zinc-200 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            className="rounded border-zinc-300 text-amber-500 focus:ring-amber-500"
-                            checked={isVisible}
-                            onChange={() => setAccompLayerVisibility(prev => ({
-                              ...prev,
-                              [voiceName]: !isVisible
-                            }))}
-                          />
-                          {friendlyName}
-                        </label>
-                      );
-                    })}
-                  </div>
+                  <LayerVisibilityControls
+                    items={layerVisibilityItems}
+                    visibility={accompLayerVisibility}
+                    onVisibilityChange={setAccompLayerVisibility}
+                    volumes={accompLayerVolumes}
+                    onVolumeChange={setAccompLayerVolumes}
+                  />
                 </section>
               )}
 
@@ -266,7 +176,7 @@ export function AccompanimentStep({
               <section className="mt-6 rounded-2xl border border-dashed border-zinc-300 bg-white/70 p-4 dark:border-zinc-700 dark:bg-zinc-950/50">
                 <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Generated ABC Source</h2>
                 <pre className="mt-3 max-h-[min(30vh,300px)] overflow-auto whitespace-pre-wrap rounded-xl bg-zinc-50 p-3 text-xs leading-5 text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
-                  {accompanimentAbc}
+                  {rawAccompanimentAbc}
                 </pre>
               </section>
             </>

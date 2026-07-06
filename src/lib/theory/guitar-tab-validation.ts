@@ -1,4 +1,12 @@
-import { MAX_FRET_STRETCH } from "./guitar-playability";
+import {
+  MAX_FRET_STRETCH,
+  midiForStringFret,
+  parseScientificPitch,
+  resolveGuitarPlayabilityProfile,
+  resolveGuitarVoicingProfile,
+  type GuitarPlayabilityProfileInput,
+  type GuitarVoicingPlayabilityProfileInput,
+} from "./guitar-playability";
 import { getNoteValue } from "./scales";
 
 export type GuitarTabStringNumber = 1 | 2 | 3 | 4 | 5 | 6;
@@ -8,10 +16,18 @@ export interface GuitarTabEvent {
   beat: number;
   subdivision?: string | number;
   simultaneousGroupId?: string;
+  sourceEventId?: string;
   note: string;
   string: GuitarTabStringNumber;
   fret: number;
   role: string;
+}
+
+export interface GuitarTabValidationOptions {
+  guitarProfile?: GuitarPlayabilityProfileInput;
+  voicingProfile?: GuitarVoicingPlayabilityProfileInput;
+  requireScientificPitch?: boolean;
+  requireSourceEventIds?: boolean;
 }
 
 export interface GuitarTabValidationIssue {
@@ -19,10 +35,17 @@ export interface GuitarTabValidationIssue {
     | "invalid-string"
     | "invalid-fret"
     | "duplicate-string"
+    | "duplicate-source-note"
+    | "missing-source-event-id"
     | "too-many-notes"
     | "too-many-fretted-notes"
     | "fret-span"
-    | "pitch-string-mismatch";
+    | "pitch-string-mismatch"
+    | "fret-out-of-range"
+    | "missing-octave"
+    | "pitch-register-mismatch"
+    | "left-hand-unfingerable"
+    | "multiple-barres";
   message: string;
   measureIndex?: number;
   beat?: number;
@@ -40,6 +63,12 @@ export interface GuitarTabValidatedGroup {
   frettedNoteCount: number;
   fretSpan: number;
   strings: GuitarTabStringNumber[];
+  leftHandPlayable: boolean;
+  frettingFingerCount: number;
+  requiresBarre: boolean;
+  barreFret?: number;
+  profileId: string;
+  voicingProfileId?: string;
 }
 
 export interface GuitarTabValidationResult {
@@ -101,11 +130,85 @@ function issueLocation(events: GuitarTabEvent[]): Pick<GuitarTabValidationIssue,
   };
 }
 
-export function validateGuitarTab(events: GuitarTabEvent[]): GuitarTabValidationResult {
+function isValidString(value: number): value is GuitarTabStringNumber {
+  return VALID_STRINGS.has(value);
+}
+
+export function validateOneGuitarStringAssignments(
+  events: GuitarTabEvent[],
+  options: GuitarTabValidationOptions = {}
+): GuitarTabValidationIssue[] {
+  const issues: GuitarTabValidationIssue[] = [];
+
+  for (const [key, group] of groupEvents(events)) {
+    if (group.length > 6) {
+      issues.push({
+        code: "too-many-notes",
+        message: `Simultaneous group ${key} has ${group.length} notes; a six-string guitar can sound at most 6 string events at once.`,
+        ...issueLocation(group),
+        events: group,
+      });
+    }
+
+    const byString = new Map<GuitarTabStringNumber, GuitarTabEvent[]>();
+    const bySourceEvent = new Map<string, GuitarTabEvent[]>();
+
+    for (const event of group) {
+      const matches = byString.get(event.string) ?? [];
+      matches.push(event);
+      byString.set(event.string, matches);
+
+      const sourceEventId = event.sourceEventId?.trim();
+      if (sourceEventId) {
+        const sourceMatches = bySourceEvent.get(sourceEventId) ?? [];
+        sourceMatches.push(event);
+        bySourceEvent.set(sourceEventId, sourceMatches);
+      } else if (options.requireSourceEventIds) {
+        issues.push({
+          code: "missing-source-event-id",
+          message: `${event.note} at measure ${event.measureIndex}, beat ${event.beat} is missing sourceEventId; one-note-to-one-string validation requires a stable source note id.`,
+          ...issueLocation([event]),
+          string: event.string,
+          events: [event],
+        });
+      }
+    }
+
+    for (const [string, stringEvents] of byString) {
+      if (stringEvents.length <= 1) continue;
+      issues.push({
+        code: "duplicate-string",
+        message: `Simultaneous group ${key} assigns ${stringEvents.map((event) => event.note).join(" + ")} to string ${string}; one guitar string cannot produce multiple pitches at the same time.`,
+        ...issueLocation(stringEvents),
+        string,
+        events: stringEvents,
+      });
+    }
+
+    for (const [sourceEventId, sourceEvents] of bySourceEvent) {
+      if (sourceEvents.length <= 1) continue;
+      issues.push({
+        code: "duplicate-source-note",
+        message: `Simultaneous group ${key} assigns source note/event ${sourceEventId} to ${sourceEvents.length} strings; one musical source event must be placed on only one guitar string.`,
+        ...issueLocation(sourceEvents),
+        events: sourceEvents,
+      });
+    }
+  }
+
+  return issues;
+}
+
+export function validateGuitarFretboardRange(
+  events: GuitarTabEvent[],
+  options: GuitarTabValidationOptions = {}
+): GuitarTabValidationIssue[] {
+  const profile = resolveGuitarPlayabilityProfile(options.guitarProfile);
   const issues: GuitarTabValidationIssue[] = [];
 
   for (const event of events) {
-    if (!VALID_STRINGS.has(event.string)) {
+    const validString = isValidString(event.string);
+    if (!validString) {
       issues.push({
         code: "invalid-string",
         message: `Invalid guitar string ${event.string}; string must be 1-6.`,
@@ -113,6 +216,7 @@ export function validateGuitarTab(events: GuitarTabEvent[]): GuitarTabValidation
         events: [event],
       });
     }
+
     if (!Number.isFinite(event.fret) || event.fret < 0) {
       issues.push({
         code: "invalid-fret",
@@ -121,10 +225,23 @@ export function validateGuitarTab(events: GuitarTabEvent[]): GuitarTabValidation
         string: event.string,
         events: [event],
       });
+      continue;
+    }
+
+    if (!validString) continue;
+
+    if (event.fret > profile.maxFret) {
+      issues.push({
+        code: "fret-out-of-range",
+        message: `Fret ${event.fret} is outside ${profile.label}'s fretboard range; maximum supported fret is ${profile.maxFret}.`,
+        ...issueLocation([event]),
+        string: event.string,
+        events: [event],
+      });
     }
 
     const actualPitch = eventPitchValue(event);
-    if (actualPitch !== undefined && VALID_STRINGS.has(event.string) && event.fret >= 0) {
+    if (actualPitch !== undefined) {
       const expectedPitch = expectedPitchValueFor(event);
       if (actualPitch !== expectedPitch) {
         issues.push({
@@ -136,74 +253,158 @@ export function validateGuitarTab(events: GuitarTabEvent[]): GuitarTabValidation
         });
       }
     }
+
+    const scientificPitch = parseScientificPitch(event.note);
+    if (options.requireScientificPitch && !scientificPitch) {
+      issues.push({
+        code: "missing-octave",
+        message: `${event.note} must include octave/register, e.g. E2 or F#4, so fretboard range can be proven.`,
+        ...issueLocation([event]),
+        string: event.string,
+        events: [event],
+      });
+      continue;
+    }
+
+    if (scientificPitch) {
+      const expectedMidi = midiForStringFret(event.string, event.fret);
+      if (scientificPitch.midi !== expectedMidi) {
+        issues.push({
+          code: "pitch-register-mismatch",
+          message: `${event.note} is not the sounding register for string ${event.string} fret ${event.fret}; expected MIDI ${expectedMidi}.`,
+          ...issueLocation([event]),
+          string: event.string,
+          events: [event],
+        });
+      }
+    }
   }
 
+  return issues;
+}
+
+interface LeftHandGroupAnalysis {
+  fretSpan: number;
+  frettedNoteCount: number;
+  frettingFingerCount: number;
+  requiresBarre: boolean;
+  barreFret?: number;
+  playable: boolean;
+  issues: GuitarTabValidationIssue[];
+}
+
+function analyzeLeftHandGroup(
+  key: string,
+  group: GuitarTabEvent[],
+  options: GuitarTabValidationOptions
+): LeftHandGroupAnalysis {
+  const profile = resolveGuitarPlayabilityProfile(options.guitarProfile);
+  const voicingProfile = resolveGuitarVoicingProfile(options.voicingProfile);
+  const maxFretStretch = voicingProfile.maxFretStretch ?? profile.maxFretStretch ?? MAX_FRET_STRETCH;
+  const allowBarre = voicingProfile.allowBarre ?? profile.allowSingleBarre;
+  const frettedEvents = group.filter((event) => event.fret > 0 && isValidString(event.string));
+  const frettedFrets = frettedEvents.map((event) => event.fret);
+  const fretSpan = frettedFrets.length > 1 ? Math.max(...frettedFrets) - Math.min(...frettedFrets) : 0;
+  const issues: GuitarTabValidationIssue[] = [];
+  const eventsByFret = frettedEvents.reduce((acc, event) => {
+    const matches = acc.get(event.fret) ?? [];
+    matches.push(event);
+    acc.set(event.fret, matches);
+    return acc;
+  }, new Map<number, GuitarTabEvent[]>());
+  const duplicateFretGroups = Array.from(eventsByFret.entries())
+    .filter(([, events]) => events.length > 1)
+    .sort(([left], [right]) => left - right);
+  const barreFret = allowBarre && duplicateFretGroups.length > 0 ? duplicateFretGroups[0][0] : undefined;
+  const barreEventCount = barreFret === undefined ? 0 : eventsByFret.get(barreFret)?.length ?? 0;
+  const requiresBarre = barreFret !== undefined;
+  const frettingFingerCount = frettedEvents.length - Math.max(0, barreEventCount - 1);
+
+  if (frettedEvents.length > profile.maxFrettingFingerCount && !allowBarre) {
+    issues.push({
+      code: "too-many-fretted-notes",
+      message: `Simultaneous group ${key} has ${frettedEvents.length} fretted notes; the fretting hand has at most ${profile.maxFrettingFingerCount} fingers.`,
+      ...issueLocation(group),
+      events: group,
+    });
+  }
+
+  if (frettingFingerCount > profile.maxFrettingFingerCount) {
+    issues.push({
+      code: "left-hand-unfingerable",
+      message: `Simultaneous group ${key} needs ${frettingFingerCount} fretting fingers after barre/open-string reduction; one left hand has ${profile.maxFrettingFingerCount} fingers available.`,
+      ...issueLocation(group),
+      events: group,
+    });
+  }
+
+  if (allowBarre && duplicateFretGroups.length > 1 && frettingFingerCount > profile.maxFrettingFingerCount) {
+    issues.push({
+      code: "multiple-barres",
+      message: `Simultaneous group ${key} has same-fret clusters at frets ${duplicateFretGroups.map(([fret]) => fret).join(", ")}; one left hand can rely on at most one barre shape at a time.`,
+      ...issueLocation(group),
+      events: group,
+    });
+  }
+
+  if (fretSpan > maxFretStretch) {
+    issues.push({
+      code: "fret-span",
+      message: `Simultaneous group ${key} spans ${fretSpan} frets; maximum playable span is ${maxFretStretch}.`,
+      ...issueLocation(group),
+      events: group,
+    });
+  }
+
+  return {
+    fretSpan,
+    frettedNoteCount: frettedEvents.length,
+    frettingFingerCount,
+    requiresBarre,
+    barreFret,
+    playable: issues.length === 0,
+    issues,
+  };
+}
+
+export function validateLeftHandReach(
+  events: GuitarTabEvent[],
+  options: GuitarTabValidationOptions = {}
+): GuitarTabValidationIssue[] {
+  return Array.from(groupEvents(events).entries()).flatMap(([key, group]) => analyzeLeftHandGroup(key, group, options).issues);
+}
+
+export function validateGuitarTab(
+  events: GuitarTabEvent[],
+  options: GuitarTabValidationOptions = {}
+): GuitarTabValidationResult {
+  const profile = resolveGuitarPlayabilityProfile(options.guitarProfile);
+  const voicingProfile = resolveGuitarVoicingProfile(options.voicingProfile);
+  const issues = [
+    ...validateGuitarFretboardRange(events, options),
+    ...validateOneGuitarStringAssignments(events, options),
+    ...validateLeftHandReach(events, options),
+  ];
   const validatedGroups: GuitarTabValidatedGroup[] = [];
 
   for (const [key, group] of groupEvents(events)) {
-    const frettedFrets = group.filter((event) => event.fret > 0).map((event) => event.fret);
-    const fretSpan = frettedFrets.length > 1 ? Math.max(...frettedFrets) - Math.min(...frettedFrets) : 0;
-    const strings = group.map((event) => event.string);
-    const frettedNoteCount = frettedFrets.length;
-
+    const leftHand = analyzeLeftHandGroup(key, group, options);
     validatedGroups.push({
       key,
       measureIndex: group[0]?.measureIndex ?? 0,
       beat: group[0]?.beat ?? 0,
       simultaneousGroupId: group[0]?.simultaneousGroupId,
       noteCount: group.length,
-      frettedNoteCount,
-      fretSpan,
-      strings,
+      frettedNoteCount: leftHand.frettedNoteCount,
+      fretSpan: leftHand.fretSpan,
+      strings: group.map((event) => event.string),
+      leftHandPlayable: leftHand.playable,
+      frettingFingerCount: leftHand.frettingFingerCount,
+      requiresBarre: leftHand.requiresBarre,
+      barreFret: leftHand.barreFret,
+      profileId: profile.id,
+      voicingProfileId: voicingProfile.id,
     });
-
-    if (group.length > 6) {
-      issues.push({
-        code: "too-many-notes",
-        message: `Simultaneous group ${key} has ${group.length} notes; a six-string guitar can sound at most 6 string events at once.`,
-        ...issueLocation(group),
-        events: group,
-      });
-    }
-
-    if (frettedNoteCount > 4) {
-      issues.push({
-        code: "too-many-fretted-notes",
-        message: `Simultaneous group ${key} has ${frettedNoteCount} fretted notes; the fretting hand has at most 4 fingers.`,
-        ...issueLocation(group),
-        events: group,
-      });
-    }
-
-    if (fretSpan > MAX_FRET_STRETCH) {
-      issues.push({
-        code: "fret-span",
-        message: `Simultaneous group ${key} spans ${fretSpan} frets; maximum playable span is ${MAX_FRET_STRETCH}.`,
-        ...issueLocation(group),
-        events: group,
-      });
-    }
-
-    const byString = new Map<GuitarTabStringNumber, GuitarTabEvent[]>();
-    for (const event of group) {
-      const matches = byString.get(event.string) ?? [];
-      matches.push(event);
-      byString.set(event.string, matches);
-    }
-
-    for (const [string, stringEvents] of byString) {
-      if (stringEvents.length <= 1) continue;
-      // One physical string has only one speaking length at a time. This is the
-      // hard invariant that rejects cases such as simultaneous E3 and G3 both
-      // assigned to low-E string 6.
-      issues.push({
-        code: "duplicate-string",
-        message: `Simultaneous group ${key} assigns ${stringEvents.map((event) => event.note).join(" + ")} to string ${string}; one guitar string cannot produce multiple pitches at the same time.`,
-        ...issueLocation(stringEvents),
-        string,
-        events: stringEvents,
-      });
-    }
   }
 
   return {
@@ -213,12 +414,26 @@ export function validateGuitarTab(events: GuitarTabEvent[]): GuitarTabValidation
   };
 }
 
+function buildGuitarTabEventSchemaProperties() {
+  return {
+    measureIndex: { type: "number", description: "Zero-based or one-based measure index; use consistently." },
+    beat: { type: "number", description: "Beat or subdivision time within the measure." },
+    subdivision: { type: ["string", "number"], description: "Optional subdivision label when multiple events occur inside a beat." },
+    simultaneousGroupId: { type: "string", description: "Optional explicit group id for notes that sound together." },
+    sourceEventId: { type: "string", description: "Stable id for the musical source note/event. The same source note event must not be assigned to multiple strings in the same simultaneous group." },
+    note: { type: "string", description: "Sounding pitch with octave/register, such as E2, B3, or F#4." },
+    string: { type: "integer", enum: [1, 2, 3, 4, 5, 6], description: "Guitar string number, 1 high E through 6 low E." },
+    fret: { type: "number", description: "Fret number, with 0 for an open string." },
+    role: { type: "string", description: "Musical role: melody, bass, root, third, seventh, fill, percussion, etc." },
+  };
+}
+
 export function buildValidGuitarTabToolSchema() {
   return {
     type: "function",
     function: {
       name: "valid_guitar_tab",
-      description: "Validate concrete guitar tab events before finalizing guitar voicings, fills, intro, interlude, or outro plans. Call this before the final generation tool. If invalid, revise the tab and call valid_guitar_tab again; do not finalize until every option is valid.",
+      description: "Validate concrete guitar tab events against one physical guitar before finalizing guitar profiles, voicings, fills, intro, interlude, or outro plans. Call this before the final generation tool. If invalid, revise the tab and call valid_guitar_tab again; do not finalize until every option is valid.",
       parameters: {
         type: "object",
         additionalProperties: false,
@@ -227,22 +442,22 @@ export function buildValidGuitarTabToolSchema() {
             type: "string",
             description: "Short label for the option or passage being validated.",
           },
+          profileId: {
+            type: "string",
+            enum: ["guitar-classic", "guitar-acoustic", "standard-six-string"],
+            description: "Physical guitar profile used for fret range and left-hand validation.",
+          },
+          voicingProfileId: {
+            type: "string",
+            description: "Voicing/playability profile such as open-position, barre, fingerstyle-melody-bass, or power-chord.",
+          },
           events: {
             type: "array",
-            description: "Concrete guitar tab events to validate. Events that share measureIndex + beat + subdivision or simultaneousGroupId are treated as simultaneous.",
+            description: "Concrete guitar tab events to validate. Events that share measureIndex + beat + subdivision or simultaneousGroupId are treated as simultaneous; each event must use one string and octave-bearing note labels.",
             items: {
               type: "object",
               additionalProperties: false,
-              properties: {
-                measureIndex: { type: "number", description: "Zero-based or one-based measure index; use consistently." },
-                beat: { type: "number", description: "Beat or subdivision time within the measure." },
-                subdivision: { type: ["string", "number"], description: "Optional subdivision label when multiple events occur inside a beat." },
-                simultaneousGroupId: { type: "string", description: "Optional explicit group id for notes that sound together." },
-                note: { type: "string", description: "Sounding pitch label such as E3, G3, B, or F#4." },
-                string: { type: "integer", enum: [1, 2, 3, 4, 5, 6], description: "Guitar string number, 1 high E through 6 low E." },
-                fret: { type: "number", description: "Fret number, with 0 for an open string." },
-                role: { type: "string", description: "Musical role: melody, bass, root, third, seventh, fill, percussion, etc." },
-              },
+              properties: buildGuitarTabEventSchemaProperties(),
               required: ["measureIndex", "beat", "note", "string", "fret", "role"],
             },
           },

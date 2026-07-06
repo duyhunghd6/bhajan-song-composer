@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { generateFingerstyleArrangement, generateFingerstyleLine } from "../fingerstyle-arranger";
+import { validateGuitarTab } from "../guitar-tab-validation";
 import { sampleAbc } from "./arranger-fixtures";
 
 describe("Guitar fingerstyle arranger", () => {
@@ -300,6 +301,17 @@ K:C
         }),
       ]),
     });
+  });
+
+  it("emits octave-aware tab events that pass strict one-guitar validation", () => {
+    const arrangement = generateFingerstyleArrangement(sampleAbc, ["Em", "Bm", "G", "Em"]);
+    const events = arrangement.outputContract.artifacts.guitarTabEvents;
+
+    expect(events).toEqual(expect.arrayContaining([
+      expect.objectContaining({ note: "E2", string: 6, fret: 0, sourceEventId: expect.any(String) }),
+      expect.objectContaining({ note: "E4", string: 1, fret: 0, sourceEventId: expect.any(String) }),
+    ]));
+    expect(validateGuitarTab(events, { requireScientificPitch: true }).valid).toBe(true);
   });
 
   it("exposes a line-only helper for direct ABC output", () => {

@@ -21,7 +21,9 @@ import {
   getAbcMeasureLinePattern,
   getAccompanimentWorkflowLlmToolNames,
   isGuitarTabValidationWorkflowStep,
+  normalizeAccompanimentWorkflowSetup,
   normalizeWorkflowOptionDataLineBreaks,
+  orderedAccompanimentInstruments,
   type AccompanimentWorkflowLlmLogEntry,
   type AccompanimentWorkflowLlmLogKind,
   type AccompanimentWorkflowLlmLogStatus,
@@ -41,6 +43,7 @@ import {
   buildValidGuitarTabToolSchema,
   validateGuitarTab,
   type GuitarTabEvent,
+  type GuitarTabValidationOptions,
   type GuitarTabValidationResult,
 } from "@/lib/theory/guitar-tab-validation";
 
@@ -280,6 +283,61 @@ function guitarTabEventsFromOption(option: Partial<AccompanimentWorkflowOption>)
   return Array.isArray(events) ? events as GuitarTabEvent[] : null;
 }
 
+function stringValue(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function isGuitarValidationProfileId(value: unknown): value is "guitar-classic" | "guitar-acoustic" | "standard-six-string" {
+  return value === "guitar-classic" || value === "guitar-acoustic" || value === "standard-six-string";
+}
+
+function guitarTabObjectFromData(data: Record<string, unknown> | null): Record<string, unknown> | null {
+  const guitarTab = data?.guitarTab;
+  return guitarTab && typeof guitarTab === "object" && !Array.isArray(guitarTab)
+    ? guitarTab as Record<string, unknown>
+    : null;
+}
+
+function profileFromSetup(setupInput?: Partial<AccompanimentWorkflowSetup> | null): GuitarTabValidationOptions["guitarProfile"] {
+  const setup = normalizeAccompanimentWorkflowSetup(setupInput);
+  const guitar = orderedAccompanimentInstruments(setup).find((instrument) =>
+    instrument.enabled && (instrument.id === "guitar-classic" || instrument.id === "guitar-acoustic")
+  );
+  if (guitar?.id === "guitar-classic") return "guitar-classic";
+  if (guitar?.id === "guitar-acoustic") return "guitar-acoustic";
+  return "standard-six-string";
+}
+
+function guitarTabValidationOptionsFromOption(
+  option: Partial<AccompanimentWorkflowOption>,
+  input: GenerateAccompanimentWorkflowStepInput
+): GuitarTabValidationOptions {
+  const data = optionData(option);
+  const guitarTab = guitarTabObjectFromData(data);
+  const previousGuitarProfile = input.previousSelections
+    .map((selection) => guitarTabObjectFromData(selection.data)?.profileId ?? selection.data.profileId)
+    .find(isGuitarValidationProfileId);
+  const optionProfile = guitarTab?.profileId ?? data?.guitarProfileId ?? data?.profileId;
+  const optionVoicing = guitarTab?.voicingProfileId ?? data?.voicingProfileId ?? data?.compingProfile ?? data?.pickingProfile ?? data?.profileId;
+
+  return {
+    guitarProfile: isGuitarValidationProfileId(optionProfile)
+      ? optionProfile
+      : previousGuitarProfile ?? profileFromSetup(input.setup),
+    voicingProfile: stringValue(optionVoicing) ?? stringValue(input.previousSelections.find((selection) => selection.stepId === "guitar-comping-profile")?.data.voicingProfileId),
+    requireScientificPitch: true,
+  };
+}
+
+function guitarTabValidationOptionsFromToolArgs(args: unknown, input: GenerateAccompanimentWorkflowStepInput): GuitarTabValidationOptions {
+  const record = args && typeof args === "object" && !Array.isArray(args) ? args as Record<string, unknown> : {};
+  return {
+    guitarProfile: isGuitarValidationProfileId(record.profileId) ? record.profileId : profileFromSetup(input.setup),
+    voicingProfile: stringValue(record.voicingProfileId),
+    requireScientificPitch: true,
+  };
+}
+
 function hasObjectProperty(value: unknown, key: string): boolean {
   return Boolean(value && typeof value === "object" && !Array.isArray(value) && key in value);
 }
@@ -320,7 +378,7 @@ function validateGuitarFingerstyleOption(optionId: string, option: Partial<Accom
   }
 }
 
-function validateGuitarWorkflowResult(raw: unknown, stepId?: AccompanimentWorkflowStepId): ToolLoopValidationResult {
+function validateGuitarWorkflowResult(raw: unknown, input: GenerateAccompanimentWorkflowStepInput): ToolLoopValidationResult {
   const result = raw as RawWorkflowStepResult;
   const options = Array.isArray(result.options) ? result.options.slice(0, 5) : [];
   const validations: Array<{ optionId: string; validation: GuitarTabValidationResult }> = [];
@@ -338,11 +396,11 @@ function validateGuitarWorkflowResult(raw: unknown, stepId?: AccompanimentWorkfl
       continue;
     }
 
-    if (stepId === "guitar-fingerstyle") {
+    if (input.stepId === "guitar-fingerstyle") {
       validateGuitarFingerstyleOption(optionId, option, events, messages);
     }
 
-    const validation = validateGuitarTab(events);
+    const validation = validateGuitarTab(events, guitarTabValidationOptionsFromOption(option, input));
     validations.push({ optionId, validation });
     if (!validation.valid) {
       messages.push(`${optionId}: ${validation.issues.map((issue) => issue.message).join("; ")}`);
@@ -633,7 +691,7 @@ export async function generateAccompanimentWorkflowStep(
       });
     } else if (isGuitarTabValidationWorkflowStep(input.stepId)) {
       rawResult = await requestOpenAiCompatibleToolLoop({
-        systemPrompt: `${systemPrompt} For guitar tab-bearing steps, call valid_guitar_tab with concrete string/fret events before calling the final generation tool. Revise and revalidate until valid_guitar_tab reports valid=true.`,
+        systemPrompt: `${systemPrompt} For guitar tab-bearing steps, call valid_guitar_tab with profileId, voicingProfileId, and concrete octave-bearing string/fret events before calling the final generation tool. Revise and revalidate until valid_guitar_tab reports valid=true for one physical guitar: unique string/source assignment, fretboard range, and one-left-hand reach.`,
         userPrompt: requestPrompt,
         tools: [buildValidGuitarTabToolSchema(), toolSchema],
         finalToolName: toolName,
@@ -641,10 +699,13 @@ export async function generateAccompanimentWorkflowStep(
           name: "valid_guitar_tab",
           execute: (args) => {
             const events = (args as { events?: unknown }).events;
-            return validateGuitarTab(Array.isArray(events) ? events as GuitarTabEvent[] : []);
+            return validateGuitarTab(
+              Array.isArray(events) ? events as GuitarTabEvent[] : [],
+              guitarTabValidationOptionsFromToolArgs(args, input)
+            );
           },
         }],
-        validateFinalResult: (args) => validateGuitarWorkflowResult(args, input.stepId),
+        validateFinalResult: (args) => validateGuitarWorkflowResult(args, input),
         temperature: 0.25,
         maxIterations: MAX_TOOL_LOOP_ITERATIONS,
         maxValidationAttempts: MAX_VALIDATION_REPAIR_ATTEMPTS,

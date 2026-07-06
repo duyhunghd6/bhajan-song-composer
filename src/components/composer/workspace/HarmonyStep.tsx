@@ -2,11 +2,9 @@ import type { Dispatch, SetStateAction } from "react";
 import AbcjsPlaybackController from "@/components/music-sheet/AbcjsPlaybackController";
 import type { ArrangementPipelineResult } from "@/lib/theory/arrangement-pipeline";
 import type { WorkspaceState } from "../useWorkspaceState";
-import {
-  isAccompanimentWorkflowStepComplete,
-  type AccompanimentWorkflowSession,
-} from "@/lib/theory/accompaniment-workflow";
 import AccompanimentWorkflowWizard from "../AccompanimentWorkflowWizard";
+import type { HarmonyPreviewModel } from "./arrangement-preview-model";
+import { LayerVisibilityControls } from "./LayerVisibilityControls";
 import {
   COMPOSER_PREVIEW_PROPS,
   ComposerNotationPreviewLayout,
@@ -17,10 +15,11 @@ interface HarmonyStepProps {
   initialMelodyAbc?: string;
   hasMounted: boolean;
   pipeline: ArrangementPipelineResult | null;
-  workflowAppliedMusicAbc: string;
-  activeWorkflow: AccompanimentWorkflowSession | null;
-  layerVisibility: { melody: boolean; harmony: boolean };
-  setLayerVisibility: Dispatch<SetStateAction<{ melody: boolean; harmony: boolean }>>;
+  harmonyPreview: HarmonyPreviewModel;
+  layerVisibility: Record<string, boolean>;
+  setLayerVisibility: Dispatch<SetStateAction<Record<string, boolean>>>;
+  layerVolumes: Record<string, number>;
+  setLayerVolumes: Dispatch<SetStateAction<Record<string, number>>>;
   ws: WorkspaceState;
   updateState: (updates: Partial<WorkspaceState>) => void;
   onRestore: () => void;
@@ -31,26 +30,15 @@ export function HarmonyStep({
   initialMelodyAbc,
   hasMounted,
   pipeline,
-  workflowAppliedMusicAbc,
-  activeWorkflow,
+  harmonyPreview,
   layerVisibility,
   setLayerVisibility,
+  layerVolumes,
+  setLayerVolumes,
   ws,
   updateState,
   onRestore,
 }: HarmonyStepProps) {
-  const harmonySynthOptions: { voicesOff?: boolean; chordsOff?: boolean } = {};
-  if (!layerVisibility.melody) {
-    harmonySynthOptions.voicesOff = true;
-  }
-  if (!layerVisibility.harmony) {
-    harmonySynthOptions.chordsOff = true;
-  }
-
-  const harmonyStepComplete = Boolean(
-    activeWorkflow && isAccompanimentWorkflowStepComplete(activeWorkflow, "voice-leading-validation")
-  );
-
   return (
     <div className="space-y-6">
       <ComposerNotationPreviewLayout
@@ -95,40 +83,27 @@ export function HarmonyStep({
           <>
             <section className="mb-4 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950/60">
               <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 mb-2 font-sans">Layer Visibility</h2>
-              <div className="flex gap-6">
-                <label className="flex items-center gap-2 text-xs font-semibold text-zinc-800 dark:text-zinc-200 cursor-pointer font-sans">
-                  <input
-                    type="checkbox"
-                    className="rounded border-zinc-300 text-amber-500 focus:ring-amber-500"
-                    checked={layerVisibility.melody}
-                    onChange={(e) => setLayerVisibility((v) => ({ ...v, melody: e.target.checked }))}
-                  />
-                  Melody Layer
-                </label>
-                <label className="flex items-center gap-2 text-xs font-semibold text-zinc-800 dark:text-zinc-200 cursor-pointer font-sans">
-                  <input
-                    type="checkbox"
-                    className="rounded border-zinc-300 text-amber-500 focus:ring-amber-500"
-                    checked={layerVisibility.harmony}
-                    onChange={(e) => setLayerVisibility((v) => ({ ...v, harmony: e.target.checked }))}
-                  />
-                  Harmonic Chord Progression Layer
-                </label>
-              </div>
+              <LayerVisibilityControls
+                items={harmonyPreview.layerVisibilityItems}
+                visibility={layerVisibility}
+                onVisibilityChange={setLayerVisibility}
+                volumes={layerVolumes}
+                onVolumeChange={setLayerVolumes}
+              />
             </section>
 
             <div>
               <div className="mb-3 flex items-center justify-between gap-3">
-                <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 font-sans">Harmonization Preview</h3>
+                <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 font-sans">Resulting ABC Staff Preview</h3>
                 <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 font-sans">
-                  {harmonyStepComplete ? "Harmonized Melody" : "Source Melody"}
+                  {harmonyPreview.harmonyStepComplete ? "Harmonized Melody" : "Source Melody"}
                 </span>
               </div>
               <AbcjsPlaybackController
-                abcString={workflowAppliedMusicAbc}
+                abcString={harmonyPreview.abc}
                 title="Harmonization Audio Preview"
                 canvasId="composer-harmony-preview"
-                synthOptions={harmonySynthOptions}
+                synthOptions={harmonyPreview.synthOptions}
                 {...COMPOSER_PREVIEW_PROPS}
               />
             </div>
@@ -136,7 +111,7 @@ export function HarmonyStep({
             <section className="mt-6 rounded-2xl border border-dashed border-zinc-300 bg-white/70 p-4 dark:border-zinc-700 dark:bg-zinc-950/50">
               <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 font-sans">Current ABCNotation of the Song</h2>
               <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap rounded-xl bg-zinc-50 p-3 text-xs leading-5 text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400 font-mono">
-                {workflowAppliedMusicAbc}
+                {harmonyPreview.rawAbc}
               </pre>
             </section>
           </>

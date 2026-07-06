@@ -447,9 +447,11 @@ export function getAccompanimentVoiceNames(
   generatedGuitar?: string | null,
   generatedPiano?: string | null,
   extraVoiceSources: Array<string | null | undefined> = [],
+  baseAbc?: string | null
 ): string[] {
-  return getLayerVoiceNames(generatedAccompaniment, generatedGuitar, generatedPiano, ...extraVoiceSources);
+  return getLayerVoiceNames(baseAbc, generatedAccompaniment, generatedGuitar, generatedPiano, ...extraVoiceSources);
 }
+
 
 export function buildAccompanimentAbc({
   baseAbc,

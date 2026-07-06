@@ -12,12 +12,14 @@ Composer screens live under `src/components/composer/`.
 - `workspace/` contains step-specific modules:
   - `HarmonyStep.tsx` handles harmonization selection and preview.
   - `AccompanimentStep.tsx` handles accompaniment workflow review, setup persistence, layer visibility, and instrument previews.
+  - `arrangement-preview-model.ts` derives harmony and accompaniment preview models from workspace state, workflow state, ABC builders, and layer visibility.
   - `preview.tsx` contains shared preview layout, render options, and harmonization display helpers.
 - `LayerManager.tsx` remains the public layer-stack entrypoint.
 - `layers/layer-manager-parts.tsx` contains layer stack defaults, layer parsing/combining utilities, and the extracted pipeline/fingerstyle panels.
 - `AccompanimentWorkflowWizard.tsx` and `EnsembleWorkflowWizard.tsx` are workflow shells.
 - `accompaniment-workflow/WorkflowSetupPanel.tsx` contains the setup UI for accompaniment style, ordered instrument stack, native drag/drop, and accessible up/down reordering.
-- `accompaniment-workflow/wizard-parts.tsx` and `ensemble-workflow/wizard-parts.tsx` contain reusable wizard state transitions and option-list UI.
+- `accompaniment-workflow/wizard-parts.tsx` contains accompaniment wizard presentation helpers and option-list UI.
+- `ensemble-workflow/wizard-parts.tsx` contains reusable ensemble wizard state transitions and option-list UI.
 - `SongForm.tsx` is the metadata form shell.
 - `song-form/metadata.ts` contains metadata defaults and YAML serialization.
 - `song-form/TextField.tsx` contains the shared text field module.
@@ -50,6 +52,7 @@ Music-theory logic lives under `src/lib/theory/`.
 - `fingerstyle-arranger/types.ts` contains the exported fingerstyle source-layer, playability, section metadata, validation-compatible guitar tab events, artifact, and output contract types.
 - `accompaniment-workflow.ts` remains the public accompaniment workflow interface. It owns setup normalization, legacy setup fallback, ordered-instrument role hints, and enabled-step planning for Solo/Fingerstyle versus combined Accompaniment instrument stacks.
 - `accompaniment-workflow/definition.ts` contains workflow ids, setup types, instrument branch scopes, constants, and step definitions for shared, Guitar, Piano, Harmonium, Djembe, Flute, and Violin branches.
+- `accompaniment-workflow/session-transitions.ts` contains pure workflow session transitions for merging generated runs, selecting options, skipping branch steps, extracting profile hints, and detecting existing step results.
 - `accompaniment-workflow/support-layers.ts` adapts completed Djembe, Flute, and Violin accompaniment workflow decisions into playable ABC support layers for the accompaniment page preview.
 - `accompaniment-workflow/tool-schema.ts` contains structured LLM tool schemas for accompaniment workflow generation.
 - `ensemble-workflow.ts` remains the public ensemble workflow interface.

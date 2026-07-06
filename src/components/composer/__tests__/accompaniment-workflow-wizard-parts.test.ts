@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { selectOption } from "../accompaniment-workflow/wizard-parts";
 import {
   createAccompanimentWorkflowSession,
   getSelectedWorkflowOption,
+  selectOption,
   type AccompanimentWorkflowOption,
 } from "@/lib/theory/accompaniment-workflow";
 

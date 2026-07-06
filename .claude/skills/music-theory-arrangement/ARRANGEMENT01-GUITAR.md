@@ -28,7 +28,7 @@ K:G
 
 The `/compose/:slug/accompaniment` setup chooses whether guitar participates as a combined accompaniment branch or as the terminal `solo-fingerstyle` route.
 
-- In `solo-fingerstyle`, enable the Guitar branch only. The final `guitar-fingerstyle` step must carry the melody on the Guitar voice, add chord-derived bass from roots/fifths/approach notes, expose intro/interlude/outro section metadata, and render GUITAR TAB.
+- In `solo-fingerstyle`, enable the Guitar branch only. The final `guitar-fingerstyle` step must carry the melody on one physical Guitar voice, add chord-derived bass from roots/fifths/approach notes, expose intro/interlude/outro section metadata, and render GUITAR TAB.
 - In combined `accompaniment`, Guitar Classic and Guitar Acoustic share the Guitar branch initially. Use setup order and role notes to decide whether the guitar emphasizes foundation/bass arpeggios, middle comping, or treble fills.
 - Do not combine Solo/Fingerstyle compression with Piano/Harmonium/Djembe/Flute branches in the same workflow run unless the user explicitly asks for separate outputs.
 - If both Guitar Classic and Guitar Acoustic are enabled, avoid duplicate generic `V:Guitar` responsibilities; treat the setup as one guitar branch until unique voice policies are implemented.
@@ -226,7 +226,7 @@ K:C
 [V:Bass]    C,  G,  C,  G,  C,  G,  C,  G, |  G,,  D,  G,,  D,  G,,  D,  G,,  D, |
 ```
 
-In the app, final playable fingerstyle output is emitted as one physical Guitar voice so abcjs can render GUITAR TAB from that staff:
+In the app, final playable fingerstyle output is emitted as one physical Guitar voice so abcjs can render GUITAR TAB from that staff. Analysis may use separate melody/bass threads, but a valid final output is a merged one-player `V:Guitar`; do not emit two simultaneous guitar parts that would require two players.
 
 ```abc
 V:Guitar clef=treble-8 name="Layer 2 Guitar Fingerstyle"
@@ -268,7 +268,7 @@ Hard rules:
 
 Before outputting any guitar arrangement:
 
-Concrete tab events must use the app/tool schema below whenever a workflow step validates voicings, fills, intro, interlude, outro, or final fingerstyle output:
+Concrete tab events must use the app/tool schema below whenever Guitar Profile, Guitar Voicing, Guitar Polish, or Guitar Fingerstyle validates a comping sample, voicing, fill, intro, interlude, outro, or final fingerstyle output:
 
 ```ts
 type GuitarTabEvent = {
@@ -276,22 +276,33 @@ type GuitarTabEvent = {
   beat: number;
   subdivision?: string | number;
   simultaneousGroupId?: string;
-  note: string;
+  sourceEventId?: string;
+  note: string; // scientific pitch such as E2, B3, F#4
   string: 1 | 2 | 3 | 4 | 5 | 6;
   fret: number;
   role: "melody" | "bass" | "root" | "third" | "seventh" | "fill" | "percussion" | string;
 };
 ```
 
-Events sharing `measureIndex + beat + subdivision` or the same `simultaneousGroupId` are simultaneous. A simultaneous group must never assign two pitches to the same physical string.
+### One Physical Guitar Invariant
+
+Events sharing `measureIndex + beat + subdivision` or the same `simultaneousGroupId` are simultaneous. A valid simultaneous group may be a chord across multiple strings, but it must be playable by one guitarist on one six-string instrument:
+
+1. **One pitch event → one string.** A source note/event identified by `sourceEventId` must appear on only one physical string in the simultaneous group.
+2. **One string → one sounding pitch.** A simultaneous group must never assign two pitches to the same physical string.
+3. **Fretboard range is profile-aware.** `Guitar Classic` and `Guitar Acoustic` use their selected fretboard range; every validated `note` must include octave/register so `string + fret` can be checked against the sounding pitch.
+4. **One left hand.** Open strings consume no fretting finger; same-fret multi-string shapes may count as one plausible barre; more than one barre, too many non-barre fretted targets, or a shape exceeding the selected voicing's fret stretch must be rewritten.
+5. **Validation is on the merged matrix.** For solo/fingerstyle, validate the final merged physical tab events, not just separate analytical Melody/Bass threads.
 
 | Check | Rule |
 | ----- | ---- |
-| ✅ **Fret stretch** | No chord shape exceeds 4-5 fret span |
-| ✅ **Simultaneous notes** | Max 6 notes (one per string), max 4 fretted |
+| ✅ **One-guitar source mapping** | One source pitch event is assigned to only one string |
+| ✅ **Fret stretch** | No chord shape exceeds the selected profile/voicing stretch, normally 4-5 frets |
+| ✅ **Fretboard range** | Every octave-bearing `note` matches `string + fret` and stays under the profile max fret |
+| ✅ **Simultaneous notes** | Max 6 notes (one per string), with left-hand fretting count/barre feasibility checked |
 | ✅ **String assignment** | Melody on strings 1-3, bass on strings 4-6 (fingerstyle) |
 | ✅ **Beat count** | Total beats per measure match time signature |
-| ✅ **Chord tone placement** | 3rd and 7th present in every chord voicing |
+| ✅ **Chord tone placement** | 3rd and 7th present in every chord voicing when physically possible; drop 5ths first if not |
 | ✅ **Voice leading** | Adjacent chords follow shortest-path rule from THEORY.md §3.3 |
 | ✅ **Register conflict** | Guitar accompaniment does not mask the primary melody register |
 | ✅ **Thumb independence** | Bass pattern is steady and independent of melody rhythm (fingerstyle) |

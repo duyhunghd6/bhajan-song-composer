@@ -37,6 +37,7 @@ import type {
   FingerstyleTablatureMeasure,
   FingerstyleUpwardConstructionContext,
 } from "./fingerstyle-arranger/types";
+import { scientificPitchForStringFret } from "./guitar-playability";
 import type { GuitarTabEvent } from "./guitar-tab-validation";
 export type * from "./fingerstyle-arranger/types";
 
@@ -272,22 +273,39 @@ function buildFingerstyleFormPlan(bodyMeasureCount: number): FingerstyleFormPlan
   return { sections };
 }
 
+function guitarTabRolePriority(role: string): number {
+  if (role === "melody") return 3;
+  if (role === "bass") return 2;
+  return 1;
+}
+
 function buildGuitarTabEvents(compression: FingerstyleDownwardCompression, _formPlan: FingerstyleFormPlan): GuitarTabEvent[] {
-  return compression.physicalHandMapping.flatMap((measure) =>
+  const rawEvents = compression.physicalHandMapping.flatMap((measure) =>
     measure.events.filter(isStringedEvent).flatMap((event) => {
-      if (!event.note) return [];
+      if (!event.note || event.role === "percussion") return [];
       return [{
         measureIndex: measure.measureIndex,
         beat: event.beat,
         subdivision: Number.isInteger(event.beat) ? undefined : event.beat,
         simultaneousGroupId: `${measure.measureIndex}:${event.beat}`,
-        note: event.note,
+        note: scientificPitchForStringFret(event.string, event.fret),
+        sourceEventId: `${measure.measureIndex}:${event.beat}:${event.role}:${event.note}`,
         string: event.string,
         fret: event.fret,
         role: event.role,
       }];
     })
   );
+
+  const byGroupString = new Map<string, GuitarTabEvent>();
+  for (const event of rawEvents) {
+    const key = `${event.measureIndex}:${event.beat}:${event.subdivision ?? "0"}:${event.simultaneousGroupId ?? ""}:${event.string}`;
+    const existing = byGroupString.get(key);
+    if (!existing || guitarTabRolePriority(event.role) > guitarTabRolePriority(existing.role)) {
+      byGroupString.set(key, event);
+    }
+  }
+  return Array.from(byGroupString.values());
 }
 
 function firstBodyMeasure(measures: FingerstyleMeasure[]): FingerstyleMeasure | null {
