@@ -259,7 +259,7 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
           ...Array.from({ length: guitarIndex }, () => ({ instrument: "" as const })),
           {
             instrument: "guitar" as const,
-            label: "GUITAR TAB",
+            label: "",
             tuning: ["E,,", "A,,", "D,", "G,", "B,", "E"],
             capo: 0,
             hideTabSymbol: false,
