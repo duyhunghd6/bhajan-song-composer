@@ -51,11 +51,3 @@ body {
     min-height: 560px;
   }
 }
-
-/* Pull abcjs tablature up so it sits tightly under the lyrics ONLY on the first system */
-g.abcjs-l0.abcjs-tablature-staff,
-g.abcjs-l0.abcjs-tabNumber,
-g.abcjs-l0.abcjs-symbol:has(path[data-name="tab.big"]) {
-  transform: translateY(-50px);
-}
-

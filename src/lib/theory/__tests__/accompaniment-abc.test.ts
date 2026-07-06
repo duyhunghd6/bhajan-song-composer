@@ -3,6 +3,7 @@ import { buildAccompanimentAbc } from "../accompaniment-abc";
 import { buildAbcDurationContext, measureDurationUnits, splitAbcMeasureSegments } from "../abc-duration";
 import { addStrongBeatIconsToAbcNotation } from "../abc-beat-annotations";
 import { generatePianoAccompaniment } from "../piano-accompaniment";
+import { generateFingerstyleLine } from "../fingerstyle-arranger";
 
 const HAPPY_BIRTHDAY_ABC = `X: 1
 T: Happy Birthday To You
@@ -148,6 +149,32 @@ K:Em
     expect(result.abc).not.toContain("%%MIDI program 24");
   });
 
+  it("repairs malformed workflow voice ids before building the playback ABC", () => {
+    const malformedWorkflowAbc = `X:1
+T:Hari Bol Broken Workflow
+M:4/4
+L:1/8
+%%score (Melody) (Melody]) (GuitarClassic])
+K:Em
+V:Melody] | "Em"E E2 F (GB) A G | "D"(FE) DF "Em"E4 |
+V:GuitarClassic] | E,2 B,2 E2 G2 | D,2 A,2 E,2 B,2 |`;
+
+    const result = buildAccompanimentAbc({
+      baseAbc: malformedWorkflowAbc,
+      layerVisibility: {},
+    });
+
+    expect(result.voiceNames).toEqual(["Guitar"]);
+    expect(result.visibleVoiceNames).toEqual(["Guitar"]);
+    expect(result.abc).toContain("%%score (Melody Guitar)");
+    expect(result.abc).toContain("[V:Melody] | \"Em\"E E2 F (GB) A G | \"D\"(FE) DF \"Em\"E4 |");
+    expect(result.abc).toContain("[V:Guitar] | E,2 B,2 E2 G2 | D,2 A,2 E,2 B,2 |");
+    expect(result.abc).not.toContain("Melody])");
+    expect(result.abc).not.toContain("GuitarClassic])");
+    expect(result.abc).not.toMatch(/^V:Melody\]/m);
+    expect(result.abc).not.toMatch(/^V:GuitarClassic\]/m);
+  });
+
   it("keeps similarly named Guitar LH Accompaniment sources as guitar", () => {
     const melodyAbc = `X:1
 T:Guitar LH Non-target Test
@@ -192,6 +219,31 @@ K:C
     expect(melodyBars).toHaveLength(3);
     expect(guitarBars).toHaveLength(3);
     expect(guitarBars.every((bar) => measureDurationUnits(bar) === 6)).toBe(true);
+  });
+
+  it("preserves Melody body systems while adding Guitar Fingerstyle intro, interlude, outro systems with Melody rests", () => {
+    const melodyAbc = `X:1
+T:Fingerstyle Form Test
+M:4/4
+L:1/8
+K:Em
+| E2 E2 G2 A2 | B4 B2 A2 |
+| G2 A2 B2 G2 | E8 |`;
+    const fingerstyle = generateFingerstyleLine(melodyAbc, ["Em", "Bm", "G", "Em"]);
+
+    const result = buildAccompanimentAbc({
+      baseAbc: melodyAbc,
+      generatedGuitar: fingerstyle,
+      layerVisibility: {},
+    });
+
+    expect(result.abc).toContain("%%score (Melody Guitar)");
+    expect(result.abc).toContain("% Intro: Guitar Fingerstyle form section with Melody rests.");
+    expect(result.abc).toContain("% Interlude: Guitar Fingerstyle form section with Melody rests.");
+    expect(result.abc).toContain("% Outro: Guitar Fingerstyle form section with Melody rests.");
+    expect(result.abc).toContain("[V:Melody] | E2 E2 G2 A2 | B4 B2 A2 |");
+    expect(result.abc).toContain("[V:Melody] | G2 A2 B2 G2 | E8 |");
+    expect(result.abc).toMatch(/% Intro:[\s\S]*\[V:Melody\] \| z8 \|[\s\S]*\[V:Guitar\] \|/);
   });
 
   it("merges extra Layer 3 ensemble voice sources into the score after final apply", () => {

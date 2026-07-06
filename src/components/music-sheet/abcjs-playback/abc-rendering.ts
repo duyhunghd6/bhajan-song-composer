@@ -60,10 +60,8 @@ function dedupeBeatIndicatorNodes(nodes: Element[]): Element[] {
 
 export function postProcessBeats(container: HTMLDivElement | null) {
   if (!container) return;
-
   const staves = Array.from(container.querySelectorAll("g.abcjs-staff"));
   const allLyrics = Array.from(container.querySelectorAll("text.abcjs-lyric"));
-  const annotationNodes = Array.from(container.querySelectorAll("text.abcjs-annotation"));
   const beatLyricNodes = allLyrics.filter(isBeatIndicatorNode);
   const lyrics = allLyrics.filter((node) => {
     const text = (node.textContent || "").trim();
@@ -71,7 +69,7 @@ export function postProcessBeats(container: HTMLDivElement | null) {
   });
 
   // Determine if we have beat indicators, and collapse duplicate markers rendered at the same note position.
-  const beats = dedupeBeatIndicatorNodes([...beatLyricNodes, ...annotationNodes.filter(isBeatIndicatorNode)]);
+  const beats = dedupeBeatIndicatorNodes(beatLyricNodes);
 
   if (beats.length > 0) {
     container.classList.add("has-beat-indicators");
@@ -189,6 +187,7 @@ export function postProcessBeats(container: HTMLDivElement | null) {
     // Find the corresponding staff system
     let bestStaff: StaffDataItem | null = null;
     let minStaffDist = Infinity;
+    
     for (const sd of staffData) {
       const dist = Math.abs(sd.y + sd.height / 2 - nodeY);
       if (dist < minStaffDist) {

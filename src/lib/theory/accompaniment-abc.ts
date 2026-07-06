@@ -40,6 +40,12 @@ function replaceMelodyNotesWithRests(musicLine: string): string {
 }
 
 import type { StrongBeatDirective } from "./abc-beat-annotations";
+import {
+  normalizeAbcInlineVoiceLine,
+  normalizeAbcVoiceDeclarationLine,
+  normalizeAbcVoiceId,
+  normalizeAbcVoiceSyntax,
+} from "./abc-voice-normalization";
 
 export interface BuildAccompanimentAbcOptions {
   baseAbc: string;
@@ -110,6 +116,42 @@ function interleaveLyrics(musicLines: string[], lyricsGroups: string[][], beatLy
   return output;
 }
 
+function hasInlineVoiceBody(abcString: string): boolean {
+  return abcString.split(/\r?\n/).some((line) => /^\[V:[^\]]+\]/.test(line.trim()));
+}
+
+function extractInlineMelodyBlock(abcString: string): string | null {
+  if (!hasInlineVoiceBody(abcString)) return null;
+
+  const lines: string[] = [];
+  let lastInlineVoiceWasMelody = false;
+
+  for (const rawLine of normalizeAbcVoiceSyntax(abcString).split(/\r?\n/)) {
+    const trimmed = rawLine.trim();
+    const inlineVoice = normalizeAbcInlineVoiceLine(trimmed).match(/^\[V:([^\]]+)\]\s*(.*)$/);
+
+    if (inlineVoice) {
+      const voiceName = normalizeAbcVoiceId(inlineVoice[1]);
+      lastInlineVoiceWasMelody = voiceName === "Melody";
+      if (lastInlineVoiceWasMelody && inlineVoice[2]?.trim()) {
+        lines.push(inlineVoice[2].trim());
+      }
+      continue;
+    }
+
+    if (lastInlineVoiceWasMelody && /^w:/.test(trimmed) && !isStrongBeatLyricLine(trimmed)) {
+      lines.push(trimmed);
+      continue;
+    }
+
+    if (trimmed && !trimmed.startsWith("%") && !/^\+:/.test(trimmed)) {
+      lastInlineVoiceWasMelody = false;
+    }
+  }
+
+  return lines.length > 0 ? lines.join("\n") : null;
+}
+
 function stripGeneratedHeaders(generatedAccompaniment: string): string {
   return generatedAccompaniment.replace(/^[A-Z]:.*(\r?\n|$)/gm, (match) => {
     if (match.startsWith("V:")) return match;
@@ -145,12 +187,64 @@ function normalizeMidiDirectives(voiceLine: string, directives: string[]): strin
 }
 
 function splitVoiceBlocks(generatedAccompaniment: string): string[] {
-  const body = normalizeGeneratedVoiceLine(stripGeneratedHeaders(generatedAccompaniment));
-  return body.split(/(?=V:)/).filter((block) => block.trim());
+  const normalizedSource = normalizeAbcVoiceSyntax(stripGeneratedHeaders(generatedAccompaniment));
+  const voiceBlocks = new Map<string, { voiceLine: string; lines: string[] }>();
+  let currentVoiceName: string | null = null;
+
+  const ensureVoiceBlock = (voiceName: string, voiceLine?: string) => {
+    const normalizedVoiceName = normalizeAbcVoiceId(voiceName);
+    const existing = voiceBlocks.get(normalizedVoiceName);
+    if (existing) {
+      if (voiceLine) existing.voiceLine = normalizeGeneratedVoiceLine(normalizeAbcVoiceDeclarationLine(voiceLine));
+      return existing;
+    }
+
+    const block = {
+      voiceLine: normalizeGeneratedVoiceLine(voiceLine ? normalizeAbcVoiceDeclarationLine(voiceLine) : `V:${normalizedVoiceName}`),
+      lines: [] as string[],
+    };
+    voiceBlocks.set(normalizedVoiceName, block);
+    return block;
+  };
+
+  for (const rawLine of normalizedSource.split(/\r?\n/)) {
+    const trimmed = rawLine.trim();
+    if (!trimmed) continue;
+    if (/^%%score\b/.test(trimmed)) continue;
+
+    const voiceDeclaration = trimmed.match(/^V:(\S+)/);
+    if (voiceDeclaration) {
+      currentVoiceName = normalizeAbcVoiceId(voiceDeclaration[1]);
+      ensureVoiceBlock(currentVoiceName, trimmed);
+      continue;
+    }
+
+    if (/^[A-Z]:/.test(trimmed)) continue;
+
+    const inlineVoiceLine = normalizeAbcInlineVoiceLine(trimmed);
+    const inlineVoice = inlineVoiceLine.match(/^\[V:([^\]]+)\]\s*(.*)$/);
+    if (inlineVoice) {
+      const voiceName = normalizeAbcVoiceId(inlineVoice[1]);
+      const block = ensureVoiceBlock(voiceName);
+      const bodyLine = inlineVoice[2]?.trim();
+      if (bodyLine) block.lines.push(bodyLine);
+      currentVoiceName = voiceName;
+      continue;
+    }
+
+    if (currentVoiceName) {
+      ensureVoiceBlock(currentVoiceName).lines.push(trimmed);
+    }
+  }
+
+  return [...voiceBlocks.values()]
+    .map((block) => [block.voiceLine, ...block.lines].join("\n"))
+    .filter((block) => block.trim());
 }
 
 function getVoiceName(block: string): string | null {
-  return block.match(/V:(\S+)/)?.[1] ?? null;
+  const match = block.match(/V:(\S+)/);
+  return match ? normalizeAbcVoiceId(match[1]) : null;
 }
 
 function buildFullMeasureRest(fullMeasureUnits: number): string {
@@ -192,11 +286,20 @@ function splitVoiceBodyLines(lines: string[]): { directives: string[]; musicLine
   }, { directives: [] as string[], musicLines: [] as string[] });
 }
 
+interface FingerstyleFormSystem {
+  label: string;
+  position: "before" | "after-line" | "after";
+  afterLineIndex?: number;
+  melodyLine: string;
+  voiceLine: string;
+}
+
 interface AlignedVoiceBlock {
   name: string;
   voiceLine: string;
   directives: string[];
   musicLines: string[];
+  formSystems?: FingerstyleFormSystem[];
 }
 
 function regroupMeasureSegmentsForMelodyLines(
@@ -230,18 +333,73 @@ function getMelodyMeasureLinePattern(melodyMusicLines: string[]): number[] {
     .filter((count) => count > 0);
 }
 
+function isFingerstyleVoiceBlock(voiceLine: string, lines: string[]): boolean {
+  return /Layer 2 Guitar Fingerstyle/.test(voiceLine) || lines.some((line) => line.includes("@fingerstyle-section"));
+}
+
+function parseFingerstyleVoiceSections(lines: string[]): { directives: string[]; bodyBars: string[]; introBars: string[]; interludeBars: string[]; outroBars: string[] } {
+  let current: "body" | "intro" | "interlude" | "outro" = "body";
+  const sections = {
+    directives: [] as string[],
+    bodyBars: [] as string[],
+    introBars: [] as string[],
+    interludeBars: [] as string[],
+    outroBars: [] as string[],
+  };
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const sectionMatch = trimmed.match(/^%\s*@fingerstyle-section\s+(intro|body|interlude|outro)\b/);
+    if (sectionMatch) {
+      current = sectionMatch[1] as "body" | "intro" | "interlude" | "outro";
+      continue;
+    }
+    if (trimmed.startsWith("%")) {
+      sections.directives.push(trimmed);
+      continue;
+    }
+
+    const bars = splitAbcMeasureSegments(trimmed);
+    if (bars.length === 0) continue;
+    if (current === "intro") sections.introBars.push(...bars);
+    else if (current === "interlude") sections.interludeBars.push(...bars);
+    else if (current === "outro") sections.outroBars.push(...bars);
+    else sections.bodyBars.push(...bars);
+  }
+
+  return sections;
+}
+
+function buildFormSystem(label: string, position: FingerstyleFormSystem["position"], bars: string[], fullMeasureUnits: number, afterLineIndex?: number): FingerstyleFormSystem | null {
+  if (bars.length === 0) return null;
+  const normalizedBars = bars.map((bar) => normalizeAbcMeasureDuration(bar, fullMeasureUnits));
+  const restBars = normalizedBars.map(() => buildFullMeasureRest(fullMeasureUnits));
+  return {
+    label,
+    position,
+    afterLineIndex,
+    melodyLine: `| ${restBars.join(" | ")} |`,
+    voiceLine: `| ${normalizedBars.join(" | ")} |`,
+  };
+}
+
 function alignVoiceBlockToMelodyLines(block: string, baseAbc: string, melodyLinePattern: number[]): AlignedVoiceBlock | null {
   const lines = stripStrongBeatLyricLines(block).split("\n").map(stripBeatAnnotations);
   const voiceLine = normalizeGeneratedVoiceLine(lines[0].trim());
   const name = getVoiceName(voiceLine);
   if (!name) return null;
 
-  const { directives, musicLines } = splitVoiceBodyLines(lines.slice(1));
-  const normalizedDirectives = normalizeMidiDirectives(voiceLine, directives);
-  const voiceBody = musicLines.join(" ").trim();
-  const voiceBars = splitAbcMeasureSegments(voiceBody);
   const { durationContext, hasPickup, pickupUnits, fullMeasureCount } = getMelodyMeasureInfo(baseAbc);
   const fallbackMeasure = buildFullMeasureRest(durationContext.fullMeasureUnits);
+  const fingerstyle = isFingerstyleVoiceBlock(voiceLine, lines);
+  const parsedFingerstyle = fingerstyle ? parseFingerstyleVoiceSections(lines.slice(1)) : null;
+  const { directives, musicLines } = parsedFingerstyle
+    ? { directives: parsedFingerstyle.directives, musicLines: parsedFingerstyle.bodyBars }
+    : splitVoiceBodyLines(lines.slice(1));
+  const normalizedDirectives = normalizeMidiDirectives(voiceLine, directives);
+  const voiceBody = Array.isArray(musicLines) ? musicLines.join(" ").trim() : "";
+  const voiceBars = parsedFingerstyle?.bodyBars ?? splitAbcMeasureSegments(voiceBody);
   let fullMeasureBars = [...voiceBars];
 
   if (hasPickup && fullMeasureBars.length > fullMeasureCount) {
@@ -259,11 +417,21 @@ function alignVoiceBlockToMelodyLines(block: string, baseAbc: string, melodyLine
     ? [buildPickupRest(pickupUnits), ...normalizedFullMeasures]
     : normalizedFullMeasures;
 
+  const interludeAfterLineIndex = Math.max(0, Math.floor(melodyLinePattern.length / 2) - 1);
+  const formSystems = parsedFingerstyle
+    ? [
+        buildFormSystem("Intro", "before", parsedFingerstyle.introBars, durationContext.fullMeasureUnits),
+        buildFormSystem("Interlude", "after-line", parsedFingerstyle.interludeBars, durationContext.fullMeasureUnits, interludeAfterLineIndex),
+        buildFormSystem("Outro", "after", parsedFingerstyle.outroBars, durationContext.fullMeasureUnits),
+      ].filter((system): system is FingerstyleFormSystem => Boolean(system))
+    : undefined;
+
   return {
     name,
     voiceLine,
     directives: normalizedDirectives,
     musicLines: regroupMeasureSegmentsForMelodyLines(alignedMeasures, melodyLinePattern, hasPickup),
+    formSystems,
   };
 }
 
@@ -292,18 +460,24 @@ export function buildAccompanimentAbc({
   layerVisibility = {},
   strongBeatDirectives,
 }: BuildAccompanimentAbcOptions): BuildAccompanimentAbcResult {
-  const baseAbcBlocks = baseAbc.split(/(?=^V:)/m).filter(block => block.trim());
-  const melodyBlock = baseAbcBlocks.find(b => b.startsWith("V:Melody")) 
-    || baseAbcBlocks.find(b => !b.startsWith("V:")) 
+  const normalizedBaseAbc = normalizeAbcVoiceSyntax(baseAbc);
+  const baseAbcBlocks = normalizedBaseAbc.split(/(?=^V:)/m).filter(block => block.trim());
+  const inlineMelodyBlock = extractInlineMelodyBlock(normalizedBaseAbc);
+  const melodyBlock = inlineMelodyBlock
+    || baseAbcBlocks.find(b => /^V:Melody\b/.test(b.trim()))
+    || baseAbcBlocks.find(b => !b.trim().startsWith("V:"))
     || "";
-  const otherBaseBlocks = baseAbcBlocks.filter(b => b !== melodyBlock && b.startsWith("V:") && !b.startsWith("V:Melody"));
+  const otherBaseBlocks = hasInlineVoiceBody(normalizedBaseAbc)
+    ? [normalizedBaseAbc]
+    : baseAbcBlocks.filter(b => b !== melodyBlock && b.trim().startsWith("V:") && !/^V:Melody\b/.test(b.trim()));
 
-  const headerLines = getHeaderLines(baseAbc);
+  const headerLines = getHeaderLines(normalizedBaseAbc);
   const showChords = layerVisibility.__chords__ !== false;
   const showMelody = layerVisibility.__melody__ !== false;
   const showStrongBeats = layerVisibility.__strong_beats__ === true;
   const cleanMelodyBlock = stripStrongBeatLyricLines(melodyBlock);
   const musicLines = extractMusicBodyLines(cleanMelodyBlock).map(stripBeatAnnotations);
+  const melodyReferenceAbc = [...headerLines, ...musicLines].join("\n");
 
   // Build melody lines: strip chords if chord layer is off, replace notes with rests if melody is off
   let melodyMusicLines: string[];
@@ -363,7 +537,7 @@ export function buildAccompanimentAbc({
 
   const melodyLinePattern = getMelodyMeasureLinePattern(melodyMusicLines);
   const alignedBlocks = [...voiceBlockMap.values()]
-    .map((block) => alignVoiceBlockToMelodyLines(block, baseAbc, melodyLinePattern))
+    .map((block) => alignVoiceBlockToMelodyLines(block, melodyReferenceAbc, melodyLinePattern))
     .filter(Boolean) as AlignedVoiceBlock[];
   const voiceNames = alignedBlocks.map((block) => block.name);
   const visibleBlocks = alignedBlocks.filter((block) => layerVisibility[block.name] !== false);
@@ -413,6 +587,20 @@ export function buildAccompanimentAbc({
     output.push(block.voiceLine, ...block.directives);
   }
 
+  const emitFormSystems = (position: FingerstyleFormSystem["position"], afterLineIndex?: number) => {
+    for (const block of processedVisibleBlocks) {
+      for (const system of block.formSystems ?? []) {
+        if (system.position !== position) continue;
+        if (position === "after-line" && system.afterLineIndex !== afterLineIndex) continue;
+        output.push(`% ${system.label}: Guitar Fingerstyle form section with Melody rests.`);
+        output.push(`[V:Melody] ${system.melodyLine}`);
+        output.push(`[V:${block.name}] ${system.voiceLine}`);
+      }
+    }
+  };
+
+  emitFormSystems("before");
+
   for (let lineIndex = 0; lineIndex < melodyMusicLines.length; lineIndex += 1) {
     output.push(`% Staff system ${lineIndex + 1}: Melody and visible instruments share this measure range.`);
     output.push(`[V:Melody] ${melodyMusicLines[lineIndex]}`);
@@ -424,7 +612,11 @@ export function buildAccompanimentAbc({
       const voiceLine = block.musicLines[lineIndex];
       if (voiceLine) output.push(`[V:${block.name}] ${voiceLine}`);
     }
+
+    emitFormSystems("after-line", lineIndex);
   }
+
+  emitFormSystems("after");
 
   for (let lineIndex = melodyMusicLines.length; lineIndex < lyricsGroups.length; lineIndex += 1) {
     output.push(...(lyricsGroups[lineIndex] ?? []));

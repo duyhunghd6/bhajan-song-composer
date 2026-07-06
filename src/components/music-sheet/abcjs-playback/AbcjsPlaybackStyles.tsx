@@ -45,35 +45,6 @@ export function AbcjsPlaybackStyles({ resolvedCanvasId }: { resolvedCanvasId: st
           font-weight: 600 !important;
           fill: #a5b4fc !important; /* Indigo-300 style chord */
         }
-
-        /* Pull tablature staff up ONLY on the first system (g.abcjs-l0) to prevent overlaps on subsequent compact lines */
-        /* Pull tablature staff up when beat indicators AND lyrics are present */
-        #${resolvedCanvasId}.has-beat-indicators.has-lyrics g.abcjs-l0.abcjs-tablature-staff,
-        #${resolvedCanvasId}.has-beat-indicators.has-lyrics g.abcjs-l0.abcjs-tabNumber,
-        #${resolvedCanvasId}.has-beat-indicators.has-lyrics g.abcjs-l0.abcjs-symbol:has(path[data-name="tab.big"]) {
-          transform: translateY(-60px);
-        }
-
-        /* Keep default tablature spacing for beat-only rows so Melody, beat icons, and TAB stay separated */
-        #${resolvedCanvasId}.has-beat-indicators.no-lyrics g.abcjs-l0.abcjs-tablature-staff,
-        #${resolvedCanvasId}.has-beat-indicators.no-lyrics g.abcjs-l0.abcjs-tabNumber,
-        #${resolvedCanvasId}.has-beat-indicators.no-lyrics g.abcjs-l0.abcjs-symbol:has(path[data-name="tab.big"]) {
-          transform: translateY(0);
-        }
-
-        /* Pull tablature staff up when NO beat indicators are present but lyrics are present */
-        #${resolvedCanvasId}:not(.has-beat-indicators).has-lyrics g.abcjs-l0.abcjs-tablature-staff,
-        #${resolvedCanvasId}:not(.has-beat-indicators).has-lyrics g.abcjs-l0.abcjs-tabNumber,
-        #${resolvedCanvasId}:not(.has-beat-indicators).has-lyrics g.abcjs-l0.abcjs-symbol:has(path[data-name="tab.big"]) {
-          transform: translateY(-50px);
-        }
-
-        /* Keep default spacing (no pull up) when NO beat indicators and NO lyrics are present */
-        #${resolvedCanvasId}:not(.has-beat-indicators).no-lyrics g.abcjs-l0.abcjs-tablature-staff,
-        #${resolvedCanvasId}:not(.has-beat-indicators).no-lyrics g.abcjs-l0.abcjs-tabNumber,
-        #${resolvedCanvasId}:not(.has-beat-indicators).no-lyrics g.abcjs-l0.abcjs-symbol:has(path[data-name="tab.big"]) {
-          transform: translateY(0);
-        }
       `}</style>
   );
 }
