@@ -32,7 +32,16 @@ export {
   buildConsolidatedChordIngestionToolSchema,
   getAccompanimentWorkflowLlmToolNames,
 } from "./accompaniment-workflow/tool-schema";
-
+export {
+  emptyStepState,
+  extractProfile,
+  hasWorkflowStepResults,
+  makeSkippedOption,
+  mergeRun,
+  mergeRuns,
+  selectOption,
+  skipWorkflowSteps,
+} from "./accompaniment-workflow/session-transitions";
 
 const STEP_BY_ID = new Map(ACCOMPANIMENT_WORKFLOW_STEPS.map((step) => [step.id, step]));
 const LYRIC_CHORD_PATTERN = /\[([A-G](?:#|b)?(?:(?:maj|min|m|dim|aug|sus|add)\d*|\d+)?(?:[#b]\d+)*(?:\/[A-G](?:#|b)?)?)\]/g;
@@ -508,6 +517,62 @@ function isMusicBodyLine(line: string): boolean {
   return true;
 }
 
+function isLyricLine(line: string): boolean {
+  const trimmed = line.trim();
+  return trimmed.startsWith("w:") || trimmed.startsWith("+:");
+}
+
+function hasLyricGroups(groups: string[][], expectedLineCount: number): boolean {
+  return groups.length === expectedLineCount && groups.some((group) => group.length > 0);
+}
+
+function extractSequentialLyricLineGroups(lines: string[]): string[][] {
+  const groups: string[][] = [];
+  let currentMusicLineIndex = -1;
+
+  for (const line of lines) {
+    if (isMusicBodyLine(line)) {
+      currentMusicLineIndex += 1;
+      groups[currentMusicLineIndex] ??= [];
+      continue;
+    }
+
+    if (isLyricLine(line) && currentMusicLineIndex >= 0) {
+      groups[currentMusicLineIndex] ??= [];
+      groups[currentMusicLineIndex].push(line);
+    }
+  }
+
+  return groups;
+}
+
+function extractInlineMelodyLyricLineGroups(lines: string[]): string[][] {
+  const groups: string[][] = [];
+  let currentMelodyLineIndex = -1;
+  let acceptsLyrics = false;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    const match = trimmed.match(/^\[V:([^\]]+)\]\s*(.*)$/);
+
+    if (match) {
+      acceptsLyrics = match[1] === "Melody";
+      if (acceptsLyrics) {
+        currentMelodyLineIndex += 1;
+        groups[currentMelodyLineIndex] ??= [];
+      }
+      continue;
+    }
+
+    if (isLyricLine(line) && acceptsLyrics && currentMelodyLineIndex >= 0) {
+      groups[currentMelodyLineIndex] ??= [];
+      groups[currentMelodyLineIndex].push(line);
+    }
+  }
+
+  return groups;
+}
+
 function measureLinePatternFromLines(lines: string[]): number[] {
   return lines
     .filter(isMusicBodyLine)
@@ -577,7 +642,11 @@ function regroupMeasures(measures: string[], pattern: number[], fallbackLineCoun
   return output;
 }
 
-function rebuildMusicLinesForPattern(lines: string[], pattern: number[]): string[] {
+function rebuildMusicLinesForPattern(
+  lines: string[],
+  pattern: number[],
+  fallbackLyricLineGroups: string[][] = []
+): string[] {
   const musicLineIndices = lines.flatMap((line, index) => isMusicBodyLine(line) ? [index] : []);
   if (musicLineIndices.length === 0) return lines;
 
@@ -585,34 +654,28 @@ function rebuildMusicLinesForPattern(lines: string[], pattern: number[]): string
   if (measures.length === 0) return lines;
 
   const regroupedMusicLines = regroupMeasures(measures, pattern, musicLineIndices.length);
-  const lyricLines = lines.filter((line) => line.trim().startsWith("w:"));
+  const generatedLyricLineGroups = extractSequentialLyricLineGroups(lines);
+  const lyricLineGroups = hasLyricGroups(generatedLyricLineGroups, regroupedMusicLines.length)
+    ? generatedLyricLineGroups
+    : fallbackLyricLineGroups;
   const output: string[] = [];
   let inserted = false;
-  let lyricIndex = 0;
 
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
     if (isMusicBodyLine(line)) {
       if (!inserted) {
-        for (const musicLine of regroupedMusicLines) {
-          output.push(musicLine);
-          if (lyricIndex < lyricLines.length) {
-            output.push(lyricLines[lyricIndex]);
-            lyricIndex += 1;
-          }
+        for (let lineIndex = 0; lineIndex < regroupedMusicLines.length; lineIndex += 1) {
+          output.push(regroupedMusicLines[lineIndex]);
+          output.push(...(lyricLineGroups[lineIndex] ?? []));
         }
         inserted = true;
       }
       continue;
     }
 
-    if (line.trim().startsWith("w:")) continue;
+    if (isLyricLine(line)) continue;
     output.push(line);
-  }
-
-  while (lyricIndex < lyricLines.length) {
-    output.push(lyricLines[lyricIndex]);
-    lyricIndex += 1;
   }
 
   return output;
@@ -637,7 +700,7 @@ function splitInlineVoiceBody(lines: string[]): { prefix: string[]; voiceLines: 
       continue;
     }
 
-    if (sawInlineVoice && (trimmed.startsWith("w:") || trimmed.startsWith("+:") || trimmed.startsWith("% Staff system"))) continue;
+    if (sawInlineVoice && (isLyricLine(line) || trimmed.startsWith("% Staff system"))) continue;
     if (sawInlineVoice && trimmed && !/^[A-Za-z]:/.test(trimmed) && !trimmed.startsWith("%")) {
       suffix.push(line);
       continue;
@@ -650,7 +713,25 @@ function splitInlineVoiceBody(lines: string[]): { prefix: string[]; voiceLines: 
   return { prefix, voiceLines, suffix };
 }
 
-function regroupInlineVoiceLines(lines: string[], pattern: number[]): string[] {
+function getReferenceLyricLineGroups(referenceAbc: string): string[][] {
+  const lines = normalizeAbcVoiceSyntax(referenceAbc).split(/\r?\n/);
+
+  if (lines.some((line) => /^\[V:Melody\]\s*/.test(line.trim()))) {
+    return extractInlineMelodyLyricLineGroups(lines);
+  }
+
+  const melodyStart = lines.findIndex((line) => /^V:Melody\b/.test(line.trim()));
+
+  if (melodyStart >= 0) {
+    const nextVoiceOffset = lines.slice(melodyStart + 1).findIndex((line) => /^V:/.test(line.trim()));
+    const melodyEnd = nextVoiceOffset >= 0 ? melodyStart + 1 + nextVoiceOffset : lines.length;
+    return extractSequentialLyricLineGroups(lines.slice(melodyStart + 1, melodyEnd));
+  }
+
+  return extractSequentialLyricLineGroups(lines);
+}
+
+function regroupInlineVoiceLines(lines: string[], pattern: number[], fallbackLyricLineGroups: string[][] = []): string[] {
   const { prefix, voiceLines, suffix } = splitInlineVoiceBody(lines);
   const melodyLines = voiceLines.get("Melody");
   if (!melodyLines || melodyLines.length === 0) return lines;
@@ -662,6 +743,10 @@ function regroupInlineVoiceLines(lines: string[], pattern: number[]): string[] {
 
   const orderedVoiceNames = Array.from(voiceLines.keys());
   const lineCount = regroupedByVoice.get("Melody")?.length ?? 0;
+  const generatedLyricLineGroups = extractInlineMelodyLyricLineGroups(lines);
+  const lyricLineGroups = hasLyricGroups(generatedLyricLineGroups, lineCount)
+    ? generatedLyricLineGroups
+    : fallbackLyricLineGroups;
   const output = [...prefix];
 
   for (let lineIndex = 0; lineIndex < lineCount; lineIndex += 1) {
@@ -669,6 +754,7 @@ function regroupInlineVoiceLines(lines: string[], pattern: number[]): string[] {
     for (const voiceName of orderedVoiceNames) {
       const bodyLine = regroupedByVoice.get(voiceName)?.[lineIndex];
       if (bodyLine) output.push(`[V:${voiceName}] ${bodyLine}`);
+      if (voiceName === "Melody") output.push(...(lyricLineGroups[lineIndex] ?? []));
     }
   }
 
@@ -681,8 +767,9 @@ export function break_measures_line(generatedAbc: string, referenceAbc: string):
   if (pattern.length === 0) return normalizedGeneratedAbc;
 
   const lines = normalizedGeneratedAbc.split(/\r?\n/);
+  const fallbackLyricLineGroups = getReferenceLyricLineGroups(referenceAbc);
   if (lines.some((line) => /^\[V:Melody\]\s*/.test(line.trim()))) {
-    return regroupInlineVoiceLines(lines, pattern).join("\n");
+    return regroupInlineVoiceLines(lines, pattern, fallbackLyricLineGroups).join("\n");
   }
 
   const melodyStart = lines.findIndex((line) => /^V:Melody\b/.test(line.trim()));
@@ -692,12 +779,12 @@ export function break_measures_line(generatedAbc: string, referenceAbc: string):
     const melodyEnd = nextVoiceOffset >= 0 ? melodyStart + 1 + nextVoiceOffset : lines.length;
     return [
       ...lines.slice(0, melodyStart + 1),
-      ...rebuildMusicLinesForPattern(lines.slice(melodyStart + 1, melodyEnd), pattern),
+      ...rebuildMusicLinesForPattern(lines.slice(melodyStart + 1, melodyEnd), pattern, fallbackLyricLineGroups),
       ...lines.slice(melodyEnd),
     ].join("\n");
   }
 
-  return rebuildMusicLinesForPattern(lines, pattern).join("\n");
+  return rebuildMusicLinesForPattern(lines, pattern, fallbackLyricLineGroups).join("\n");
 }
 
 const ABC_OPTION_DATA_KEYS = ["harmonizedAbc", "validatedAbc", "chordAnnotatedAbc", "abc"] as const;
@@ -765,7 +852,7 @@ export function buildAccompanimentWorkflowPrompt(input: {
     ? "\nStrong Beats local algorithm requirement: choose only the review direction/emphasis. Before calling the final generate_strong_beat_targets tool, call add_strong_beat_icons for each distinct emphasis direction you plan to offer so the local algorithm validates the concrete beat positions. Final option.data MUST include only strongBeatEmphasis. Do not include annotatedAbc, abcNotation, strongBeatDirectives, measureIndex, or beatTime in the final payload. Strong beat notation is generated locally as beat-only w: lyric rows, never as inline note annotations, and later inserted after the Melody line inside each staff-system/sentence group."
     : "";
   const guitarTabInstruction = isGuitarTabValidationWorkflowStep(input.stepId)
-    ? "\nGuitar tab validation requirement: each option.data MUST include guitarTab.events with measureIndex, beat, note, string, fret, and role. Before finalizing an option, call the valid_guitar_tab tool with those exact events. If valid_guitar_tab reports any issue, revise the tab and call valid_guitar_tab again. Hard physical rule: in any simultaneous group, a string number may appear only once; one guitar string cannot play E3 and G3 (or any two pitches) at the same time."
+    ? `\nOne physical guitar validation requirement: each option must prove it is playable on one physical guitar. Each option.data MUST include guitarTab.profileId, guitarTab.voicingProfileId, and guitarTab.events with measureIndex, beat, note, string, fret, role, and sourceEventId when mapping a source melody/chord event. Use octave/register-bearing note labels such as E2, B3, and F#4. Before finalizing an option, call valid_guitar_tab with the same profileId, voicingProfileId, and events. If valid_guitar_tab reports any issue, revise the tab and call valid_guitar_tab again. Hard physical rules to prove in validation notes: (1) simultaneous notes may form a chord across multiple strings, but one physical string may appear only once and one source note/event may be assigned to only one string; (2) every string/fret/note is inside the selected guitar fretboard range; (3) one left hand can fret the simultaneous target positions for the selected profile/voicing. ${input.stepId === "guitar-comping-profile" ? "For Guitar Profile, guitarTab.events may be a representative one-measure pattern sample that proves the chosen comping/picking profile is playable on one guitar." : "For this step, guitarTab.events should represent the concrete voicing, fill, polish, or fingerstyle events being selected."}`
     : "";
   const guitarFingerstyleInstruction = input.stepId === "guitar-fingerstyle"
     ? "\nGuitar Fingerstyle step-specific requirement: finalize a solo guitar fingerstyle plan, not a rhythm-only accompaniment. Each option.data MUST include mode=\"solo-fingerstyle\", carriesMelody=true, pickingProfile (strict-pima or folk-travis), bassStrategy derived from the selected chord progression roots/fifths/approaches, formPlan.intro, formPlan.interlude, and formPlan.outro. The Guitar Fingerstyle part must play the melody itself while adding chord-derived bass. Include tab roles for both melody and bass. Do not hand-write final ABC in this step; the local arranger will render ABC and GUITAR TAB from the selected profile/form plan."

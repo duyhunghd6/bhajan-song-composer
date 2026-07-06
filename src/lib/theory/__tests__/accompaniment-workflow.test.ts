@@ -506,6 +506,62 @@ V:Melody name="Melody"
     expect(musicLines.map((line) => line.split("|").filter((part) => part.trim()).length)).toEqual([2, 2, 2]);
   });
 
+  it("preserves source lyric rows when normalizing generated harmony ABC without lyrics", () => {
+    const referenceAbc = `X:1
+T:Lyric Reference
+M:4/4
+L:1/8
+K:C
+| C2 D2 E2 F2 | G2 A2 B2 c2 |
+w: Ha-ri Bol Ha-ri Bol
+| c2 B2 A2 G2 | F2 E2 D2 C2 |
+w: Go-vin-da Ra-dhe Shyam`;
+    const generatedAbc = `X:1
+T:Generated Harmony
+M:4/4
+L:1/8
+K:C
+| "C"C2 D2 E2 F2 | "G"G2 A2 B2 c2 | "Am"c2 B2 A2 G2 | "F"F2 E2 D2 C2 |`;
+
+    const normalized = break_measures_line(generatedAbc, referenceAbc);
+
+    expect(normalized).toContain("w: Ha-ri Bol Ha-ri Bol");
+    expect(normalized).toContain("w: Go-vin-da Ra-dhe Shyam");
+    expect(abcMatchesReferenceMeasureLinePattern(normalized, referenceAbc)).toBe(true);
+  });
+
+  it("preserves source lyric rows under Melody in normalized inline multi-voice harmony ABC", () => {
+    const referenceAbc = `X:1
+T:Inline Lyric Reference
+M:4/4
+L:1/8
+K:C
+| C2 D2 E2 F2 | G2 A2 B2 c2 |
+w: Ha-ri Bol Ha-ri Bol
+| c2 B2 A2 G2 | F2 E2 D2 C2 |
+w: Go-vin-da Ra-dhe Shyam`;
+    const generatedAbc = `X:1
+T:Generated Multi Voice Harmony
+M:4/4
+L:1/8
+%%score (Melody) (Guitar)
+K:C
+V:Melody name="Melody"
+V:Guitar clef=treble-8
+[V:Melody] | "C"C2 D2 E2 F2 | "G"G2 A2 B2 c2 | "Am"c2 B2 A2 G2 | "F"F2 E2 D2 C2 |
+[V:Guitar] | C,2 G,2 C2 E2 | G,2 D2 G2 B2 | A,2 E2 A2 c2 | F,2 C2 F2 A2 |`;
+
+    const normalized = break_measures_line(generatedAbc, referenceAbc);
+
+    expect(normalized).toContain("[V:Melody] | \"C\"C2 D2 E2 F2 | \"G\"G2 A2 B2 c2 |");
+    expect(normalized).toContain("w: Ha-ri Bol Ha-ri Bol");
+    expect(normalized).toContain("[V:Guitar] | C,2 G,2 C2 E2 | G,2 D2 G2 B2 |");
+    expect(normalized).toContain("[V:Melody] | \"Am\"c2 B2 A2 G2 | \"F\"F2 E2 D2 C2 |");
+    expect(normalized).toContain("w: Go-vin-da Ra-dhe Shyam");
+    expect(normalized).toContain("[V:Guitar] | A,2 E2 A2 c2 | F,2 C2 F2 A2 |");
+    expect(abcMatchesReferenceMeasureLinePattern(normalized, referenceAbc)).toBe(true);
+  });
+
   it("repairs malformed voice ids in ABC-shaped workflow option data", () => {
     const referenceAbc = `X:1
 T:Hari Bol Reference
@@ -590,8 +646,8 @@ K:C
     expect(schema.function.parameters.required).toEqual(["chordToneMapping", "chordProgression", "voiceLeadingValidation"]);
   });
 
-  it("marks guitar voicing, polish, and fingerstyle as tab-validation steps", () => {
-    expect(isGuitarTabValidationWorkflowStep("guitar-comping-profile")).toBe(false);
+  it("marks all concrete guitar workflow steps as tab-validation steps", () => {
+    expect(isGuitarTabValidationWorkflowStep("guitar-comping-profile")).toBe(true);
     expect(isGuitarTabValidationWorkflowStep("guitar-voicing-bass")).toBe(true);
     expect(isGuitarTabValidationWorkflowStep("guitar-fills-validation")).toBe(true);
     expect(isGuitarTabValidationWorkflowStep("guitar-fingerstyle")).toBe(true);
@@ -606,8 +662,13 @@ K:C
     });
 
     expect(prompt).toContain("valid_guitar_tab");
+    expect(prompt).toContain("guitarTab.profileId");
+    expect(prompt).toContain("guitarTab.voicingProfileId");
     expect(prompt).toContain("guitarTab.events");
-    expect(prompt).toContain("one guitar string cannot play E3 and G3");
+    expect(prompt).toContain("one physical guitar");
+    expect(prompt).toContain("one source note/event may be assigned to only one string");
+    expect(prompt).toContain("selected guitar fretboard range");
+    expect(prompt).toContain("one left hand can fret");
   });
 
   it("requires guitarTab events in guitar tab-bearing workflow schemas", () => {
@@ -618,7 +679,10 @@ K:C
     const guitarTab = data.properties?.guitarTab;
     const events = guitarTab?.properties?.events;
 
-    expect(guitarTab?.required).toEqual(["events"]);
+    expect(guitarTab?.required).toEqual(["profileId", "events"]);
+    expect(guitarTab?.properties).toHaveProperty("profileId");
+    expect(guitarTab?.properties).toHaveProperty("voicingProfileId");
+    expect(events?.items?.properties).toHaveProperty("sourceEventId");
     expect(events?.items?.required).toEqual([
       "measureIndex",
       "beat",
@@ -647,7 +711,7 @@ K:C
     expect(prompt).toContain("formPlan.outro");
     expect(data.required).toEqual(["mode", "carriesMelody", "pickingProfile", "bassStrategy", "formPlan", "guitarTab"]);
     expect(data.properties?.formPlan?.required).toEqual(["intro", "interlude", "outro"]);
-    expect(data.properties?.guitarTab?.required).toEqual(["events"]);
+    expect(data.properties?.guitarTab?.required).toEqual(["profileId", "events"]);
   });
 
   it("exposes the valid_guitar_tab schema for the LLM tool loop", () => {
