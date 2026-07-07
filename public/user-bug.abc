@@ -1,0 +1,96 @@
+X: 1
+T: Hari Bol - Voice-led Combined Accompaniment
+M: 4/4
+L: 1/8
+Q: 1/4=65
+K: Em
+%%MIDI chordvol 127
+%%MIDI bassvol 127
+V:Melody clef=treble name=""
+%%MIDI program 52
+%%MIDI beat 127 127 127 1
+V:Guitar clef=treble-8 name="" stem=down
+%%MIDI beat 127 127 127 1
+V:Piano clef=treble name=""
+%%MIDI beat 127 127 127 1
+V:Harmonium clef=treble name=""
+%%MIDI beat 127 127 127 1
+V:Flute clef=treble name=""
+%%MIDI beat 127 127 127 1
+V:Djembe clef=perc name=""
+%%MIDI beat 127 127 127 1
+V:Violin clef=treble name=""
+%%MIDI beat 127 127 127 1
+%%SCORE_PLACEHOLDER
+%%vocalspace 10
+%%botmargin 80
+V:Melody name="" stem=up
+%%MIDI program 52
+%%MIDI beat 127 127 127 1
+V:Guitar clef=treble-8 name="" stem=down
+%%MIDI beat 127 127 127 1
+%%MIDI program 24
+V:Piano clef=treble name=""
+%%MIDI beat 127 127 127 1
+%%MIDI program 0
+V:Harmonium clef=treble name=""
+%%MIDI beat 127 127 127 1
+%%MIDI program 20
+V:Flute clef=treble name=""
+%%MIDI beat 127 127 127 1
+%%MIDI program 73
+V:Djembe clef=perc name=""
+%%MIDI beat 127 127 127 1
+%%MIDI program 116
+V:Violin clef=treble name=""
+%%MIDI beat 127 127 127 1
+%%MIDI program 40
+% Line 1
+% Staff system 1: Melody and visible instruments share this measure range.
+% Staff system 1: Melody and visible instruments share this measure range.
+% Staff system 2: Melody and visible instruments share this measure range.
+% Staff system 3: Melody and visible instruments share this measure range.
+% Staff system 4: Melody and visible instruments share this measure range.
+% Line 2
+% Line 3
+% Line 4
+% Staff system 1: Melody and visible instruments share this measure range.
+[V:Melody] | "Em"E E (EB,) "D"E E (EB,) | "Em"E F G "D"F2 (G2F) | "Em"E E (EB,) "D"E E (EB,) | "Em"E F G "D"F2 (G2F) |
+w: Ha-ri Bol _ Ha-ri Bol _ | Ha-ri Ha-ri Bol _ | Ha-ri Bol _ Ha-ri Bol _ | Ha-ri Ha-ri Bol _
+w: ⬤ * * * ● * * * | ⬤ * * * * * | ⬤ * * * ● * * * | ⬤ * * * * * |
+[V:Guitar] | E, B,, E, B,, D, A,, D, A,, | E, B,, E, B,, D, A,, D, A,, | E, B,, E, B,, D, A,, D, A,, | E, B,, E, B,, D, A,, D, A,, |
+[V:Piano] | [E,B,]2 z2 [D,A,]2 z2 | [E,B,]2 z2 [D,A,]2 z2 | [E,B,]2 z2 [D,A,]2 z2 | [E,B,]2 z2 [D,A,]2 z2 |
+[V:Harmonium] | [EGB]4 [DFA]4 | [EGB]4 [DFA]4 | [EGB]4 [DFA]4 | [EGB]4 [DFA]4 |
+[V:Flute] | z8 | z4 B2 A2 | z8 | z4 B2 A2 |
+[V:Djembe] | C,2 z C, z C, z C, | C,2 z C, z C, z C, | C,2 z C, z C, z C, | C,2 z C, z C, z C, |
+[V:Violin] | B,4 A,4 | B,4 A,4 | B,4 A,4 | B,4 A,4 |
+% Staff system 2: Melody and visible instruments share this measure range.
+[V:Melody] | "Em"E E2 F (GB) A G | "D"(FE) D F "Em"E4 | "Em"E E2 F (GB) A G | "D"(FE) D F "Em"E4 |
+w: Mu-kun-da Ma- _ dha-va | Go- _ vin-da Bol | Mu-kun-da Ma- _ dha-va | Go- _ vin-da Bol
+w: ⬤ * * ● * * * | ⬤ * * * ● | ⬤ * * ● * * * | ⬤ * * * ● |
+[V:Guitar] | z2 [EGB]2 z2 [DFA]2 | z2 [EGB]2 z2 [DFA]2 | z2 [EGB]2 z2 [DFA]2 | z2 [EGB]2 z2 [DFA]2 |
+[V:Piano] | [E,B,]2 z2 [G,B,]2 z2 | [D,A,]2 z2 [E,B,]2 z2 | [E,B,]2 z2 [G,B,]2 z2 | [D,A,]2 z2 [E,B,]2 z2 |
+[V:Harmonium] | [EGB]8 | [DFA]4 [EGB]4 | [EGB]8 | [DFA]4 [EGB]4 |
+[V:Flute] | z8 | z6 G2 | z8 | z6 G2 |
+[V:Djembe] | C,2 z C, z C, z C, | C,2 z C, z C, z C, | C,2 z C, z C, z C, | C,2 z C, z C, z C, |
+[V:Violin] | E4 B,4 | A,4 B,4 | E4 B,4 | A,4 B,4 |
+% Staff system 3: Melody and visible instruments share this measure range.
+[V:Melody] | "G"B B B (Bd) c B | "D"(AG) A B A4 | "G"B B2 B (Bd) c B | "D"(AG) A B "B7"A2 B2 |
+w: Ke-sha-va Ma- _ dha-va | Go- _ vin-da Bol | Ke-sha-va Ma- _ dha-va | Go- _ vin-da Bol _
+w: ⬤ * * * ● * * | ⬤ * * * ● | ⬤ * * ● * * * | ⬤ * * * ● * |
+[V:Guitar] | E, B,, E, G, B,, E, G, B,, | D, A,, D, A,, E, B,, E, B,, | E, B,, E, G, B,, E, G, B,, | D, A,, D, A,, E, B,, E, B,, |
+[V:Piano] | [G,D]2 z2 [B,D]2 z2 | [D,A,]2 z2 [F,A,]2 z2 | [G,D]2 z2 [B,D]2 z2 | [D,A,]2 z2 [B,,A,]2 z2 |
+[V:Harmonium] | [GBd]8 | [DFA]8 | [GBd]8 | [DFA]4 [B^DFA]4 |
+[V:Flute] | z8 | z4 G2 F2 | z8 | z4 A2 B2 |
+[V:Djembe] | C,2 z C, z C, z C, | C,2 z C, z C, z C, | C,2 z C, z C, z C, | C,2 z C, z C, z C, |
+[V:Violin] | d4 B4 | A4 F4 | d4 B4 | A4 ^D4 |
+% Staff system 4: Melody and visible instruments share this measure range.
+[V:Melody] | "Em"E E2 F (GB) A G | "D"(FE) DF "Em"E4 | "Em"E E2 F (GB) A G | "D"(FE) D F "Em"E4 |
+w: Mu-kun-da Ma- _ dha-va | Go- _ vin-da Bol | Mu-kun-da Ma- _ dha-va | Go- _ vin-da Bol
+w: ⬤ * * ● * * * | ⬤ * * * ● | ⬤ * * ● * * * | ⬤ * * * ● |
+[V:Guitar] | z2 [EGB]2 z2 [EGB]2 | z2 [DFA]2 z2 [EGB]2 | z2 [EGB]2 z2 [EGB]2 | z2 [DFA]2 z2 [EGB]2 |
+[V:Piano] | [E,B,]2 z2 [G,B,]2 z2 | [D,A,]2 z2 [E,B,]2 z2 | [E,B,]2 z2 [G,B,]2 z2 | [D,A,]2 z2 [E,B,]2 z2 |
+[V:Harmonium] | [EGB]8 | [DFA]4 [EGB]4 | [EGB]8 | [DFA]4 [EGB]4 |
+[V:Flute] | z8 | z6 G2 | z8 | z6 G2 |
+[V:Djembe] | C,2 z C, z C, z C, | C,2 z C, z C, z C, | C,2 z C, z C, z C, | C,2 z C, z C, z C, |
+[V:Violin] | E4 B,4 | A,4 B,4 | E4 B,4 | A,4 B,4 |
