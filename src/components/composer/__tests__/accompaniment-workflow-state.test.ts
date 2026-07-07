@@ -8,7 +8,11 @@ import {
   type AccompanimentWorkflowRun,
   type AccompanimentWorkflowStepId,
 } from "@/lib/theory/accompaniment-workflow";
-import type { WorkspaceState } from "../useWorkspaceState";
+import {
+  DEFAULT_ACCOMPANIMENT_LAYER_VISIBILITY,
+  DEFAULT_LAYER_VOLUMES,
+  type WorkspaceState,
+} from "../useWorkspaceState";
 import {
   buildAccompanimentGuitarBranchResetState,
   hasAccompanimentGuitarBranchWork,
@@ -45,6 +49,41 @@ function makeRun(
 }
 
 describe("accompaniment workflow wizard state", () => {
+  it("stores accompaniment layer visibility and volumes in the persisted workspace state", () => {
+    const state = {
+      aiSuggestions: [],
+      selectedCandidateId: null,
+      acceptedHarmony: null,
+      aiAccompanimentSuggestions: [],
+      selectedAccompanimentIndex: null,
+      pianoAccompanimentData: null,
+      guitarAccompanimentData: null,
+      generatedAccompaniment: null,
+      aiGuitarSuggestions: [],
+      aiPianoSuggestions: [],
+      selectedGuitarIndex: null,
+      selectedPianoIndex: null,
+      generatedGuitar: null,
+      generatedPiano: null,
+      accompanimentWorkflowSetup: null,
+      accompanimentWorkflow: null,
+      ensembleWorkflow: null,
+      stagedEnsembleLayers: null,
+      appliedEnsembleLayers: null,
+      accompanimentLayerVisibility: {
+        ...DEFAULT_ACCOMPANIMENT_LAYER_VISIBILITY,
+        Guitar: false,
+      },
+      accompanimentLayerVolumes: {
+        ...DEFAULT_LAYER_VOLUMES,
+        Guitar: 65,
+      },
+    } satisfies WorkspaceState;
+
+    expect(state.accompanimentLayerVisibility.Guitar).toBe(false);
+    expect(state.accompanimentLayerVolumes.Guitar).toBe(65);
+  });
+
   it("keeps previous generated options after a selected step is regenerated", () => {
     const session = createAccompanimentWorkflowSession(sampleAbc);
     const firstRun = makeRun("run-1", ["option-a", "option-b"]);

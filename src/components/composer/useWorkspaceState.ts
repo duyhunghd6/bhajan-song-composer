@@ -10,6 +10,26 @@ import type { EnsembleExpansionValidation } from "@/lib/theory/ensemble-output-c
 import type { EnsembleConflictReportEntry } from "@/lib/theory/ensemble-conflicts";
 import { getComposerWorkspaceStorageKey } from "./workspace/storage";
 
+export const DEFAULT_HARMONY_LAYER_VISIBILITY: Record<string, boolean> = {
+  ChordProgression: true,
+  Lyrics: true,
+  Melody: true,
+  TAB: false,
+};
+
+export const DEFAULT_ACCOMPANIMENT_LAYER_VISIBILITY: Record<string, boolean> = {
+  ChordProgression: true,
+  Lyrics: true,
+  StrongBeats: true,
+  Melody: true,
+  TAB: false,
+};
+
+export const DEFAULT_LAYER_VOLUMES: Record<string, number> = {
+  ChordProgression: 100,
+  Melody: 100,
+};
+
 export interface EnsembleLayerAbcBundle {
   djembe: string | null;
   flute: string | null;
@@ -43,6 +63,8 @@ export interface WorkspaceState {
   ensembleWorkflow: EnsembleWorkflowSession | null;
   stagedEnsembleLayers: EnsembleLayerAbcBundle | null;
   appliedEnsembleLayers: EnsembleLayerAbcBundle | null;
+  accompanimentLayerVisibility: Record<string, boolean>;
+  accompanimentLayerVolumes: Record<string, number>;
 }
 
 export const DEFAULT_WORKSPACE_STATE: WorkspaceState = {
@@ -66,6 +88,8 @@ export const DEFAULT_WORKSPACE_STATE: WorkspaceState = {
   ensembleWorkflow: null,
   stagedEnsembleLayers: null,
   appliedEnsembleLayers: null,
+  accompanimentLayerVisibility: DEFAULT_ACCOMPANIMENT_LAYER_VISIBILITY,
+  accompanimentLayerVolumes: DEFAULT_LAYER_VOLUMES,
 };
 
 export function useWorkspaceState(slug: string) {

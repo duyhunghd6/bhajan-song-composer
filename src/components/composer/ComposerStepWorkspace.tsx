@@ -1,7 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useWorkspaceState } from "./useWorkspaceState";
+import { useCallback, useEffect, useMemo, useState, type SetStateAction } from "react";
+import {
+  DEFAULT_ACCOMPANIMENT_LAYER_VISIBILITY,
+  DEFAULT_HARMONY_LAYER_VISIBILITY,
+  DEFAULT_LAYER_VOLUMES,
+  useWorkspaceState,
+} from "./useWorkspaceState";
 import AbcjsPlaybackController from "@/components/music-sheet/AbcjsPlaybackController";
 import PianoPedalIndicator from "@/components/instruments/PianoPedalIndicator";
 import AbcEditor, { DEFAULT_ABC } from "./AbcEditor";
@@ -19,26 +24,6 @@ import {
 } from "./workspace/preview";
 import { clearComposerSongStorage, getComposerMelodyStorageKey } from "./workspace/storage";
 
-const DEFAULT_HARMONY_LAYER_VISIBILITY: Record<string, boolean> = {
-  ChordProgression: true,
-  Lyrics: true,
-  Melody: true,
-  TAB: false,
-};
-
-const DEFAULT_ACCOMPANIMENT_LAYER_VISIBILITY: Record<string, boolean> = {
-  ChordProgression: true,
-  Lyrics: true,
-  StrongBeats: true,
-  Melody: true,
-  TAB: false,
-};
-
-const DEFAULT_LAYER_VOLUMES: Record<string, number> = {
-  ChordProgression: 100,
-  Melody: 100,
-};
-
 interface ComposerStepWorkspaceProps {
   slug: string;
   step: ComposerStepId;
@@ -53,9 +38,23 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
   const { state: ws, updateState, resetState: resetWorkspaceState } = useWorkspaceState(slug);
   const [layerVisibility, setLayerVisibility] = useState<Record<string, boolean>>(DEFAULT_HARMONY_LAYER_VISIBILITY);
   const [layerVolumes, setLayerVolumes] = useState<Record<string, number>>(DEFAULT_LAYER_VOLUMES);
-  const [accompLayerVisibility, setAccompLayerVisibility] = useState<Record<string, boolean>>(DEFAULT_ACCOMPANIMENT_LAYER_VISIBILITY);
-  const [accompLayerVolumes, setAccompLayerVolumes] = useState<Record<string, number>>(DEFAULT_LAYER_VOLUMES);
   const [copyStatus, setCopyStatus] = useState("Copy Markdown");
+  const accompLayerVisibility = ws.accompanimentLayerVisibility ?? DEFAULT_ACCOMPANIMENT_LAYER_VISIBILITY;
+  const accompLayerVolumes = ws.accompanimentLayerVolumes ?? DEFAULT_LAYER_VOLUMES;
+  const setAccompLayerVisibility = useCallback((nextVisibility: SetStateAction<Record<string, boolean>>) => {
+    updateState({
+      accompanimentLayerVisibility: typeof nextVisibility === "function"
+        ? nextVisibility(accompLayerVisibility)
+        : nextVisibility,
+    });
+  }, [accompLayerVisibility, updateState]);
+  const setAccompLayerVolumes = useCallback((nextVolumes: SetStateAction<Record<string, number>>) => {
+    updateState({
+      accompanimentLayerVolumes: typeof nextVolumes === "function"
+        ? nextVolumes(accompLayerVolumes)
+        : nextVolumes,
+    });
+  }, [accompLayerVolumes, updateState]);
 
   // Hydrate melodyAbc from localStorage after mount (client-only)
   useEffect(() => {
@@ -110,8 +109,6 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
     }
     setLayerVisibility(DEFAULT_HARMONY_LAYER_VISIBILITY);
     setLayerVolumes(DEFAULT_LAYER_VOLUMES);
-    setAccompLayerVisibility(DEFAULT_ACCOMPANIMENT_LAYER_VISIBILITY);
-    setAccompLayerVolumes(DEFAULT_LAYER_VOLUMES);
   }, [initialMelodyAbc, resetWorkspaceState, slug]);
 
   const hasGuitarBranchWork = hasAccompanimentGuitarBranchWork(ws);

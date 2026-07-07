@@ -24,7 +24,7 @@ export function LayerVisibilityControls({
   accentClassName = "text-amber-500 focus:ring-amber-500",
 }: LayerVisibilityControlsProps) {
   return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+    <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(6, minmax(0, 1fr))" }}>
       {items.map((item) => {
         const checked = isAbcLayerVisible(item.id, visibility, item.defaultVisible);
         const volumePercent = getAbcLayerVolumePercent(item.id, volumes);
@@ -33,7 +33,7 @@ export function LayerVisibilityControls({
         return (
           <div
             key={item.id}
-            className={`rounded-xl border bg-white/70 p-3 dark:bg-zinc-950/50 ${item.enabled ? "border-zinc-200 dark:border-zinc-800" : "border-zinc-200 opacity-60 dark:border-zinc-800"}`}
+            className={`min-w-0 rounded-xl border bg-white/70 p-2 dark:bg-zinc-950/50 ${item.enabled ? "border-zinc-200 dark:border-zinc-800" : "border-zinc-200 opacity-60 dark:border-zinc-800"}`}
           >
             <label
               className={`flex items-center gap-2 text-xs font-semibold font-sans ${item.enabled ? "cursor-pointer text-zinc-800 dark:text-zinc-200" : "cursor-not-allowed text-zinc-400 dark:text-zinc-600"}`}
@@ -52,8 +52,8 @@ export function LayerVisibilityControls({
             </label>
 
             {item.supportsVolume && (
-              <label className="mt-2 flex items-center gap-2 text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
-                <span className="w-10 tabular-nums">{volumePercent}%</span>
+              <label className="mt-2 block text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
+                <span className="block tabular-nums">{volumePercent}%</span>
                 <input
                   type="range"
                   min={ABC_LAYER_VOLUME.min}
@@ -61,7 +61,7 @@ export function LayerVisibilityControls({
                   step={ABC_LAYER_VOLUME.step}
                   value={volumePercent}
                   disabled={!canAdjustVolume}
-                  className="h-1.5 flex-1 accent-amber-500 disabled:opacity-40"
+                  className="mt-1 h-1.5 w-full min-w-0 accent-amber-500 disabled:opacity-40"
                   aria-label={`${item.label} volume`}
                   onChange={(event) => {
                     const nextVolume = Number.parseInt(event.target.value, 10);
