@@ -106,7 +106,7 @@ w: Ha-ri Bol _`;
         step: 13,
         beat: 4.00,
         melody: { pitch: "A4", state: "attack" },
-        lyric: null, // melisma _
+        lyric: "_", // melisma _ is preserved
       });
     });
 
@@ -128,35 +128,35 @@ w: ⬤ * ● *`;
       expect(grid[0]).toMatchObject({
         step: 1,
         beat: 1.0,
-        beatWeight: "strong",
+        weight: "⬤",
       });
 
       // Beat 1.25 (step 2) sustain -> falls back to metric default (null for offbeats)
       expect(grid[1]).toMatchObject({
         step: 2,
         beat: 1.25,
-        beatWeight: null,
+        weight: null,
       });
 
       // Beat 2.0 (step 5) note attack E has * in weight line -> soft
       expect(grid[4]).toMatchObject({
         step: 5,
         beat: 2.0,
-        beatWeight: "soft",
+        weight: "*",
       });
 
       // Beat 3.0 (step 9) note attack G has ● in weight line -> medium
       expect(grid[8]).toMatchObject({
         step: 9,
         beat: 3.0,
-        beatWeight: "medium",
+        weight: "●",
       });
 
       // Beat 4.0 (step 13) has fallback metric default since note attack has * in weight line -> soft
       expect(grid[12]).toMatchObject({
         step: 13,
         beat: 4.00,
-        beatWeight: "soft",
+        weight: "*",
       });
     });
   });

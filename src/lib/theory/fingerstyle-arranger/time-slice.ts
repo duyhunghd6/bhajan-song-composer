@@ -23,7 +23,7 @@ export interface TimeSliceStep {
     state: "attack" | "sustain" | "rest";
   };
   lyric: string | null;
-  beatWeight: "strong" | "medium" | "soft" | null;
+  weight: "⬤" | "●" | "*" | null;
 }
 
 const STRONG_BEAT_LYRIC_CONTENT_PATTERN = /^[\s|*⬤●•·]+$/;
@@ -40,15 +40,15 @@ export function isStrongBeatLyricLine(line: string): boolean {
   return content.length > 0 && STRONG_BEAT_LYRIC_CONTENT_PATTERN.test(content);
 }
 
-export function getMetricWeight(beat: number, timeSignature: string): "strong" | "medium" | "soft" | null {
+export function getMetricWeight(beat: number, timeSignature: string): "⬤" | "●" | "*" | null {
   const normTime = timeSignature.trim();
   if (normTime === "4/4" || normTime === "C") {
-    if (beat === 1.0) return "strong";
-    if (beat === 3.0) return "medium";
-    if (beat === 2.0 || beat === 4.0) return "soft";
+    if (beat === 1.0) return "⬤";
+    if (beat === 3.0) return "●";
+    if (beat === 2.0 || beat === 4.0) return "*";
   } else if (normTime === "3/4") {
-    if (beat === 1.0) return "strong";
-    if (beat === 2.0 || beat === 3.0) return "soft";
+    if (beat === 1.0) return "⬤";
+    if (beat === 2.0 || beat === 3.0) return "*";
   }
   return null;
 }
@@ -365,7 +365,6 @@ export function convertAbcToTimeSliceGrid(abcString: string, chords: string[]): 
     const measureGrid = Array.from({ length: stepsPerMeasure }, (_, i) => {
       const stepNum = i + 1;
       const beat = 1.00 + i * 0.25;
-      const timeSig = meter.numerator + "/" + meter.denominator;
       return {
         step: stepNum,
         beat: parseFloat(beat.toFixed(2)),
@@ -375,7 +374,7 @@ export function convertAbcToTimeSliceGrid(abcString: string, chords: string[]): 
           state: "rest" as "attack" | "sustain" | "rest",
         },
         lyric: null as string | null,
-        beatWeight: getMetricWeight(beat, timeSig),
+        weight: null as "⬤" | "●" | "*" | null,
       };
     });
 
@@ -400,9 +399,7 @@ export function convertAbcToTimeSliceGrid(abcString: string, chords: string[]): 
         const syllable = syllables[syllableCursor];
         if (syllable !== undefined) {
           syllableCursor++;
-          if (syllable !== "_" && syllable !== "*") {
-            measureGrid[startIndex].lyric = syllable;
-          }
+          measureGrid[startIndex].lyric = syllable;
         }
 
         // Beat weight mapping
@@ -410,12 +407,15 @@ export function convertAbcToTimeSliceGrid(abcString: string, chords: string[]): 
         if (weightToken !== undefined) {
           weightCursor++;
           if (weightToken === "⬤") {
-            measureGrid[startIndex].beatWeight = "strong";
+            measureGrid[startIndex].weight = "⬤";
           } else if (weightToken === "●") {
-            measureGrid[startIndex].beatWeight = "medium";
+            measureGrid[startIndex].weight = "●";
           } else if (weightToken === "•" || weightToken === "*") {
-            measureGrid[startIndex].beatWeight = "soft";
+            measureGrid[startIndex].weight = "*";
           }
+        } else {
+          const timeSig = meter.numerator + "/" + meter.denominator;
+          measureGrid[startIndex].weight = getMetricWeight(measureGrid[startIndex].beat, timeSig);
         }
 
         // Sustain steps
