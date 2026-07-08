@@ -83,30 +83,43 @@ To ensure physical playability and voice-leading safety, the LLM is equipped wit
 
 ---
 
-## 5. Theory Rules for Arrangement (LLM Prompt Injection)
+## 5. The LLM System Prompt & Internal Workflow
 
-The arrangement engine enforces three core rules of counterpoint and classical voicing:
+We inject our "Workflow Decisions" into the System Prompt to guide the LLM's logical tool-calling loop:
 
-### I. The Sustain Rule
-If a step in the grid has `"melody": {"state": "sustain"}`, the vocal melody is ringing out on a treble string (strings 1, 2, or 3). The LLM is **strictly forbidden** from placing any accompaniment or filler note on that exact same string during those steps.
-
-### II. Bass Anchoring & Harmonic Rhythm
-* **On `⬤` (Strong Downbeats):** Place the root Bass note (Thumb/P) on strings 4–6 to establish the tonic.
-* **On `●` (Medium Accents):** Place a secondary bass note (root or fifth) to stabilize the cadence.
-* **On `*` (Soft Syncopations):** Maintain syncopation by leaving bass empty or playing sparse treble fills.
-
-### III. Devotional PIMA Texturing
-* Fills should be arpeggiated and sparse to yield to the vocal melody.
-* Parallel fifths and octaves must be avoided to ensure clean counterpoint.
+**System Prompt:**
+> "You are an expert devotional fingerstyle guitar arranger. You will receive a 16-step JSON grid. Follow this exact tool-calling workflow:
+>
+> 1. **Anchor the Bass:** Scan the grid for the weight markers.
+>    * On `⬤` (Beat 1), you MUST place the lowest root Bass note (Thumb/P).
+>    * On `●` (Beat 3), you MUST place a secondary root/5th Bass note.
+>    * On `*` (Soft beats), DO NOT play heavy bass notes.
+> 2. **Lock the Grip:** Call `query_guitar_voicings()` on steps 1 and 9 to retrieve the valid open-position shapes.
+> 3. **Protect the Melody:** Map the exact melody pitches to the exact attack steps on the highest available strings.
+> 4. **PIMA Fills:** Look at the `null` steps (the empty 16th-note spaces). You may add light, arpeggiated inner chord tones (Index/Middle). **Rule Check:** Because this is a devotional bhajan, keep fills sparse. Avoid dense attacks during vocal phrases.
+> 5. **Validate & Submit:** Call `validate_fingerstyle_physics()` before submitting your work."
 
 ---
 
-## 6. Mapped Execution & Tablature Output (Measure 1)
+## 6. Real-Time Execution (How the LLM handles Measure 1)
 
-Following the rules above, the arrangement engine generates a playable, dual-voice layout:
+Here is how the LLM executes the prompt against your JSON data:
+
+* **Step 1 (`⬤` / Ha-):** The LLM queries `"Em"` + `"E4"` + `"open"`. The backend gives it an open Em shape. The LLM drops the Bass on String 6 (Open E) and the Melody on String 1 (Open E4).
+* **Step 2 (`null`):** The LLM sees empty space. It knows the vocal is sustaining on String 1. It adds a gentle "i-m" filler note on String 3 (Open G) to keep the arpeggio flowing.
+* **Step 3 (`*` / ri):** The LLM sees a soft melody attack. It plays String 1 (E4) but drops no bass note.
+* **Step 5 (`*` / Bol):** The LLM plays String 1 (E4) again. No bass.
+* **Step 7 (`*` / _):** The LLM maps the melisma (the slur) to String 2 (Open B3).
+* **Step 9 (`●` / Ha-):** The LLM hits the second half of the loop. It queries `"D"` + `"E4"` + `"open"`. The backend hands it an Open Dadd9 shape. It drops the Thumb on String 4 (Open D) and the Melody on String 1 (Open E4).
+
+---
+
+## 7. The Final Visual Output
+
+Because the data was gridded perfectly based on your `⬤` and `●` map, the Human-in-the-Loop UI instantly renders the LLM's JSON submission into this perfect, hallucination-free tablature:
 
 ```text
-Measure 1 (Em to D):
+Measure 1:
       Ha-   ri    Bol   _       Ha-   ri    Bol   _ 
       ⬤                 *       ●                 *
 e |---0-----------0-------------0-----------0-----------|
@@ -117,9 +130,4 @@ A |-----------------------------------------------------|
 E |-0---------------------------------------------------|
 ```
 
-### Generated ABC Notation:
-```abc
-V:Guitar clef=treble-8 name="Guitar" stem=down
-| E, B,, E, B,, D, A,, D, A,, |
-```
-*The resulting arrangement yields a beautiful, clean, and physically playable counterpoint that carries both melody and bass with zero overlaps.*
+**Why this works flawlessly:** The LLM did not compose the rhythm, and it didn't invent the chord voicings. It simply acted as a logic router—connecting the requested "Open Em/D PIMA Profile" to the strict mathematical grid of the ABC notation.

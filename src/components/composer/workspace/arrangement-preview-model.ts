@@ -81,9 +81,9 @@ function generatePipelineSafely(abc: string, fallback: ArrangementPipelineResult
   }
 }
 
-function buildHarmonySynthOptions(layerVisibility: HarmonyLayerVisibility): HarmonyPreviewModel["synthOptions"] {
+export function buildArrangementSynthOptions(layerVisibility: Record<string, boolean>): { voicesOff?: boolean; chordsOff?: boolean } {
   const normalizedVisibility = normalizeAbcLayerVisibility(layerVisibility);
-  const synthOptions: HarmonyPreviewModel["synthOptions"] = {};
+  const synthOptions: { voicesOff?: boolean; chordsOff?: boolean } = {};
   if (!isAbcLayerVisible("Melody", normalizedVisibility, true)) synthOptions.voicesOff = true;
   if (!isAbcLayerVisible(ABC_LAYER_IDS.chordProgression, normalizedVisibility, true)) synthOptions.chordsOff = true;
   return synthOptions;
@@ -227,7 +227,7 @@ export function buildArrangementPreviewModel(input: BuildArrangementPreviewModel
       abc: applyAbcLayerVisibility(rawHarmonyAbc, harmonyVisibility),
       rawAbc: rawHarmonyAbc,
       layerVisibilityItems: harmonyLayerVisibilityItems,
-      synthOptions: buildHarmonySynthOptions(harmonyVisibility),
+      synthOptions: buildArrangementSynthOptions(harmonyVisibility),
       harmonyStepComplete: Boolean(
         activeWorkflow && isAccompanimentWorkflowStepComplete(activeWorkflow, "voice-leading-validation")
       ),

@@ -100,4 +100,6 @@ export interface AbcjsPlaybackControllerProps {
   /** Options forwarded to abcjs CreateSynth.init() to control voice/chord muting. */
   synthOptions?: AbcjsPlaybackSynthOptions;
   onPlaybackCursor?: (event: MusicSheetPlaybackCursorEvent | null) => void;
+  useContainerWidth?: boolean;
+  hideVoiceNames?: boolean;
 }

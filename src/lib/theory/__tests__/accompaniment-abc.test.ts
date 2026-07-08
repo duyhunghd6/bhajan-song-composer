@@ -84,7 +84,7 @@ describe("accompaniment ABC alignment", () => {
 
     expect(result.voiceNames).toEqual(["PianoLH"]);
     expect(result.visibleVoiceNames).toEqual(["PianoLH"]);
-    expect(result.abc).toContain('V:Melody name="Original Melody"');
+    expect(result.abc).toContain('V:Melody name="Melody"');
     expect(result.abc).toContain("w: Hap-py birth-day to you!");
 
     const pianoBody = getVoiceBody(result.abc, "PianoLH");
@@ -115,8 +115,8 @@ K:Em
 
     expect(result.voiceNames).toEqual(["Guitar"]);
     expect(result.visibleVoiceNames).toEqual(["Guitar"]);
-    expect(result.abc).toContain('V:Melody name="Original Melody"');
-    expect(result.abc).toContain('V:Guitar clef=treble-8 name="Layer 2 Guitar Accompaniment" stem=down\n%%MIDI program 24');
+    expect(result.abc).toContain('V:Melody name="Melody"');
+    expect(result.abc).toContain('V:Guitar clef=treble-8 name="Guitar" stem=down\n%%MIDI program 24');
 
     const melodyBars = splitAbcMeasureSegments(getVoiceMusicBody(result.abc, "Melody"));
     const guitarBars = splitAbcMeasureSegments(getVoiceMusicBody(result.abc, "Guitar"));
@@ -144,7 +144,7 @@ K:Em
 
     expect(result.voiceNames).toEqual(["Harmonium"]);
     expect(result.visibleVoiceNames).toEqual(["Harmonium"]);
-    expect(result.abc).toContain('V:Harmonium clef=treble name="Layer 2 Harmonium Accompaniment"\n%%MIDI program 20');
+    expect(result.abc).toContain('V:Harmonium clef=treble name="Indian Harmonium"\n%%MIDI program 20');
     expect(result.abc).not.toContain("Guitar Left Hand");
     expect(result.abc).not.toContain("%%MIDI program 24");
   });
@@ -193,7 +193,7 @@ K:Em
     });
 
     expect(result.voiceNames).toEqual(["GuitarLH"]);
-    expect(result.abc).toContain('V:GuitarLH clef=treble-8 name="Guitar LH Accompaniment"\n%%MIDI program 24');
+    expect(result.abc).toContain('V:GuitarLH clef=treble-8 name="Guitar"\n%%MIDI program 24');
     expect(result.abc).not.toContain("V:Harmonium");
   });
 
@@ -269,9 +269,9 @@ K:Em
       layerVisibility: {},
     });
 
-    expect(result.abc).toContain('V:Djembe clef=perc name="Layer 3 Djembe Interlock"\n%%MIDI channel 10');
-    expect(result.abc).toContain('V:Flute name="Layer 3 Flute Support"\n%%MIDI program 73');
-    expect(result.abc).toContain('V:Violin name="Layer 3 Violin Support"\n%%MIDI program 40');
+    expect(result.abc).toContain('V:Djembe clef=perc name="Djembe"\n%%MIDI channel 10');
+    expect(result.abc).toContain('V:Flute name="Flute"\n%%MIDI program 73');
+    expect(result.abc).toContain('V:Violin name="Violin"\n%%MIDI program 40');
     expect(result.voiceNames).toEqual(["Djembe", "Flute", "Violin"]);
     expect(result.visibleVoiceNames).toEqual(["Djembe", "Flute", "Violin"]);
     expect(getVoiceBody(result.abc, "Djembe")).toBeTruthy();

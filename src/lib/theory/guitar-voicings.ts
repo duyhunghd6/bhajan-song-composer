@@ -145,3 +145,86 @@ export function getGuitarVoicings(chordSymbol: string): GuitarVoicing[] {
 
   return voicings;
 }
+
+export type GuitarVoicingQueryMatch = {
+  bass: { string: number; fret: number };
+  melody?: { string: number; fret: number };
+  available_inner_strings: number[];
+  frets: (number | "X")[];
+  barre?: { fret: number; fromString: number; toString: number };
+};
+
+const GUITAR_TUNING_MIDI = [
+  40, // 6: E2 (0)
+  45, // 5: A2 (1)
+  50, // 4: D3 (2)
+  55, // 3: G3 (3)
+  59, // 2: B3 (4)
+  64  // 1: E4 (5)
+];
+
+export function query_guitar_voicings(
+  chordSymbol: string,
+  melodyPitch?: string,
+  targetPosition?: "open" | "barre" | "any"
+): GuitarVoicingQueryMatch[] {
+  const voicings = getGuitarVoicings(chordSymbol);
+  
+  const melodyMidi = melodyPitch ? Note.midi(melodyPitch) : undefined;
+  
+  const results: GuitarVoicingQueryMatch[] = [];
+  
+  for (const v of voicings) {
+    if (targetPosition === "open") {
+      const isOpen = v.frets.some(f => f === 0);
+      if (!isOpen) continue;
+    } else if (targetPosition === "barre") {
+      if (!v.barre) continue;
+    }
+    
+    // Find bass
+    let bass: { string: number; fret: number } | undefined;
+    for (let i = 0; i < 6; i++) {
+      if (v.frets[i] !== "X") {
+        bass = { string: 6 - i, fret: v.frets[i] as number };
+        break; // Lowest string is the first non-X
+      }
+    }
+    if (!bass) continue;
+    
+    // Find melody match
+    let melody: { string: number; fret: number } | undefined;
+    if (melodyMidi !== undefined && melodyMidi !== null) {
+      for (let i = 0; i < 6; i++) {
+        if (v.frets[i] !== "X") {
+          const stringMidi = GUITAR_TUNING_MIDI[i] + (v.frets[i] as number);
+          if (stringMidi === melodyMidi) {
+            melody = { string: 6 - i, fret: v.frets[i] as number };
+          }
+        }
+      }
+      if (!melody) continue; // If melody pitch requested but not found, filter out
+    }
+    
+    // Available inner strings
+    const innerStrings: number[] = [];
+    for (let i = 0; i < 6; i++) {
+      if (v.frets[i] !== "X") {
+        const stringNum = 6 - i;
+        if (stringNum !== bass.string && (!melody || stringNum !== melody.string)) {
+          innerStrings.push(stringNum);
+        }
+      }
+    }
+    
+    results.push({
+      bass,
+      melody,
+      available_inner_strings: innerStrings,
+      frets: v.frets,
+      barre: v.barre
+    });
+  }
+  
+  return results;
+}

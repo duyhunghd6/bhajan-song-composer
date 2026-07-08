@@ -69,7 +69,7 @@ export interface BuildAccompanimentAbcResult {
 }
 
 function getHeaderLines(abcString: string): string[] {
-  return abcString.split("\n").filter((line) => /^[A-Z]:/.test(line.trim()));
+  return abcString.split("\n").filter((line) => /^[A-Z]:/.test(line.trim()) && !/^V:/.test(line.trim()));
 }
 
 function isMelodyBodyLine(line: string): boolean {
@@ -163,13 +163,34 @@ function isGuitarLeftHandVoiceLine(voiceLine: string): boolean {
   return /^V:GuitarLeftHand\b/.test(voiceLine) || /\bname="Guitar Left Hand"/.test(voiceLine);
 }
 
+function getFriendlyVoiceName(voiceId: string): string {
+  const normalized = voiceId.toLowerCase();
+  if (normalized === "melody") return "Melody";
+  if (normalized.includes("guitar")) return "Guitar";
+  if (normalized.includes("piano") || normalized === "accompaniment") return "Piano";
+  if (normalized === "harmonium") return "Indian Harmonium";
+  if (normalized === "djembe") return "Djembe";
+  if (normalized === "flute") return "Flute";
+  if (normalized === "violin") return "Violin";
+  return voiceId;
+}
+
 function normalizeGeneratedVoiceLine(voiceLine: string): string {
   if (isGuitarLeftHandVoiceLine(voiceLine)) {
-    return 'V:Harmonium clef=treble name="Layer 2 Harmonium Accompaniment"';
+    return 'V:Harmonium clef=treble name="Indian Harmonium"';
   }
 
-  if (!voiceLine.startsWith("V:Guitar") || voiceLine.includes("name=")) return voiceLine;
-  return voiceLine.replace(/V:Guitar clef=treble-8/g, 'V:Guitar clef=treble-8 name="Layer 2 Guitar Accompaniment"');
+  if (!voiceLine.startsWith("V:Guitar") || voiceLine.includes("name=")) {
+    if (voiceLine.includes('name=')) {
+      const nameMatch = voiceLine.match(/V:(\S+)/);
+      if (nameMatch) {
+        const friendlyName = getFriendlyVoiceName(nameMatch[1]);
+        return voiceLine.replace(/name="[^"]*"/g, `name="${friendlyName}"`);
+      }
+    }
+    return voiceLine;
+  }
+  return voiceLine.replace(/V:Guitar clef=treble-8/g, 'V:Guitar clef=treble-8 name="Guitar"');
 }
 
 function normalizeMidiDirectives(voiceLine: string, directives: string[]): string[] {
@@ -567,11 +588,22 @@ export function buildAccompanimentAbc({
   // Melody line N, lyric/beat helper lines for that same melody line, then every visible
   // accompaniment/ensemble voice line N. This keeps abcjs rendering/playback aligned when
   // the source melody has multiple visual lines.
-  output.push('V:Melody name="Original Melody" stem=up');
+  output.push('V:Melody name="Melody" stem=up');
   const processedVisibleBlocks = visibleBlocks.map((block) => {
-    const voiceLine = block.name === "Guitar" && !block.voiceLine.includes("stem=")
-      ? `${block.voiceLine} stem=down`
-      : block.voiceLine;
+    const friendlyName = getFriendlyVoiceName(block.name);
+    let voiceLine = block.voiceLine;
+
+    // Ensure it uses the friendly display name
+    if (voiceLine.includes('name=')) {
+      voiceLine = voiceLine.replace(/name="[^"]*"/g, `name="${friendlyName}"`);
+    } else {
+      voiceLine = voiceLine.replace(/^(V:\S+)/, `$1 name="${friendlyName}"`);
+    }
+
+    if (block.name === "Guitar" && !voiceLine.includes("stem=")) {
+      voiceLine += " stem=down";
+    }
+
     return {
       ...block,
       voiceLine,

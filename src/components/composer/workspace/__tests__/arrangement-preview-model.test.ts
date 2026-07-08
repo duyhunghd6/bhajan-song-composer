@@ -230,7 +230,7 @@ V:Guitar clef=treble-8 name="Layer 2 Guitar Fingerstyle"
       },
     });
 
-    expect(model.accompaniment.rawAbc).toContain('V:Guitar clef=treble-8 name="Layer 2 Guitar Fingerstyle" stem=down');
+    expect(model.accompaniment.rawAbc).toContain('V:Guitar clef=treble-8 name="Guitar" stem=down');
     expect(model.accompaniment.rawAbc).toContain("% Staff system 1: Melody and visible instruments share this measure range.");
     expect(model.accompaniment.rawAbc).toContain("[V:Melody] | C2 D2 E2 F2 | G4 G4 |");
     expect(model.accompaniment.rawAbc).toContain("[V:Guitar] | [C,C]2 D2 [G,E]2 F2 | [G,G]4 [D,G]4 |");

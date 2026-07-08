@@ -191,7 +191,6 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
         setAccompLayerVisibility={setAccompLayerVisibility}
         accompLayerVolumes={accompLayerVolumes}
         setAccompLayerVolumes={setAccompLayerVolumes}
-        getRenderOptionsFor={getRenderOptionsFor}
         ws={ws}
         updateState={updateState}
         canResetGuitarBranchWork={hasGuitarBranchWork}

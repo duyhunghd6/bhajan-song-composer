@@ -304,7 +304,7 @@ export function applyAbcLayerVolumes(abcString: string, volumes: Record<string, 
 
   const withChordVolumes = insertAfterKeyLine(output, chordVolumeDirectives(volumes));
   if (melodyProgramApplied || !extractAbcVoiceIds(abcString, false).includes("Melody")) return withChordVolumes.join("\n");
-  return insertAfterKeyLine(withChordVolumes, ["V:Melody name=\"Original Melody\" stem=up", "%%MIDI program 52", voiceVolumeDirective("Melody", volumes)]).join("\n");
+  return insertAfterKeyLine(withChordVolumes, ["V:Melody name=\"Melody\" stem=up", "%%MIDI program 52", voiceVolumeDirective("Melody", volumes)]).join("\n");
 }
 
 export function applyAbcLayerVisibility(abcString: string, visibility: Record<string, boolean>): string {

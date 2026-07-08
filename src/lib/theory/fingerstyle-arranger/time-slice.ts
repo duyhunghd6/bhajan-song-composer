@@ -1,5 +1,7 @@
-import { buildAbcDurationContext, stripAbcChordSymbols, cleanAbcMeasureSegment } from "../abc-duration";
+import { buildAbcDurationContext, stripAbcChordSymbols, cleanAbcMeasureSegment, formatAbcDuration, AbcDurationContext } from "../abc-duration";
 import { parseNoteDuration } from "../melody-analyzer";
+import { scientificPitchForStringFret } from "../guitar-playability";
+import type { GuitarStringNumber } from "../fingerstyle-compressor";
 
 export interface TimeSliceMelodyEvent {
   kind: "note" | "rest";
@@ -35,6 +37,12 @@ export interface TimeSliceGridStep {
     state: "attack" | "sustain" | "rest";
   };
   lyric: string | null;
+  tablature?: {
+    string: GuitarStringNumber;
+    fret: number;
+    finger: "p" | "i" | "m" | "a" | null;
+    role: "bass" | "melody" | "fill" | "root" | "fifth";
+  }[];
 }
 
 export interface TimeSliceMeasure {
@@ -45,6 +53,12 @@ export interface TimeSliceMeasure {
     voicing_plan: string;
   };
   grid: TimeSliceGridStep[];
+  visualTablature?: string;
+  source_abc?: {
+    melody: string;
+    lyric: string;
+    beatWeight: string;
+  };
 }
 
 const STRONG_BEAT_LYRIC_CONTENT_PATTERN = /^[\s|*⬤●•·]+$/;
@@ -501,6 +515,8 @@ export function convertAbcToTimeSliceGrid(abcString: string, chords: string[]): 
         state: item.melody.state,
       },
       lyric: item.lyric,
+      // Initially, no tablature events are present
+      tablature: undefined,
     }));
 
     measuresList.push({
@@ -511,8 +527,102 @@ export function convertAbcToTimeSliceGrid(abcString: string, chords: string[]): 
         voicing_plan: `Open-position ${key} and D shapes. Thumbed E/B and D/A anchors.`,
       },
       grid: finalGrid,
+      source_abc: {
+        melody: measureStr,
+        lyric: lyricStr,
+        beatWeight: beatWeightStr,
+      }
     });
   }
 
   return measuresList;
 }
+
+function scientificPitchToAbc(scientificPitch: string): string {
+  const match = scientificPitch.match(/^([A-G][#b]?)(-?\d+)$/);
+  if (!match) return scientificPitch;
+  const [, note, octaveStr] = match;
+  const octave = parseInt(octaveStr, 10);
+  
+  // ABC Octaves:
+  // C, = octave 2
+  // C = octave 3
+  // c = octave 4
+  // c' = octave 5
+  // c'' = octave 6
+  let abcNote = note.replace("#", "^").replace("b", "_");
+  if (octave >= 4) {
+    abcNote = abcNote.toLowerCase();
+    const ticks = octave - 4;
+    abcNote += "'".repeat(ticks);
+  } else if (octave === 3) {
+    // Standard uppercase
+  } else {
+    const commas = 3 - octave;
+    abcNote += ",".repeat(commas);
+  }
+  return abcNote;
+}
+
+export function convertTimeSliceMeasureToAbc(measure: TimeSliceMeasure, durationContext: AbcDurationContext): string {
+  const { unitsPerBeat } = durationContext;
+  const stepsPerBeat = 4;
+  const stepDurationUnits = unitsPerBeat / stepsPerBeat;
+
+  const rendered: string[] = [];
+  
+  let currentRestSteps = 0;
+
+  for (let i = 0; i < measure.grid.length; i++) {
+    const step = measure.grid[i];
+    const isAttack = step.tablature && step.tablature.length > 0;
+
+    if (isAttack) {
+      // If we accumulated rests before this attack, output them
+      if (currentRestSteps > 0) {
+        rendered.push(`z${formatAbcDuration(currentRestSteps * stepDurationUnits)}`);
+        currentRestSteps = 0;
+      }
+
+      // Calculate how long this attack holds
+      let durationSteps = 1;
+      for (let j = i + 1; j < measure.grid.length; j++) {
+        if (measure.grid[j].tablature && measure.grid[j].tablature!.length > 0) {
+          break; // Next attack interrupts
+        }
+        durationSteps++;
+      }
+
+      const durationUnits = durationSteps * stepDurationUnits;
+      const suffix = formatAbcDuration(durationUnits);
+
+      // Convert tablature notes to ABC
+      const soundingAbc = step.tablature!
+        // Sort bass notes lower, melody higher
+        .sort((a, b) => b.string - a.string)
+        .map(tab => {
+          const pitch = scientificPitchForStringFret(tab.string, tab.fret);
+          return scientificPitchToAbc(pitch);
+        });
+
+      if (soundingAbc.length === 1) {
+        rendered.push(`${soundingAbc[0]}${suffix}`);
+      } else if (soundingAbc.length > 1) {
+        rendered.push(`[${soundingAbc.join("")}]${suffix}`);
+      }
+      
+      // Skip the sustained steps
+      i += (durationSteps - 1);
+    } else {
+      currentRestSteps++;
+    }
+  }
+
+  // If there are leftover rests at the end of the measure
+  if (currentRestSteps > 0) {
+    rendered.push(`z${formatAbcDuration(currentRestSteps * stepDurationUnits)}`);
+  }
+
+  return rendered.join(" ");
+}
+

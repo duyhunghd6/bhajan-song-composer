@@ -34,6 +34,8 @@ export default function AbcjsPlaybackController({
   renderOptions,
   synthOptions,
   onPlaybackCursor,
+  useContainerWidth = false,
+  hideVoiceNames = false,
 }: AbcjsPlaybackControllerProps) {
   const generatedId = useId().replace(/:/g, "");
   const resolvedCanvasId = canvasId ?? `music-sheet-canvas-${generatedId}`;
@@ -56,12 +58,60 @@ export default function AbcjsPlaybackController({
   const timingCallbacksRef = useRef<TimingCallbacksType | null>(null);
   const activeNoteElementsRef = useRef<HTMLElement[]>([]);
   const suppressNextEndedRef = useRef(false);
+
+  const [containerWidth, setContainerWidth] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!useContainerWidth || typeof window === "undefined" || !containerRef.current) return;
+
+    const updateWidth = () => {
+      const parent = containerRef.current?.parentElement;
+      if (parent) {
+        const width = parent.clientWidth;
+        if (width && width > 0) {
+          setContainerWidth(width);
+        }
+      }
+    };
+
+    updateWidth();
+
+    if (typeof ResizeObserver !== "undefined") {
+      const parent = containerRef.current?.parentElement;
+      if (parent) {
+        const observer = new ResizeObserver(() => {
+          updateWidth();
+        });
+        observer.observe(parent);
+        return () => observer.disconnect();
+      }
+    }
+
+    window.addEventListener("resize", updateWidth);
+    return () => window.removeEventListener("resize", updateWidth);
+  }, [useContainerWidth]);
+
   const finalAbcString = useMemo(() => {
     let result = abcString;
     if (overrideKey) result = result.replace(/^\s*K:\s*(.+)$/m, `K: ${overrideKey}`);
     if (overrideMeter) result = result.replace(/^\s*M:\s*(.+)$/m, `M: ${overrideMeter}`);
+    if (hideVoiceNames) {
+      result = result
+        .split("\n")
+        .map((line) => {
+          if (line.trim().startsWith("V:")) {
+            return line
+              .replace(/name="[^"]*"/g, "")
+              .replace(/name=[^\s]+/g, "")
+              .replace(/snm="[^"]*"/g, "")
+              .replace(/snm=[^\s]+/g, "");
+          }
+          return line;
+        })
+        .join("\n");
+    }
     return result;
-  }, [abcString, overrideKey, overrideMeter]);
+  }, [abcString, overrideKey, overrideMeter, hideVoiceNames]);
   // Sync tempo from the ABC Q: field when the source ABC string changes
   useEffect(() => {
     const parsedBpm = parseAbcTempo(abcString);
@@ -318,6 +368,7 @@ export default function AbcjsPlaybackController({
         stafftopmargin: 0,
         paddingbottom: 30,
         ...renderOptions,
+        ...(useContainerWidth && containerWidth ? { staffwidth: containerWidth } : {}),
         clickListener: handleNoteClick,
       };
       const visualObj = abcjsModule.renderAbc(canvas, finalAbcString, mergedRenderOptions);
@@ -396,7 +447,7 @@ export default function AbcjsPlaybackController({
       stopRenderedPlayback();
       timingCallbacksRef.current = null;
     };
-  }, [abcjsModule, finalAbcString, clearActiveNoteHighlight, handleNoteClick, highlightTimingEvent, loopEndMeasure, loopMode, loopStartMeasure, onPlaybackCursor, playFromTimingEvent, renderOptions, setPlaybackState, tempo]);
+  }, [abcjsModule, finalAbcString, clearActiveNoteHighlight, handleNoteClick, highlightTimingEvent, loopEndMeasure, loopMode, loopStartMeasure, onPlaybackCursor, playFromTimingEvent, renderOptions, setPlaybackState, tempo, useContainerWidth, containerWidth]);
   // Invalidate synth when synthOptions change so next play uses updated voicesOff/chordsOff
   const synthOptionsKey = JSON.stringify(synthOptions ?? {});
   useEffect(() => {
