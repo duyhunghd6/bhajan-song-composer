@@ -5,9 +5,12 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
 import GuitarFretboard from "@/components/instruments/GuitarFretboard";
+import VirtualGuitarFretboard from "@/components/instruments/VirtualGuitarFretboard";
 import PianoKeyboard, { type PianoHandMode, type PianoHighlightedNote } from "@/components/instruments/PianoKeyboard";
 import PianoPedalIndicator from "@/components/instruments/PianoPedalIndicator";
 import { buildSynchronizedInstrumentHighlights } from "@/components/playback/instrument-highlighting";
+import { Chord, Scale, Note } from "@tonaljs/tonal";
+import { getGuitarVoicings } from "@/lib/theory/guitar-voicings";
 import type { MusicSheetPlaybackCursorEvent } from "@/components/music-sheet/AbcjsPlaybackController";
 import {
   CHORD_SHAPE_POSITIONS,
@@ -37,6 +40,68 @@ export default function VisualInstrumentsMockupClient() {
     buildMockCursor(SAMPLE_MELODY_ABC, "E2", 0)
   );
   const [handMode, setHandMode] = useState<PianoHandMode>("combined");
+  
+  // Interactive Chord state
+  const [activeHoverChord, setActiveHoverChord] = useState<string | null>(null);
+  
+  const activeChordNotes = useMemo(() => {
+    if (!activeHoverChord) return [];
+    return Chord.get(activeHoverChord).notes;
+  }, [activeHoverChord]);
+
+  const activeVoicings = useMemo(() => {
+    if (!activeHoverChord) return undefined;
+    return getGuitarVoicings(activeHoverChord);
+  }, [activeHoverChord]);
+
+  const ROOT_NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+  const MODIFIERS = ["dim", "5", "7", "maj7", "9", "11", "aug", "sus4"];
+
+  const [selectedKey, setSelectedKey] = useState<string>("C");
+
+  const diatonicScale = useMemo(() => {
+    const scaleNotes = Scale.get(`${selectedKey} major`).notes;
+    // Diatonic qualities for major scale: I, ii, iii, IV, V, vi, vii°
+    const qualities = ["M", "m", "m", "M", "M", "m", "dim"] as const;
+    
+    return scaleNotes.map((note, i) => ({
+      root: note,
+      quality: qualities[i % 7]
+    }));
+  }, [selectedKey]);
+
+  const getDiatonicChordSymbol = (root: string, quality: "M" | "m" | "dim", mod: string) => {
+    if (mod === "") {
+      if (quality === "M") return root;
+      if (quality === "m") return `${root}m`;
+      if (quality === "dim") return `${root}dim`;
+    }
+    
+    // Power chords and sus4 are neutral
+    if (mod === "5" || mod === "sus4") return `${root}${mod}`;
+    
+    if (quality === "dim") {
+      if (mod === "7") return `${root}dim7`;
+      if (mod === "maj7") return `${root}m7b5`; // Half-diminished
+      return `${root}dim`; // fallback
+    }
+    
+    if (quality === "M") {
+      if (mod === "dim") return `${root}dim`;
+      if (mod === "aug") return `${root}aug`;
+      if (mod === "maj7") return `${root}maj7`;
+      return `${root}${mod}`; 
+    }
+    
+    if (quality === "m") {
+      if (mod === "dim") return `${root}dim7`;
+      if (mod === "aug" || mod === "maj7") return `${root}mM7`; 
+      return `${root}m${mod}`; 
+    }
+    
+    return root;
+  };
+
   const handlePlaybackCursor = useCallback((event: MusicSheetPlaybackCursorEvent | null) => {
     setPlaybackCursor(event ?? buildMockCursor(SAMPLE_MELODY_ABC, "E2", 0));
   }, []);
@@ -281,6 +346,106 @@ export default function VisualInstrumentsMockupClient() {
                     </dl>
                   </article>
                 ))}
+              </div>
+            </section>
+          </div>
+        ) : null}
+
+        {activeVariant === "virtual-guitar-master" ? (
+          <div className="space-y-8">
+            <section className="grid gap-6 lg:grid-cols-[30rem_1fr] lg:items-start">
+              <aside className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6 shadow-xl h-[700px] flex flex-col">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h2 className="text-xl font-bold text-zinc-100 mb-1">Chord Builder Table</h2>
+                    <p className="text-xs text-zinc-400">Hover over any base chord or modifier to visualize its notes on the fretboard.</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs font-semibold text-zinc-400 whitespace-nowrap">Key:</label>
+                    <select 
+                      value={selectedKey}
+                      onChange={(e) => setSelectedKey(e.target.value)}
+                      className="bg-zinc-800 border border-zinc-700 text-zinc-200 text-xs rounded px-2 py-1 focus:ring-amber-500 focus:border-amber-500 outline-none w-28"
+                    >
+                      {ROOT_NOTES.map(key => (
+                        <option key={key} value={key}>{key} Major</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Table */}
+                <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
+                  <table className="w-full text-left border-collapse">
+                    <thead className="sticky top-0 bg-zinc-900/95 backdrop-blur z-10">
+                      <tr>
+                        <th className="py-2 text-zinc-500 font-semibold text-sm border-b border-zinc-800 w-24">Note</th>
+                        <th className="py-2 text-zinc-500 font-semibold text-sm border-b border-zinc-800">Chord List (Main | Modifiers)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {diatonicScale.map(({ root, quality }, idx) => {
+                        return (
+                          <tr key={`${root}-${idx}`} className="border-b border-zinc-800/50 hover:bg-zinc-800/30 transition">
+                            <td className="py-3 font-bold text-zinc-300 align-top">
+                              {root} <span className="text-xs text-zinc-500 ml-1 font-normal">({quality})</span>
+                            </td>
+                            
+                            <td className="py-2 align-middle">
+                              <div className="flex flex-nowrap items-center gap-1 overflow-x-auto custom-scrollbar pb-1">
+                                {["", ...MODIFIERS].map((mod, i) => {
+                                  const chord = getDiatonicChordSymbol(root, quality, mod);
+                                  const isBase = mod === "";
+                                  const isHovered = activeHoverChord === chord;
+                                  
+                                  return (
+                                    <div key={mod} className="flex items-center">
+                                      {i === 1 && <div className="w-px h-4 bg-zinc-700 mx-2" />}
+                                      <button
+                                        className={`text-center px-2 py-1 rounded transition whitespace-nowrap flex-shrink-0 ${
+                                          isBase ? "font-bold text-sm min-w-[3rem]" : "text-[10px]"
+                                        } ${
+                                          isHovered 
+                                            ? "bg-amber-500 text-zinc-950 shadow-sm" 
+                                            : isBase 
+                                              ? "bg-zinc-800 text-zinc-200 hover:bg-zinc-700" 
+                                              : "bg-zinc-800/50 text-zinc-400 border border-zinc-700/50 hover:bg-zinc-700 hover:text-white"
+                                        }`}
+                                        onMouseEnter={() => setActiveHoverChord(chord)}
+                                        onMouseLeave={() => setActiveHoverChord(null)}
+                                      >
+                                        {isBase ? chord : `+${mod}`}
+                                      </button>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </aside>
+
+              <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6 shadow-xl overflow-hidden">
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-xl font-bold text-zinc-100">
+                    {activeHoverChord ? `${activeHoverChord} Notes Highlighted` : "Virtual Guitar Fretboard Reference"}
+                  </h2>
+                  {activeHoverChord && (
+                    <span className="text-sm font-mono bg-zinc-800 px-3 py-1 rounded-lg text-amber-400">
+                      Hovering: {activeChordNotes.join(", ")}
+                    </span>
+                  )}
+                </div>
+                <VirtualGuitarFretboard 
+                  fretCount={16} 
+                  activeNotes={activeChordNotes.length > 0 ? activeChordNotes : undefined}
+                  activeVoicings={activeVoicings && activeVoicings.length > 0 ? activeVoicings : undefined}
+                  onNoteClick={(note, string, fret) => console.log(`Selected: ${note} on string ${string}, fret ${fret}`)}
+                />
               </div>
             </section>
           </div>
