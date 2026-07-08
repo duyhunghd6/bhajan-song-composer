@@ -26,6 +26,27 @@ export interface TimeSliceStep {
   weight: "⬤" | "●" | "*" | null;
 }
 
+export interface TimeSliceGridStep {
+  step: number;
+  chord: string;
+  weight: "⬤" | "●" | "*" | null;
+  melody: {
+    pitch: string | null;
+    state: "attack" | "sustain" | "rest";
+  };
+  lyric: string | null;
+}
+
+export interface TimeSliceMeasure {
+  measure: number;
+  style_profile: {
+    key: string;
+    comping_style: string;
+    voicing_plan: string;
+  };
+  grid: TimeSliceGridStep[];
+}
+
 const STRONG_BEAT_LYRIC_CONTENT_PATTERN = /^[\s|*⬤●•·]+$/;
 
 export function isStrongBeatLyricLine(line: string): boolean {
@@ -219,7 +240,29 @@ export function extractMelodyMeasureTimelineWithTies(abcMeasureStr: string): Tim
   });
 }
 
-export function convertAbcToTimeSliceGrid(abcString: string, chords: string[]): TimeSliceStep[] {
+export function extractChordsFromMeasure(abcMeasure: string, defaultChord: string): { chord: string; onsetUnits: number }[] {
+  const cleanMeasure = cleanAbcMeasureSegment(abcMeasure);
+  const chords: { chord: string; onsetUnits: number }[] = [];
+  let currentOnset = 0;
+
+  const regex = /"([^"]+)"|(\[[^\]]+\]|[_^=]?[A-Ga-g][,']*|[zx])([0-9]*(?:\/[0-9]*)?|\/[0-9]*)/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(cleanMeasure)) !== null) {
+    if (match[1]) {
+      const chordName = match[1];
+      chords.push({ chord: chordName, onsetUnits: currentOnset });
+    } else {
+      const durationSuffix = match[3] ?? "";
+      const parsed = parseNoteDuration(durationSuffix);
+      currentOnset += parsed;
+    }
+  }
+
+  return chords;
+}
+
+export function convertAbcToTimeSliceGrid(abcString: string, chords: string[]): TimeSliceMeasure[] {
   const durationContext = buildAbcDurationContext(abcString);
   const { unitsPerBeat, meter } = durationContext;
   const stepsPerBeat = 4;
@@ -345,13 +388,28 @@ export function convertAbcToTimeSliceGrid(abcString: string, chords: string[]): 
   }
 
   const totalMeasures = finalMelodyMeasures.length;
-  const flatGrid: TimeSliceStep[] = [];
+  const measuresList: TimeSliceMeasure[] = [];
+
+  const keyLine = abcString.split(/\r?\n/).find(line => line.trim().startsWith("K:"));
+  const key = keyLine ? keyLine.substring(2).trim().split(/\s/)[0] : "Em";
 
   for (let measureIndex = 0; measureIndex < totalMeasures; measureIndex++) {
     const measureStr = finalMelodyMeasures[measureIndex];
     const lyricStr = finalLyricMeasures[measureIndex];
     const beatWeightStr = finalBeatWeightMeasures[measureIndex];
-    const chordName = chords[measureIndex] || chords[chords.length - 1] || "C";
+    const defaultChord = chords[measureIndex] || chords[chords.length - 1] || "C";
+    const measureChords = extractChordsFromMeasure(measureStr, defaultChord);
+
+    const getChordAtStep = (stepIdx: number): string => {
+      const stepOnset = stepIdx * (unitsPerBeat / stepsPerBeat);
+      let activeChord = defaultChord;
+      for (const mc of measureChords) {
+        if (mc.onsetUnits <= stepOnset) {
+          activeChord = mc.chord;
+        }
+      }
+      return activeChord;
+    };
 
     // Syllables
     const syllables = getLyricSyllablesForMeasure(lyricStr);
@@ -368,7 +426,7 @@ export function convertAbcToTimeSliceGrid(abcString: string, chords: string[]): 
       return {
         step: stepNum,
         beat: parseFloat(beat.toFixed(2)),
-        chord: chordName,
+        chord: getChordAtStep(i),
         melody: {
           pitch: null as string | null,
           state: "rest" as "attack" | "sustain" | "rest",
@@ -434,8 +492,27 @@ export function convertAbcToTimeSliceGrid(abcString: string, chords: string[]): 
       }
     }
 
-    flatGrid.push(...measureGrid);
+    const finalGrid: TimeSliceGridStep[] = measureGrid.map(item => ({
+      step: item.step,
+      chord: item.chord,
+      weight: item.weight,
+      melody: {
+        pitch: item.melody.pitch,
+        state: item.melody.state,
+      },
+      lyric: item.lyric,
+    }));
+
+    measuresList.push({
+      measure: measureIndex + 1,
+      style_profile: {
+        key: key,
+        comping_style: "PIMA devotional fingerstyle. Sparse fills.",
+        voicing_plan: `Open-position ${key} and D shapes. Thumbed E/B and D/A anchors.`,
+      },
+      grid: finalGrid,
+    });
   }
 
-  return flatGrid;
+  return measuresList;
 }

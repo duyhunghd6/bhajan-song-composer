@@ -6,6 +6,7 @@ import {
   convertAbcToTimeSliceGrid,
   midiToScientificPitch,
   abcNoteToMidi,
+  extractChordsFromMeasure,
 } from "../fingerstyle-arranger/time-slice";
 
 describe("Time-Slice conversion", () => {
@@ -65,46 +66,49 @@ K:Em
 [V:Melody] | E2 E2 G2 A2 |
 w: Ha-ri Bol _`;
 
-      const grid = convertAbcToTimeSliceGrid(abc, ["Em"]);
+      const measures = convertAbcToTimeSliceGrid(abc, ["Em"]);
 
-      // In 4/4 time with L:1/8, unitsPerBeat = 2, stepsPerBeat = 4, 16 steps total
-      expect(grid).toHaveLength(16);
+      expect(measures).toHaveLength(1);
+      expect(measures[0].measure).toBe(1);
+      expect(measures[0].style_profile).toEqual({
+        key: "Em",
+        comping_style: "PIMA devotional fingerstyle. Sparse fills.",
+        voicing_plan: "Open-position Em and D shapes. Thumbed E/B and D/A anchors.",
+      });
+
+      const steps = measures[0].grid;
+      expect(steps).toHaveLength(16);
 
       // Verify Beat 1 (step 1-4, E2)
-      expect(grid[0]).toMatchObject({
+      expect(steps[0]).toMatchObject({
         step: 1,
-        beat: 1.00,
         chord: "Em",
         melody: { pitch: "E4", state: "attack" },
         lyric: "Ha-",
       });
-      expect(grid[1]).toMatchObject({
+      expect(steps[1]).toMatchObject({
         step: 2,
-        beat: 1.25,
         melody: { pitch: "E4", state: "sustain" },
         lyric: null,
       });
 
       // Verify Beat 2 (step 5-8, E2)
-      expect(grid[4]).toMatchObject({
+      expect(steps[4]).toMatchObject({
         step: 5,
-        beat: 2.00,
         melody: { pitch: "E4", state: "attack" },
         lyric: "ri",
       });
 
       // Verify Beat 3 (step 9-12, G2)
-      expect(grid[8]).toMatchObject({
+      expect(steps[8]).toMatchObject({
         step: 9,
-        beat: 3.00,
         melody: { pitch: "G4", state: "attack" },
         lyric: "Bol",
       });
 
       // Verify Beat 4 (step 13-16, A2)
-      expect(grid[12]).toMatchObject({
+      expect(steps[12]).toMatchObject({
         step: 13,
-        beat: 4.00,
         melody: { pitch: "A4", state: "attack" },
         lyric: "_", // melisma _ is preserved
       });
@@ -120,44 +124,51 @@ K:Em
 w: Ha-ri Bol _
 w: ⬤ * ● *`;
 
-      const grid = convertAbcToTimeSliceGrid(abc, ["Em"]);
+      const measures = convertAbcToTimeSliceGrid(abc, ["Em"]);
 
-      expect(grid).toHaveLength(16);
+      expect(measures).toHaveLength(1);
+      const steps = measures[0].grid;
+      expect(steps).toHaveLength(16);
 
       // Beat 1.0 (step 1) note attack E has ⬤ in weight line -> strong
-      expect(grid[0]).toMatchObject({
+      expect(steps[0]).toMatchObject({
         step: 1,
-        beat: 1.0,
         weight: "⬤",
       });
 
       // Beat 1.25 (step 2) sustain -> falls back to metric default (null for offbeats)
-      expect(grid[1]).toMatchObject({
+      expect(steps[1]).toMatchObject({
         step: 2,
-        beat: 1.25,
         weight: null,
       });
 
       // Beat 2.0 (step 5) note attack E has * in weight line -> soft
-      expect(grid[4]).toMatchObject({
+      expect(steps[4]).toMatchObject({
         step: 5,
-        beat: 2.0,
         weight: "*",
       });
 
       // Beat 3.0 (step 9) note attack G has ● in weight line -> medium
-      expect(grid[8]).toMatchObject({
+      expect(steps[8]).toMatchObject({
         step: 9,
-        beat: 3.0,
         weight: "●",
       });
 
       // Beat 4.0 (step 13) has fallback metric default since note attack has * in weight line -> soft
-      expect(grid[12]).toMatchObject({
+      expect(steps[12]).toMatchObject({
         step: 13,
-        beat: 4.00,
         weight: "*",
       });
+    });
+  });
+
+  describe("extractChordsFromMeasure", () => {
+    it("extracts inline chords and their correct onset offsets", () => {
+      const chords = extractChordsFromMeasure('"Em"E E (EB,) "D"E E (EB,)', "Em");
+      expect(chords).toEqual([
+        { chord: "Em", onsetUnits: 0 },
+        { chord: "D", onsetUnits: 4 },
+      ]);
     });
   });
 });

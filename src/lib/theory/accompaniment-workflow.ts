@@ -901,9 +901,12 @@ export function buildAccompanimentWorkflowPrompt(input: {
       } else {
         chords = resolveProgression(effectiveSourceAbc).chords.map((c) => c.chordName);
       }
-      const grid = convertAbcToTimeSliceGrid(effectiveSourceAbc, chords);
-      const gridLines = grid.map(step => JSON.stringify(step));
-      timeSliceGridStr = `\n\n### Time-Slice Melodic Grid (Quantized 16-step grid per measure)\nUse this flat time-sliced grid to plan your fingerstyle arrangement. All durations, rests, and ties have been mapped to 16 steps per measure (4 steps per beat):\n\`\`\`json\n[\n  ${gridLines.join(",\n  ")}\n]\n\`\`\``;
+      const measures = convertAbcToTimeSliceGrid(effectiveSourceAbc, chords);
+      const measureStrings = measures.map(m => {
+        const gridLines = m.grid.map(s => "      " + JSON.stringify(s));
+        return `  {\n    "measure": ${m.measure},\n    "style_profile": ${JSON.stringify(m.style_profile)},\n    "grid": [\n${gridLines.join(",\n")}\n    ]\n  }`;
+      });
+      timeSliceGridStr = `\n\n### Time-Slice Melodic Grid (Quantized 16-step grid per measure)\nUse this time-sliced grid to plan your fingerstyle arrangement. All durations, rests, and ties have been mapped to 16 steps per measure (4 steps per beat):\n\`\`\`json\n[\n${measureStrings.join(",\n")}\n]\n\`\`\``;
     } catch (e) {
       console.error("Failed to generate Time-Slice grid for prompt:", e);
     }
