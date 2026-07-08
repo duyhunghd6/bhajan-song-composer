@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { generateAccompanimentWorkflowStep, generateConsolidatedChordIngestionWorkflowSteps } from "@/app/actions/accompaniment-workflow";
 import {
   ACCOMPANIMENT_WORKFLOW_BRANCH_STEP_IDS,
+  applyAccompanimentWorkflowSetupToSession,
   buildAccompanimentWorkflowPrompt,
   clearAccompanimentWorkflowStepResults,
   createAccompanimentWorkflowSession,
@@ -47,14 +48,14 @@ import WorkflowSetupPanel from "./accompaniment-workflow/WorkflowSetupPanel";
 type BranchScope = Exclude<AccompanimentWorkflowScope, "shared">;
 
 interface AccompanimentWorkflowWizardProps {
-  mode?: "harmony" | "accompaniment";
+  mode?: "harmony" | "accompaniment" | "guitar";
   sourceAbc: string;
   metadata: AccompanimentWorkflowMetadata;
   workflow: AccompanimentWorkflowSession | null;
   workflowSetup: AccompanimentWorkflowSetup | null;
   onWorkflowChange: (workflow: AccompanimentWorkflowSession | null) => void;
   onWorkflowSetupChange: (setup: AccompanimentWorkflowSetup) => void;
-  onGuitarProfileSelected?: (profile: string | null) => void;
+  onGuitarProfileSelected?: (profile: string | null, option?: AccompanimentWorkflowOption) => void;
   onPianoProfileSelected?: (profile: string | null) => void;
   onReset?: () => void;
 }
@@ -175,6 +176,8 @@ export default function AccompanimentWorkflowWizard({
   const filteredSteps = useMemo(() => {
     if (mode === "harmony") {
       return visibleSteps.filter((s) => s.scope === "shared");
+    } else if (mode === "guitar") {
+      return visibleSteps.filter((s) => s.scope === "guitar");
     } else {
       return visibleSteps.filter((s) => s.scope !== "shared");
     }
@@ -235,7 +238,17 @@ export default function AccompanimentWorkflowWizard({
   };
 
   const handleSetupChange = (setup: AccompanimentWorkflowSetup) => {
-    onWorkflowSetupChange(normalizeAccompanimentWorkflowSetup(setup));
+    const normalizedSetup = normalizeAccompanimentWorkflowSetup(setup);
+    onWorkflowSetupChange(normalizedSetup);
+
+    if (!session) return;
+
+    const next = applyAccompanimentWorkflowSetupToSession(session, normalizedSetup);
+    onWorkflowChange(next);
+    setActiveStepId(next.currentStepId);
+    if (!next.guitarProfileHint) onGuitarProfileSelected?.(null);
+    if (!next.pianoProfileHint) onPianoProfileSelected?.(null);
+    setError(null);
   };
 
   const savePromptNote = () => {
@@ -339,7 +352,7 @@ export default function AccompanimentWorkflowWizard({
     if (!session || !activeStep) return;
     const next = selectOption(session, activeStep.id, option, activeUserNote, runId);
     onWorkflowChange(next);
-    if (activeStep.id === "guitar-fingerstyle") onGuitarProfileSelected?.(extractProfile(option));
+    if (activeStep.id === "guitar-fingerstyle") onGuitarProfileSelected?.(extractProfile(option), option);
     if (activeStep.id === "piano-fills-pedal-validation") onPianoProfileSelected?.(extractProfile(option));
   };
 
@@ -355,12 +368,14 @@ export default function AccompanimentWorkflowWizard({
         )}
         <div>
           <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 font-sans">
-            {mode === "harmony" ? "Step-by-step AI Harmony Workflow" : "Step-by-step AI Accompaniment Workflow"}
+            {mode === "harmony" ? "Step-by-step AI Harmony Workflow" : mode === "guitar" ? "Step-by-step Guitar Fingerstyle Workflow" : "Step-by-step AI Accompaniment Workflow"}
           </h3>
           <p className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
             {mode === "harmony"
               ? `${filteredSteps.length} planned review points for the shared harmonic foundation. Configure your instruments above before starting.`
-              : `${filteredSteps.length} planned review points will be created from the selected style and instruments. Change the setup above to preview the exact workflow before starting.`}
+              : mode === "guitar"
+                ? `${filteredSteps.length} planned review points for the guitar fingerstyle arrangement.`
+                : `${filteredSteps.length} planned review points will be created from the selected style and instruments. Change the setup above to preview the exact workflow before starting.`}
           </p>
           {workflow && !sourceCurrent && (
             <p className="mt-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900/70 dark:bg-amber-950/40 dark:text-amber-300">
@@ -395,21 +410,22 @@ export default function AccompanimentWorkflowWizard({
             ? "Reset Workflow for Current ABC" 
             : mode === "harmony"
               ? `Start ${filteredSteps.length}-step Harmony Workflow`
-              : `Start ${filteredSteps.length}-step ${editableSetup.style === "solo-fingerstyle" ? "Solo/Fingerstyle" : "Accompaniment"} Workflow`}
+              : mode === "guitar"
+                ? `Start ${filteredSteps.length}-step Guitar Fingerstyle Workflow`
+                : `Start ${filteredSteps.length}-step ${editableSetup.style === "solo-fingerstyle" ? "Solo/Fingerstyle" : "Accompaniment"} Workflow`}
         </button>
       </div>
     );
   }
 
-  if (!activeStep) return null;
-
-  const activeUnlocked = isAccompanimentWorkflowStepUnlocked(session, activeStep.id);
+  const activeUnlocked = activeStep ? isAccompanimentWorkflowStepUnlocked(session, activeStep.id) : false;
+  const workflowComplete = filteredSteps.length > 0 && filteredSteps.every((step) => isAccompanimentWorkflowStepComplete(session, step.id));
   const branchScopes = enabledBranchScopes(session);
   const canSkipActiveBranch = activeUnlocked && activeStep.scope !== "shared";
   const persistedLlmLogs = logsFromRuns(activeStepState.runs);
-  const transientLlmLogs = liveLlmLogs.filter((log) =>
+  const transientLlmLogs = activeStep ? liveLlmLogs.filter((log) =>
     log.stepId === activeStep.id || (log.stepId === "consolidated-chord-ingestion" && isChordIngestionWorkflowStep(activeStep.id))
-  );
+  ) : [];
   const activeLlmLogs = Array.from(new Map([...persistedLlmLogs, ...transientLlmLogs].map((log) => [log.id, log])).values());
 
   return (
@@ -427,12 +443,18 @@ export default function AccompanimentWorkflowWizard({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 font-sans">
-            {mode === "harmony" ? "Step-by-step AI Harmony Workflow" : "Step-by-step AI Accompaniment Workflow"}
+            {mode === "harmony" ? "Step-by-step AI Harmony Workflow" : mode === "guitar" ? "Step-by-step Guitar Fingerstyle Workflow" : "Step-by-step AI Accompaniment Workflow"}
           </h3>
           <p className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
             {mode === "harmony"
               ? `${filteredSteps.length} shared harmonic foundation steps.`
-              : `${filteredSteps.length} review points: shared harmonic foundation first, then enabled instrument branches.`}
+              : mode === "guitar"
+                ? workflowComplete
+                  ? `Workflow complete: all ${filteredSteps.length} guitar review points selected and applied.`
+                  : `${filteredSteps.length} review points for the guitar arrangement.`
+                : workflowComplete
+                  ? `Workflow complete: all ${filteredSteps.length} enabled accompaniment review point${filteredSteps.length === 1 ? "" : "s"} selected and applied to the result preview.`
+                  : `${filteredSteps.length} review points: shared harmonic foundation first, then enabled instrument branches.`}
           </p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
@@ -469,87 +491,99 @@ export default function AccompanimentWorkflowWizard({
         onStepClick={setActiveStepId}
       />
 
-      <section className="space-y-3 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/50">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h4 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">{activeStep.index}. {activeStep.label}</h4>
-            <p className="mt-1 text-xs leading-5 text-zinc-600 dark:text-zinc-400">{activeStep.description}</p>
+      {workflowComplete && mode === "accompaniment" && (
+        <p className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-300">
+          Accompaniment workflow complete. All enabled instrument steps are selected; disabled instruments were skipped by setup and are not required for the result ABC.
+        </p>
+      )}
+
+      {activeStep ? (
+        <section className="space-y-3 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/50">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h4 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">{activeStep.index}. {activeStep.label}</h4>
+              <p className="mt-1 text-xs leading-5 text-zinc-600 dark:text-zinc-400">{activeStep.description}</p>
+            </div>
+            <span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase ${SCOPE_CLASS[activeStep.scope]}`}>{activeStep.scope}</span>
           </div>
-          <span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase ${SCOPE_CLASS[activeStep.scope]}`}>{activeStep.scope}</span>
-        </div>
 
-        <details className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950/50">
-          <summary className="cursor-pointer text-xs font-bold text-zinc-700 dark:text-zinc-200">Default prompt preview</summary>
-          <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-zinc-500 dark:text-zinc-400">{getAccompanimentWorkflowPromptSummary(activeStep.id)}</p>
-          <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap rounded-lg bg-zinc-50 p-3 text-[11px] leading-5 text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">{promptPreview}</pre>
-        </details>
+          <details className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950/50">
+            <summary className="cursor-pointer text-xs font-bold text-zinc-700 dark:text-zinc-200">Default prompt preview</summary>
+            <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-zinc-500 dark:text-zinc-400">{getAccompanimentWorkflowPromptSummary(activeStep.id)}</p>
+            <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap rounded-lg bg-zinc-50 p-3 text-[11px] leading-5 text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">{promptPreview}</pre>
+          </details>
 
-        <div className="space-y-2">
-          <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-200">
-            User note to add to prompt
-            <textarea
-              value={activeUserNote}
-              onChange={(event) => setUserNotes((current) => ({ ...current, [activeStep.id]: event.target.value }))}
-              placeholder="Optional: add style, mood, instrument, raga, or playability instructions for this step."
-              className="mt-2 min-h-20 w-full rounded-xl border border-zinc-200 bg-white p-3 text-xs font-normal text-zinc-800 outline-none transition focus:border-amber-400 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100"
-            />
-          </label>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              disabled={!activeUnlocked}
-              onClick={savePromptNote}
-              className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-bold text-zinc-700 transition hover:border-amber-300 hover:text-amber-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:text-amber-300"
-            >
-              Save prompt note
-            </button>
-            {savedNoteStepId === activeStep.id && (
-              <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">Prompt note saved</span>
-            )}
-            {activeStepState.promptNote && savedNoteStepId !== activeStep.id && (
-              <span className="text-xs text-zinc-500 dark:text-zinc-400">Saved note will be sent with this step.</span>
-            )}
+          <div className="space-y-2">
+            <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-200">
+              User note to add to prompt
+              <textarea
+                value={activeUserNote}
+                onChange={(event) => setUserNotes((current) => ({ ...current, [activeStep.id]: event.target.value }))}
+                placeholder="Optional: add style, mood, instrument, raga, or playability instructions for this step."
+                className="mt-2 min-h-20 w-full rounded-xl border border-zinc-200 bg-white p-3 text-xs font-normal text-zinc-800 outline-none transition focus:border-amber-400 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100"
+              />
+            </label>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                disabled={!activeUnlocked}
+                onClick={savePromptNote}
+                className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-bold text-zinc-700 transition hover:border-amber-300 hover:text-amber-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:text-amber-300"
+              >
+                Save prompt note
+              </button>
+              {savedNoteStepId === activeStep.id && (
+                <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">Prompt note saved</span>
+              )}
+              {activeStepState.promptNote && savedNoteStepId !== activeStep.id && (
+                <span className="text-xs text-zinc-500 dark:text-zinc-400">Saved note will be sent with this step.</span>
+              )}
+            </div>
           </div>
-        </div>
 
-        {canConsolidateChordIngestion && (
-          <p className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs leading-5 text-emerald-800 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-300">
-            Detected {lyricChordAnnotations.length} lyric chord annotation{lyricChordAnnotations.length === 1 ? "" : "s"}. Generate once to fill Chord Roles, Progression, and Validate Harmony from the supplied lyric chord progression.
-          </p>
-        )}
-
-        {error && <p className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/40 dark:text-rose-300">{error}</p>}
-
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            disabled={!activeUnlocked || generatingStepId === activeStep.id}
-            onClick={generateStep}
-            className="rounded-xl border border-sky-400/30 bg-sky-500/10 px-3 py-2 text-xs font-bold text-sky-600 transition hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-50 dark:text-sky-400"
-          >
-            {generatingStepId === activeStep.id
-              ? "Generating..."
-              : canConsolidateChordIngestion
-                ? "Generate 3 Harmony Steps from Lyrics Chords"
-                : "Generate / Regenerate Options"}
-          </button>
-          {canSkipActiveBranch && (
-            <button
-              type="button"
-              disabled={generatingStepId === activeStep.id}
-              onClick={() => handleSkipBranch(activeStep.scope as BranchScope)}
-              className={`rounded-xl border px-3 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50 ${SCOPE_CLASS[activeStep.scope]}`}
-            >
-              Skip {BRANCH_LABELS[activeStep.scope as BranchScope]} Branch
-            </button>
+          {canConsolidateChordIngestion && (
+            <p className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs leading-5 text-emerald-800 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-300">
+              Detected {lyricChordAnnotations.length} lyric chord annotation{lyricChordAnnotations.length === 1 ? "" : "s"}. Generate once to fill Chord Roles, Progression, and Validate Harmony from the supplied lyric chord progression.
+            </p>
           )}
-          {!activeUnlocked && <span className="self-center text-xs text-zinc-500 dark:text-zinc-400">Select required previous steps before generating this one.</span>}
-        </div>
 
-        <RunOptionList workflow={session} stepId={activeStep.id} onSelect={handleSelectOption} />
+          {error && <p className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/40 dark:text-rose-300">{error}</p>}
 
-        <LlmCallLogPanel logs={activeLlmLogs} />
-      </section>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={!activeUnlocked || generatingStepId === activeStep.id}
+              onClick={generateStep}
+              className="rounded-xl border border-sky-400/30 bg-sky-500/10 px-3 py-2 text-xs font-bold text-sky-600 transition hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-50 dark:text-sky-400"
+            >
+              {generatingStepId === activeStep.id
+                ? "Generating..."
+                : canConsolidateChordIngestion
+                  ? "Generate 3 Harmony Steps from Lyrics Chords"
+                  : "Generate / Regenerate Options"}
+            </button>
+            {canSkipActiveBranch && (
+              <button
+                type="button"
+                disabled={generatingStepId === activeStep.id}
+                onClick={() => handleSkipBranch(activeStep.scope as BranchScope)}
+                className={`rounded-xl border px-3 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50 ${SCOPE_CLASS[activeStep.scope]}`}
+              >
+                Skip {BRANCH_LABELS[activeStep.scope as BranchScope]} Branch
+              </button>
+            )}
+            {!activeUnlocked && <span className="self-center text-xs text-zinc-500 dark:text-zinc-400">Select required previous steps before generating this one.</span>}
+          </div>
+
+          <RunOptionList workflow={session} stepId={activeStep.id} onSelect={handleSelectOption} />
+
+          <LlmCallLogPanel logs={activeLlmLogs} />
+        </section>
+      ) : (
+        <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-800 dark:border-amber-900/70 dark:bg-amber-950/40 dark:text-amber-300">
+          No accompaniment instrument steps are enabled. Use Accompaniment setup above to check at least one instrument.
+        </p>
+      )}
     </div>
   );
 }

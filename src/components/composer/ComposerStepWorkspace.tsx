@@ -12,6 +12,7 @@ import PianoPedalIndicator from "@/components/instruments/PianoPedalIndicator";
 import AbcEditor, { DEFAULT_ABC } from "./AbcEditor";
 import type { ComposerStepId } from "./composer-steps";
 import { AccompanimentStep } from "./workspace/AccompanimentStep";
+import { GuitarFingerstyleStep } from "./workspace/GuitarFingerstyleStep";
 import {
   buildAccompanimentGuitarBranchResetState,
   hasAccompanimentGuitarBranchWork,
@@ -160,6 +161,27 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
   if (step === "accompaniment") {
     return (
       <AccompanimentStep
+        activeAbc={activeAbc}
+        hasMounted={hasMounted}
+        pipeline={pipeline}
+        workflowAppliedMusicAbc={workflowAppliedMusicAbc}
+        accompanimentPreview={previewModel.accompaniment}
+        accompLayerVisibility={accompLayerVisibility}
+        setAccompLayerVisibility={setAccompLayerVisibility}
+        accompLayerVolumes={accompLayerVolumes}
+        setAccompLayerVolumes={setAccompLayerVolumes}
+        getRenderOptionsFor={getRenderOptionsFor}
+        ws={ws}
+        updateState={updateState}
+        canResetGuitarBranchWork={hasGuitarBranchWork}
+        onResetGuitarBranchWork={handleResetGuitarBranchWork}
+      />
+    );
+  }
+
+  if (step === "guitar-fingerstyle") {
+    return (
+      <GuitarFingerstyleStep
         activeAbc={activeAbc}
         hasMounted={hasMounted}
         pipeline={pipeline}

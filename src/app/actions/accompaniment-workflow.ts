@@ -39,6 +39,7 @@ import {
   type StrongBeatEmphasis,
   type StrongBeatIconGenerationResult,
 } from "@/lib/theory/abc-beat-annotations";
+import { extractMelodyMeasureTimeline } from "@/lib/theory/arranger-utils";
 import {
   buildValidGuitarTabToolSchema,
   validateGuitarTab,
@@ -342,7 +343,7 @@ function hasObjectProperty(value: unknown, key: string): boolean {
   return Boolean(value && typeof value === "object" && !Array.isArray(value) && key in value);
 }
 
-function validateGuitarFingerstyleOption(optionId: string, option: Partial<AccompanimentWorkflowOption>, events: GuitarTabEvent[], messages: string[]): void {
+function validateGuitarFingerstyleOption(optionId: string, option: Partial<AccompanimentWorkflowOption>, events: GuitarTabEvent[], messages: string[], sourceMeasures: Array<{ measureIndex: number; hasMelody: boolean }>): void {
   const data = optionData(option);
   if (!data) {
     messages.push(`${optionId} is missing fingerstyle option data.`);
@@ -369,12 +370,43 @@ function validateGuitarFingerstyleOption(optionId: string, option: Partial<Accom
     }
   }
 
-  const roles = new Set(events.map((event) => event.role.toLowerCase()));
-  if (!roles.has("melody")) {
+  const melodyEvents = events.filter((event) => event.role.toLowerCase() === "melody");
+  const bassEvents = events.filter((event) => event.role.toLowerCase() === "bass");
+  if (melodyEvents.length === 0) {
     messages.push(`${optionId} guitarTab.events must include melody role events.`);
   }
-  if (!roles.has("bass")) {
+  if (bassEvents.length === 0) {
     messages.push(`${optionId} guitarTab.events must include bass role events.`);
+  }
+  if (melodyEvents.some((event) => event.string < 1 || event.string > 3)) {
+    messages.push(`${optionId} melody role events must be routed to treble strings 1-3 for solo fingerstyle.`);
+  }
+  if (bassEvents.some((event) => event.string < 4 || event.string > 6)) {
+    messages.push(`${optionId} bass role events must be routed to bass strings 4-6 for chord-derived fingerstyle anchors.`);
+  }
+
+  const representedMeasures = new Set(events.map((event) => event.measureIndex));
+  const expectedMeasureIndexes = new Set(sourceMeasures.map((measure) => measure.measureIndex));
+  for (const event of events) {
+    if (!expectedMeasureIndexes.has(event.measureIndex)) {
+      messages.push(`${optionId} measure ${event.measureIndex} is outside the source/body measure range.`);
+    }
+  }
+  for (const { measureIndex, hasMelody } of sourceMeasures) {
+    if (!representedMeasures.has(measureIndex)) {
+      messages.push(`${optionId} measure ${measureIndex} is missing full-song Guitar Fingerstyle tab coverage.`);
+      continue;
+    }
+    if (hasMelody && !melodyEvents.some((event) => event.measureIndex === measureIndex)) {
+      messages.push(`${optionId} measure ${measureIndex} must include melody role tab events because solo fingerstyle carries the melody.`);
+    }
+    const measureBassEvents = bassEvents.filter((event) => event.measureIndex === measureIndex);
+    if (!measureBassEvents.some((event) => Math.abs(event.beat - 1) < 0.001)) {
+      messages.push(`${optionId} measure ${measureIndex} must include a bass anchor on beat 1 aligned to the selected chord progression.`);
+    }
+    if (!measureBassEvents.some((event) => event.beat > 1)) {
+      messages.push(`${optionId} measure ${measureIndex} must include an internal root/fifth/approach bass anchor after beat 1.`);
+    }
   }
 }
 
@@ -388,6 +420,11 @@ function validateGuitarWorkflowResult(raw: unknown, input: GenerateAccompaniment
     return { valid: false, message: "Final guitar workflow output contained no options." };
   }
 
+  const sourceMeasures = extractMelodyMeasureTimeline(input.sourceAbc).map((measure) => ({
+    measureIndex: measure.measureIndex,
+    hasMelody: measure.events.some((event) => event.kind === "note"),
+  }));
+
   for (const [index, option] of options.entries()) {
     const optionId = normalizeId(option.id, `option-${index + 1}`);
     const events = guitarTabEventsFromOption(option);
@@ -397,10 +434,13 @@ function validateGuitarWorkflowResult(raw: unknown, input: GenerateAccompaniment
     }
 
     if (input.stepId === "guitar-fingerstyle") {
-      validateGuitarFingerstyleOption(optionId, option, events, messages);
+      validateGuitarFingerstyleOption(optionId, option, events, messages, sourceMeasures);
     }
 
-    const validation = validateGuitarTab(events, guitarTabValidationOptionsFromOption(option, input));
+    const validation = validateGuitarTab(events, {
+      ...guitarTabValidationOptionsFromOption(option, input),
+      requireSourceEventIds: input.stepId === "guitar-fingerstyle",
+    });
     validations.push({ optionId, validation });
     if (!validation.valid) {
       messages.push(`${optionId}: ${validation.issues.map((issue) => issue.message).join("; ")}`);

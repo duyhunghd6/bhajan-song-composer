@@ -11,9 +11,12 @@ videos:
     label: "Full Performance"
     default: true
 abcNotations:
+  - type: "accompaniment"
+    label: "Accompaniment Music Sheet"
+    default: true
   - type: "melody"
     label: "Melody Music Sheet"
-    default: true
+    default: false
 tags: ["bhajan", "hindi", "sahaja-yoga"]
 composer: "Traditional"
 contributors: ["community"]

@@ -103,7 +103,7 @@ describe("ABC layer visibility", () => {
     expect(getVisibleAbcVoiceIds(multiVoiceAbc, { Piano: false })).toEqual(["Melody", "Guitar"]);
   });
 
-  it("preserves Melody as MIDI program 52 and applies 5-percent-step volume values", () => {
+  it("preserves Melody as MIDI program 52 and applies persistent 5-percent-step volume values", () => {
     const filtered = applyAbcLayerVisibility(multiVoiceAbc, {});
     const withVolumes = filtered.replace("V:Melody name=\"Melody\"", "V:Melody name=\"Melody\"\n%%MIDI program 1");
     const result = applyAbcLayerVolumes(withVolumes, {
@@ -112,10 +112,11 @@ describe("ABC layer visibility", () => {
       ChordProgression: 25,
     });
 
-    expect(result).toContain("V:Melody name=\"Melody\"\n%%MIDI program 52\n%%MIDI vol 64");
-    expect(result).toContain("V:Guitar clef=treble-8\n%%MIDI vol 95");
+    expect(result).toContain("V:Melody name=\"Melody\"\n%%MIDI program 52\n%%MIDI beat 64 64 64 1");
+    expect(result).toContain("V:Guitar clef=treble-8\n%%MIDI beat 95 95 95 1");
     expect(result).toContain("%%MIDI chordvol 32");
     expect(result).toContain("%%MIDI bassvol 32");
+    expect(result).not.toContain("%%MIDI vol ");
     expect(result).not.toContain("%%MIDI program 1");
   });
 });

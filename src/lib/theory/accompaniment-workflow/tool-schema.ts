@@ -32,7 +32,7 @@ function buildGuitarTabDataProperty() {
       events: {
         type: "array",
         minItems: 1,
-        description: "Concrete guitar tab events. Events sharing measureIndex + beat + subdivision or simultaneousGroupId are simultaneous; each source event must map to one string and each physical string may appear only once per simultaneous group.",
+        description: "Concrete guitar tab events covering every source/body measure. Events sharing measureIndex + beat + subdivision or simultaneousGroupId are simultaneous; each source event must map to one string and each physical string may appear only once per simultaneous group. Final solo fingerstyle plans must include treble-string melody events and bass-string beat-1/internal anchors for every body measure.",
         items: {
           type: "object",
           additionalProperties: false,
@@ -47,7 +47,7 @@ function buildGuitarTabDataProperty() {
             fret: { type: "number", description: "Fret number, 0 for open string and no higher than the selected guitar profile allows." },
             role: { type: "string", description: "Musical role: melody, bass, root, third, seventh, fill, percussion, etc." },
           },
-          required: ["measureIndex", "beat", "note", "string", "fret", "role"],
+          required: ["measureIndex", "beat", "sourceEventId", "note", "string", "fret", "role"],
         },
       },
     },
@@ -84,7 +84,7 @@ function buildFingerstyleFormPlanProperty() {
 function buildGuitarFingerstyleDataProperty() {
   return {
     type: "object",
-    description: "Final solo guitar fingerstyle decision. The local arranger generates final ABC from this profile/form plan; the LLM must provide playable, validated tab events.",
+    description: "Final solo guitar fingerstyle decision. The local arranger generates final ABC from this profile/form plan; the LLM must provide playable, validated tab events covering every source/body measure.",
     additionalProperties: true,
     properties: {
       mode: {

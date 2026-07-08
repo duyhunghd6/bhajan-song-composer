@@ -243,7 +243,8 @@ function removeHiddenInlineVoiceSegments(line: string, visibleVoices: Set<string
 }
 
 function voiceVolumeDirective(voiceName: string, volumes: Record<string, number>): string {
-  return `%%MIDI vol ${volumePercentToMidiValue(getAbcLayerVolumePercent(voiceName, volumes))}`;
+  const volume = volumePercentToMidiValue(getAbcLayerVolumePercent(voiceName, volumes));
+  return `%%MIDI beat ${volume} ${volume} ${volume} 1`;
 }
 
 function chordVolumeDirectives(volumes: Record<string, number>): string[] {
@@ -272,7 +273,7 @@ export function applyAbcLayerVolumes(abcString: string, volumes: Record<string, 
   if (!hasVoiceDeclarations) {
     const directives = ["%%MIDI program 52", voiceVolumeDirective("Melody", volumes), ...chordVolumeDirectives(volumes)];
     return insertAfterKeyLine(
-      lines.filter((line) => !/^\s*%%MIDI\s+(program|vol|chordvol|bassvol)\b/.test(line.trim())),
+      lines.filter((line) => !/^\s*%%MIDI\s+(program|vol|beat|chordvol|bassvol)\b/.test(line.trim())),
       directives
     ).join("\n");
   }
@@ -292,9 +293,9 @@ export function applyAbcLayerVolumes(abcString: string, volumes: Record<string, 
       continue;
     }
 
-    const midiDirective = rawLine.trim().match(/^%%MIDI\s+(program|vol|chordvol|bassvol)\b/);
+    const midiDirective = rawLine.trim().match(/^%%MIDI\s+(program|vol|beat|chordvol|bassvol)\b/);
     if (midiDirective) {
-      if (midiDirective[1] === "vol" || midiDirective[1] === "chordvol" || midiDirective[1] === "bassvol") continue;
+      if (midiDirective[1] === "vol" || midiDirective[1] === "beat" || midiDirective[1] === "chordvol" || midiDirective[1] === "bassvol") continue;
       if (midiDirective[1] === "program" && currentVoice === "Melody") continue;
     }
 

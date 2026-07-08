@@ -4,6 +4,8 @@ import {
   ACCOMPANIMENT_WORKFLOW_BRANCH_STEP_IDS,
   createAccompanimentWorkflowSession,
   extractProfile,
+  getEnabledAccompanimentWorkflowStepIds,
+  getNextUncompletedWorkflowStepId,
   hasWorkflowStepResults,
   mergeRun,
   mergeRuns,
@@ -45,6 +47,44 @@ function makeRun(stepId: AccompanimentWorkflowStepId, id: string, optionIds: str
 }
 
 describe("accompaniment workflow session transitions", () => {
+  it("keeps only enabled instrument branches in a solo setup and completes after those steps", () => {
+    const setup = {
+      style: "solo-fingerstyle" as const,
+      instruments: [
+        { id: "guitar-classic" as const, enabled: false, order: 0 },
+        { id: "guitar-acoustic" as const, enabled: false, order: 1 },
+        { id: "piano" as const, enabled: false, order: 2 },
+        { id: "indian-harmonium" as const, enabled: false, order: 3 },
+        { id: "flute" as const, enabled: true, order: 4 },
+        { id: "djembe" as const, enabled: true, order: 5 },
+        { id: "violin" as const, enabled: false, order: 6 },
+      ],
+    };
+
+    const enabledStepIds = getEnabledAccompanimentWorkflowStepIds(setup);
+    let session = createAccompanimentWorkflowSession(sampleAbc, setup);
+
+    expect(enabledStepIds).toEqual([
+      "key-scale-cadence",
+      "strong-beat-targets",
+      "chord-tone-mapping",
+      "chord-progression",
+      "voice-leading-validation",
+      "flute-yield-register",
+      "flute-breath-fill-validation",
+      "djembe-groove-interlock",
+      "djembe-fill-validation",
+    ]);
+    expect(session.enabledStepIds).toEqual(enabledStepIds);
+
+    for (const stepId of enabledStepIds) {
+      const run = makeRun(stepId, `${stepId}-run`, [`${stepId}-option`]);
+      session = selectOption(mergeRun(session, run, ""), stepId, run.options[0], "", run.id);
+    }
+
+    expect(getNextUncompletedWorkflowStepId(session)).toBeNull();
+  });
+
   it("keeps a selected option from an older run after regeneration", () => {
     const session = createAccompanimentWorkflowSession(sampleAbc);
     const firstRun = makeRun("key-scale-cadence", "run-1", ["option-a", "option-b"]);

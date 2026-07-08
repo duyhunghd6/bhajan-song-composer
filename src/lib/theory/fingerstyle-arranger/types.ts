@@ -192,6 +192,11 @@ export interface FingerstyleGeneratedArtifacts {
   };
   fretboardHighlightEvents: FingerstyleFretboardHighlightEvent[];
   noteMarkerEvents: FingerstyleNoteMarkerEvent[];
+  appliedWorkflowOption?: {
+    pickingProfile: string;
+    bassStrategy?: string;
+    usedCanonicalGuitarTabEvents: boolean;
+  };
 }
 
 export interface FingerstyleOutputContract {

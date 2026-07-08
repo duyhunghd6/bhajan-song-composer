@@ -98,7 +98,7 @@ export function generateAccompanimentSupportLayers(
   melodyAbc: string,
   { accompaniment, workflow }: GenerateAccompanimentSupportLayersOptions
 ): AccompanimentSupportLayerBundle {
-  if (!workflow || !accompaniment || workflow.setup?.style === "solo-fingerstyle") {
+  if (!workflow || !accompaniment) {
     return { djembe: null, flute: null, violin: null, combined: null };
   }
 

@@ -61,7 +61,7 @@ export interface FingerstyleFallbackSuggestion {
   suggestedKeys: string[];
 }
 
-export type FingerstylePhysicalRole = RoutedFingerstyleEvent["role"] | "percussion";
+export type FingerstylePhysicalRole = RoutedFingerstyleEvent["role"] | "fifth" | "fill" | "percussion";
 
 export interface FingerstylePhysicalHandEvent {
   note: string | null;
@@ -88,6 +88,7 @@ export interface FingerstylePhysicalHandMeasure {
 
 export interface FingerstyleCompressionOptions {
   pickingProfile?: FingerstylePickingProfileId;
+  workflowOptionData?: Record<string, unknown>;
 }
 
 export interface FingerstyleDownwardCompression {
@@ -238,11 +239,20 @@ function buildStrictPimaEvents(
 function buildFolkTravisEvents(outerMeasure: FingerstyleOuterVoiceMeasure): FingerstylePhysicalHandEvent[] {
   const bassAnchor = outerMeasure.bassRoute[0];
   const thumbClock = [1, 2, 3, 4].map((beat) => physicalEvent(bassAnchor, "thumb-clock", "p", beat));
-  const syncopatedMelody = outerMeasure.melodyRoute.slice(1).map((event, index) =>
-    physicalEvent(event, "syncopation", index % 2 === 0 ? "i" : "m", event.beat + 0.5)
+  const syncopatedMelody = outerMeasure.melodyRoute.map((event, index) =>
+    physicalEvent(event, event.beat === 1 ? "pinch" : "syncopation", index % 2 === 0 ? "i" : "m", event.beat)
   );
 
   return [...thumbClock, stringSlapEvent(2), stringSlapEvent(4), ...syncopatedMelody];
+}
+
+function melodyBeatPositions(melody: MelodyNoteEvent[]): number[] {
+  let elapsedUnits = 0;
+  return melody.map((event) => {
+    const beat = elapsedUnits / 2 + 1;
+    elapsedUnits += event.duration;
+    return beat;
+  });
 }
 
 function sortPhysicalEvents(events: FingerstylePhysicalHandEvent[]): FingerstylePhysicalHandEvent[] {
@@ -284,9 +294,10 @@ export function compressFingerstyleArrangement(
   const pickingProfile = options.pickingProfile ?? "strict-pima";
   const outerVoiceMap = chords.map((chord, measureIndex): FingerstyleOuterVoiceMeasure => {
     const melody = melodyMeasures[measureIndex] ?? [];
+    const melodyBeats = melodyBeatPositions(melody);
     const melodyRoute = melody.map((event, eventIndex): RoutedFingerstyleEvent => ({
       ...routeToStrings(event.note, TREBLE_STRINGS),
-      beat: eventIndex + 1,
+      beat: melodyBeats[eventIndex] ?? eventIndex + 1,
       role: "melody",
     }));
     const bassRoot = routeBassRoot(chord);

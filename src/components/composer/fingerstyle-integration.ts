@@ -6,6 +6,10 @@ import type { ComposerLayer } from "./LayerManager";
 
 export type FingerstyleComposerProfileId = NonNullable<FingerstyleCompressionOptions["pickingProfile"]>;
 
+export interface FingerstyleComposerIntegrationOptions extends FingerstyleCompressionOptions {
+  workflowOptionData?: Record<string, unknown>;
+}
+
 export interface FingerstyleComposerProfileOption {
   id: FingerstyleComposerProfileId;
   label: string;
@@ -26,6 +30,7 @@ export interface FingerstyleComposerIntegration {
     positions: GuitarFretPosition[];
   };
   noteMarkers: InstrumentNoteMarker[];
+  workflowOptionData?: Record<string, unknown>;
 }
 
 export const FINGERSTYLE_PROFILE_OPTIONS: FingerstyleComposerProfileOption[] = [
@@ -52,7 +57,9 @@ function toneForRole(role: string): GuitarFretPosition["tone"] {
   return "chord";
 }
 
-function buildComposerLayer(arrangement: FingerstyleArrangement, profile: FingerstyleComposerProfileOption): ComposerLayer {
+function buildComposerLayer(arrangement: FingerstyleArrangement, profile: FingerstyleComposerProfileOption, sourceAbc: string): ComposerLayer {
+  const sourceLength = sourceAbc.split(/\r?\n/).find((line) => line.trim().startsWith("L:"))?.trim() ?? "L:1/8";
+  const sourceTempo = sourceAbc.split(/\r?\n/).find((line) => line.trim().startsWith("Q:"))?.trim() ?? "Q:1/4=120";
   return {
     id: `fingerstyle-guitar-${profile.id}`,
     name: `Fingerstyle Guitar (${profile.label})`,
@@ -62,8 +69,8 @@ function buildComposerLayer(arrangement: FingerstyleArrangement, profile: Finger
       "X:10",
       `T:Fingerstyle Guitar (${profile.label})`,
       `M:${arrangement.timeSignature}`,
-      "L:1/8",
-      "Q:1/4=120",
+      sourceLength,
+      sourceTempo,
       `K:${arrangement.key}`,
       arrangement.abc,
     ].join("\n"),
@@ -120,9 +127,12 @@ function buildNoteMarkers(arrangement: FingerstyleArrangement): InstrumentNoteMa
 export function buildFingerstyleComposerIntegration(
   abcString: string,
   progression?: string[],
-  options: FingerstyleCompressionOptions = {}
+  options: FingerstyleComposerIntegrationOptions = {}
 ): FingerstyleComposerIntegration {
-  const arrangement = generateFingerstyleArrangement(abcString, progression, options);
+  const arrangement = generateFingerstyleArrangement(abcString, progression, {
+    pickingProfile: options.pickingProfile,
+    workflowOptionData: options.workflowOptionData,
+  });
   const selectedProfile = profileOptionFor(options.pickingProfile ?? arrangement.outputContract.profileMetadata.id);
 
   const noteMarkers = buildNoteMarkers(arrangement);
@@ -130,9 +140,10 @@ export function buildFingerstyleComposerIntegration(
   return {
     selectedProfile,
     arrangement,
-    composerLayer: buildComposerLayer(arrangement, selectedProfile),
+    composerLayer: buildComposerLayer(arrangement, selectedProfile, abcString),
     playability: buildPlayability(arrangement),
     fretboard: { positions: buildFretboardPositions(arrangement) },
     noteMarkers,
+    workflowOptionData: options.workflowOptionData,
   };
 }

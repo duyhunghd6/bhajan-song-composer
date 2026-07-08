@@ -13,13 +13,57 @@ describe("Guitar fingerstyle arranger", () => {
       measureIndex: 0,
       chord: "Em",
       bassNotes: ["E,", "B,"],
-      melodyNotes: ["E", "E"],
-      abc: "E,2 E2 B,2 E2",
+      melodyNotes: ["E", "E", "G", "A"],
+      abc: "[E,E]2 E2 [B,G]2 A2",
     });
     expect(arrangement.abc).toContain('V:Guitar clef=treble-8 name="Layer 2 Guitar Fingerstyle"\n%%MIDI program 24');
     expect(arrangement.abc).toContain("% @fingerstyle-section intro");
     expect(arrangement.abc).toContain("% @fingerstyle-section interlude");
     expect(arrangement.abc).toContain("% @fingerstyle-section outro");
+  });
+
+  it("derives chord-timed fingerstyle bass from workflow-applied chord annotations", () => {
+    const chordAnnotatedAbc = `X:1
+T:Workflow Chord Timing
+M:4/4
+L:1/8
+K:Em
+| "Em"E2 E2 G2 A2 | "D"B4 B2 A2 | "C"G2 A2 B2 G2 | "B7"E8 |`;
+
+    const arrangement = generateFingerstyleArrangement(chordAnnotatedAbc);
+
+    expect(arrangement.measures.map((measure) => measure.chord)).toEqual(["Em", "D", "C", "B7"]);
+    expect(arrangement.measures).toEqual(expect.arrayContaining([
+      expect.objectContaining({ measureIndex: 0, chord: "Em", bassNotes: ["E,", "B,"], melodyNotes: ["E", "E", "G", "A"] }),
+      expect.objectContaining({ measureIndex: 1, chord: "D", bassNotes: ["D,", "A,"], melodyNotes: ["B", "B", "A"] }),
+      expect.objectContaining({ measureIndex: 2, chord: "C", bassNotes: ["C,", "G,"], melodyNotes: ["G", "A", "B", "G"] }),
+      expect.objectContaining({ measureIndex: 3, chord: "B7", bassNotes: ["B,", "^F,"], melodyNotes: ["E"] }),
+    ]));
+    expect(arrangement.measures[3].abc).toBe("[B,E]2 E2 [^F,E]2 E2");
+
+    expect(arrangement.downwardCompression.outerVoiceMap).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        measureIndex: 3,
+        chord: "B7",
+        bassRoute: expect.arrayContaining([
+          expect.objectContaining({ beat: 1, note: "B", role: "bass", string: 5, fret: 2 }),
+          expect.objectContaining({ beat: 3, note: "B", role: "bass", string: 5, fret: 2 }),
+        ]),
+        melodyRoute: expect.arrayContaining([
+          expect.objectContaining({ beat: 1, note: "E", role: "melody", string: 1, fret: 0 }),
+        ]),
+      }),
+    ]));
+
+    expect(arrangement.outputContract.artifacts.guitarTabEvents).toEqual(expect.arrayContaining([
+      expect.objectContaining({ measureIndex: 0, beat: 1, role: "bass", note: "E2", string: 6, fret: 0 }),
+      expect.objectContaining({ measureIndex: 0, beat: 1, role: "melody", note: "E4", string: 1, fret: 0 }),
+      expect.objectContaining({ measureIndex: 1, beat: 1, role: "bass", note: "D3", string: 4, fret: 0 }),
+      expect.objectContaining({ measureIndex: 1, beat: 1, role: "melody", note: "B4", string: 1, fret: 7 }),
+      expect.objectContaining({ measureIndex: 2, beat: 1, role: "bass", note: "C3", string: 5, fret: 3 }),
+      expect.objectContaining({ measureIndex: 3, beat: 1, role: "bass", note: "B2", string: 5, fret: 2 }),
+    ]));
+    expect(validateGuitarTab(arrangement.outputContract.artifacts.guitarTabEvents, { requireScientificPitch: true }).valid).toBe(true);
   });
 
   it("builds inspectable upward construction source layers before guitar reduction", () => {
@@ -132,7 +176,7 @@ describe("Guitar fingerstyle arranger", () => {
         expect.objectContaining({ beat: 1, role: "bass", pickingFinger: "p", technique: "thumb-clock" }),
         expect.objectContaining({ beat: 2, role: "bass", pickingFinger: "p", technique: "thumb-clock" }),
         expect.objectContaining({ beat: 2, role: "percussion", pickingFinger: "p", technique: "string-slap" }),
-        expect.objectContaining({ beat: 2.5, role: "melody", pickingFinger: "i", technique: "syncopation" }),
+        expect.objectContaining({ beat: 3, role: "melody", pickingFinger: "i", technique: "syncopation" }),
         expect.objectContaining({ beat: 4, role: "percussion", pickingFinger: "p", technique: "string-slap" }),
       ]),
       validation: {
@@ -234,8 +278,8 @@ K:C
         expect.objectContaining({
           measureIndex: 0,
           simultaneousMelodyBassFeasible: true,
-          frettingFingerCount: 1,
-          pickingFingerCount: 1,
+          frettingFingerCount: 2,
+          pickingFingerCount: 3,
           failedConstraints: [],
         }),
       ]),
@@ -248,8 +292,8 @@ K:C
     expect(arrangement.outputContract.rhythmicEventMap).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ measureIndex: 0, beat: 1, technique: "thumb-clock", pickingFinger: "p" }),
-        expect.objectContaining({ measureIndex: 0, beat: 2, technique: "string-slap", role: "percussion" }),
-        expect.objectContaining({ measureIndex: 0, beat: 2.5, technique: "syncopation", role: "melody" }),
+        expect.objectContaining({ measureIndex: 0, beat: 2, technique: "guide-tone", role: "melody" }),
+        expect.objectContaining({ measureIndex: 0, beat: 3, technique: "thumb-clock", role: "fifth" }),
       ])
     );
     expect(arrangement.outputContract.profileMetadata).toMatchObject({
@@ -318,7 +362,60 @@ K:C
     const line = generateFingerstyleLine(sampleAbc, ["Em", "Bm", "G", "Em"]);
 
     expect(line.startsWith('V:Guitar clef=treble-8 name="Layer 2 Guitar Fingerstyle"')).toBe(true);
-    expect(line).toContain("E,2 E2 B,2 E2");
+    expect(line).toContain("[E,E]2 E2 [B,G]2 A2");
     expect(line).toContain("% @fingerstyle-section body");
+  });
+
+  it("preserves rests and rest-only measures in the guitar body timeline", () => {
+    const restedAbc = `X:1
+T:Rests
+M:4/4
+L:1/8
+K:Em
+| z8 | z4 E4 |`;
+    const arrangement = generateFingerstyleArrangement(restedAbc, ["Em", "Em"]);
+
+    expect(arrangement.measures).toHaveLength(2);
+    expect(arrangement.measures[0].melodyNotes).toEqual([]);
+    expect(arrangement.measures[1].abc).toContain("E,2 z2");
+    expect(arrangement.measures[1].abc).toContain("[B,E]2 E2");
+  });
+
+  it("extracts only the Melody inline voice for solo fingerstyle input", () => {
+    const inlineAbc = `X:1
+T:Inline Voices
+M:4/4
+L:1/8
+K:Em
+[V:Melody] E2 z2 G4 |
+[V:Piano] C8 |`;
+    const arrangement = generateFingerstyleArrangement(inlineAbc, ["Em"]);
+
+    expect(arrangement.measures[0].melodyNotes).toEqual(["E", "G"]);
+    expect(arrangement.measures[0].abc).not.toContain("C");
+  });
+
+  it("uses complete validated workflow tab events as the selected canonical tab mapping", () => {
+    const base = generateFingerstyleArrangement(sampleAbc, ["Em", "Bm", "G", "Em"]);
+    const selectedEvents = base.outputContract.artifacts.guitarTabEvents.map((event) =>
+      event.measureIndex === 0 && event.beat === 1 && event.role === "melody"
+        ? { ...event, string: 2 as const, fret: 5, note: "E4" }
+        : event
+    );
+    const arrangement = generateFingerstyleArrangement(sampleAbc, ["Em", "Bm", "G", "Em"], {
+      workflowOptionData: {
+        pickingProfile: "strict-pima",
+        bassStrategy: "selected validated map",
+        guitarTab: { profileId: "guitar-classic", events: selectedEvents },
+      },
+    });
+
+    expect(arrangement.outputContract.artifacts.appliedWorkflowOption).toMatchObject({
+      bassStrategy: "selected validated map",
+      usedCanonicalGuitarTabEvents: true,
+    });
+    expect(arrangement.outputContract.artifacts.guitarTabEvents).toEqual(
+      expect.arrayContaining([expect.objectContaining({ measureIndex: 0, beat: 1, role: "melody", string: 2, fret: 5, note: "E4" })])
+    );
   });
 });

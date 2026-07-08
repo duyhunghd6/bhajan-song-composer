@@ -135,8 +135,9 @@ Use the small workflow steps defined in `src/lib/theory/accompaniment-workflow/d
 Dynamic step gating:
 
 - Shared steps 1–6 are always enabled.
-- `solo-fingerstyle` enables only shared steps plus the Guitar branch; Piano, Harmonium, Djembe, Flute, and Violin branches are disabled for that workflow run.
-- Combined `accompaniment` enables branch steps only for enabled instruments in the ordered stack, and the planned step grid must react before workflow start/reset.
+- `solo-fingerstyle` enables shared steps plus branch steps for exactly the instruments the user enabled in the ordered setup. If Guitar Classic/Acoustic is enabled, use the Guitar Fingerstyle branch; if Djembe, Flute, Violin, Piano, or Harmonium are enabled, use those enabled instrument branches too. Disabled instrument branches must not appear, block completion, or be required before the accompaniment result is applied.
+- Combined `accompaniment` enables branch steps only for enabled instruments in the ordered stack.
+- The planned step grid must react whenever an instrument checkbox changes, including after a workflow has started: newly checked instruments add their branch steps, unchecked instruments remove their branch steps and must not block completion.
 - Guitar Classic and Guitar Acoustic share the Guitar branch initially; setup context decides tone/role and prevents duplicate branch execution.
 - Disabled branches must not block `getNextUncompletedWorkflowStepId` or step unlock checks.
 

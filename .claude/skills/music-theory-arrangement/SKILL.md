@@ -146,6 +146,44 @@ Hard rules:
 - Do not output all Melody lines first and all instrument lines later when final ABC contains multiple instruments; interleave by staff system for abcjs rendering/playback alignment.
 - Use comments like `% Staff system N` for readability, but avoid blank lines inside one ABC tune because blank lines can split tunes.
 
+### 🎸 Guitar Fingerstyle Tab Generation (Time-Slice Grid)
+
+For solo guitar fingerstyle arrangements, the backend translates the melody and chord progression into a quantized 16-step JSON grid. The LLM acts as a logic router to map voicings and fingerpicking filler notes.
+
+#### 1. Quantized JSON Step Grid Schema
+The JSON grid contains exactly 16 steps per measure (for 4/4 meter):
+```json
+{
+  "measure": 1,
+  "style_profile": {
+    "key": "Em",
+    "comping_style": "PIMA devotional fingerstyle. Sparse fills.",
+    "voicing_plan": "Open-position Em and D shapes. Thumbed E/B and D/A anchors."
+  },
+  "grid": [
+    {"step": 1, "chord": "Em", "weight": "⬤", "melody": {"pitch": "E4", "state": "attack"}, "lyric": "Ha-"},
+    {"step": 2, "chord": "Em", "weight": null, "melody": {"pitch": "E4", "state": "sustain"}, "lyric": null},
+    {"step": 3, "chord": "Em", "weight": "*", "melody": {"pitch": "E4", "state": "attack"}, "lyric": "ri"},
+    {"step": 4, "chord": "Em", "weight": null, "melody": {"pitch": "E4", "state": "sustain"}, "lyric": null}
+  ]
+}
+```
+* **weight**: Indicates the rhythmic weight. Strong beat downbeat (`⬤`), medium beat (`●`), soft beat (`*`), or off-beat (`null`).
+* **melody.state**: Either `"attack"`, `"sustain"`, or `"rest"`.
+* **lyric**: Syllable string, melisma (`_`), or skip (`*`).
+
+#### 2. Exposed Arrangement Tools
+* **`query_guitar_voicings(chord, melody_pitch, target_position)`**: Returns valid safe left-hand open chord shapes (e.g. `{"bass": {"string": 6, "fret": 0}, "melody": {"string": 1, "fret": 0}, "available_inner_strings": [3, 4]}`).
+* **`validate_fingerstyle_physics(proposed_grid)`**: Evaluates playability. Returns an error if any inner-string note is placed on a string holding a sustaining melody note (`"state": "sustain"`).
+* **`submit_arranged_measure(final_grid)`**: Submits the verified tablature grid.
+
+#### 3. LLM Guidelines & System Prompt
+The LLM must follow this systematic process:
+1. **Anchor the Bass**: Place the lowest root bass note (Thumb/P) on `⬤` (Beat 1), and a secondary root/5th on `●` (Beat 3). Do not place heavy bass on `*` (Soft beats).
+2. **Lock the Grip**: Query open-position shapes for chords at step 1 and 9 via `query_guitar_voicings()`.
+3. **Protect the Melody**: Map melody pitches exactly on the highest treble strings (1-3).
+4. **PIMA Fills**: Place sparse filler notes (Index/Middle) on empty `null` steps using available inner strings. Check that no filler notes collide with sustaining melody strings (The Sustain Rule).
+
 ---
 
 ## Relationship to Other Skills

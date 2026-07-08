@@ -13,7 +13,7 @@ import type { InstrumentNoteMarker } from "@/components/instruments/InstrumentNo
 import type { MusicSheetPlaybackCursorEvent } from "@/components/music-sheet/AbcjsPlaybackController";
 import type { PianoPedalAutomation } from "@/lib/theory/piano-accompaniment";
 
-export type VisualInstrumentVariant = "instrument-sync" | "note-markers" | "teacher-mode";
+export type VisualInstrumentVariant = "instrument-sync" | "note-markers" | "teacher-mode" | "virtual-guitar-master";
 
 type VariantConfig = {
   label: string;
@@ -29,6 +29,7 @@ const VALID_VARIANTS = new Set<VisualInstrumentVariant>([
   "instrument-sync",
   "note-markers",
   "teacher-mode",
+  "virtual-guitar-master",
 ]);
 
 export const VARIANT_CONFIG: Record<VisualInstrumentVariant, VariantConfig> = {
@@ -43,6 +44,10 @@ export const VARIANT_CONFIG: Record<VisualInstrumentVariant, VariantConfig> = {
   "teacher-mode": {
     label: "Teacher Mode",
     description: "Measure-by-measure coaching with hand filters, pedal state, and visible marker data.",
+  },
+  "virtual-guitar-master": {
+    label: "Virtual Guitar Master",
+    description: "Full-width 16-fret virtual guitar with chromatic coloring and exact string/fret intersections.",
   },
 };
 
@@ -62,6 +67,14 @@ export const CHORD_SHAPE_POSITIONS: GuitarFretPosition[] = [
   { string: 2, fret: 0, note: "B", tone: "melody" },
   { string: 1, fret: 0, note: "E", tone: "melody" },
 ];
+
+export const EXAMPLE_CHORD_GROUPS = {
+  "Basic Triads": ["C", "Cm", "G", "Gm"],
+  "Sevenths": ["Cmaj7", "C7", "Cm7", "G7"],
+  "Extensions": ["C9", "Fmaj9", "Am11"],
+  "Altered / Suspended": ["Cdim", "Bdim7", "Caug", "Csus4"],
+  "Power Chords": ["E5", "A5", "D5"]
+};
 
 export const PEDAL_AUTOMATION: PianoPedalAutomation = {
   controller: { midiControlChange: 64, downValue: 127, upValue: 0 },

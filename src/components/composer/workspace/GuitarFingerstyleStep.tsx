@@ -14,7 +14,7 @@ import {
   ComposerNotationPreviewLayout,
 } from "./preview";
 
-interface AccompanimentStepProps {
+interface GuitarFingerstyleStepProps {
   activeAbc: string;
   hasMounted: boolean;
   pipeline: ArrangementPipelineResult | null;
@@ -31,7 +31,7 @@ interface AccompanimentStepProps {
   onResetGuitarBranchWork: () => void;
 }
 
-export function AccompanimentStep({
+export function GuitarFingerstyleStep({
   activeAbc,
   hasMounted,
   pipeline,
@@ -46,7 +46,7 @@ export function AccompanimentStep({
   updateState,
   canResetGuitarBranchWork,
   onResetGuitarBranchWork,
-}: AccompanimentStepProps) {
+}: GuitarFingerstyleStepProps) {
     const {
       abc: accompanimentAbc,
       rawAbc: rawAccompanimentAbc,
@@ -62,7 +62,7 @@ export function AccompanimentStep({
             <>
               <section className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950/60">
                 <div className="flex items-center justify-between gap-2 mb-4">
-                  <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">AI Accompaniment Generation</h2>
+                  <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">AI Guitar Fingerstyle Generation</h2>
                   <div className="flex items-center gap-1.5">
                     {hasMounted && canResetGuitarBranchWork && (
                       <button
@@ -80,7 +80,7 @@ export function AccompanimentStep({
 
 
                 <AccompanimentWorkflowWizard
-                  mode="accompaniment"
+                  mode="guitar"
                   sourceAbc={activeAbc}
                   metadata={{
                     key: pipeline?.harmonization.key ?? "Unknown",
@@ -117,27 +117,6 @@ export function AccompanimentStep({
                     updateState({ generatedGuitar: integration.composerLayer.abc, guitarAccompanimentData: integration });
                     setAccompLayerVisibility((prev) => ({ ...prev, TAB: true }));
                   }}
-                  onPianoProfileSelected={(profile) => {
-                    if (profile === null) {
-                      updateState({
-                        generatedPiano: null,
-                        pianoAccompanimentData: null,
-                        selectedPianoIndex: null,
-                        aiPianoSuggestions: [],
-                        ensembleWorkflow: null,
-                        stagedEnsembleLayers: null,
-                        appliedEnsembleLayers: null,
-                      });
-                      return;
-                    }
-
-                    const pianoStyles: PianoCompingProfileId[] = ["pop-ballad", "rock-rnb", "classical-folk"];
-                    const compingProfile = pianoStyles.includes(profile as PianoCompingProfileId)
-                      ? profile as PianoCompingProfileId
-                      : "pop-ballad";
-                    const accompaniment = generatePianoAccompaniment(workflowAppliedMusicAbc, { compingProfile });
-                    updateState({ generatedPiano: accompaniment.abc, pianoAccompanimentData: accompaniment });
-                  }}
                 />
               </section>
             </>
@@ -165,8 +144,8 @@ export function AccompanimentStep({
               </div>
               <AbcjsPlaybackController
                 abcString={accompanimentAbc}
-                title={appliedWorkflowStep ? `Resulting ABC Staff Preview: Step ${appliedWorkflowStep.label}` : "Accompaniment Music Sheet"}
-                canvasId="composer-accompaniment-preview"
+                title={appliedWorkflowStep ? `Resulting ABC Staff Preview: Step ${appliedWorkflowStep.label}` : "Guitar Fingerstyle Music Sheet"}
+                canvasId="composer-guitar-preview"
                 minWidthClassName="min-w-[520px]"
                 sheetViewportClassName="max-h-[min(76vh,860px)] overflow-auto p-4"
                 renderOptions={getRenderOptionsFor(accompanimentAbc, ACCOMPANIMENT_PREVIEW_RENDER_OPTIONS)}

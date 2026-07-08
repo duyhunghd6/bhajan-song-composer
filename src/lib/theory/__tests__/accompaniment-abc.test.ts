@@ -166,7 +166,7 @@ V:GuitarClassic] | E,2 B,2 E2 G2 | D,2 A,2 E,2 B,2 |`;
 
     expect(result.voiceNames).toEqual(["Guitar"]);
     expect(result.visibleVoiceNames).toEqual(["Guitar"]);
-    expect(result.abc).toContain("%%score (Melody Guitar)");
+    expect(result.abc).toContain("%%score (Melody) (Guitar)");
     expect(result.abc).toContain("[V:Melody] | \"Em\"E E2 F (GB) A G | \"D\"(FE) DF \"Em\"E4 |");
     expect(result.abc).toContain("[V:Guitar] | E,2 B,2 E2 G2 | D,2 A,2 E,2 B,2 |");
     expect(result.abc).not.toContain("Melody])");
@@ -237,7 +237,7 @@ K:Em
       layerVisibility: {},
     });
 
-    expect(result.abc).toContain("%%score (Melody Guitar)");
+    expect(result.abc).toContain("%%score (Melody) (Guitar)");
     expect(result.abc).toContain("% Intro: Guitar Fingerstyle form section with Melody rests.");
     expect(result.abc).toContain("% Interlude: Guitar Fingerstyle form section with Melody rests.");
     expect(result.abc).toContain("% Outro: Guitar Fingerstyle form section with Melody rests.");

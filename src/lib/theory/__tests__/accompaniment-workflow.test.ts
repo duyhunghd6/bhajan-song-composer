@@ -4,6 +4,7 @@ import {
   ACCOMPANIMENT_WORKFLOW_GUITAR_STEP_IDS,
   ACCOMPANIMENT_WORKFLOW_STEP_IDS,
   ACCOMPANIMENT_WORKFLOW_STEPS,
+  applyAccompanimentWorkflowSetupToSession,
   buildAccompanimentWorkflowAbcAnnotation,
   getDefaultAccompanimentWorkflowSetup,
   getEnabledAccompanimentWorkflowStepIds,
@@ -152,7 +153,7 @@ describe("accompaniment workflow", () => {
     expect(normalized.instruments.find((instrument) => instrument.id === "violin")?.enabled).toBe(false);
   });
 
-  it("derives solo fingerstyle steps from the selected setup", () => {
+  it("derives solo fingerstyle steps from every enabled instrument in the selected setup", () => {
     const setup = {
       ...getDefaultAccompanimentWorkflowSetup(),
       style: "solo-fingerstyle" as const,
@@ -160,11 +161,64 @@ describe("accompaniment workflow", () => {
     const stepIds = getEnabledAccompanimentWorkflowStepIds(setup);
 
     expect(stepIds).toContain("guitar-fingerstyle");
-    expect(stepIds).not.toContain("piano-comping-bass");
-    expect(stepIds).not.toContain("harmonium-drone-register");
-    expect(stepIds).not.toContain("djembe-groove-interlock");
-    expect(stepIds).not.toContain("flute-yield-register");
-    expect(stepIds).not.toContain("violin-bed-register");
+    expect(stepIds).toContain("piano-comping-bass");
+    expect(stepIds).toContain("harmonium-drone-register");
+    expect(stepIds).toContain("djembe-groove-interlock");
+    expect(stepIds).toContain("flute-yield-register");
+    expect(stepIds).toContain("violin-bed-register");
+  });
+
+  it("derives solo support steps from exactly the enabled non-guitar instruments", () => {
+    const setup = {
+      ...getDefaultAccompanimentWorkflowSetup(),
+      style: "solo-fingerstyle" as const,
+      instruments: getDefaultAccompanimentWorkflowSetup().instruments.map((instrument) => ({
+        ...instrument,
+        enabled: instrument.id === "djembe" || instrument.id === "flute",
+      })),
+    };
+    const stepIds = getEnabledAccompanimentWorkflowStepIds(setup);
+
+    expect(stepIds).toEqual([
+      "key-scale-cadence",
+      "strong-beat-targets",
+      "chord-tone-mapping",
+      "chord-progression",
+      "voice-leading-validation",
+      "flute-yield-register",
+      "flute-breath-fill-validation",
+      "djembe-groove-interlock",
+      "djembe-fill-validation",
+    ]);
+  });
+
+  it("updates an active session when setup checkboxes enable another instrument", () => {
+    const djembeOnlySetup = {
+      ...getDefaultAccompanimentWorkflowSetup(),
+      style: "solo-fingerstyle" as const,
+      instruments: getDefaultAccompanimentWorkflowSetup().instruments.map((instrument) => ({
+        ...instrument,
+        enabled: instrument.id === "djembe",
+      })),
+    };
+    const djembeAndFluteSetup = {
+      ...djembeOnlySetup,
+      instruments: djembeOnlySetup.instruments.map((instrument) => ({
+        ...instrument,
+        enabled: instrument.id === "djembe" || instrument.id === "flute",
+      })),
+    };
+
+    const session = createAccompanimentWorkflowSession(sampleAbc, djembeOnlySetup);
+    const updated = applyAccompanimentWorkflowSetupToSession(session, djembeAndFluteSetup);
+
+    expect(session.enabledStepIds).toContain("djembe-fill-validation");
+    expect(session.enabledStepIds).not.toContain("flute-yield-register");
+    expect(updated.setup.instruments.find((instrument) => instrument.id === "flute")?.enabled).toBe(true);
+    expect(updated.enabledStepIds).toContain("flute-yield-register");
+    expect(updated.enabledStepIds).toContain("flute-breath-fill-validation");
+    expect(updated.enabledStepIds).toContain("djembe-fill-validation");
+    expect(getVisibleAccompanimentWorkflowSteps(updated).map((step) => step.id)).toEqual(updated.enabledStepIds);
   });
 
   it("derives combined accompaniment steps for every enabled instrument", () => {
@@ -240,17 +294,24 @@ describe("accompaniment workflow", () => {
     expect(layers.combined).toContain("Layer 2");
   });
 
-  it("does not generate support layers for solo fingerstyle workflows", () => {
+  it("generates support layers for completed enabled solo support branches", () => {
     const session = createAccompanimentWorkflowSession(sampleAbc, {
       ...getDefaultAccompanimentWorkflowSetup(),
       style: "solo-fingerstyle",
+      instruments: getDefaultAccompanimentWorkflowSetup().instruments.map((instrument) => ({
+        ...instrument,
+        enabled: instrument.id === "djembe",
+      })),
     });
     const accompaniment = generateAccompanimentStage(sampleAbc);
-    selectOption(session, "djembe-fill-validation");
+    selectOption(session, "djembe-fill-validation", { grooveProfile: "devotional", density: "moderate" });
     selectOption(session, "flute-breath-fill-validation");
     selectOption(session, "violin-expression-validation");
 
-    expect(generateAccompanimentSupportLayers(sampleAbc, { workflow: session, accompaniment }).combined).toBeNull();
+    const layers = generateAccompanimentSupportLayers(sampleAbc, { workflow: session, accompaniment });
+    expect(layers.djembe).toContain("V:Djembe");
+    expect(layers.flute).toBeNull();
+    expect(layers.violin).toBeNull();
   });
 
   it("locks branch steps until the shared harmonic foundation is selected", () => {
@@ -682,10 +743,12 @@ K:C
     expect(guitarTab?.required).toEqual(["profileId", "events"]);
     expect(guitarTab?.properties).toHaveProperty("profileId");
     expect(guitarTab?.properties).toHaveProperty("voicingProfileId");
+    expect(String(events?.description)).toContain("covering every source/body measure");
     expect(events?.items?.properties).toHaveProperty("sourceEventId");
     expect(events?.items?.required).toEqual([
       "measureIndex",
       "beat",
+      "sourceEventId",
       "note",
       "string",
       "fret",
@@ -704,8 +767,13 @@ K:C
     const data = schema.function.parameters.properties.options.items.properties.data as WorkflowDataSchemaForTest;
 
     expect(prompt).toContain("solo guitar fingerstyle");
-    expect(prompt).toContain("play the melody itself");
+    expect(prompt).toContain("carries the melody");
     expect(prompt).toContain("chord-derived bass");
+    expect(prompt).toContain("one merged physical Guitar matrix covering every source/body measure");
+    expect(prompt).toContain("treble melody events on strings 1-3");
+    expect(prompt).toContain("bass-string chord anchors on strings 4-6");
+    expect(prompt).toContain("beat-1 roots");
+    expect(prompt).toContain("merged final tab events");
     expect(prompt).toContain("formPlan.intro");
     expect(prompt).toContain("formPlan.interlude");
     expect(prompt).toContain("formPlan.outro");

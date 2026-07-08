@@ -545,16 +545,10 @@ export function buildAccompanimentAbc({
   const visibleBlocks = alignedBlocks.filter((block) => layerVisibility[block.name] !== false);
   const visibleVoiceNames = visibleBlocks.map((block) => block.name);
 
-  // Always include Melody in score so the staff stays visible (rests show the silent voice)
-  const scoreParts: string[] = [];
-  if (visibleVoiceNames.includes("Guitar")) {
-    // Merge Melody and Guitar onto a single staff so the Tablature plugin reads both!
-    scoreParts.push("(Melody Guitar)");
-    scoreParts.push(...visibleVoiceNames.filter(v => v !== "Guitar").map((v) => `(${v})`));
-  } else {
-    scoreParts.push("(Melody)");
-    scoreParts.push(...visibleVoiceNames.map((voiceName) => `(${voiceName})`));
-  }
+  // Always include Melody in score so the staff stays visible (rests show the silent voice).
+  // Guitar stays on its own staff because the fingerstyle voice now carries the melody itself;
+  // tablature must be generated from Guitar only, not a merged Melody+Guitar staff.
+  const scoreParts: string[] = ["(Melody)", ...visibleVoiceNames.map((voiceName) => `(${voiceName})`)];
 
   const output = [...headerLines];
   if (scoreParts.length > 0) {

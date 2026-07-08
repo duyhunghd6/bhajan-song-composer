@@ -24,6 +24,15 @@ export const COMPOSER_STEPS = [
     title: "Step 3: Accompaniment",
     focus: "Generate piano accompaniment or guitar fingerstyle from the harmonized melody.",
     backLabel: "Back to Harmony",
+    nextLabel: "Save & Continue",
+  },
+  {
+    id: "guitar-fingerstyle",
+    number: 3.1,
+    label: "Guitar Fingerstyle",
+    title: "Step 3.1: Guitar Fingerstyle",
+    focus: "Generate and review guitar fingerstyle arrangement.",
+    backLabel: "Back to Accompaniment",
     nextLabel: "Save & Review",
   },
   {

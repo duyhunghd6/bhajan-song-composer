@@ -123,7 +123,7 @@ export function RunOptionList({
   onSelect: (option: AccompanimentWorkflowOption, runId: string) => void;
 }) {
   const stepState = workflow.steps[stepId] ?? emptyStepState();
-  const runs = [...stepState.runs].reverse();
+  const runs = [...stepState.runs].slice(-1);
 
   if (runs.length === 0) {
     return (

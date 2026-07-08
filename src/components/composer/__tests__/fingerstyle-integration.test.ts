@@ -27,6 +27,9 @@ describe("fingerstyle Composer integration", () => {
     });
     expect(integration.composerLayer.abc).toContain("T:Fingerstyle Guitar (Folk / Travis Override)");
     expect(integration.composerLayer.abc).toContain('V:Guitar clef=treble-8 name="Layer 2 Guitar Fingerstyle"');
+    expect(integration.composerLayer.abc).toContain("%%MIDI program 24");
+    expect(integration.composerLayer.abc).toContain("[E,E]2 E2 [B,G]2 A2");
+    expect(integration.composerLayer.abc).toContain("[B,B]2 B2 [^F,B]2 A2");
     expect(integration.arrangement.outputContract.artifacts.formPlan.sections.map((section) => section.kind)).toEqual([
       "intro",
       "body",
@@ -35,22 +38,23 @@ describe("fingerstyle Composer integration", () => {
     ]);
     expect(integration.arrangement.outputContract.artifacts.guitarTabEvents).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ role: "melody" }),
-        expect.objectContaining({ role: "bass" }),
+        expect.objectContaining({ measureIndex: 0, beat: 1, role: "melody" }),
+        expect.objectContaining({ measureIndex: 0, beat: 1, role: "bass" }),
+        expect.objectContaining({ measureIndex: 0, beat: 3, role: "fifth" }),
       ])
     );
 
     expect(integration.playability).toMatchObject({
       status: "ready_for_integration",
       valid: true,
-      maxFretSpan: 3,
+      maxFretSpan: 5,
       failedConstraints: [],
     });
 
     expect(integration.fretboard.positions).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ string: 6, fret: 0, note: "E", tone: "bass" }),
-        expect.objectContaining({ string: 1, fret: 0, note: "E", tone: "melody" }),
+        expect.objectContaining({ string: 6, fret: 0, note: "E2", tone: "bass" }),
+        expect.objectContaining({ string: 1, fret: 0, note: "E4", tone: "melody" }),
       ])
     );
     expect(integration.noteMarkers).toEqual(
@@ -100,11 +104,11 @@ describe("fingerstyle Composer integration", () => {
           noteLabel: "string 1 fret 0",
         }),
         expect.objectContaining({
-          id: "fingerstyle-picking-0-2-guide-tone-3-0",
+          id: "fingerstyle-picking-0-2-guide-tone-1-0",
           hand: "right",
-          fingerNumber: 2,
-          techniqueLabel: "guide-tone (i)",
-          noteLabel: "string 3 fret 0",
+          fingerNumber: 4,
+          techniqueLabel: "guide-tone (a)",
+          noteLabel: "string 1 fret 0",
         }),
       ])
     );

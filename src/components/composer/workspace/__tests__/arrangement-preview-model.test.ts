@@ -47,6 +47,19 @@ K:C
 V:Piano clef=treble
 [V:Piano] E2 G2 C2 G2 | E2 G2 C2 G2 |`;
 
+const djembeOnlySetup = {
+  style: "solo-fingerstyle" as const,
+  instruments: [
+    { id: "guitar-classic" as const, enabled: false, order: 0 },
+    { id: "guitar-acoustic" as const, enabled: false, order: 1 },
+    { id: "piano" as const, enabled: false, order: 2 },
+    { id: "indian-harmonium" as const, enabled: false, order: 3 },
+    { id: "flute" as const, enabled: false, order: 4 },
+    { id: "djembe" as const, enabled: true, order: 5 },
+    { id: "violin" as const, enabled: false, order: 6 },
+  ],
+};
+
 function makeOption(id: string, data: Record<string, unknown> = {}): AccompanimentWorkflowOption {
   return {
     id,
@@ -196,6 +209,36 @@ describe("arrangement preview model", () => {
     expect(model.accompaniment.guitarTabEnabled).toBe(true);
   });
 
+  it("keeps fingerstyle guitar as one tab-enabled voice grouped under each Melody staff system", () => {
+    const fingerstyleGuitarAbc = `X:1
+T:Fingerstyle Layer
+M:4/4
+L:1/8
+K:C
+V:Guitar clef=treble-8 name="Layer 2 Guitar Fingerstyle"
+%%MIDI program 24
+% @fingerstyle-section body
+| [C,C]2 D2 [G,E]2 F2 | [G,G]4 [D,G]4 |`;
+
+    const model = buildModel({
+      generatedGuitar: fingerstyleGuitarAbc,
+      accompanimentLayerVisibility: {
+        __melody__: true,
+        __strong_beats__: false,
+        __chords__: false,
+        __guitar_tab__: true,
+      },
+    });
+
+    expect(model.accompaniment.rawAbc).toContain('V:Guitar clef=treble-8 name="Layer 2 Guitar Fingerstyle" stem=down');
+    expect(model.accompaniment.rawAbc).toContain("% Staff system 1: Melody and visible instruments share this measure range.");
+    expect(model.accompaniment.rawAbc).toContain("[V:Melody] | C2 D2 E2 F2 | G4 G4 |");
+    expect(model.accompaniment.rawAbc).toContain("[V:Guitar] | [C,C]2 D2 [G,E]2 F2 | [G,G]4 [D,G]4 |");
+    expect(model.accompaniment.voiceNames).toContain("Guitar");
+    expect(model.accompaniment.visibleVoiceNames).toContain("Guitar");
+    expect(model.accompaniment.guitarTabEnabled).toBe(true);
+  });
+
   it("applies Melody singer program and per-layer volume directives to preview ABC", () => {
     const model = buildModel({
       activeAbc: harmonizedAbc,
@@ -205,10 +248,10 @@ describe("arrangement preview model", () => {
     });
 
     expect(model.harmony.rawAbc).toContain("%%MIDI program 52");
-    expect(model.harmony.rawAbc).toContain("%%MIDI vol 64");
+    expect(model.harmony.rawAbc).toContain("%%MIDI beat 64 64 64 1");
     expect(model.harmony.rawAbc).toContain("%%MIDI chordvol 32");
     expect(model.accompaniment.rawAbc).toContain("V:Guitar");
-    expect(model.accompaniment.rawAbc).toContain("%%MIDI vol 95");
+    expect(model.accompaniment.rawAbc).toContain("%%MIDI beat 95 95 95 1");
   });
 
   it("keeps hidden accompaniment voices available in raw-derived layer controls", () => {
@@ -277,6 +320,27 @@ describe("arrangement preview model", () => {
     expect(afterReset.accompaniment.abc).toContain("V:Piano");
     expect(afterReset.accompaniment.guitarTabEnabled).toBe(false);
     expect(afterReset.accompaniment.appliedWorkflowStep?.id).toBe("voice-leading-validation");
+  });
+
+  it("applies Djembe support ABC after the Djembe branch completes in a Djembe-only solo setup", () => {
+    let workflow = createAccompanimentWorkflowSession(sampleAbc, djembeOnlySetup);
+    workflow = selectWorkflowStep(
+      workflow,
+      "djembe-groove-interlock",
+      makeOption("djembe-groove", { grooveProfile: "devotional", density: "moderate", bassSync: true })
+    );
+    workflow = selectWorkflowStep(
+      workflow,
+      "djembe-fill-validation",
+      makeOption("djembe-fills", { fillPolicy: "cadence-only", backbeatSlaps: true })
+    );
+
+    const model = buildModel({ workflow });
+
+    expect(model.accompaniment.appliedWorkflowStep?.id).toBe("djembe-fill-validation");
+    expect(model.accompaniment.rawAbc).toContain("V:Djembe");
+    expect(model.accompaniment.voiceNames).toContain("Djembe");
+    expect(model.accompaniment.rawAbc).toContain("ABCNotation applied after Step 16: Djembe Fill & Transient Validation");
   });
 
   it("derives guitar tablature render options from score order", () => {

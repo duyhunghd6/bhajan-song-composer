@@ -1,10 +1,11 @@
 import { generateAccompanimentStage } from "./accompaniment-stage";
+import { buildAbcDurationContext, formatAbcDuration, normalizeAbcMeasureDuration, type AbcDurationContext } from "./abc-duration";
 import {
   extractMelodyMeasures,
-  getBeatsPerMeasure,
-  melodyNoteToQuarterAbc,
+  extractMelodyMeasureTimeline,
   noteNameToAbc,
   resolveProgression,
+  type MelodyNoteEvent,
 } from "./arranger-utils";
 import {
   FingerstyleCompressionOptions,
@@ -15,6 +16,7 @@ import {
 } from "./fingerstyle-compressor";
 import { generateFullTrackExpansionStage } from "./full-track-expansion-stage";
 import { generateHarmonizationStage } from "./harmonizer";
+import type { ChordInfo } from "./chords";
 import type {
   FingerstyleAccompanimentSourceLayer,
   FingerstyleArrangement,
@@ -38,7 +40,13 @@ import type {
   FingerstyleUpwardConstructionContext,
 } from "./fingerstyle-arranger/types";
 import { scientificPitchForStringFret } from "./guitar-playability";
-import type { GuitarTabEvent } from "./guitar-tab-validation";
+import type { GuitarTabEvent, GuitarTabValidationResult } from "./guitar-tab-validation";
+import {
+  buildFingerstyleEventMatrix,
+  canonicalEventsToTabEvents,
+  renderCanonicalMeasureAbc,
+  type FingerstyleEventMatrix,
+} from "./fingerstyle-arranger/event-matrix";
 export type * from "./fingerstyle-arranger/types";
 
 
@@ -316,33 +324,37 @@ function lastBodyMeasure(measures: FingerstyleMeasure[]): FingerstyleMeasure | n
   return measures.at(-1) ?? null;
 }
 
-function buildIntroMeasure(measures: FingerstyleMeasure[]): string {
+function normalizeFingerstyleMeasure(measure: string, durationContext: AbcDurationContext): string {
+  return normalizeAbcMeasureDuration(measure, durationContext.fullMeasureUnits);
+}
+
+function buildIntroMeasure(measures: FingerstyleMeasure[], durationContext: AbcDurationContext): string {
   const first = firstBodyMeasure(measures);
-  if (!first) return "z8";
+  if (!first) return `z${formatAbcDuration(durationContext.fullMeasureUnits)}`;
   const bass = first.bassNotes[0] ?? "E,";
   const fifth = first.bassNotes[1] ?? bass;
   const melody = first.melodyNotes[0] ? noteNameToAbc(first.melodyNotes[0]) : "E";
-  return `${bass}2 ${fifth}2 ${melody}2 ${fifth}2`;
+  return normalizeFingerstyleMeasure(`${bass}2 ${fifth}2 ${melody}2 ${fifth}2`, durationContext);
 }
 
-function buildInterludeMeasure(measures: FingerstyleMeasure[]): string {
+function buildInterludeMeasure(measures: FingerstyleMeasure[], durationContext: AbcDurationContext): string {
   const pivot = measures[Math.max(0, Math.floor(measures.length / 2) - 1)] ?? firstBodyMeasure(measures);
-  if (!pivot) return "z8";
+  if (!pivot) return `z${formatAbcDuration(durationContext.fullMeasureUnits)}`;
   const bass = pivot.bassNotes[0] ?? "E,";
   const fifth = pivot.bassNotes[1] ?? bass;
   const melody = pivot.melodyNotes.at(-1) ? noteNameToAbc(pivot.melodyNotes.at(-1)!) : "G";
-  return `${bass}2 ${melody}2 ${fifth}2 ${melody}2`;
+  return normalizeFingerstyleMeasure(`${bass}2 ${melody}2 ${fifth}2 ${melody}2`, durationContext);
 }
 
-function buildOutroMeasure(measures: FingerstyleMeasure[]): string {
+function buildOutroMeasure(measures: FingerstyleMeasure[], durationContext: AbcDurationContext): string {
   const last = lastBodyMeasure(measures);
-  if (!last) return "z8";
+  if (!last) return `z${formatAbcDuration(durationContext.fullMeasureUnits)}`;
   const bass = last.bassNotes[0] ?? "E,";
   const melody = last.melodyNotes.at(-1) ? noteNameToAbc(last.melodyNotes.at(-1)!) : "E";
-  return `${bass}2 ${melody}2 ${bass}4`;
+  return normalizeFingerstyleMeasure(`${bass}2 ${melody}2 ${bass}4`, durationContext);
 }
 
-function buildFingerstyleAbc(measures: FingerstyleMeasure[]): string {
+function buildFingerstyleAbc(measures: FingerstyleMeasure[], durationContext: AbcDurationContext): string {
   const interludeAfter = Math.max(1, Math.ceil(measures.length / 2));
   const beforeInterlude = measures.slice(0, interludeAfter).map((measure) => measure.abc);
   const afterInterlude = measures.slice(interludeAfter).map((measure) => measure.abc);
@@ -350,25 +362,115 @@ function buildFingerstyleAbc(measures: FingerstyleMeasure[]): string {
     'V:Guitar clef=treble-8 name="Layer 2 Guitar Fingerstyle"',
     "%%MIDI program 24",
     "% @fingerstyle-section intro",
-    `| ${buildIntroMeasure(measures)} |`,
+    `| ${buildIntroMeasure(measures, durationContext)} |`,
     "% @fingerstyle-section body",
     `| ${beforeInterlude.join(" | ")} |`,
     "% @fingerstyle-section interlude",
-    `| ${buildInterludeMeasure(measures)} |`,
+    `| ${buildInterludeMeasure(measures, durationContext)} |`,
   ];
 
   if (afterInterlude.length > 0) {
     lines.push("% @fingerstyle-section body", `| ${afterInterlude.join(" | ")} |`);
   }
 
-  lines.push("% @fingerstyle-section outro", `| ${buildOutroMeasure(measures)} |`);
+  lines.push("% @fingerstyle-section outro", `| ${buildOutroMeasure(measures, durationContext)} |`);
   return lines.join("\n");
 }
 
-function buildGeneratedArtifacts(compression: FingerstyleDownwardCompression, finalAbc: string, formPlan: FingerstyleFormPlan): FingerstyleGeneratedArtifacts {
-  const tablatureMeasures = compression.physicalHandMapping.map((measure): FingerstyleTablatureMeasure => ({
+interface TimedFingerstyleToken {
+  at: number;
+  token: string;
+  role: "melody" | "bass";
+}
+
+function uniqueSortedOffsets(offsets: number[], fullMeasureUnits: number): number[] {
+  return [...new Set(offsets
+    .filter((offset) => offset >= 0 && offset < fullMeasureUnits)
+    .map((offset) => Number(offset.toFixed(6))))]
+    .sort((left, right) => left - right);
+}
+
+function bassAnchorOffsets(durationContext: AbcDurationContext): number[] {
+  const { meter, unitsPerBeat, fullMeasureUnits } = durationContext;
+  let secondaryOffset = Math.floor(meter.numerator / 2) * unitsPerBeat;
+
+  if (meter.numerator === 3 && meter.denominator === 4) {
+    secondaryOffset = 2 * unitsPerBeat;
+  } else if (meter.numerator === 6 && meter.denominator === 8) {
+    secondaryOffset = 3 * unitsPerBeat;
+  }
+
+  return uniqueSortedOffsets([0, secondaryOffset], fullMeasureUnits);
+}
+
+function buildMergedFingerstyleMeasure(
+  melody: MelodyNoteEvent[],
+  chord: ChordInfo,
+  durationContext: AbcDurationContext
+): { abc: string; melodyNotes: string[]; bassNotes: string[] } {
+  const bassNotes = [
+    noteNameToAbc(chord.notes[0] ?? chord.chordName, ","),
+    noteNameToAbc(chord.notes[2] ?? chord.notes[0] ?? chord.chordName, ","),
+  ];
+  const tokens: TimedFingerstyleToken[] = [];
+  const boundaries = new Set<number>([0, durationContext.fullMeasureUnits]);
+  let elapsed = 0;
+
+  for (const event of melody) {
+    const at = Math.min(elapsed, durationContext.fullMeasureUnits);
+    const duration = Math.min(event.duration, durationContext.fullMeasureUnits - at);
+    if (duration > 0) {
+      tokens.push({ at, token: event.note, role: "melody" });
+      boundaries.add(at);
+      boundaries.add(at + duration);
+    }
+    elapsed += event.duration;
+  }
+
+  for (const [index, offset] of bassAnchorOffsets(durationContext).entries()) {
+    tokens.push({ at: offset, token: bassNotes[index % bassNotes.length], role: "bass" });
+    boundaries.add(offset);
+  }
+
+  const sortedBoundaries = Array.from(boundaries)
+    .filter((offset) => offset >= 0 && offset <= durationContext.fullMeasureUnits)
+    .sort((left, right) => left - right);
+  const rendered: string[] = [];
+
+  for (let index = 0; index < sortedBoundaries.length - 1; index += 1) {
+    const at = sortedBoundaries[index];
+    const next = sortedBoundaries[index + 1];
+    const duration = next - at;
+    if (duration <= 0) continue;
+
+    const sounding = tokens.filter((token) => Math.abs(token.at - at) < 1e-6);
+    const melodyTokens = sounding.filter((token) => token.role === "melody").map((token) => token.token);
+    const bassTokens = sounding.filter((token) => token.role === "bass").map((token) => token.token);
+    const durationSuffix = formatAbcDuration(duration);
+
+    if (melodyTokens.length > 0 && bassTokens.length > 0) {
+      rendered.push(`[${[...bassTokens, ...melodyTokens].join("")}]${durationSuffix}`);
+    } else if (bassTokens.length > 0) {
+      rendered.push(`${bassTokens[0]}${durationSuffix}`);
+    } else if (melodyTokens.length > 0) {
+      rendered.push(`${melodyTokens[0]}${durationSuffix}`);
+    } else {
+      rendered.push(`z${durationSuffix}`);
+    }
+  }
+
+  return {
+    abc: normalizeFingerstyleMeasure(rendered.join(" "), durationContext),
+    melodyNotes: melody.map((event) => event.note),
+    bassNotes,
+  };
+}
+
+function buildGeneratedArtifacts(matrix: FingerstyleEventMatrix, finalAbc: string, formPlan: FingerstyleFormPlan): FingerstyleGeneratedArtifacts {
+  const matrixEvents = matrix.measures.flatMap((measure) => measure.events);
+  const tablatureMeasures = matrix.measures.map((measure): FingerstyleTablatureMeasure => ({
     measureIndex: measure.measureIndex,
-    positions: measure.events.filter(isStringedEvent).map((event) => ({
+    positions: measure.events.map((event) => ({
       note: event.note,
       string: event.string,
       fret: event.fret,
@@ -380,69 +482,103 @@ function buildGeneratedArtifacts(compression: FingerstyleDownwardCompression, fi
   const fretboardHighlightEvents = tablatureMeasures.flatMap((measure) =>
     measure.positions.map((position) => ({ ...position, measureIndex: measure.measureIndex }))
   );
-  const noteMarkerEvents = compression.physicalHandMapping.flatMap((measure): FingerstyleNoteMarkerEvent[] =>
-    measure.events.flatMap((event) => {
-      const pickingFingerNumbers: Record<FingerstylePhysicalHandEvent["pickingFinger"], 1 | 2 | 3 | 4> = {
-        p: 1,
-        i: 2,
-        m: 3,
-        a: 4,
-      };
-      const pickingEvent: FingerstyleNoteMarkerEvent = {
-        measureIndex: measure.measureIndex,
+  const pickingFingerNumbers: Record<FingerstylePhysicalHandEvent["pickingFinger"], 1 | 2 | 3 | 4> = {
+    p: 1,
+    i: 2,
+    m: 3,
+    a: 4,
+  };
+  const noteMarkerEvents = matrixEvents.flatMap((event): FingerstyleNoteMarkerEvent[] => {
+    const pickingEvent: FingerstyleNoteMarkerEvent = {
+      measureIndex: event.measureIndex,
+      beat: event.beat,
+      hand: "right",
+      sourceHand: "picking",
+      fingerNumber: pickingFingerNumbers[event.pickingFinger],
+      musicalFingering: event.pickingFinger,
+      technique: event.technique,
+      string: event.string,
+      fret: event.fret,
+    };
+
+    if (event.frettingFinger === null) return [pickingEvent];
+
+    return [
+      pickingEvent,
+      {
+        measureIndex: event.measureIndex,
         beat: event.beat,
-        hand: "right",
-        sourceHand: "picking",
-        fingerNumber: pickingFingerNumbers[event.pickingFinger],
-        musicalFingering: event.pickingFinger,
+        hand: "left",
+        sourceHand: "fretting",
+        fingerNumber: event.frettingFinger,
         technique: event.technique,
         string: event.string,
         fret: event.fret,
-      };
-
-      if (event.frettingFinger === null) return [pickingEvent];
-
-      return [
-        pickingEvent,
-        {
-          measureIndex: measure.measureIndex,
-          beat: event.beat,
-          hand: "left",
-          sourceHand: "fretting",
-          fingerNumber: event.frettingFinger,
-          technique: event.technique,
-          string: event.string,
-          fret: event.fret,
-        },
-      ];
-    })
-  );
+      },
+    ];
+  });
 
   return {
     finalAbc,
     formPlan,
-    guitarTabEvents: buildGuitarTabEvents(compression, formPlan),
+    guitarTabEvents: matrix.tabEvents,
     tablature: { measures: tablatureMeasures },
     fretboardHighlightEvents,
     noteMarkerEvents,
+    appliedWorkflowOption: matrix.appliedWorkflowOption,
+  };
+}
+
+function buildMatrixPlayabilityReport(matrix: FingerstyleEventMatrix): FingerstylePlayabilityReport {
+  return {
+    valid: matrix.validation.valid,
+    measures: matrix.measures.map((measure): FingerstylePlayabilityMeasureReport => {
+      const groups = matrix.validation.validatedGroups.filter((group) => group.measureIndex === measure.measureIndex);
+      const issues = matrix.validation.issues.filter((issue) => issue.measureIndex === measure.measureIndex);
+      const failedConstraints: FingerstyleFailedConstraint[] = issues.some((issue) => issue.code === "fret-span")
+        ? ["fret-span"]
+        : issues.length > 0
+          ? ["fretting-assignments"]
+          : [];
+      return {
+        measureIndex: measure.measureIndex,
+        chord: measure.chord,
+        fretSpan: Math.max(0, ...groups.map((group) => group.fretSpan)),
+        maxFretSpan: 5,
+        simultaneousMelodyBassFeasible: failedConstraints.length === 0,
+        frettingFingerCount: Math.max(0, ...groups.map((group) => group.frettingFingerCount)),
+        pickingFingerCount: new Set(measure.events.map((event) => event.pickingFinger)).size,
+        failedConstraints,
+      };
+    }),
   };
 }
 
 function buildOutputContract(
   upwardConstruction: FingerstyleUpwardConstructionContext,
   downwardCompression: FingerstyleDownwardCompression,
+  matrix: FingerstyleEventMatrix,
   finalAbc: string,
   formPlan: FingerstyleFormPlan
 ): FingerstyleOutputContract {
   return {
     sourceLayers: upwardConstruction.layers,
     outerVoiceMap: downwardCompression.outerVoiceMap,
-    playabilityReport: buildPlayabilityReport(downwardCompression),
+    playabilityReport: buildMatrixPlayabilityReport(matrix),
     fallbackSuggestions: downwardCompression.fallbackSuggestions,
     innerVoiceReduction: downwardCompression.innerVoiceReduction,
-    rhythmicEventMap: buildRhythmicEventMap(downwardCompression),
+    rhythmicEventMap: matrix.measures.flatMap((measure) => measure.events.map((event) => ({
+      measureIndex: measure.measureIndex,
+      chord: measure.chord,
+      beat: event.beat,
+      role: event.role,
+      technique: event.technique,
+      pickingFinger: event.pickingFinger,
+      string: event.string,
+      fret: event.fret,
+    }))),
     profileMetadata: buildProfileMetadata(downwardCompression),
-    artifacts: buildGeneratedArtifacts(downwardCompression, finalAbc, formPlan),
+    artifacts: buildGeneratedArtifacts(matrix, finalAbc, formPlan),
   };
 }
 
@@ -452,47 +588,30 @@ export function generateFingerstyleArrangement(
   options: FingerstyleCompressionOptions = {}
 ): FingerstyleArrangement {
   const resolved = resolveProgression(abcString, progression);
+  const melodyTimelines = extractMelodyMeasureTimeline(abcString);
   const melodyMeasures = extractMelodyMeasures(abcString);
-  const beatCount = getBeatsPerMeasure(resolved.timeSignature);
   const resolvedProgression = resolved.chords.map((chord) => chord.chordName);
+  const matrix = buildFingerstyleEventMatrix({ abcString, timelines: melodyTimelines, chords: resolved.chords, options });
 
-  const measures = resolved.chords.map((chord, measureIndex) => {
-    const melody = melodyMeasures[measureIndex] ?? [];
-    const bassNotes = [noteNameToAbc(chord.notes[0], ","), noteNameToAbc(chord.notes[2], ",")];
-    const tokens: string[] = [];
-    const melodyNotes: string[] = [];
-
-    for (let beat = 0; beat < beatCount; beat++) {
-      if (beat % 2 === 0) {
-        const bass = bassNotes[(beat / 2) % bassNotes.length];
-        tokens.push(`${bass}2`);
-      } else {
-        const melodyEvent = melody[(beat - 1) / 2];
-        tokens.push(melodyNoteToQuarterAbc(melodyEvent));
-        if (melodyEvent) melodyNotes.push(melodyEvent.note);
-      }
-    }
-
-    return {
-      measureIndex,
-      chord: chord.chordName,
-      bassNotes,
-      melodyNotes,
-      abc: tokens.join(" "),
-    };
-  });
+  const measures = matrix.measures.map((measure): FingerstyleMeasure => ({
+    measureIndex: measure.measureIndex,
+    chord: measure.chord,
+    bassNotes: measure.events.filter((event) => event.role === "bass" || event.role === "fifth").map((event) => event.abcToken),
+    melodyNotes: measure.events.filter((event) => event.role === "melody").map((event) => event.abcToken),
+    abc: renderCanonicalMeasureAbc(measure, matrix.durationContext),
+  }));
 
   const upwardConstruction = buildUpwardConstructionContext(abcString, resolvedProgression, melodyMeasures);
   const downwardCompression = compressFingerstyleArrangement(resolved.chords, melodyMeasures, options);
   const formPlan = buildFingerstyleFormPlan(measures.length);
-  const abc = buildFingerstyleAbc(measures);
+  const abc = buildFingerstyleAbc(measures, matrix.durationContext);
 
   return {
     key: resolved.key,
     timeSignature: resolved.timeSignature,
     upwardConstruction,
     downwardCompression,
-    outputContract: buildOutputContract(upwardConstruction, downwardCompression, abc, formPlan),
+    outputContract: buildOutputContract(upwardConstruction, downwardCompression, matrix, abc, formPlan),
     measures,
     abc,
   };
