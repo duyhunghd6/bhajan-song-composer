@@ -1,5 +1,7 @@
 import { splitAbcMeasureSegments } from "./abc-duration";
 import { normalizeAbcVoiceSyntax } from "./abc-voice-normalization";
+import { resolveProgression } from "./arranger-utils";
+import { convertAbcToTimeSliceGrid } from "./fingerstyle-arranger/time-slice";
 import {
   ACCOMPANIMENT_CHORD_INGESTION_STEP_IDS,
   ACCOMPANIMENT_GUITAR_TAB_VALIDATION_STEP_IDS,
@@ -157,12 +159,6 @@ export function getEnabledAccompanimentWorkflowStepIds(setupInput?: Partial<Acco
   const seenScopes = new Set<AccompanimentWorkflowScope>(["shared"]);
   const enabledInstruments = orderedAccompanimentInstruments(setup).filter((instrument) => instrument.enabled);
 
-  if (setup.style === "solo-fingerstyle") {
-    const hasGuitar = enabledInstruments.some((instrument) => instrumentScope(instrument.id) === "guitar");
-    if (hasGuitar) stepIds.push(...ACCOMPANIMENT_WORKFLOW_BRANCH_STEP_IDS.guitar);
-    return stepIds;
-  }
-
   for (const instrument of enabledInstruments) {
     const scope = instrumentScope(instrument.id);
     if (seenScopes.has(scope)) continue;
@@ -297,6 +293,34 @@ export function createAccompanimentWorkflowSession(
     pianoProfileHint: null,
     setup,
     enabledStepIds,
+  };
+}
+
+export function applyAccompanimentWorkflowSetupToSession(
+  session: AccompanimentWorkflowSession,
+  setupInput: Partial<AccompanimentWorkflowSetup>
+): AccompanimentWorkflowSession {
+  const setup = normalizeAccompanimentWorkflowSetup(setupInput);
+  const enabledStepIds = getEnabledAccompanimentWorkflowStepIds(setup);
+  const enabledStepIdSet = new Set<AccompanimentWorkflowStepId>(enabledStepIds);
+  const updatedSession: AccompanimentWorkflowSession = {
+    ...session,
+    setup,
+    enabledStepIds,
+  };
+  const nextUncompletedStepId = getNextUncompletedWorkflowStepId(updatedSession);
+  const currentStepId = nextUncompletedStepId
+    ?? (enabledStepIdSet.has(session.currentStepId) ? session.currentStepId : enabledStepIds[0] ?? "key-scale-cadence");
+
+  return {
+    ...updatedSession,
+    currentStepId,
+    guitarProfileHint: enabledStepIds.some((stepId) => ACCOMPANIMENT_WORKFLOW_BRANCH_STEP_IDS.guitar.includes(stepId))
+      ? updatedSession.guitarProfileHint
+      : null,
+    pianoProfileHint: enabledStepIds.some((stepId) => ACCOMPANIMENT_WORKFLOW_BRANCH_STEP_IDS.piano.includes(stepId))
+      ? updatedSession.pianoProfileHint
+      : null,
   };
 }
 
@@ -490,7 +514,8 @@ function formatWorkflowSetup(setupInput?: Partial<AccompanimentWorkflowSetup> | 
     disabled.length ? `- Disabled/skipped instruments: ${disabled.map((instrument) => ACCOMPANIMENT_INSTRUMENT_LABELS[instrument.id]).join(", ")}` : "- Disabled/skipped instruments: none",
   ];
   if (setup.style === "solo-fingerstyle") {
-    lines.push("- Solo/Fingerstyle rule: compress accompaniment onto the top enabled guitar and do not propose piano, harmonium, djembe, or flute arrangement branches.");
+    const enabledLabels = enabled.map((instrument) => ACCOMPANIMENT_INSTRUMENT_LABELS[instrument.id]);
+    lines.push(`- Solo/Fingerstyle rule: generate only the enabled instrument branches${enabledLabels.length ? ` (${enabledLabels.join(", ")})` : ""}; do not propose or wait for disabled instrument branches. Guitar branches must carry the melody as fingerstyle when a guitar is enabled.`);
   } else {
     lines.push("- Combined accompaniment rule: respect the ordered stack; lower instruments carry foundation/bass duties, upper instruments carry treble fills or transient color while yielding to melody.");
   }
@@ -855,15 +880,36 @@ export function buildAccompanimentWorkflowPrompt(input: {
     ? `\nOne physical guitar validation requirement: each option must prove it is playable on one physical guitar. Each option.data MUST include guitarTab.profileId, guitarTab.voicingProfileId, and guitarTab.events with measureIndex, beat, note, string, fret, role, and sourceEventId when mapping a source melody/chord event. Use octave/register-bearing note labels such as E2, B3, and F#4. Before finalizing an option, call valid_guitar_tab with the same profileId, voicingProfileId, and events. If valid_guitar_tab reports any issue, revise the tab and call valid_guitar_tab again. Hard physical rules to prove in validation notes: (1) simultaneous notes may form a chord across multiple strings, but one physical string may appear only once and one source note/event may be assigned to only one string; (2) every string/fret/note is inside the selected guitar fretboard range; (3) one left hand can fret the simultaneous target positions for the selected profile/voicing. ${input.stepId === "guitar-comping-profile" ? "For Guitar Profile, guitarTab.events may be a representative one-measure pattern sample that proves the chosen comping/picking profile is playable on one guitar." : "For this step, guitarTab.events should represent the concrete voicing, fill, polish, or fingerstyle events being selected."}`
     : "";
   const guitarFingerstyleInstruction = input.stepId === "guitar-fingerstyle"
-    ? "\nGuitar Fingerstyle step-specific requirement: finalize a solo guitar fingerstyle plan, not a rhythm-only accompaniment. Each option.data MUST include mode=\"solo-fingerstyle\", carriesMelody=true, pickingProfile (strict-pima or folk-travis), bassStrategy derived from the selected chord progression roots/fifths/approaches, formPlan.intro, formPlan.interlude, and formPlan.outro. The Guitar Fingerstyle part must play the melody itself while adding chord-derived bass. Include tab roles for both melody and bass. Do not hand-write final ABC in this step; the local arranger will render ABC and GUITAR TAB from the selected profile/form plan."
+    ? "\nGuitar Fingerstyle step-specific requirement: finalize a solo guitar fingerstyle plan, not a rhythm-only accompaniment. Each option.data MUST include mode=\"solo-fingerstyle\", carriesMelody=true, pickingProfile (strict-pima or folk-travis), bassStrategy derived from the selected chord progression roots/fifths/approaches, formPlan.intro, formPlan.interlude, and formPlan.outro. The final playable result is one merged physical Guitar matrix covering every source/body measure: treble melody events on strings 1-3 plus bass-string chord anchors on strings 4-6, with beat-1 roots and internal root/fifth/approach bass aligned to the selected chord progression in every body measure. Include tab roles for both melody and bass in the merged final tab events, not only separate analytical Treb/Bass threads. Do not hand-write final ABC in this step; the local arranger will render ABC and GUITAR TAB from the selected profile/form plan."
     : "";
   const lyricChordInstruction = lyricChordAnnotations.length > 0 && isChordIngestionWorkflowStep(input.stepId)
     ? "\n- The source ABC has chord symbols embedded inside the lyric w: lines. Treat those lyric chord symbols as the user-supplied chord progression. Do not invent a different progression; map roles, progression, and validation around these chords."
     : "";
+  const sustainRuleInstruction = isGuitarTabValidationWorkflowStep(input.stepId)
+    ? "\n- The Sustain Rule: If a step has \"state\": \"sustain\" in the Time-Slice grid, the vocal melody is currently ringing out on a specific string. When you add fingerpicking/comping filler notes on empty steps, you are strictly forbidden from placing a note on the exact same string that holds the sustaining melody (treble string 1, 2, or 3)."
+    : "";
   const midiInstruction = "\n- Any generated Guitar Classic/Classical Guitar ABC must include `%%MIDI program 24` immediately after the Guitar voice declaration.\n- Only an exact `Guitar Left Hand` target may be retargeted to Harmonium/Reed Organ, and it must use `%%MIDI program 20`; do not change `Guitar LH Accompaniment`, `Guitar Right Hand`, or generic Guitar layers.";
   const staffSystemInstruction = "\n- Multi-voice ABC line grouping requirement: when returning ABC with Melody plus Guitar/Piano/etc., preserve the source Melody visual staff systems/sentences. Emit/validate each staff-system group as Melody line N, then lyric/helper rows for that Melody line, then every instrument's line N for the same measure range before moving to Melody line N+1. Do not write all Melody lines first and all accompaniment lines later when the final ABC contains multiple instruments.";
 
-  return `DEFAULT PROMPT — MUSIC ACCOMPANIMENT WORKFLOW STEP ${step.index}\n\nTask: ${step.label}\n${step.description}\n\nTheory reference to follow:\n${step.theoryReference}\n\nOutput focus:\n${step.outputFocus.map((item) => `- ${item}`).join("\n")}\n\nGlobal hard rules:\n- Return between 1 and 5 distinct options.\n- Every option must include a concise label, summary, justification, warnings, and validation notes.\n- Preserve the source melody ABC exactly unless this step explicitly asks for chord annotations.\n- Respect previously selected workflow decisions.\n- If a choice is musically risky, include a warning instead of hiding the risk.\n- Prefer devotional/bhajan-appropriate support unless the user's note asks otherwise.${midiInstruction}${staffSystemInstruction}${abcDataInstruction}${strongBeatInstruction}${guitarTabInstruction}${guitarFingerstyleInstruction}${lyricChordInstruction}\n\nMetadata:\n${formatMetadata(input.metadata)}\n\nWorkflow setup:\n${formatWorkflowSetup(input.setup)}\n\nPreviously selected workflow context:\n${formatPreviousSelections(input.previousSelections)}\n\nLyric chord annotations:\n${formatLyricChordAnnotations(effectiveSourceAbc)}\n\nSource ABC:\n\`\`\`abc\n${effectiveSourceAbc}\n\`\`\`\n\nUSER NOTE TO ADD TO PROMPT:\n${userNote || "(none)"}`;
+  let timeSliceGridStr = "";
+  if (isGuitarTabValidationWorkflowStep(input.stepId)) {
+    try {
+      const progressionSelection = input.previousSelections.find(s => s.stepId === "chord-progression");
+      let chords: string[] = [];
+      if (progressionSelection && Array.isArray(progressionSelection.data.progression)) {
+        chords = progressionSelection.data.progression as string[];
+      } else {
+        chords = resolveProgression(effectiveSourceAbc).chords.map((c) => c.chordName);
+      }
+      const grid = convertAbcToTimeSliceGrid(effectiveSourceAbc, chords);
+      const gridLines = grid.map(step => JSON.stringify(step));
+      timeSliceGridStr = `\n\n### Time-Slice Melodic Grid (Quantized 16-step grid per measure)\nUse this flat time-sliced grid to plan your fingerstyle arrangement. All durations, rests, and ties have been mapped to 16 steps per measure (4 steps per beat):\n\`\`\`json\n[\n  ${gridLines.join(",\n  ")}\n]\n\`\`\``;
+    } catch (e) {
+      console.error("Failed to generate Time-Slice grid for prompt:", e);
+    }
+  }
+
+  return `DEFAULT PROMPT — MUSIC ACCOMPANIMENT WORKFLOW STEP ${step.index}\n\nTask: ${step.label}\n${step.description}\n\nTheory reference to follow:\n${step.theoryReference}\n\nOutput focus:\n${step.outputFocus.map((item) => `- ${item}`).join("\n")}\n\nGlobal hard rules:\n- Return between 1 and 5 distinct options.\n- Every option must include a concise label, summary, justification, warnings, and validation notes.\n- Preserve the source melody ABC exactly unless this step explicitly asks for chord annotations.\n- Respect previously selected workflow decisions.\n- If a choice is musically risky, include a warning instead of hiding the risk.\n- Prefer devotional/bhajan-appropriate support unless the user's note asks otherwise.${midiInstruction}${staffSystemInstruction}${abcDataInstruction}${strongBeatInstruction}${guitarTabInstruction}${guitarFingerstyleInstruction}${sustainRuleInstruction}${lyricChordInstruction}\n\nMetadata:\n${formatMetadata(input.metadata)}\n\nWorkflow setup:\n${formatWorkflowSetup(input.setup)}\n\nPreviously selected workflow context:\n${formatPreviousSelections(input.previousSelections)}\n\nLyric chord annotations:\n${formatLyricChordAnnotations(effectiveSourceAbc)}\n\nSource ABC:\n\`\`\`abc\n${effectiveSourceAbc}\n\`\`\`${timeSliceGridStr}\n\nUSER NOTE TO ADD TO PROMPT:\n${userNote || "(none)"}`;
 }
 
 export function buildConsolidatedChordIngestionPrompt(input: {

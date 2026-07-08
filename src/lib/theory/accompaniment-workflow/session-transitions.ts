@@ -64,10 +64,14 @@ function getNextUncompletedWorkflowStepId(session: AccompanimentWorkflowSession)
 
 export function mergeRun(workflow: AccompanimentWorkflowSession, run: AccompanimentWorkflowRun, promptNote: string): AccompanimentWorkflowSession {
   const stepState = workflow.steps[run.stepId] ?? emptyStepState();
-  const existingRunIndex = stepState.runs.findIndex((candidate) => candidate.id === run.id);
-  const nextRuns = existingRunIndex >= 0
-    ? stepState.runs.map((candidate, index) => index === existingRunIndex ? run : candidate)
-    : [...stepState.runs, run];
+  
+  // As requested, we just store only 1 last run (plus the active/selected run if it exists to preserve selections)
+  const selectedRun = stepState.activeRunId && stepState.selectedOptionId
+    ? stepState.runs.find((candidate) => candidate.id === stepState.activeRunId)
+    : null;
+  const nextRuns = selectedRun && selectedRun.id !== run.id
+    ? [selectedRun, run]
+    : [run];
   const hasSelectedOption = Boolean(
     stepState.activeRunId
       && stepState.selectedOptionId
