@@ -164,7 +164,7 @@ w: ⬤ * ● *`;
 
   describe("extractChordsFromMeasure", () => {
     it("extracts inline chords and their correct onset offsets", () => {
-      const chords = extractChordsFromMeasure('"Em"E E (EB,) "D"E E (EB,)', "Em");
+      const chords = extractChordsFromMeasure('"Em"E E (EB,) "D"E E (EB,)');
       expect(chords).toEqual([
         { chord: "Em", onsetUnits: 0 },
         { chord: "D", onsetUnits: 4 },

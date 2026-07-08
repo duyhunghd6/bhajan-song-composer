@@ -240,7 +240,7 @@ export function extractMelodyMeasureTimelineWithTies(abcMeasureStr: string): Tim
   });
 }
 
-export function extractChordsFromMeasure(abcMeasure: string, defaultChord: string): { chord: string; onsetUnits: number }[] {
+export function extractChordsFromMeasure(abcMeasure: string): { chord: string; onsetUnits: number }[] {
   const cleanMeasure = cleanAbcMeasureSegment(abcMeasure);
   const chords: { chord: string; onsetUnits: number }[] = [];
   let currentOnset = 0;
@@ -398,7 +398,7 @@ export function convertAbcToTimeSliceGrid(abcString: string, chords: string[]): 
     const lyricStr = finalLyricMeasures[measureIndex];
     const beatWeightStr = finalBeatWeightMeasures[measureIndex];
     const defaultChord = chords[measureIndex] || chords[chords.length - 1] || "C";
-    const measureChords = extractChordsFromMeasure(measureStr, defaultChord);
+    const measureChords = extractChordsFromMeasure(measureStr);
 
     const getChordAtStep = (stepIdx: number): string => {
       const stepOnset = stepIdx * (unitsPerBeat / stepsPerBeat);
