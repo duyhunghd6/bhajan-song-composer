@@ -17,6 +17,7 @@ import {
   buildBreakMeasuresLineToolSchema,
   buildConsolidatedChordIngestionPrompt,
   buildConsolidatedChordIngestionToolSchema,
+  buildQueryGuitarVoicingsToolSchema,
   extractLyricChordAnnotations,
   getAbcMeasureLinePattern,
   getAccompanimentWorkflowLlmToolNames,
@@ -39,6 +40,7 @@ import {
   type StrongBeatEmphasis,
   type StrongBeatIconGenerationResult,
 } from "@/lib/theory/abc-beat-annotations";
+import { query_guitar_voicings } from "@/lib/theory/guitar-voicings";
 import { extractMelodyMeasureTimeline } from "@/lib/theory/arranger-utils";
 import {
   buildValidGuitarTabToolSchema,
@@ -731,20 +733,29 @@ export async function generateAccompanimentWorkflowStep(
       });
     } else if (isGuitarTabValidationWorkflowStep(input.stepId)) {
       rawResult = await requestOpenAiCompatibleToolLoop({
-        systemPrompt: `${systemPrompt} For guitar tab-bearing steps, call valid_guitar_tab with profileId, voicingProfileId, and concrete octave-bearing string/fret events before calling the final generation tool. Revise and revalidate until valid_guitar_tab reports valid=true for one physical guitar: unique string/source assignment, fretboard range, and one-left-hand reach.`,
+        systemPrompt: `${systemPrompt} For guitar tab-bearing steps, call query_guitar_voicings BEFORE fretting any notes. Then call valid_guitar_tab with profileId, voicingProfileId, and concrete octave-bearing string/fret events before calling the final generation tool. Revise and revalidate until valid_guitar_tab reports valid=true for one physical guitar: unique string/source assignment, fretboard range, and one-left-hand reach.`,
         userPrompt: requestPrompt,
-        tools: [buildValidGuitarTabToolSchema(), toolSchema],
+        tools: [buildValidGuitarTabToolSchema(), buildQueryGuitarVoicingsToolSchema(), toolSchema],
         finalToolName: toolName,
-        localTools: [{
-          name: "valid_guitar_tab",
-          execute: (args) => {
-            const events = (args as { events?: unknown }).events;
-            return validateGuitarTab(
-              Array.isArray(events) ? events as GuitarTabEvent[] : [],
-              guitarTabValidationOptionsFromToolArgs(args, input)
-            );
+        localTools: [
+          {
+            name: "valid_guitar_tab",
+            execute: (args) => {
+              const events = (args as { events?: unknown }).events;
+              return validateGuitarTab(
+                Array.isArray(events) ? events as GuitarTabEvent[] : [],
+                guitarTabValidationOptionsFromToolArgs(args, input)
+              );
+            },
           },
-        }],
+          {
+            name: "query_guitar_voicings",
+            execute: (args) => {
+              const { chord, melody_pitch, target_position } = args as any;
+              return query_guitar_voicings(chord, melody_pitch, target_position);
+            }
+          }
+        ],
         validateFinalResult: (args) => validateGuitarWorkflowResult(args, input),
         temperature: 0.25,
         maxIterations: MAX_TOOL_LOOP_ITERATIONS,

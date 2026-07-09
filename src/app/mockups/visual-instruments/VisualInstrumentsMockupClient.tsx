@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
@@ -43,16 +43,60 @@ export default function VisualInstrumentsMockupClient() {
   
   // Interactive Chord state
   const [activeHoverChord, setActiveHoverChord] = useState<string | null>(null);
-  
+  const [selectedChord, setSelectedChord] = useState<string | null>("C"); // default to C Major
+  const [selectedVoicingIndex, setSelectedVoicingIndex] = useState<number>(0);
+  const [visibleCount, setVisibleCount] = useState<number>(32);
+
+  const displayedChord = activeHoverChord || selectedChord;
+
+  useEffect(() => {
+    setVisibleCount(32);
+  }, [displayedChord]);
+
   const activeChordNotes = useMemo(() => {
-    if (!activeHoverChord) return [];
-    return Chord.get(activeHoverChord).notes;
-  }, [activeHoverChord]);
+    if (!displayedChord) return [];
+    return Chord.get(displayedChord).notes;
+  }, [displayedChord]);
+
+  const allVoicings = useMemo(() => {
+    if (!displayedChord) return [];
+    return getGuitarVoicings(displayedChord);
+  }, [displayedChord]);
+
+  const currentVoicingIndex = Math.min(selectedVoicingIndex, Math.max(0, allVoicings.length - 1));
 
   const activeVoicings = useMemo(() => {
-    if (!activeHoverChord) return undefined;
-    return getGuitarVoicings(activeHoverChord);
-  }, [activeHoverChord]);
+    if (allVoicings.length === 0) return undefined;
+    const selectedVoicing = allVoicings[currentVoicingIndex];
+    if (!selectedVoicing) return undefined;
+    return [{
+      ...selectedVoicing,
+      isPrimary: true
+    }];
+  }, [allVoicings, currentVoicingIndex]);
+
+  // Color map for note badges matching fretboard coloring
+  const NOTE_BADGE_COLORS: Record<string, string> = {
+    "C": "bg-rose-500 text-white",
+    "C#": "bg-orange-500 text-white",
+    "D": "bg-amber-500 text-white",
+    "D#": "bg-yellow-500 text-black",
+    "E": "bg-lime-500 text-white",
+    "F": "bg-green-500 text-white",
+    "F#": "bg-emerald-500 text-white",
+    "G": "bg-teal-500 text-white",
+    "G#": "bg-cyan-500 text-white",
+    "A": "bg-sky-500 text-white",
+    "A#": "bg-blue-500 text-white",
+    "B": "bg-violet-500 text-white",
+  };
+
+  const normalizeToSharp = (note: string): string => {
+    const chroma = Note.chroma(note);
+    if (chroma === undefined || chroma === null) return note;
+    const CHROMATIC_SCALE = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+    return CHROMATIC_SCALE[chroma];
+  };
 
   const ROOT_NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
   const MODIFIERS = ["dim", "5", "7", "maj7", "9", "11", "aug", "sus4"];
@@ -397,6 +441,7 @@ export default function VisualInstrumentsMockupClient() {
                                   const chord = getDiatonicChordSymbol(root, quality, mod);
                                   const isBase = mod === "";
                                   const isHovered = activeHoverChord === chord;
+                                  const isSelected = selectedChord === chord;
                                   
                                   return (
                                     <div key={mod} className="flex items-center">
@@ -406,13 +451,19 @@ export default function VisualInstrumentsMockupClient() {
                                           isBase ? "font-bold text-sm min-w-[3rem]" : "text-[10px]"
                                         } ${
                                           isHovered 
-                                            ? "bg-amber-500 text-zinc-950 shadow-sm" 
-                                            : isBase 
-                                              ? "bg-zinc-800 text-zinc-200 hover:bg-zinc-700" 
-                                              : "bg-zinc-800/50 text-zinc-400 border border-zinc-700/50 hover:bg-zinc-700 hover:text-white"
+                                            ? "bg-amber-400 text-zinc-950 shadow-sm" 
+                                            : isSelected
+                                              ? "bg-amber-500 text-zinc-950 shadow-sm font-black ring-1 ring-amber-400"
+                                              : isBase 
+                                                ? "bg-zinc-800 text-zinc-200 hover:bg-zinc-700" 
+                                                : "bg-zinc-800/50 text-zinc-400 border border-zinc-700/50 hover:bg-zinc-700 hover:text-white"
                                         }`}
                                         onMouseEnter={() => setActiveHoverChord(chord)}
                                         onMouseLeave={() => setActiveHoverChord(null)}
+                                        onClick={() => {
+                                          setSelectedChord(chord);
+                                          setSelectedVoicingIndex(0);
+                                        }}
                                       >
                                         {isBase ? chord : `+${mod}`}
                                       </button>
@@ -432,11 +483,11 @@ export default function VisualInstrumentsMockupClient() {
               <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6 shadow-xl overflow-hidden">
                 <div className="flex justify-between items-center mb-6">
                   <h2 className="text-xl font-bold text-zinc-100">
-                    {activeHoverChord ? `${activeHoverChord} Notes Highlighted` : "Virtual Guitar Fretboard Reference"}
+                    {displayedChord ? `${displayedChord} (Shape #${currentVoicingIndex + 1})` : "Virtual Guitar Fretboard Reference"}
                   </h2>
-                  {activeHoverChord && (
-                    <span className="text-sm font-mono bg-zinc-800 px-3 py-1 rounded-lg text-amber-400">
-                      Hovering: {activeChordNotes.join(", ")}
+                  {displayedChord && (
+                    <span className="text-sm font-mono bg-zinc-850 border border-zinc-800 px-3 py-1 rounded-lg text-amber-400">
+                      {activeHoverChord ? "Hovering" : "Selected"}: {activeChordNotes.join(", ")}
                     </span>
                   )}
                 </div>
@@ -446,6 +497,122 @@ export default function VisualInstrumentsMockupClient() {
                   activeVoicings={activeVoicings && activeVoicings.length > 0 ? activeVoicings : undefined}
                   onNoteClick={(note, string, fret) => console.log(`Selected: ${note} on string ${string}, fret ${fret}`)}
                 />
+
+                {/* Voicing Library Grid */}
+                <div className="mt-8 pt-8 border-t border-zinc-800">
+                  <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+                    <div>
+                      <h3 className="text-lg font-bold text-zinc-100">
+                        Chord Voicing Possibilities for <span className="text-amber-400">{displayedChord}</span>
+                      </h3>
+                      <p className="text-xs text-zinc-400 mt-1">
+                        Found {allVoicings.length} shapes in the chords library. Select a card to view its fret pattern.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {activeChordNotes.map((note) => {
+                        const sharpNote = normalizeToSharp(note);
+                        const colorClass = NOTE_BADGE_COLORS[sharpNote] || "bg-zinc-800 text-zinc-300";
+                        return (
+                          <span 
+                            key={note} 
+                            className={`px-2.5 py-1 text-xs font-bold rounded-md shadow-sm ${colorClass}`}
+                          >
+                            {note}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {allVoicings.length > 0 ? (
+                    <div className="space-y-6">
+                      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                        {allVoicings.slice(0, visibleCount).map((voicing, index) => {
+                          const isSelectedVoicing = currentVoicingIndex === index;
+                          
+                          // Format the fret representation, e.g. "X 3 2 0 1 0"
+                          const fretStr = voicing.frets.map(f => f === "X" ? "X" : f).join(" ");
+                          
+                          // Format the finger representation, e.g. "X 3 2 X 1 X"
+                          const fingerStr = voicing.fingers 
+                            ? voicing.fingers.map(f => f === "X" ? "X" : f).join(" ")
+                            : "N/A";
+
+                          // Get base fret description
+                          const baseFret = voicing.frets.reduce((min: number, f) => {
+                            if (typeof f === "number" && f > 0) {
+                              return min === 0 ? f : Math.min(min, f);
+                            }
+                            return min;
+                          }, 0);
+
+                          return (
+                            <button
+                              key={index}
+                              onClick={() => setSelectedVoicingIndex(index)}
+                              className={`text-left p-4 rounded-2xl border transition-all cursor-pointer ${
+                                isSelectedVoicing
+                                  ? "border-amber-400 bg-amber-500/10 shadow-lg shadow-amber-500/5 ring-1 ring-amber-400"
+                                  : "border-zinc-800 bg-zinc-950/40 hover:border-zinc-700 hover:bg-zinc-800/40"
+                              }`}
+                            >
+                              <div className="flex items-center justify-between mb-2">
+                                <span className={`text-xs font-semibold px-2 py-0.5 rounded ${
+                                  isSelectedVoicing 
+                                    ? "bg-amber-400 text-zinc-950 font-black" 
+                                    : "bg-zinc-800 text-zinc-400"
+                                }`}>
+                                  Shape #{index + 1}
+                                </span>
+                                {voicing.barre && (
+                                  <span className="text-[10px] bg-sky-900/60 text-sky-300 border border-sky-800/80 px-1.5 py-0.5 rounded">
+                                    Barre F{voicing.barre.fret}
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="space-y-1.5 text-xs">
+                                <div className="flex justify-between">
+                                  <span className="text-zinc-500">Frets:</span>
+                                  <span className="font-mono font-bold text-zinc-200">{fretStr}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-zinc-500">Fingers:</span>
+                                  <span className="font-mono text-zinc-400">{fingerStr}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-zinc-500">Base Fret:</span>
+                                  <span className="font-mono text-zinc-300">{baseFret > 0 ? `Fret ${baseFret}` : "Open"}</span>
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {allVoicings.length > visibleCount && (
+                        <div className="flex justify-center pt-2">
+                          <button
+                            onClick={() => setVisibleCount(prev => prev + 32)}
+                            className="bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 text-zinc-100 hover:text-white px-6 py-2.5 rounded-xl font-semibold text-sm transition-all shadow-md active:scale-95 cursor-pointer"
+                          >
+                            Load More (+32 shapes of {allVoicings.length - visibleCount} remaining)
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-zinc-800 bg-zinc-950/20 p-6 text-center">
+                      <p className="text-sm text-zinc-500">
+                        No detailed voicing shapes available in the database for chord "{displayedChord}".
+                      </p>
+                      <p className="text-xs text-zinc-600 mt-1">
+                        Falling back to automatic pitch highlighting across all strings/frets.
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
             </section>
           </div>

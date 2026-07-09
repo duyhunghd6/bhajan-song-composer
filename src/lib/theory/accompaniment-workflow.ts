@@ -32,6 +32,7 @@ export {
   buildAddStrongBeatIconsToolSchema,
   buildBreakMeasuresLineToolSchema,
   buildConsolidatedChordIngestionToolSchema,
+  buildQueryGuitarVoicingsToolSchema,
   getAccompanimentWorkflowLlmToolNames,
 } from "./accompaniment-workflow/tool-schema";
 export {
@@ -877,7 +878,7 @@ export function buildAccompanimentWorkflowPrompt(input: {
     ? "\nStrong Beats local algorithm requirement: choose only the review direction/emphasis. Before calling the final generate_strong_beat_targets tool, call add_strong_beat_icons for each distinct emphasis direction you plan to offer so the local algorithm validates the concrete beat positions. Final option.data MUST include only strongBeatEmphasis. Do not include annotatedAbc, abcNotation, strongBeatDirectives, measureIndex, or beatTime in the final payload. Strong beat notation is generated locally as beat-only w: lyric rows, never as inline note annotations, and later inserted after the Melody line inside each staff-system/sentence group."
     : "";
   const guitarTabInstruction = isGuitarTabValidationWorkflowStep(input.stepId)
-    ? `\nOne physical guitar validation requirement: each option must prove it is playable on one physical guitar. Each option.data MUST include guitarTab.profileId, guitarTab.voicingProfileId, and guitarTab.events with measureIndex, beat, note, string, fret, role, and sourceEventId when mapping a source melody/chord event. Use octave/register-bearing note labels such as E2, B3, and F#4. Before finalizing an option, call valid_guitar_tab with the same profileId, voicingProfileId, and events. If valid_guitar_tab reports any issue, revise the tab and call valid_guitar_tab again. Hard physical rules to prove in validation notes: (1) simultaneous notes may form a chord across multiple strings, but one physical string may appear only once and one source note/event may be assigned to only one string; (2) every string/fret/note is inside the selected guitar fretboard range; (3) one left hand can fret the simultaneous target positions for the selected profile/voicing. ${input.stepId === "guitar-comping-profile" ? "For Guitar Profile, guitarTab.events may be a representative one-measure pattern sample that proves the chosen comping/picking profile is playable on one guitar." : "For this step, guitarTab.events should represent the concrete voicing, fill, polish, or fingerstyle events being selected."}`
+    ? `\nOne physical guitar validation requirement: each option must prove it is playable on one physical guitar. Each option.data MUST include guitarTab.profileId, guitarTab.voicingProfileId, and guitarTab.events with measureIndex, beat, note, string, fret, role, and sourceEventId when mapping a source melody/chord event. Use octave/register-bearing note labels such as E2, B3, and F#4. BEFORE trying to fret any notes manually, call query_guitar_voicings(chord, melody_pitch). You are strictly forbidden from inventing fretted notes. You must exclusively use the strings and frets provided by the tool's returned grip. Then, call valid_guitar_tab with the same profileId, voicingProfileId, and events. If valid_guitar_tab reports any issue, revise the tab and call valid_guitar_tab again. Hard physical rules to prove in validation notes: (1) Standard PIMA Rule: The Thumb (p) plays exactly 1 Bass String (usually strings 6, 5, or 4). The fingers (i, m, a) play a tight cluster of up to 3 Treble/Inner Strings to support the melody (unless playing a full strum, in which case assign 'p' to multiple bass/inner strings); (2) simultaneous notes may form a chord across multiple strings, but one physical string may appear only once and one source note/event may be assigned to only one string; (3) every string/fret/note is inside the selected guitar fretboard range; (4) one left hand can fret the simultaneous target positions for the selected profile/voicing. ${input.stepId === "guitar-comping-profile" ? "For Guitar Profile, guitarTab.events may be a representative one-measure pattern sample that proves the chosen comping/picking profile is playable on one guitar." : "For this step, guitarTab.events should represent the concrete voicing, fill, polish, or fingerstyle events being selected."}`
     : "";
   const guitarFingerstyleInstruction = input.stepId === "guitar-fingerstyle"
     ? "\nGuitar Fingerstyle step-specific requirement: finalize a solo guitar fingerstyle plan, not a rhythm-only accompaniment. Each option.data MUST include mode=\"solo-fingerstyle\", carriesMelody=true, pickingProfile (strict-pima or folk-travis), bassStrategy derived from the selected chord progression roots/fifths/approaches, formPlan.intro, formPlan.interlude, and formPlan.outro. The final playable result is one merged physical Guitar matrix covering every source/body measure: treble melody events on strings 1-3 plus bass-string chord anchors on strings 4-6, with beat-1 roots and internal root/fifth/approach bass aligned to the selected chord progression in every body measure. Include tab roles for both melody and bass in the merged final tab events, not only separate analytical Treb/Bass threads. Do not hand-write final ABC in this step; the local arranger will render ABC and GUITAR TAB from the selected profile/form plan."
@@ -895,13 +896,26 @@ export function buildAccompanimentWorkflowPrompt(input: {
   if (isGuitarTabValidationWorkflowStep(input.stepId)) {
     try {
       const progressionSelection = input.previousSelections.find(s => s.stepId === "chord-progression");
+      const compingSelection = input.previousSelections.find(s => s.stepId === "guitar-comping-profile");
+      const voicingSelection = input.previousSelections.find(s => s.stepId === "guitar-voicing-bass");
+
+      const comping_style = (compingSelection?.data?.compingProfile as string)
+        || compingSelection?.label
+        || undefined;
+      const voicing_plan = (voicingSelection?.data?.voicingPlan as string)
+        || voicingSelection?.label
+        || undefined;
+
       let chords: string[] = [];
       if (progressionSelection && Array.isArray(progressionSelection.data.progression)) {
         chords = progressionSelection.data.progression as string[];
       } else {
         chords = resolveProgression(effectiveSourceAbc).chords.map((c) => c.chordName);
       }
-      const measures = convertAbcToTimeSliceGrid(effectiveSourceAbc, chords);
+      const measures = convertAbcToTimeSliceGrid(effectiveSourceAbc, chords, {
+        comping_style,
+        voicing_plan,
+      });
       const measureStrings = measures.map(m => {
         const gridLines = m.grid.map(s => "      " + JSON.stringify(s));
         return `  {\n    "measure": ${m.measure},\n    "style_profile": ${JSON.stringify(m.style_profile)},\n    "grid": [\n${gridLines.join(",\n")}\n    ]\n  }`;
@@ -912,7 +926,7 @@ export function buildAccompanimentWorkflowPrompt(input: {
     }
   }
 
-  return `DEFAULT PROMPT — MUSIC ACCOMPANIMENT WORKFLOW STEP ${step.index}\n\nTask: ${step.label}\n${step.description}\n\nTheory reference to follow:\n${step.theoryReference}\n\nOutput focus:\n${step.outputFocus.map((item) => `- ${item}`).join("\n")}\n\nGlobal hard rules:\n- Return between 1 and 5 distinct options.\n- Every option must include a concise label, summary, justification, warnings, and validation notes.\n- Preserve the source melody ABC exactly unless this step explicitly asks for chord annotations.\n- Respect previously selected workflow decisions.\n- If a choice is musically risky, include a warning instead of hiding the risk.\n- Prefer devotional/bhajan-appropriate support unless the user's note asks otherwise.${midiInstruction}${staffSystemInstruction}${abcDataInstruction}${strongBeatInstruction}${guitarTabInstruction}${guitarFingerstyleInstruction}${sustainRuleInstruction}${lyricChordInstruction}\n\nMetadata:\n${formatMetadata(input.metadata)}\n\nWorkflow setup:\n${formatWorkflowSetup(input.setup)}\n\nPreviously selected workflow context:\n${formatPreviousSelections(input.previousSelections)}\n\nLyric chord annotations:\n${formatLyricChordAnnotations(effectiveSourceAbc)}\n\nSource ABC:\n\`\`\`abc\n${effectiveSourceAbc}\n\`\`\`${timeSliceGridStr}\n\nUSER NOTE TO ADD TO PROMPT:\n${userNote || "(none)"}`;
+  return `DEFAULT PROMPT — MUSIC ACCOMPANIMENT WORKFLOW STEP ${step.index}\n\nTask: ${step.label}\n${step.description}\n\nTheory reference to follow:\n${step.theoryReference}\n\nOutput focus:\n${step.outputFocus.map((item) => `- ${item}`).join("\n")}\n\nGlobal hard rules:\n- Return between 1 and 5 distinct options. Always try to provide at least 2 or 3 stylistically contrasting options (e.g. Option 1: sparse/minimal, Option 2: full strums/denser) to give the user creative choice.\n- Every option must include a concise label, summary, justification, warnings, and validation notes.\n- Preserve the source melody ABC exactly unless this step explicitly asks for chord annotations.\n- Respect previously selected workflow decisions.\n- If a choice is musically risky, include a warning instead of hiding the risk.\n- Prefer devotional/bhajan-appropriate support unless the user's note asks otherwise.${midiInstruction}${staffSystemInstruction}${abcDataInstruction}${strongBeatInstruction}${guitarTabInstruction}${guitarFingerstyleInstruction}${sustainRuleInstruction}${lyricChordInstruction}\n\nMetadata:\n${formatMetadata(input.metadata)}\n\nWorkflow setup:\n${formatWorkflowSetup(input.setup)}\n\nPreviously selected workflow context:\n${formatPreviousSelections(input.previousSelections)}\n\nLyric chord annotations:\n${formatLyricChordAnnotations(effectiveSourceAbc)}\n\nSource ABC:\n\`\`\`abc\n${effectiveSourceAbc}\n\`\`\`${timeSliceGridStr}\n\nUSER NOTE TO ADD TO PROMPT:\n${userNote || "(none)"}`;
 }
 
 export function buildConsolidatedChordIngestionPrompt(input: {

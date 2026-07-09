@@ -27,6 +27,9 @@ export function FingerstyleMeasureCard({
   const [error, setError] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
+  const [copiedAbc, setCopiedAbc] = useState(false);
+  const [copiedTab, setCopiedTab] = useState(false);
+  const [copiedLogs, setCopiedLogs] = useState(false);
 
   // Sync toonText if measure changes externally (like on mount from localStorage or AI simulation)
   useEffect(() => {
@@ -87,6 +90,7 @@ export function FingerstyleMeasureCard({
           __chords__: isAbcLayerVisible("ChordProgression", accompLayerVisibility, true),
           __strong_beats__: isAbcLayerVisible("StrongBeats", accompLayerVisibility, true),
         },
+        disablePickupLogic: true,
       });
 
       return applyAbcLayerVisibility(result.abc, accompLayerVisibility);
@@ -104,6 +108,37 @@ export function FingerstyleMeasureCard({
     } catch (e) {
       setError(e instanceof Error ? e.message : "Invalid TOON format");
     }
+  };
+
+  const handleCopyAbc = () => {
+    if (abcResult) {
+      navigator.clipboard.writeText(abcResult);
+      setCopiedAbc(true);
+      setTimeout(() => setCopiedAbc(false), 2000);
+    }
+  };
+
+  const handleCopyTab = () => {
+    const tabStr = renderAsciiTab(measure.grid);
+    if (tabStr) {
+      navigator.clipboard.writeText(tabStr);
+      setCopiedTab(true);
+      setTimeout(() => setCopiedTab(false), 2000);
+    }
+  };
+
+  const handleCopyLogs = () => {
+    let logStr = logs.join("\n");
+    const asciiTab = renderAsciiTab(measure.grid);
+    if (asciiTab) {
+      logStr += `\n\n## 7. The Final Visual Output\n\n${asciiTab}`;
+    }
+    if (abcResult) {
+      logStr += `\n\n## 8. ABCNotation\n\n\`\`\`abc\n${abcResult}\n\`\`\``;
+    }
+    navigator.clipboard.writeText(logStr);
+    setCopiedLogs(true);
+    setTimeout(() => setCopiedLogs(false), 2000);
   };
 
   const handleAIGenerate = async () => {
@@ -170,9 +205,25 @@ export function FingerstyleMeasureCard({
           {/* Diagnostic Logs */}
           {logs.length > 0 && (
             <div className="mt-4 flex flex-col flex-none">
-              <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1 block">
-                LLM Diagnostic Logs
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                  LLM Diagnostic Logs
+                </label>
+                <button
+                  type="button"
+                  onClick={handleCopyLogs}
+                  className="flex items-center gap-1 text-[10px] text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded"
+                >
+                  {copiedLogs ? (
+                    <span className="text-emerald-600 dark:text-emerald-400 font-medium">Copied to Clipboard!</span>
+                  ) : (
+                    <>
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                      <span>Copy</span>
+                    </>
+                  )}
+                </button>
+              </div>
               <div 
                 className="rounded-xl border border-zinc-200 bg-zinc-950 p-3 font-mono text-[10px] text-emerald-400"
                 style={{ height: '320px', minHeight: '320px', maxHeight: '320px', overflowY: 'scroll', overflowX: 'hidden', wordBreak: 'break-word' }}
@@ -180,6 +231,16 @@ export function FingerstyleMeasureCard({
                 {logs.map((log, i) => (
                   <div key={i} className="mb-2 border-b border-zinc-800 pb-1 last:border-0 whitespace-pre-wrap">{log}</div>
                 ))}
+                {renderAsciiTab(measure.grid) && (
+                  <div className="mb-2 border-b border-zinc-800 pb-1 last:border-0 whitespace-pre-wrap">
+                    {`\n## 7. The Final Visual Output\n\n${renderAsciiTab(measure.grid)}`}
+                  </div>
+                )}
+                {abcResult && (
+                  <div className="mb-2 border-b border-zinc-800 pb-1 last:border-0 whitespace-pre-wrap">
+                    {`\n## 8. ABCNotation\n\n\`\`\`abc\n${abcResult}\n\`\`\``}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -187,9 +248,27 @@ export function FingerstyleMeasureCard({
 
         {/* Right Side: Tablature Preview */}
         <div className="flex flex-col">
-          <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
-            Resulting ABC Tablature
-          </label>
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+              Resulting ABC Tablature
+            </label>
+            {abcResult && (
+              <button
+                type="button"
+                onClick={handleCopyAbc}
+                className="flex items-center gap-1 text-[10px] text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded"
+              >
+                {copiedAbc ? (
+                  <span className="text-emerald-600 dark:text-emerald-400 font-medium">Copied to Clipboard!</span>
+                ) : (
+                  <>
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                    <span>Copy</span>
+                  </>
+                )}
+              </button>
+            )}
+          </div>
           {abcResult ? (
             <div className="border border-zinc-200 dark:border-zinc-800 rounded-xl bg-zinc-50 dark:bg-zinc-900/50 p-2 overflow-hidden">
                <AbcjsPlaybackController
@@ -207,9 +286,25 @@ export function FingerstyleMeasureCard({
             </div>
           )}
           <div className="mt-4">
-            <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
-              Resulting ABC Tablature
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                Resulting ASCII Tablature
+              </label>
+              <button
+                type="button"
+                onClick={handleCopyTab}
+                className="flex items-center gap-1 text-[10px] text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded"
+              >
+                {copiedTab ? (
+                  <span className="text-emerald-600 dark:text-emerald-400 font-medium">Copied to Clipboard!</span>
+                ) : (
+                  <>
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                    <span>Copy</span>
+                  </>
+                )}
+              </button>
+            </div>
             <pre className="border border-zinc-200 dark:border-zinc-800 rounded-xl bg-zinc-50 dark:bg-zinc-900/50 p-3 overflow-x-auto text-xs font-mono text-zinc-700 dark:text-zinc-300">
               {renderAsciiTab(measure.grid)}
             </pre>

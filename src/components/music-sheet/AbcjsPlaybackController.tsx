@@ -292,8 +292,18 @@ export default function AbcjsPlaybackController({
         timingCallbacksRef.current?.setProgress(startSeconds, "seconds");
         setCurrentSeconds(startSeconds);
         if (!isPlayingRef.current && !synth.getIsRunning?.()) {
-          synth.start();
-          timingCallbacksRef.current?.start();
+          try {
+            synth.start();
+            timingCallbacksRef.current?.start();
+          } catch (startErr: unknown) {
+            const message = startErr instanceof Error ? startErr.message : String(startErr);
+            if (message.includes("onended") || message.includes("undefined")) {
+              console.warn("abcjs synth.start() failed from note click: Sequence could not start. Playback gracefully skipped.");
+              setPlaybackState(false);
+            } else {
+              throw startErr;
+            }
+          }
         }
         setPlaybackState(true);
       } catch (err) {

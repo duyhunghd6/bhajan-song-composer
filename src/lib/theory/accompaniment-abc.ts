@@ -55,6 +55,7 @@ export interface BuildAccompanimentAbcOptions {
   extraVoiceSources?: Array<string | null | undefined>;
   layerVisibility?: Record<string, boolean>;
   strongBeatDirectives?: StrongBeatDirective[];
+  disablePickupLogic?: boolean;
 }
 
 export interface AccompanimentVoiceInfo {
@@ -405,13 +406,18 @@ function buildFormSystem(label: string, position: FingerstyleFormSystem["positio
   };
 }
 
-function alignVoiceBlockToMelodyLines(block: string, baseAbc: string, melodyLinePattern: number[]): AlignedVoiceBlock | null {
+function alignVoiceBlockToMelodyLines(block: string, baseAbc: string, melodyLinePattern: number[], disablePickupLogic: boolean = false): AlignedVoiceBlock | null {
   const lines = stripStrongBeatLyricLines(block).split("\n").map(stripBeatAnnotations);
   const voiceLine = normalizeGeneratedVoiceLine(lines[0].trim());
   const name = getVoiceName(voiceLine);
   if (!name) return null;
 
-  const { durationContext, hasPickup, pickupUnits, fullMeasureCount } = getMelodyMeasureInfo(baseAbc);
+  const info = getMelodyMeasureInfo(baseAbc);
+  const hasPickup = disablePickupLogic ? false : info.hasPickup;
+  const pickupUnits = disablePickupLogic ? 0 : info.pickupUnits;
+  const fullMeasureCount = disablePickupLogic ? info.durationContext.fullMeasureUnits > 0 ? melodyLinePattern.reduce((a, b) => a + b, 0) : info.fullMeasureCount : info.fullMeasureCount;
+  const durationContext = info.durationContext;
+
   const fallbackMeasure = buildFullMeasureRest(durationContext.fullMeasureUnits);
   const fingerstyle = isFingerstyleVoiceBlock(voiceLine, lines);
   const parsedFingerstyle = fingerstyle ? parseFingerstyleVoiceSections(lines.slice(1)) : null;
@@ -482,6 +488,7 @@ export function buildAccompanimentAbc({
   extraVoiceSources = [],
   layerVisibility = {},
   strongBeatDirectives,
+  disablePickupLogic = false,
 }: BuildAccompanimentAbcOptions): BuildAccompanimentAbcResult {
   const normalizedBaseAbc = normalizeAbcVoiceSyntax(baseAbc);
   const baseAbcBlocks = normalizedBaseAbc.split(/(?=^V:)/m).filter(block => block.trim());
@@ -560,7 +567,7 @@ export function buildAccompanimentAbc({
 
   const melodyLinePattern = getMelodyMeasureLinePattern(melodyMusicLines);
   const alignedBlocks = [...voiceBlockMap.values()]
-    .map((block) => alignVoiceBlockToMelodyLines(block, melodyReferenceAbc, melodyLinePattern))
+    .map((block) => alignVoiceBlockToMelodyLines(block, melodyReferenceAbc, melodyLinePattern, disablePickupLogic))
     .filter(Boolean) as AlignedVoiceBlock[];
   const voiceNames = alignedBlocks.map((block) => block.name);
   const visibleBlocks = alignedBlocks.filter((block) => layerVisibility[block.name] !== false);

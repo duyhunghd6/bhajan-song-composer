@@ -160,6 +160,21 @@ w: ⬤ * ● *`;
         weight: "*",
       });
     });
+
+    it("respects optional comping_style and voicing_plan options", () => {
+      const abc = `X:1\nT:Hari Bol\nM:4/4\nL:1/8\nK:Em\n[V:Melody] | E2 E2 G2 A2 |`;
+      const measures = convertAbcToTimeSliceGrid(abc, ["Em"], {
+        comping_style: "Folk Travis picking",
+        voicing_plan: "Open-position Em/D transitions with walking bass",
+      });
+
+      expect(measures).toHaveLength(1);
+      expect(measures[0].style_profile).toEqual({
+        key: "Em",
+        comping_style: "Folk Travis picking",
+        voicing_plan: "Open-position Em/D transitions with walking bass",
+      });
+    });
   });
 
   describe("extractChordsFromMeasure", () => {

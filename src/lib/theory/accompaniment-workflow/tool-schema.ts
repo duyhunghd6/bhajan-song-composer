@@ -236,6 +236,7 @@ export function getAccompanimentWorkflowLlmToolNames(): string[] {
     "break_measures_line",
     "add_strong_beat_icons",
     "valid_guitar_tab",
+    "query_guitar_voicings",
   ];
 }
 
@@ -323,5 +324,25 @@ export function buildAccompanimentWorkflowToolSchema(stepId: AccompanimentWorkfl
         required: ["options"],
       },
     },
+  };
+}
+
+export function buildQueryGuitarVoicingsToolSchema() {
+  return {
+    type: "function",
+    function: {
+      name: "query_guitar_voicings",
+      description: "Retrieve valid guitar voicings for a chord. Use this tool BEFORE trying to fret any notes manually. You are forbidden from inventing fretted notes.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          chord: { type: "string" },
+          melody_pitch: { type: "string" },
+          target_position: { type: "string", enum: ["open"] }
+        },
+        required: ["chord"]
+      }
+    }
   };
 }

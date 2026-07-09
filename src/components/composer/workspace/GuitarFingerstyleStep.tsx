@@ -13,6 +13,7 @@ import { LayerVisibilityControls } from "./LayerVisibilityControls";
 import { applyAbcLayerVisibility, applyAbcLayerVolumes, isAbcLayerVisible, ABC_LAYER_IDS } from "@/lib/theory/abc-layer-visibility";
 import { getArrangementRenderOptionsFor, buildArrangementSynthOptions } from "./arrangement-preview-model";
 import { buildAccompanimentAbc } from "@/lib/theory/accompaniment-abc";
+import { getSelectedWorkflowOption } from "@/lib/theory/accompaniment-workflow";
 
 interface GuitarFingerstyleStepProps {
   activeAbc: string;
@@ -32,11 +33,13 @@ interface GuitarFingerstyleStepProps {
 
 export function GuitarFingerstyleStep({
   activeAbc,
+  workflowAppliedMusicAbc,
   accompanimentPreview,
   accompLayerVisibility,
   setAccompLayerVisibility,
   accompLayerVolumes,
   setAccompLayerVolumes,
+  ws,
   updateState,
 }: GuitarFingerstyleStepProps) {
   const [measures, setMeasures] = useState<TimeSliceMeasure[]>([]);
@@ -51,24 +54,62 @@ export function GuitarFingerstyleStep({
 
   useEffect(() => {
     try {
+      const workflow = ws.accompanimentWorkflow;
+      let compingStyle: string | undefined;
+      let voicingPlan: string | undefined;
+
+      if (workflow) {
+        const compingOpt = getSelectedWorkflowOption(workflow, "guitar-comping-profile");
+        const voicingOpt = getSelectedWorkflowOption(workflow, "guitar-voicing-bass");
+        if (compingOpt) {
+          compingStyle = (compingOpt.data?.compingProfile as string) || compingOpt.label;
+        }
+        if (voicingOpt) {
+          voicingPlan = (voicingOpt.data?.voicingPlan as string) || voicingOpt.label;
+        }
+      }
+
+      const options = {
+        comping_style: compingStyle,
+        voicing_plan: voicingPlan,
+      };
+
       // First try to load from localStorage
       const saved = localStorage.getItem("fingerstyle-measures-draft");
       if (saved) {
         const parsedMeasures = JSON.parse(saved);
         // Only use saved if the number of measures matches (basic check for activeAbc changes)
-        const newParsed = convertAbcToTimeSliceGrid(activeAbc, []);
+        const newParsed = convertAbcToTimeSliceGrid(workflowAppliedMusicAbc, [], options);
         if (parsedMeasures.length === newParsed.length) {
-          setMeasures(parsedMeasures);
+          // Sync fresh chords/weights to the saved draft to prevent stale chords
+          const updatedMeasures = parsedMeasures.map((pm: TimeSliceMeasure, idx: number) => {
+            const fresh = newParsed[idx];
+            if (!fresh) return pm;
+            return {
+              ...pm,
+              style_profile: fresh.style_profile,
+              grid: pm.grid.map((step, stepIdx) => {
+                const freshStep = fresh.grid[stepIdx];
+                return {
+                  ...step,
+                  chord: freshStep ? freshStep.chord : step.chord,
+                  weight: freshStep ? freshStep.weight : step.weight,
+                };
+              }),
+            };
+          });
+          // eslint-disable-next-line react-hooks/set-state-in-effect
+          setMeasures(updatedMeasures);
           return;
         }
       }
       
-      const parsed = convertAbcToTimeSliceGrid(activeAbc, []);
+      const parsed = convertAbcToTimeSliceGrid(workflowAppliedMusicAbc, [], options);
       setMeasures(parsed);
     } catch (e) {
       console.error("Failed to parse measures", e);
     }
-  }, [activeAbc]);
+  }, [workflowAppliedMusicAbc, ws.accompanimentWorkflow]);
 
   // Save to localStorage and sync to workspace state whenever measures change
   useEffect(() => {
@@ -197,7 +238,7 @@ export function GuitarFingerstyleStep({
             key={measure.measure}
             measure={measure}
             originalAbcMeasure={originalAbcMeasures[idx] || ""}
-            activeAbc={activeAbc}
+            activeAbc={workflowAppliedMusicAbc}
             onUpdateMeasure={handleUpdateMeasure}
             accompLayerVisibility={accompLayerVisibility}
           />

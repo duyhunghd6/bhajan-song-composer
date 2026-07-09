@@ -170,9 +170,7 @@ export default function VirtualGuitarFretboard({
                 const y = stringYs[stringIdx];
                 const x = fret === 0 
                   ? nutX - 22 
-                  : fret === 1 
-                    ? (nutX + fretsX[0]) / 2 
-                    : (fretsX[fret - 2] + fretsX[fret - 1]) / 2;
+                  : (fretsX[fret - 1] + fretsX[fret]) / 2;
                 points.push([x, y]);
               }
             });
@@ -199,7 +197,7 @@ export default function VirtualGuitarFretboard({
             const y1 = stringYs[Math.min(fromIdx, toIdx)];
             const y2 = stringYs[Math.max(fromIdx, toIdx)];
             const fret = voicing.barre.fret;
-            const x = fret === 1 ? (nutX + fretsX[0]) / 2 : (fretsX[fret - 2] + fretsX[fret - 1]) / 2;
+            const x = (fretsX[fret - 1] + fretsX[fret]) / 2;
             return (
               <rect 
                 key={`barre-${vIdx}`}
@@ -259,9 +257,7 @@ export default function VirtualGuitarFretboard({
 
                   const x = fret === 0 
                     ? nutX - 22 
-                    : fret === 1 
-                      ? (nutX + fretsX[0]) / 2 
-                      : (fretsX[fret - 2] + fretsX[fret - 1]) / 2;
+                    : (fretsX[fret - 1] + fretsX[fret]) / 2;
                   const noteIndex = (baseIndex + fret) % 12;
                   const noteName = CHROMATIC_SCALE[noteIndex];
                   const color = PITCH_COLORS[noteName];

@@ -88,16 +88,32 @@ To ensure physical playability and voice-leading safety, the LLM is equipped wit
 We inject our "Workflow Decisions" into the System Prompt to guide the LLM's logical tool-calling loop:
 
 **System Prompt:**
-> "You are an expert devotional fingerstyle guitar arranger. You will receive a 16-step JSON grid. Follow this exact tool-calling workflow:
->
-> 1. **Anchor the Bass:** Scan the grid for the weight markers.
->    * On `⬤` (Beat 1), you MUST place the lowest root Bass note (Thumb/P).
->    * On `●` (Beat 3), you MUST place a secondary root/5th Bass note.
->    * On `*` (Soft beats), DO NOT play heavy bass notes.
-> 2. **Lock the Grip:** Call `query_guitar_voicings()` on steps 1 and 9 to retrieve the valid open-position shapes.
-> 3. **Protect the Melody:** Map the exact melody pitches to the exact attack steps on the highest available strings.
-> 4. **PIMA Fills:** Look at the `null` steps (the empty 16th-note spaces). You may add light, arpeggiated inner chord tones (Index/Middle). **Rule Check:** Because this is a devotional bhajan, keep fills sparse. Avoid dense attacks during vocal phrases.
-> 5. **Validate & Submit:** Call `validate_fingerstyle_physics()` before submitting your work."
+> You are an expert devotional fingerstyle guitar arranger. You will receive a 16-step JSON grid. Follow this exact tool-calling workflow sequentially:
+> 
+> **1. Lock the Grip & Voicings (Tool Call First):**
+> * Scan the grid. On Step 1, Step 9, AND on any step where the `chord` symbol changes, you MUST call `query_guitar_voicings(chord, melody_pitch)`.
+> * **Constraint Check:** You are strictly forbidden from inventing fretted notes. You must exclusively use the strings and frets provided by the tool's returned grip. The tool already automatically accounts for the 4-finger fretting limit and 5-fret stretch limit.
+> 
+> **2. Right-Hand Foundation (Strums vs Pinches):**
+> * **Strumming on Downbeats:** Scan the grid for the strong downbeat weight marker `⬤` (Beat 1). You MUST establish a rich harmonic foundation using a full 5-string or 6-string **Strum** across all active strings from the grip.
+>   * *Strum Notation Rule:* To notate a strum, assign the Thumb (`p`) to ALL the bass and inner strings being strummed, leaving the fingers for the melody.
+>   * *Example of a full 6-string Em strum:* Str 6 (`p`), Str 5 (`p`), Str 4 (`p`), Str 3 (`p`), Str 2 (`p`), Str 1 (`a` - Melody).
+> * **Standard PIMA Pinches (Max 4 strings):** On secondary strong beats `●` (Beat 3) or non-downbeat chord changes, play a lighter 4-note **Pinch**. The Thumb (`p`) plays exactly 1 Bass String. The fingers (`i, m, a`) play up to 3 Treble/Inner Strings.
+>   * *Example of a 4-note C pinch (X32010):* Play Str 5 (`p`), Str 3 (`i`), Str 2 (`m`), Str 1 (`a`).
+>   * *Example of a 4-note D pinch (XX0232):* Play Str 4 (`p`), Str 3 (`i`), Str 2 (`m`), Str 1 (`a`).
+> 
+> **3. Protect the Melody & Double-Stops:**
+> * The sung melody is absolute priority. Map the exact melody pitches to the exact `attack` steps on the highest available strings.
+> * On secondary strong beats `●` (Beat 3), do not play a heavy 4-note pinch. Play a simpler **double-stop** (1 Bass note + the Melody note, or Bass + 1 inner tone) to keep the rhythm balanced and flowing.
+> * **Simultaneous String Collision:** If a chord voicing requires fretting an inner string, but the melody note is also mapped to that exact same string, the melody note wins. Drop the chord tone from your pinch.
+> 
+> **4. PIMA Fills & The Sustain Rule (Inner Arpeggios):**
+> * Look at the `null` steps (the empty 16th-note spaces). You may add light, arpeggiated inner chord tones to keep the rhythm flowing. Keep fills sparse and subservient to the vocal melody.
+> * **Sustain Protection Rule (CRITICAL):** If the vocal melody is marked as `"state": "sustain"` on a specific string across multiple steps, you are **physically forbidden** from plucking a fill note on that exact same string. Doing so will prematurely cut off the singer's note.
+> 
+> **5. Validate & Submit:**
+> * Call `validate_fingerstyle_physics()` to verify your right-hand finger budget, string alignments, and sustain rules.
+> * Once validated, submit your final work using `submit_arranged_measure()`.
 
 ---
 
@@ -105,12 +121,12 @@ We inject our "Workflow Decisions" into the System Prompt to guide the LLM's log
 
 Here is how the LLM executes the prompt against your JSON data:
 
-* **Step 1 (`⬤` / Ha-):** The LLM queries `"Em"` + `"E4"` + `"open"`. The backend gives it an open Em shape. The LLM drops the Bass on String 6 (Open E) and the Melody on String 1 (Open E4).
+* **Step 1 (`⬤` / Ha-):** The LLM queries `"Em"` + `"E4"` + `"open"`. The backend gives it an open Em shape. The LLM drops the Bass on String 6 (Open E), adds inner chord tones on String 4 (fret 2 - E) and String 3 (fret 0 - G), and places the Melody on String 1 (Open E4). This forms a rich, simultaneous 4-note block chord (pinch).
 * **Step 2 (`null`):** The LLM sees empty space. It knows the vocal is sustaining on String 1. It adds a gentle "i-m" filler note on String 3 (Open G) to keep the arpeggio flowing.
-* **Step 3 (`*` / ri):** The LLM sees a soft melody attack. It plays String 1 (E4) but drops no bass note.
-* **Step 5 (`*` / Bol):** The LLM plays String 1 (E4) again. No bass.
+* **Step 3 (`*` / ri):** The LLM sees a soft melody attack. It plays String 1 (E4) but drops no bass/chord notes.
+* **Step 5 (`*` / Bol):** The LLM plays String 1 (E4) again. No bass/chord notes.
 * **Step 7 (`*` / _):** The LLM maps the melisma (the slur) to String 2 (Open B3).
-* **Step 9 (`●` / Ha-):** The LLM hits the second half of the loop. It queries `"D"` + `"E4"` + `"open"`. The backend hands it an Open Dadd9 shape. It drops the Thumb on String 4 (Open D) and the Melody on String 1 (Open E4).
+* **Step 9 (`●` / Ha-):** The LLM hits the second half of the loop (medium weight). It queries `"D"` + `"E4"` + `"open"`. The backend hands it an Open Dadd9 shape. It drops the Thumb on String 4 (Open D) and the Melody on String 1 (Open E4) as a double-stop.
 
 ---
 
@@ -124,10 +140,10 @@ Measure 1:
       ⬤                 *       ●                 *
 e |---0-----------0-------------0-----------0-----------|
 B |---------------------0-------------------------0-----|
-G |---------0-------------------------2-----------------|
-D |---------------------------------0-----------0-------|
+G |---0-----0-------------------------2-----------------|
+D |---2-----------------------------0-----------0-------|
 A |-----------------------------------------------------|
-E |-0---------------------------------------------------|
+E |---0-------------------------------------------------|
 ```
 
-**Why this works flawlessly:** The LLM did not compose the rhythm, and it didn't invent the chord voicings. It simply acted as a logic router—connecting the requested "Open Em/D PIMA Profile" to the strict mathematical grid of the ABC notation.
+**Why this works flawlessly:** The LLM did not compose the rhythm, and it didn't invent the chord voicings. It simply acted as a logic router—connecting the requested "Open Em/D PIMA Profile" (with a downbeat block chord/pinch) to the strict mathematical grid of the ABC notation.

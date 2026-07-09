@@ -23,25 +23,35 @@ export interface GenerateFingerstyleMeasureOutput {
 
 function formatToolJson(obj: any): string {
   if (!obj) return "null";
-  if (typeof obj === "object" && obj.grid && Array.isArray(obj.grid)) {
+  
+  if (Array.isArray(obj)) {
+    if (obj.length === 0) return "[]";
+    return "[\n" + obj.map(item => `  ${JSON.stringify(item)}`).join(",\n") + "\n]";
+  }
+
+  if (typeof obj === "object" && obj !== null) {
+    const keys = Object.keys(obj);
     let output = "{\n";
-    for (const key in obj) {
-      if (key === "grid") {
-        output += '  "grid": [\n';
-        for (const item of obj.grid) {
-          output += `    ${JSON.stringify(item)},\n`;
+    for (let i = 0; i < keys.length; i++) {
+      const key = keys[i];
+      const val = obj[key];
+      if (Array.isArray(val)) {
+        if (val.length === 0) {
+          output += `  "${key}": []`;
+        } else {
+          output += `  "${key}": [\n` + val.map(item => `    ${JSON.stringify(item)}`).join(",\n") + "\n  ]";
         }
-        output = output.replace(/,\n$/, "\n");
-        output += '  ]';
       } else {
-        output += `  "${key}": ${JSON.stringify(obj[key])},\n`;
+        output += `  "${key}": ${JSON.stringify(val)}`;
       }
+      if (i < keys.length - 1) output += ",\n";
+      else output += "\n";
     }
-    output = output.replace(/,\n$/, "\n");
-    output += "\n}";
+    output += "}";
     return output;
   }
-  return JSON.stringify(obj, null, 2);
+
+  return JSON.stringify(obj);
 }
 
 import { validateFingerstylePhysics } from "@/lib/theory/fingerstyle-arranger/physics-validation";

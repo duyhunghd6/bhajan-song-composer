@@ -73,6 +73,41 @@ Visual prototypes live in `src/app/mockups/visual-instruments/`.
 - `VisualInstrumentsMockupClient.tsx` is the interactive mockup shell.
 - `mockup-parts.tsx` contains sample ABC, marker timelines, state panels, event cards, and variant switching.
 
+### URL to Module Mapping
+
+When you are asked to work on specific Composer URLs, refer to these short lists of primary modules to save time:
+
+- `/compose/:slug/melody`:
+  - `src/components/composer/ComposerStepWorkspace.tsx` (Step Router)
+  - `src/components/composer/AbcEditor.tsx` (Notation Editor)
+  - `src/components/music-sheet/AbcjsPlaybackController.tsx` (Playback)
+  - `src/components/composer/useWorkspaceState.ts` (State)
+
+- `/compose/:slug/harmony`:
+  - `src/components/composer/workspace/HarmonyStep.tsx` (UI)
+  - `src/components/composer/workspace/arrangement-preview-model.ts` (Preview State)
+  - `src/components/composer/LayerManager.tsx` (Harmony options/layers)
+  - `src/components/composer/AccompanimentWorkflowWizard.tsx` (Wizard Controller)
+
+- `/compose/:slug/accompaniment`:
+  - `src/components/composer/workspace/AccompanimentStep.tsx` (UI)
+  - `src/components/composer/AccompanimentWorkflowWizard.tsx` (Wizard Controller)
+  - `src/lib/theory/accompaniment-workflow/definition.ts` (Workflow Rules)
+  - `src/app/actions/accompaniment-workflow.ts` (Server Actions)
+  - `src/components/composer/accompaniment-workflow/wizard-parts.tsx` (Wizard UI Parts)
+
+- `/compose/:slug/guitar-fingerstyle`:
+  - `src/components/composer/workspace/GuitarFingerstyleStep.tsx` (UI)
+  - `src/components/composer/workspace/FingerstyleMeasureCard.tsx` (Measure-level UI)
+  - `src/lib/theory/fingerstyle-arranger.ts` (Arrangement Logic)
+  - `src/components/composer/fingerstyle-integration.ts` (State Integration)
+  - `src/app/actions/fingerstyle-arranger.ts` (Server Actions)
+
+- `/compose/:slug/review`:
+  - `src/components/composer/ComposerStepWorkspace.tsx` (Review/Export layout fallback)
+  - `src/components/composer/workspace/preview.tsx` (Notation Preview Layout)
+  - `src/components/music-sheet/AbcjsPlaybackController.tsx` (Final Playback)
+
 ## Music arrangement workflow discipline
 
 The music arrangement flow is intentionally stepwise. Do not collapse small steps into one opaque generation unless the user explicitly requests it.

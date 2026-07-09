@@ -276,7 +276,15 @@ export function extractChordsFromMeasure(abcMeasure: string): { chord: string; o
   return chords;
 }
 
-export function convertAbcToTimeSliceGrid(abcString: string, chords: string[]): TimeSliceMeasure[] {
+export function convertAbcToTimeSliceGrid(
+  abcString: string,
+  chords: string[],
+  options?: {
+    key?: string;
+    comping_style?: string;
+    voicing_plan?: string;
+  }
+): TimeSliceMeasure[] {
   const durationContext = buildAbcDurationContext(abcString);
   const { unitsPerBeat, meter } = durationContext;
   const stepsPerBeat = 4;
@@ -522,9 +530,9 @@ export function convertAbcToTimeSliceGrid(abcString: string, chords: string[]): 
     measuresList.push({
       measure: measureIndex + 1,
       style_profile: {
-        key: key,
-        comping_style: "PIMA devotional fingerstyle. Sparse fills.",
-        voicing_plan: `Open-position ${key} and D shapes. Thumbed E/B and D/A anchors.`,
+        key: options?.key || key,
+        comping_style: options?.comping_style || "PIMA devotional fingerstyle. Sparse fills.",
+        voicing_plan: options?.voicing_plan || `Open-position ${options?.key || key} and D shapes. Thumbed E/B and D/A anchors.`,
       },
       grid: finalGrid,
       source_abc: {
@@ -597,13 +605,19 @@ export function convertTimeSliceMeasureToAbc(measure: TimeSliceMeasure, duration
       const suffix = formatAbcDuration(durationUnits);
 
       // Convert tablature notes to ABC
-      const soundingAbc = step.tablature!
+      let soundingAbc = step.tablature!
         // Sort bass notes lower, melody higher
         .sort((a, b) => b.string - a.string)
         .map(tab => {
           const pitch = scientificPitchForStringFret(tab.string, tab.fret);
           return scientificPitchToAbc(pitch);
         });
+
+      // Deduplicate identical ABC pitches in the same chord.
+      // E.g. playing open D string and 5th fret A string produces two "D3" pitches.
+      // ABC notation does not need redundant unison notes in a single chord, and abcjs
+      // tablature parser might struggle with duplicate unisons.
+      soundingAbc = Array.from(new Set(soundingAbc));
 
       if (soundingAbc.length === 1) {
         rendered.push(`${soundingAbc[0]}${suffix}`);
