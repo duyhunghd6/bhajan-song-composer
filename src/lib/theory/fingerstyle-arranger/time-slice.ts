@@ -547,29 +547,33 @@ export function convertAbcToTimeSliceGrid(
 }
 
 function scientificPitchToAbc(scientificPitch: string): string {
-  const match = scientificPitch.match(/^([A-G][#b]?)(-?\d+)$/);
+  const match = scientificPitch.match(/^([A-G])([#b]?)(-?\d+)$/);
   if (!match) return scientificPitch;
-  const [, note, octaveStr] = match;
+  const [, letter, accidental, octaveStr] = match;
   const octave = parseInt(octaveStr, 10);
   
-  // ABC Octaves:
-  // C, = octave 2
-  // C = octave 3
-  // c = octave 4
-  // c' = octave 5
-  // c'' = octave 6
-  let abcNote = note.replace("#", "^").replace("b", "_");
+  // ABCJS noteToMidi convention (matches standard ABC 2.1):
+  //   C,, = octave 1  |  C, = octave 2  |  C = octave 3
+  //   c   = octave 4  |  c' = octave 5  |  c'' = octave 6
+  //
+  // For guitar with clef=treble-8, ABCJS applies clefTranspose = -12 to the
+  // note pitch BEFORE comparing against the tuning stringPitches (which are
+  // NOT transposed). This means concert-pitch ABC tokens produce the correct
+  // frets without any additional octave adjustment.
+  const abcAccidental = accidental === "#" ? "^" : accidental === "b" ? "_" : "";
+  let abcLetter = letter;
+  
   if (octave >= 4) {
-    abcNote = abcNote.toLowerCase();
+    abcLetter = abcLetter.toLowerCase();
     const ticks = octave - 4;
-    abcNote += "'".repeat(ticks);
+    abcLetter += "'".repeat(ticks);
   } else if (octave === 3) {
     // Standard uppercase
   } else {
     const commas = 3 - octave;
-    abcNote += ",".repeat(commas);
+    abcLetter += ",".repeat(commas);
   }
-  return abcNote;
+  return abcAccidental + abcLetter;
 }
 
 export function convertTimeSliceMeasureToAbc(measure: TimeSliceMeasure, durationContext: AbcDurationContext): string {
@@ -604,20 +608,29 @@ export function convertTimeSliceMeasureToAbc(measure: TimeSliceMeasure, duration
       const durationUnits = durationSteps * stepDurationUnits;
       const suffix = formatAbcDuration(durationUnits);
 
-      // Convert tablature notes to ABC
-      let soundingAbc = step.tablature!
-        // Sort bass notes lower, melody higher
-        .sort((a, b) => b.string - a.string)
+      // Convert tablature notes to ABC with !N! string-forcing decorations.
+      // ABCJS's getStringDecoration() (string-patterns.js) recognises decorations
+      // '1'–'6' and uses them to force the note onto the specified guitar string,
+      // bypassing its default lowest-fret auto-assignment. This is critical for:
+      //   - Duplicate pitches on different strings (e.g. D3 on string 4 fret 0
+      //     AND string 5 fret 5) which would otherwise be collapsed.
+      //   - Exact reproduction of the LLM-generated tablature layout.
+      //
+      // scientificPitchToAbc maps concert pitch to ABC tokens at the correct
+      // octave — ABCJS then applies clefTranspose = -12 for treble-8 and
+      // compares against un-transposed tuning stringPitches, which produces
+      // the correct fret numbers without any additional octave adjustment.
+      const soundingAbc = step.tablature!
+        // Sort melody higher (string 1), bass lower (string 6)
+        .sort((a, b) => a.string - b.string)
         .map(tab => {
           const pitch = scientificPitchForStringFret(tab.string, tab.fret);
-          return scientificPitchToAbc(pitch);
+          const abcToken = scientificPitchToAbc(pitch);
+          return `!${tab.string}!${abcToken}`;
         });
 
-      // Deduplicate identical ABC pitches in the same chord.
-      // E.g. playing open D string and 5th fret A string produces two "D3" pitches.
-      // ABC notation does not need redundant unison notes in a single chord, and abcjs
-      // tablature parser might struggle with duplicate unisons.
-      soundingAbc = Array.from(new Set(soundingAbc));
+      // No deduplication — with forced string decorations, ABCJS handles
+      // duplicate pitches on different strings correctly.
 
       if (soundingAbc.length === 1) {
         rendered.push(`${soundingAbc[0]}${suffix}`);
