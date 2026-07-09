@@ -44,96 +44,39 @@ function formatToolJson(obj: any): string {
   return JSON.stringify(obj, null, 2);
 }
 
-function validateFingerstylePhysics(grid: TimeSliceGridStep[]): { valid: boolean; message: string } {
-  const messages: string[] = [];
-  const tabEvents: GuitarTabEvent[] = [];
-
-  for (let i = 0; i < grid.length; i++) {
-    const step = grid[i];
-    
-    // Build tab events and do basic checks
-    if (step.tablature && step.tablature.length > 0) {
-      const stringsInUse = new Set<number>();
-      for (const tab of step.tablature) {
-        if (stringsInUse.has(tab.string)) {
-          messages.push(`Step ${step.step}: Multiple notes assigned to string ${tab.string}.`);
-        }
-        stringsInUse.add(tab.string);
-
-        const notePitch = scientificPitchForStringFret(tab.string, tab.fret);
-
-        if (tab.role === "melody" && step.melody.pitch) {
-          if (notePitch !== step.melody.pitch) {
-            messages.push(`Step ${step.step}: Melody pitch mismatch. Expected ${step.melody.pitch}, got ${notePitch} on string ${tab.string} fret ${tab.fret}.`);
-          }
-        }
-
-        tabEvents.push({
-          measureIndex: 0,
-          beat: step.step,
-          note: notePitch,
-          string: tab.string as 1 | 2 | 3 | 4 | 5 | 6,
-          fret: tab.fret,
-          role: tab.role
-        });
-      }
-    }
-  }
-
-  const playabilityResult = validateGuitarTab(tabEvents, {
-    guitarProfile: "guitar-classic",
-    requireScientificPitch: true,
-  });
-
-  if (!playabilityResult.valid) {
-    for (const issue of playabilityResult.issues) {
-      messages.push(`Step ${issue.beat}: ${issue.message}`);
-    }
-  }
-
-  // Check if any fill interrupts the melody
-  // The melody pitch is mapped to a string. If step.melody.state === "sustain", 
-  // no fill should be played on the string where the melody attack happened.
-  let melodyString: GuitarStringNumber | null = null;
-  for (let i = 0; i < grid.length; i++) {
-    const step = grid[i];
-    if (step.melody.state === "attack") {
-      const melodyTab = step.tablature?.find(t => t.role === "melody");
-      if (melodyTab) melodyString = melodyTab.string;
-    }
-    
-    if (step.melody.state === "sustain" && melodyString !== null) {
-      const fillOnMelodyString = step.tablature?.find(t => t.string === melodyString && t.role !== "melody");
-      if (fillOnMelodyString) {
-        messages.push(`Step ${step.step}: Fill played on string ${melodyString} which is currently sustaining the melody note.`);
-      }
-    }
-
-    if (step.melody.state === "rest") {
-      melodyString = null;
-    }
-  }
-
-  return {
-    valid: messages.length === 0,
-    message: messages.length === 0 ? "Valid." : messages.join(" "),
-  };
-}
+import { validateFingerstylePhysics } from "@/lib/theory/fingerstyle-arranger/physics-validation";
 
 export async function generateAIFingerstyleMeasure(
   input: GenerateFingerstyleMeasureInput
 ): Promise<GenerateFingerstyleMeasureOutput> {
   const stepId = `fingerstyle-measure-${input.measure.measure}`;
-  const systemPrompt = `You are an expert devotional fingerstyle guitar arranger. You will receive a 16-step TOON grid. Follow this exact tool-calling workflow:
+  const systemPrompt = `You are an expert devotional fingerstyle guitar arranger. You will receive a 16-step TOON grid. Follow this exact tool-calling workflow sequentially:
 
-1. Anchor the Bass: Scan the grid for the weight markers.
-   - On ⬤ (Beat 1), you MUST place the lowest root Bass note (Thumb/P).
-   - On ● (Beat 3), you MUST place a secondary root/5th Bass note.
-   - On * (Soft beats), DO NOT play heavy bass notes.
-2. Lock the Grip: Call query_guitar_voicings() on steps 1 and 9 to retrieve the valid open-position shapes.
-3. Protect the Melody: Map the exact melody pitches to the exact attack steps on the highest available strings.
-4. PIMA Fills: Look at the null steps (the empty 16th-note spaces). You may add light, arpeggiated inner chord tones (Index/Middle). Rule Check: Because this is a devotional bhajan, keep fills sparse. Avoid dense attacks during vocal phrases.
-5. Validate & Submit: Call validate_fingerstyle_physics() before submitting your work using submit_arranged_measure().`;
+1. **Lock the Grip & Voicings (Tool Call First):**
+   - Scan the grid. On Step 1, Step 9, AND on any step where the \`chord\` symbol changes, you MUST call \`query_guitar_voicings(chord, melody_pitch)\`.
+   - **Constraint Check:** You are strictly forbidden from inventing fretted notes. You must exclusively use the strings and frets provided by the tool's returned grip.
+   - **Playability Rule:** The tool output now lists all possible bass notes sorted by \`fretDistance\` (the fret distance between the melody note and the bass note). You MUST choose the grip with the smallest \`fretDistance\` to ensure physical playability.
+
+2. **Right-Hand Foundation (Strums vs Pinches):**
+   - **Strumming on Downbeats:** Scan the grid for the strong downbeat weight marker ⬤ (Beat 1). You MUST establish a rich harmonic foundation using a full 5-string or 6-string **Strum** across all active strings from the grip.
+     - *Strum Notation Rule:* To notate a strum, assign the Thumb (\\\`p\\\`) to ALL the bass and inner strings being strummed, leaving the fingers for the melody.
+     - *Example of a full 6-string Em strum:* Str 6 (\\\`p\\\`), Str 5 (\\\`p\\\`), Str 4 (\\\`p\\\`), Str 3 (\\\`p\\\`), Str 2 (\\\`p\\\`), Str 1 (\\\`a\\\` - Melody).
+   - **Standard PIMA Pinches (Max 4 strings):** On secondary strong beats ● (Beat 3) or non-downbeat chord changes, play a lighter 4-note **Pinch**. The Thumb (\\\`p\\\`) plays exactly 1 Bass String. The fingers (\\\`i, m, a\\\`) play up to 3 Treble/Inner Strings.
+     - *Example of a 4-note C pinch (X32010):* Play Str 5 (\\\`p\\\`), Str 3 (\\\`i\\\`), Str 2 (\\\`m\\\`), Str 1 (\\\`a\\\`).
+     - *Example of a 4-note D pinch (XX0232):* Play Str 4 (\\\`p\\\`), Str 3 (\\\`i\\\`), Str 2 (\\\`m\\\`), Str 1 (\\\`a\\\`).
+
+3. **Protect the Melody & Double-Stops:**
+   - The sung melody is absolute priority. Map the exact melody pitches to the exact \`attack\` steps on the highest available strings.
+   - On secondary strong beats ● (Beat 3), do not play a heavy 4-note pinch. Play a simpler **double-stop** (1 Bass note + the Melody note, or Bass + 1 inner tone) to keep the rhythm balanced and flowing.
+   - **Simultaneous String Collision:** If a chord voicing requires fretting an inner string, but the melody note is also mapped to that exact same string, the melody note wins. Drop the chord tone from your pinch.
+
+4. **PIMA Fills & The Sustain Rule (Inner Arpeggios):**
+   - Look at the \`null\` steps (the empty 16th-note spaces). You may add light, arpeggiated inner chord tones to keep the rhythm flowing. Keep fills sparse and subservient to the vocal melody.
+   - **Sustain Protection Rule (CRITICAL):** If the vocal melody is marked as \`"state": "sustain"\` on a specific string across multiple steps, you are **physically forbidden** from plucking a fill note on that exact same string. Doing so will prematurely cut off the singer's note.
+
+5. **Validate & Submit:**
+   - Call \`validate_fingerstyle_physics()\` to verify your right-hand finger budget, string alignments, and sustain rules.
+   - Once validated, submit your final work using \`submit_arranged_measure()\`.`;
 
   const userPrompt = `Arrange Measure ${input.measure.measure} in ${input.measure.style_profile.key} key.
 Here is the TOON grid:
@@ -168,97 +111,97 @@ ${formatMeasureAsToon(input.measure)}`;
         }
       },
       tools: [
-      {
-        type: "function",
-        function: {
-          name: "submit_arranged_measure",
-          description: "Submit the final arranged grid and visual markdown tablature.",
-          parameters: {
-            type: "object",
-            properties: {
-              grid: {
-                type: "array",
-                description: "The 16-step grid populated with tablature events.",
-                items: {
-                  type: "object",
-                  properties: {
-                    step: { type: "number" },
-                    chord: { type: "string" },
-                    weight: { type: ["string", "null"] },
-                    melody: { type: "object" },
-                    lyric: { type: ["string", "null"] },
-                    tablature: {
-                      type: "array",
-                      items: {
-                        type: "object",
-                        properties: {
-                          string: { type: "number" },
-                          fret: { type: "number" },
-                          finger: { type: "string", enum: ["p", "i", "m", "a"] },
-                          role: { type: "string", enum: ["bass", "melody", "fill", "root", "fifth"] }
+        {
+          type: "function",
+          function: {
+            name: "submit_arranged_measure",
+            description: "Submit the final arranged grid and visual markdown tablature.",
+            parameters: {
+              type: "object",
+              properties: {
+                grid: {
+                  type: "array",
+                  description: "The 16-step grid populated with tablature events.",
+                  items: {
+                    type: "object",
+                    properties: {
+                      step: { type: "number" },
+                      chord: { type: "string" },
+                      weight: { type: ["string", "null"] },
+                      melody: { type: "object" },
+                      lyric: { type: ["string", "null"] },
+                      tablature: {
+                        type: "array",
+                        items: {
+                          type: "object",
+                          properties: {
+                            string: { type: "number" },
+                            fret: { type: "number" },
+                            finger: { type: "string", enum: ["p", "i", "m", "a"] },
+                            role: { type: "string", enum: ["bass", "melody", "fill", "root", "fifth"] }
+                          }
                         }
                       }
                     }
                   }
                 }
-              }
-            },
-            required: ["grid"]
+              },
+              required: ["grid"]
+            }
+          }
+        },
+        {
+          type: "function",
+          function: {
+            name: "query_guitar_voicings",
+            description: "Retrieve valid guitar voicings for a chord.",
+            parameters: {
+              type: "object",
+              properties: {
+                chord: { type: "string" },
+                melody_pitch: { type: "string" },
+                target_position: { type: "string", enum: ["open"] }
+              },
+              required: ["chord"]
+            }
+          }
+        },
+        {
+          type: "function",
+          function: {
+            name: "validate_fingerstyle_physics",
+            description: "Check if the proposed grid is physically playable without cutting off sustaining melody notes.",
+            parameters: {
+              type: "object",
+              properties: {
+                grid: {
+                  type: "array",
+                  description: "The grid of steps to validate.",
+                  items: { type: "object" }
+                }
+              },
+              required: ["grid"]
+            }
           }
         }
-      },
-      {
-        type: "function",
-        function: {
+      ],
+      finalToolName: "submit_arranged_measure",
+      localTools: [
+        {
           name: "query_guitar_voicings",
-          description: "Retrieve valid guitar voicings for a chord.",
-          parameters: {
-            type: "object",
-            properties: {
-              chord: { type: "string" },
-              melody_pitch: { type: "string" },
-              target_position: { type: "string", enum: ["open"] }
-            },
-            required: ["chord"]
+          execute: (args) => {
+            const { chord, melody_pitch, target_position } = args as { chord: string, melody_pitch?: string, target_position?: "open" };
+            return query_guitar_voicings(chord, melody_pitch, target_position);
           }
-        }
-      },
-      {
-        type: "function",
-        function: {
+        },
+        {
           name: "validate_fingerstyle_physics",
-          description: "Check if the proposed grid is physically playable without cutting off sustaining melody notes.",
-          parameters: {
-            type: "object",
-            properties: {
-              grid: {
-                type: "array",
-                description: "The grid of steps to validate.",
-                items: { type: "object" }
-              }
-            },
-            required: ["grid"]
+          execute: (args) => {
+            const { grid } = args as { grid: TimeSliceGridStep[] };
+            return validateFingerstylePhysics(grid);
           }
         }
-      }
-    ],
-    finalToolName: "submit_arranged_measure",
-    localTools: [
-      {
-        name: "query_guitar_voicings",
-        execute: (args) => {
-          const { chord, melody_pitch, target_position } = args as { chord: string, melody_pitch?: string, target_position?: "open" };
-          return query_guitar_voicings(chord, melody_pitch, target_position);
-        }
-      },
-      {
-        name: "validate_fingerstyle_physics",
-        execute: (args) => {
-          const { grid } = args as { grid: TimeSliceGridStep[] };
-          return validateFingerstylePhysics(grid);
-        }
-      }
-    ],
+      ],
       validateFinalResult: (args) => {
         const { grid } = args as { grid: TimeSliceGridStep[] };
         const validation = validateFingerstylePhysics(grid);
@@ -270,8 +213,8 @@ ${formatMeasureAsToon(input.measure)}`;
           };
           return { valid: true };
         }
-        return { 
-          valid: false, 
+        return {
+          valid: false,
           message: validation.message
         };
       },
