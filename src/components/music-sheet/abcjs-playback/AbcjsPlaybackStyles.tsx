@@ -45,6 +45,17 @@ export function AbcjsPlaybackStyles({ resolvedCanvasId }: { resolvedCanvasId: st
           font-weight: 600 !important;
           fill: #a5b4fc !important; /* Indigo-300 style chord */
         }
+
+        /* 
+         * ABCJS Tablature Rendering and String Mapping Rules:
+         * We prepend ABC notes with !N! (e.g. !1!b) to force them to specific guitar strings
+         * for the Tablature staff. However, ABCJS also renders these decorations as visual
+         * string indicator numbers above the standard treble staff notes.
+         * We hide them here to prevent visual clutter on the standard notation staff.
+         */
+        #${resolvedCanvasId} svg text.abcjs-annotation {
+          display: none;
+        }
       `}</style>
   );
 }

@@ -26,11 +26,6 @@ V:Guitar clef=treble-8 name="Guitar" stem=down
 [V:Melody] | "G"B B2 B (Bd) c B |
 w: Ke-sha-va Ma- _ dha-va
 w: ⬤ * * ● * • * |
-% ABCJS Tablature rules applied here:
-% 1. !N! decorations force the note to a specific string (1-6) bypassing auto-assignment
-% 2. Duplicate concert pitches (like !4!D and !5!D) are preserved and valid due to string forcing
-% 3. Notes are written at concert pitch. ABCJS internally applies clefTranspose = -12 for treble-8,
-%    which natively calculates the correct fret against the un-transposed open string pitches.
 [V:Guitar] | [!1!b!2!B!3!G!4!D!5!D!6!B,] !1!b !4!D !1!b/2 !3!G/2 [!1!b!6!B,] !1!d'/2 !2!B/2 [!1!c'!4!D] !1!b/2 !3!G/2 |`,
     expectedTab: `## 7. The Final Visual Output
 

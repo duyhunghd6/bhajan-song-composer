@@ -354,6 +354,11 @@ function buildOutroMeasure(measures: FingerstyleMeasure[], durationContext: AbcD
   return normalizeFingerstyleMeasure(`${bass}2 ${melody}2 ${bass}4`, durationContext);
 }
 
+/**
+ * ABCJS Tablature Rendering and String Mapping Rules:
+ * See comments in event-matrix.ts `tokenForEvent` for how `!N!` string decorations
+ * and the concert-pitch octave convention for `clef=treble-8` ensure correct fret calculations.
+ */
 function buildFingerstyleAbc(measures: FingerstyleMeasure[], durationContext: AbcDurationContext): string {
   const interludeAfter = Math.max(1, Math.ceil(measures.length / 2));
   const beforeInterlude = measures.slice(0, interludeAfter).map((measure) => measure.abc);

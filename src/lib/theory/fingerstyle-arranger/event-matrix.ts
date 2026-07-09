@@ -262,9 +262,28 @@ function buildBodyMeasure(input: {
   };
 }
 
+/**
+ * ABCJS Tablature Rendering and String Mapping Rules:
+ * 1. String Forcing: We prepend ABC notes with the !N! string decoration (e.g. !1!b, !6!B)
+ *    to explicitly assign the note to string N (1-6). This instructs ABCJS's
+ *    getStringDecoration() to bypass its default lowest-fret auto-assignment algorithm.
+ * 2. Duplicate Pitches: Because string forcing bypasses auto-assignment, it is valid to
+ *    output the same concert pitch on multiple strings simultaneously. We do not deduplicate.
+ * 3. Octave Convention: We output concert-pitch ABC tokens for the treble-8 clef.
+ *    ABCJS internally applies a clefTranspose = -12 to the note before computing the fret
+ *    against its un-transposed tuning stringPitches.
+ */
 function tokenForEvent(event: FingerstyleCanonicalEvent): string {
-  if (event.role === "melody") return event.abcToken;
-  return noteNameToAbc(event.note.replace(/-?\d+$/, ""), event.role === "bass" || event.role === "fifth" ? "," : "");
+  let baseToken = "";
+  if (event.role === "melody") {
+    baseToken = event.abcToken;
+  } else {
+    baseToken = noteNameToAbc(event.note.replace(/-?\d+$/, ""), event.role === "bass" || event.role === "fifth" ? "," : "");
+  }
+  if (event.string !== undefined && event.string !== null) {
+    return `!${event.string}!${baseToken}`;
+  }
+  return baseToken;
 }
 
 function activeEventsAt(measure: FingerstyleCanonicalMeasure, at: number): FingerstyleCanonicalEvent[] {
