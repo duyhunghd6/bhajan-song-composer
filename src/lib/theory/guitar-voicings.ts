@@ -425,5 +425,5 @@ export function query_guitar_voicings(
   // Sort by fret distance (closest first)
   results.sort((a, b) => (a.fretDistance || 0) - (b.fretDistance || 0));
   
-  return results;
+  return results.slice(0, 15);
 }

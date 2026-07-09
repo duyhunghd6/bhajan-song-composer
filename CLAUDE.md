@@ -6,6 +6,10 @@
 - If the model is changed or reset, switch it back with `/model gpt-5.5` before doing substantial project work.
 - Do not intentionally downgrade to a smaller model for architecture, music-arrangement, validation, or refactoring tasks.
 
+## Development constraints
+
+- **CRITICAL NOTE**: Do not edit files or modules inside `node_modules/*`. If changes are needed, apply them at the application level or discuss package upgrades.
+
 ## Project overview
 
 This is a Next.js bhajan song composition app. It supports ABC notation editing/playback, harmonization, accompaniment generation, ensemble expansion, and visual instrument previews.
@@ -49,6 +53,14 @@ Music notation playback lives in `src/components/music-sheet/`.
 - `abcjs-playback/AbcjsPlaybackStyles.tsx` contains scoped rendered-sheet styles.
 
 The playback controller is the abcjs adapter seam. Callers pass ABC text and render/synth options; the implementation owns abcjs rendering, synth lifecycle, click-to-play, cursor events, and visual post-processing.
+
+#### Tablature Rendering and String Mapping Rules
+
+ABCJS rendering of guitar tablature requires strict enforcement of string mapping to prevent auto-assignment errors and layout collapse:
+
+- **String Forcing**: Always prepend ABC notes with the `!N!` string decoration (e.g., `!1!b`, `!6!B`) to explicitly assign the note to string `N` (1-6). This instructs ABCJS's `getStringDecoration()` to bypass its default lowest-fret auto-assignment algorithm.
+- **Duplicate Pitches**: Because string forcing bypasses auto-assignment, it is valid to output the same concert pitch on multiple strings simultaneously (e.g., D3 on string 4 and string 5). Do *not* deduplicate identical ABC pitches in tablature chords.
+- **Octave Convention**: Always output concert-pitch ABC tokens for the `treble-8` clef. ABCJS internally applies a `clefTranspose = -12` to the note *before* computing the fret against its un-transposed tuning `stringPitches`. Manually shifting octaves up +1 will cause the fret computation to fail.
 
 ### Theory engine
 

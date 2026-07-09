@@ -14,7 +14,7 @@ describe("Guitar fingerstyle arranger", () => {
       chord: "Em",
       bassNotes: ["E,", "B,"],
       melodyNotes: ["E", "E", "G", "A"],
-      abc: "[E,E]2 E2 [B,G]2 A2",
+      abc: "[!6!E,!1!E]2 !1!E2 [!5!B,!1!G]2 !1!A2",
     });
     expect(arrangement.abc).toContain('V:Guitar clef=treble-8 name="Layer 2 Guitar Fingerstyle"\n%%MIDI program 24');
     expect(arrangement.abc).toContain("% @fingerstyle-section intro");
@@ -39,7 +39,7 @@ K:Em
       expect.objectContaining({ measureIndex: 2, chord: "C", bassNotes: ["C,", "G,"], melodyNotes: ["G", "A", "B", "G"] }),
       expect.objectContaining({ measureIndex: 3, chord: "B7", bassNotes: ["B,", "^F,"], melodyNotes: ["E"] }),
     ]));
-    expect(arrangement.measures[3].abc).toBe("[B,E]2 E2 [^F,E]2 E2");
+    expect(arrangement.measures[3].abc).toBe("[!5!B,!1!E]2 !1!E2 [!6!^F,!1!E]2 !1!E2");
 
     expect(arrangement.downwardCompression.outerVoiceMap).toEqual(expect.arrayContaining([
       expect.objectContaining({
@@ -362,7 +362,7 @@ K:C
     const line = generateFingerstyleLine(sampleAbc, ["Em", "Bm", "G", "Em"]);
 
     expect(line.startsWith('V:Guitar clef=treble-8 name="Layer 2 Guitar Fingerstyle"')).toBe(true);
-    expect(line).toContain("[E,E]2 E2 [B,G]2 A2");
+    expect(line).toContain("[!6!E,!1!E]2 !1!E2 [!5!B,!1!G]2 !1!A2");
     expect(line).toContain("% @fingerstyle-section body");
   });
 
@@ -378,7 +378,7 @@ K:Em
     expect(arrangement.measures).toHaveLength(2);
     expect(arrangement.measures[0].melodyNotes).toEqual([]);
     expect(arrangement.measures[1].abc).toContain("E,2 z2");
-    expect(arrangement.measures[1].abc).toContain("[B,E]2 E2");
+    expect(arrangement.measures[1].abc).toContain("[!5!B,!1!E]2 !1!E2");
   });
 
   it("extracts only the Melody inline voice for solo fingerstyle input", () => {
