@@ -146,6 +146,14 @@ Hard rules:
 - Do not output all Melody lines first and all instrument lines later when final ABC contains multiple instruments; interleave by staff system for abcjs rendering/playback alignment.
 - Use comments like `% Staff system N` for readability, but avoid blank lines inside one ABC tune because blank lines can split tunes.
 
+### ABC Tablature Rendering and String Mapping
+
+When generating ABC for Guitar (or any string instrument) intended to be rendered as Tablature (`abcjs`), observe these critical string mapping rules to avoid layout collapse or incorrect auto-assignment:
+
+1. **String Forcing (`!N!`)**: Prepend ABC notes with the `!N!` string decoration (e.g. `!1!b`, `!6!B,`) to explicitly force the note to a specific string `N` (1 to 6). This prevents the renderer from placing the note on the wrong string.
+2. **Duplicate Pitches**: It is mathematically valid and necessary to output the same concert pitch on multiple strings simultaneously (e.g. D3 on string 4 and string 5). Do **not** deduplicate identical pitches; emit them both with explicit string tags (`[!4!D!5!D]`).
+3. **Octave Convention (`treble-8`)**: Always write notes at **standard concert pitch**. The `treble-8` clef causes rendering engines to subtract 12 semitones internally before fret calculation. Do NOT manually shift your ABC notes up +1 octave in code to compensate, otherwise the generated tablature frets will be calculated 12 frets too high.
+
 ### 🎸 Guitar Fingerstyle Tab Generation (Time-Slice Grid)
 
 For solo guitar fingerstyle arrangements, the backend translates the melody and chord progression into a quantized 16-step JSON grid. The LLM acts as a logic router to map voicings and fingerpicking filler notes.
