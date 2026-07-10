@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { KeyboardEvent } from "react";
 import AbcjsPlaybackController from "@/components/music-sheet/AbcjsPlaybackController";
+import { validateAbcNotation, type AbcValidationEdit } from "@/app/actions/abc-validation";
 
 const DEFAULT_STORAGE_KEY = "bhajan-song-composer:abc-editor:draft";
 const MAX_HISTORY = 100;
@@ -43,6 +44,9 @@ export default function AbcEditor({
   });
   const [storageStatus, setStorageStatus] = useState("Draft saves locally in this browser.");
   const [hasLoadedStorage, setHasLoadedStorage] = useState(false);
+  const [isValidating, setIsValidating] = useState(false);
+  const [validationFeedback, setValidationFeedback] = useState<string | null>(null);
+  const [validationEdits, setValidationEdits] = useState<AbcValidationEdit[] | null>(null);
 
   const canUndo = history.past.length > 0;
   const canRedo = history.future.length > 0;
@@ -59,6 +63,17 @@ export default function AbcEditor({
     }),
     []
   );
+
+  const suggestedAbcPreview = useMemo(() => {
+    if (!validationEdits) return null;
+    let nextAbc = history.present;
+    for (const edit of validationEdits) {
+      if (edit.originalLines) {
+        nextAbc = nextAbc.replace(edit.originalLines, edit.newLines || "");
+      }
+    }
+    return nextAbc;
+  }, [history.present, validationEdits]);
 
   useEffect(() => {
     if (value === undefined) return;
@@ -201,6 +216,35 @@ export default function AbcEditor({
     }
   };
 
+  const handleValidate = async () => {
+    try {
+      setIsValidating(true);
+      setValidationFeedback(null);
+      setValidationEdits(null);
+      const result = await validateAbcNotation(history.present);
+      setValidationFeedback(result.feedback);
+      setValidationEdits(result.edits);
+    } catch (err) {
+      console.error("ABC validation failed:", err);
+      setValidationFeedback("Validation failed. Please try again.");
+    } finally {
+      setIsValidating(false);
+    }
+  };
+
+  const applySuggestion = () => {
+    if (suggestedAbcPreview) {
+      commitText(suggestedAbcPreview);
+      setValidationFeedback(null);
+      setValidationEdits(null);
+    }
+  };
+
+  const dismissSuggestion = () => {
+    setValidationFeedback(null);
+    setValidationEdits(null);
+  };
+
   return (
     <section className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-md overflow-hidden">
       <div className="flex flex-wrap gap-4 items-center justify-between border-b border-zinc-100 dark:border-zinc-800 p-5">
@@ -249,8 +293,8 @@ export default function AbcEditor({
         </div>
       </div>
 
-      <div className="abc-editor-responsive-grid">
-        <div className="abc-editor-source-panel min-w-0 space-y-3 border-b border-zinc-100 p-5 dark:border-zinc-800">
+      <div className="abc-editor-responsive-grid border-b border-zinc-100 dark:border-zinc-800">
+        <div className="abc-editor-source-panel min-w-0 space-y-3 p-5 border-r border-zinc-100 dark:border-zinc-800">
           <div className="flex items-center justify-between gap-3">
             <label
               htmlFor="abc-editor-input"
@@ -262,6 +306,7 @@ export default function AbcEditor({
               Cmd/Ctrl+Z undo · Cmd/Ctrl+Shift+Z redo
             </span>
           </div>
+
           <textarea
             id="abc-editor-input"
             value={history.present}
@@ -272,6 +317,15 @@ export default function AbcEditor({
             placeholder="X:1&#10;T:My Bhajan&#10;M:4/4&#10;K:C&#10;C D E F | G A B c |"
           />
           <p className="text-xs text-zinc-500 dark:text-zinc-400">{storageStatus}</p>
+
+          <button
+            type="button"
+            onClick={handleValidate}
+            disabled={isValidating}
+            className="w-full mt-2 py-3 px-4 font-semibold rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:hover:bg-indigo-900/50 dark:text-indigo-300 transition-all cursor-pointer disabled:opacity-50"
+          >
+            {isValidating ? "Validating..." : "Validate ABCNotation"}
+          </button>
         </div>
 
         <div className="min-w-0 space-y-3 p-5">
@@ -294,6 +348,91 @@ export default function AbcEditor({
           />
         </div>
       </div>
+
+      {validationFeedback && (
+        <div className="bg-indigo-50/30 dark:bg-indigo-950/30">
+          <div className="p-5 border-b border-indigo-100 dark:border-indigo-900/50">
+            <h4 className="text-sm font-semibold text-indigo-900 dark:text-indigo-100 mb-2">AI Suggestion</h4>
+            <p className="text-sm text-indigo-800 dark:text-indigo-200 mb-4 whitespace-pre-wrap">
+              {validationFeedback}
+            </p>
+            {validationEdits && validationEdits.length > 0 && (
+              <div className="space-y-3 mb-4">
+                {validationEdits.map((edit, idx) => (
+                  <div key={idx} className="bg-white dark:bg-zinc-900 rounded border border-indigo-100 dark:border-indigo-900 overflow-hidden text-xs font-mono">
+                    {edit.explanation && (
+                      <div className="bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1.5 border-b border-indigo-100 dark:border-indigo-900 text-indigo-700 dark:text-indigo-300 font-sans font-medium">
+                        {edit.explanation}
+                      </div>
+                    )}
+                    {edit.originalLines && (
+                      <div className="bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400 px-3 py-2 whitespace-pre-wrap">
+                        - {edit.originalLines}
+                      </div>
+                    )}
+                    {edit.newLines && (
+                      <div className="bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400 px-3 py-2 whitespace-pre-wrap">
+                        + {edit.newLines}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+            {validationEdits && (
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={applySuggestion}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-all cursor-pointer"
+                >
+                  Apply Suggestion
+                </button>
+                <button
+                  type="button"
+                  onClick={dismissSuggestion}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-indigo-100 hover:bg-indigo-200 text-indigo-700 dark:bg-indigo-900/40 dark:hover:bg-indigo-900/60 dark:text-indigo-300 transition-all cursor-pointer"
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
+          </div>
+
+          {suggestedAbcPreview && (
+            <div className="abc-editor-responsive-grid">
+              <div className="abc-editor-source-panel min-w-0 space-y-3 p-5 border-r border-indigo-100 dark:border-indigo-900/50">
+                <label className="text-sm font-semibold text-indigo-900 dark:text-indigo-100">
+                  Changed ABC source
+                </label>
+                <textarea
+                  value={suggestedAbcPreview}
+                  readOnly
+                  className="abc-editor-textarea min-h-[420px] w-full resize-y rounded-xl border border-indigo-200 bg-white/50 p-4 font-mono text-sm leading-6 text-indigo-900 shadow-inner focus:outline-none dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-100"
+                />
+              </div>
+              <div className="min-w-0 space-y-3 p-5">
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="text-sm font-semibold text-indigo-900 dark:text-indigo-100">
+                    Changed Music Sheet
+                  </h3>
+                  <span className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400">
+                    Suggested preview
+                  </span>
+                </div>
+                <AbcjsPlaybackController
+                  abcString={suggestedAbcPreview}
+                  title="Changed Editor Music Sheet Preview"
+                  canvasId="abc-editor-preview-suggested"
+                  minWidthClassName="min-w-[520px] max-w-[760px]"
+                  sheetViewportClassName="max-h-[min(72vh,780px)] overflow-auto p-4"
+                  renderOptions={previewRenderOptions}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </section>
   );
 }
