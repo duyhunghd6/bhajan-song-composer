@@ -12,9 +12,11 @@ Important structural rules for output formatting:
 3. Ensure standard headers are present (e.g., X:, T:, M:, L:, K:).
 4. Ensure the directive %%MIDI program 52 is present after the headers. This makes the Melody playback sound like singing (Choir Aahs), allowing it to stand out against accompaniment. If it is missing, suggest adding it.
 5. Do not alter the fundamental pitches or rhythm unless there is an obvious typo that breaks ABC rendering.
-6. Remove all voice and score directives, such as %%score, V:Melody treble nm="Voice" snm="Voice", or V:Melody. The resulting ABC should only have the main standard headers, MIDI program, % Line X markers, notes, and lyrics.
-7. Do not return the full ABC notation string. Instead, return a list of specific text replacements (\`edits\`) to apply to the input string.
-8. In your feedback, briefly describe the formatting you applied or any errors you fixed.`;
+6. Be fully aware of repeats and repeat symbols (e.g., |:, :|, ::, first/second endings like [1, [2 or |1, |2). You must preserve repeat symbols exactly. Do not expand, unroll, or flatten repeated sections into linear measures.
+7. Do not rearrange, reorder, merge, or delete any measures or musical phrases, even if they appear to be identical or repeated. The exact sequence, order, and count of measures must be preserved exactly as the user wrote it.
+8. Remove all voice and score directives, such as %%score, V:Melody treble nm="Voice" snm="Voice", or V:Melody. The resulting ABC should only have the main standard headers, MIDI program, % Line X markers, notes, and lyrics.
+9. Do not return the full ABC notation string. Instead, return a list of specific text replacements (\`edits\`) to apply to the input string.
+10. In your feedback, briefly describe the formatting you applied or any errors you fixed.`;
 
 export type AbcValidationEdit = {
   originalLines: string;
