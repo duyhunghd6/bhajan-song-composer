@@ -3,6 +3,7 @@ import AbcjsPlaybackController from "@/components/music-sheet/AbcjsPlaybackContr
 import { convertTimeSliceMeasureToAbc, convertAbcToTimeSliceGrid, type TimeSliceMeasure } from "@/lib/theory/fingerstyle-arranger/time-slice";
 import { formatMeasureAsToon, parseToonToMeasure, renderAsciiTab } from "@/lib/theory/fingerstyle-arranger/toon-utils";
 import { buildAbcDurationContext } from "@/lib/theory/abc-duration";
+import { getKeyAccidentalsFromAbc } from "@/lib/theory/abc-key-signature";
 import { COMPOSER_PREVIEW_RENDER_OPTIONS } from "./preview";
 import { buildAccompanimentAbc } from "@/lib/theory/accompaniment-abc";
 import { applyAbcLayerVisibility, isAbcLayerVisible, ABC_LAYER_IDS } from "@/lib/theory/abc-layer-visibility";
@@ -54,7 +55,7 @@ export function FingerstyleMeasureCard({
 
   const abcResult = useMemo(() => {
     try {
-      const measureAbc = convertTimeSliceMeasureToAbc(measure, durationContext);
+      const measureAbc = convertTimeSliceMeasureToAbc(measure, durationContext, getKeyAccidentalsFromAbc(activeAbc));
       
       const generatedGuitar = [
         'V:Guitar clef=treble-8 name="Fingerstyle"',
@@ -276,7 +277,7 @@ export function FingerstyleMeasureCard({
                 title={`Measure ${measure.measure} Playback`}
                 canvasId={`composer-measure-${measure.measure}-preview`}
                 minWidthClassName="min-w-[400px]"
-                sheetViewportClassName="max-h-[300px] overflow-auto"
+                sheetViewportClassName="max-h-[600px] overflow-auto"
                 renderOptions={getArrangementRenderOptionsFor(abcResult, COMPOSER_PREVIEW_RENDER_OPTIONS, isAbcLayerVisible(ABC_LAYER_IDS.tab, accompLayerVisibility, false))}
               />
             </div>

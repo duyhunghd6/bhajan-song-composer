@@ -2,6 +2,7 @@ import { buildAbcDurationContext, stripAbcChordSymbols, cleanAbcMeasureSegment, 
 import { parseNoteDuration } from "../melody-analyzer";
 import { scientificPitchForStringFret } from "../guitar-playability";
 import type { GuitarStringNumber } from "../fingerstyle-compressor";
+import { getKeyAccidentalsFromAbc, abcNoteToMidiWithKey, type AbcKeyAccidentalMap } from "../abc-key-signature";
 
 export interface TimeSliceMelodyEvent {
   kind: "note" | "rest";
@@ -108,19 +109,12 @@ const PITCH_CLASS_TO_SEMITONE: Record<string, number> = {
   B: 11,
 };
 
-export function abcNoteToMidi(note: string): number | null {
-  const match = note.trim().match(/^([_^=]?)([A-Ga-g])([,']*)/);
-  if (!match) return null;
-  const accidental = match[1] === "^" ? "#" : match[1] === "_" ? "b" : "";
-  const letter = match[2];
-  const pitchClass = `${letter.toUpperCase()}${accidental}`;
-  const semitone = PITCH_CLASS_TO_SEMITONE[pitchClass];
-  if (semitone === undefined) return null;
-  let octave = letter === letter.toLowerCase() ? 5 : 4;
-  for (const mark of match[3] ?? "") {
-    octave += mark === "'" ? 1 : -1;
-  }
-  return (octave + 1) * 12 + semitone;
+/**
+ * Convert an ABC note token to MIDI number, applying key signature accidentals
+ * when no explicit accidental is present on the note.
+ */
+export function abcNoteToMidi(note: string, keyAccidentals?: AbcKeyAccidentalMap): number | null {
+  return abcNoteToMidiWithKey(note, keyAccidentals);
 }
 
 export function midiToScientificPitch(midi: number): string {
@@ -286,6 +280,7 @@ export function convertAbcToTimeSliceGrid(
   }
 ): TimeSliceMeasure[] {
   const durationContext = buildAbcDurationContext(abcString);
+  const keyAccidentals = getKeyAccidentalsFromAbc(abcString);
   const { unitsPerBeat, meter } = durationContext;
   const stepsPerBeat = 4;
   const stepsPerMeasure = meter.numerator * stepsPerBeat; // 16 for 4/4
@@ -468,7 +463,7 @@ export function convertAbcToTimeSliceGrid(
       if (startIndex < 0 || startIndex >= stepsPerMeasure) continue;
 
       if (event.kind === "note") {
-        const midi = abcNoteToMidi(event.token);
+        const midi = abcNoteToMidi(event.token, keyAccidentals);
         const pitch = midi !== null ? midiToScientificPitch(midi) : null;
 
         // Attack step
@@ -546,7 +541,15 @@ export function convertAbcToTimeSliceGrid(
   return measuresList;
 }
 
-function scientificPitchToAbc(scientificPitch: string): string {
+/**
+ * Convert scientific pitch (e.g. "F4", "F#4") to ABC notation token.
+ *
+ * When keyAccidentals is provided, the function emits explicit accidentals
+ * to prevent ABCJS from misinterpreting the note due to the key signature.
+ * For example, F4 in K:Em would be output as =f (explicit natural) because
+ * K:Em makes bare f mean F#.
+ */
+function scientificPitchToAbc(scientificPitch: string, keyAccidentals?: AbcKeyAccidentalMap): string {
   const match = scientificPitch.match(/^([A-G])([#b]?)(-?\d+)$/);
   if (!match) return scientificPitch;
   const [, letter, accidental, octaveStr] = match;
@@ -560,7 +563,33 @@ function scientificPitchToAbc(scientificPitch: string): string {
   // note pitch BEFORE comparing against the tuning stringPitches (which are
   // NOT transposed). This means concert-pitch ABC tokens produce the correct
   // frets without any additional octave adjustment.
-  const abcAccidental = accidental === "#" ? "^" : accidental === "b" ? "_" : "";
+  let abcAccidental: string;
+  if (accidental === "#") {
+    // Check if key signature already implies this sharp — if so, bare note is fine
+    const keyAcc = keyAccidentals?.get(letter);
+    if (keyAcc === "^") {
+      abcAccidental = ""; // Key already makes this letter sharp, no need for explicit ^
+    } else {
+      abcAccidental = "^";
+    }
+  } else if (accidental === "b") {
+    const keyAcc = keyAccidentals?.get(letter);
+    if (keyAcc === "_") {
+      abcAccidental = ""; // Key already makes this letter flat
+    } else {
+      abcAccidental = "_";
+    }
+  } else {
+    // No accidental in the scientific pitch — but key signature might imply one.
+    // If the key says this letter is sharp/flat, we must use = (natural) to override.
+    const keyAcc = keyAccidentals?.get(letter);
+    if (keyAcc) {
+      abcAccidental = "="; // Explicit natural to override key signature
+    } else {
+      abcAccidental = "";
+    }
+  }
+
   let abcLetter = letter;
   
   if (octave >= 4) {
@@ -576,7 +605,11 @@ function scientificPitchToAbc(scientificPitch: string): string {
   return abcAccidental + abcLetter;
 }
 
-export function convertTimeSliceMeasureToAbc(measure: TimeSliceMeasure, durationContext: AbcDurationContext): string {
+export function convertTimeSliceMeasureToAbc(
+  measure: TimeSliceMeasure,
+  durationContext: AbcDurationContext,
+  keyAccidentals?: AbcKeyAccidentalMap
+): string {
   const { unitsPerBeat } = durationContext;
   const stepsPerBeat = 4;
   const stepDurationUnits = unitsPerBeat / stepsPerBeat;
@@ -620,12 +653,17 @@ export function convertTimeSliceMeasureToAbc(measure: TimeSliceMeasure, duration
       // octave — ABCJS then applies clefTranspose = -12 for treble-8 and
       // compares against un-transposed tuning stringPitches, which produces
       // the correct fret numbers without any additional octave adjustment.
+      //
+      // Key signature awareness: scientificPitchToAbc now emits explicit
+      // accidentals (= for natural, ^ for sharp, _ for flat) when the note
+      // conflicts with the key signature, ensuring ABCJS computes the exact
+      // fret from the physical string/fret data.
       const soundingAbc = step.tablature!
         // Sort melody higher (string 1), bass lower (string 6)
         .sort((a, b) => a.string - b.string)
         .map(tab => {
           const pitch = scientificPitchForStringFret(tab.string, tab.fret);
-          const abcToken = scientificPitchToAbc(pitch);
+          const abcToken = scientificPitchToAbc(pitch, keyAccidentals);
           return `!${tab.string}!${abcToken}`;
         });
 

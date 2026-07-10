@@ -16,6 +16,7 @@ import { noteNameToAbc } from "../arranger-utils";
 import type { FingerstyleCompressionOptions, FingerstylePhysicalHandEvent, GuitarStringNumber } from "../fingerstyle-compressor";
 import { strictPimaFingerForString, type FingerstylePickingProfileId, type PickingFinger } from "../picking-profiles";
 import { validateGuitarTab, type GuitarTabEvent, type GuitarTabValidationResult } from "../guitar-tab-validation";
+import { getKeyAccidentalsFromAbc, abcNoteToMidiWithKey, type AbcKeyAccidentalMap } from "../abc-key-signature";
 
 export type FingerstyleCanonicalSection = "intro" | "body" | "interlude" | "outro";
 export type FingerstyleCanonicalRole = "melody" | "bass" | "root" | "third" | "fifth" | "seventh" | "fill";
@@ -96,19 +97,12 @@ function canonicalPitchClass(note: string): string {
   return `${match[1].toUpperCase()}${match[2] ?? ""}`;
 }
 
-function abcNoteToMidi(note: string): number | null {
-  const match = note.trim().match(/^([_^=]?)([A-Ga-g])([,']*)/);
-  if (!match) return null;
-  const accidental = match[1] === "^" ? "#" : match[1] === "_" ? "b" : "";
-  const letter = match[2];
-  const pitchClass = `${letter.toUpperCase()}${accidental}`;
-  const semitone = PITCH_CLASS_TO_SEMITONE[pitchClass];
-  if (semitone === undefined) return null;
-  let octave = letter === letter.toLowerCase() ? 5 : 4;
-  for (const mark of match[3] ?? "") {
-    octave += mark === "'" ? 1 : -1;
-  }
-  return (octave + 1) * 12 + semitone;
+/**
+ * Convert an ABC note token to MIDI number, applying key signature accidentals
+ * when no explicit accidental is present on the note.
+ */
+function abcNoteToMidi(note: string, keyAccidentals?: AbcKeyAccidentalMap): number | null {
+  return abcNoteToMidiWithKey(note, keyAccidentals);
 }
 
 function routeMidiToStrings(midi: number, strings: GuitarStringNumber[], profileInput?: GuitarPlayabilityProfileInput): { string: GuitarStringNumber; fret: number } {
@@ -199,6 +193,7 @@ function buildBodyMeasure(input: {
   durationContext: AbcDurationContext;
   pickingProfile: FingerstylePickingProfileId;
   profileInput?: GuitarPlayabilityProfileInput;
+  keyAccidentals?: AbcKeyAccidentalMap;
 }): FingerstyleCanonicalMeasure {
   const events: FingerstyleCanonicalEvent[] = [];
   const rests: FingerstyleRestSpan[] = [];
@@ -216,7 +211,7 @@ function buildBodyMeasure(input: {
       continue;
     }
 
-    const midi = abcNoteToMidi(item.token);
+    const midi = abcNoteToMidi(item.token, input.keyAccidentals);
     const route = routeMidiToStrings(midi ?? midiForStringFret(1, 0), TREBLE_STRINGS, input.profileInput);
     events.push(eventFromRoute({
       sectionKind: "body",
@@ -368,6 +363,7 @@ export function buildFingerstyleEventMatrix(input: {
   options?: FingerstyleCompressionOptions;
 }): FingerstyleEventMatrix {
   const durationContext = buildAbcDurationContext(input.abcString);
+  const keyAccidentals = getKeyAccidentalsFromAbc(input.abcString);
   const options = input.options ?? {};
   const pickingProfile = options.pickingProfile ?? (options.workflowOptionData?.pickingProfile === "folk-travis" ? "folk-travis" : "strict-pima");
   const measures = input.chords.map((chord, measureIndex) => buildBodyMeasure({
@@ -375,6 +371,7 @@ export function buildFingerstyleEventMatrix(input: {
     chord,
     durationContext,
     pickingProfile,
+    keyAccidentals,
   }));
   const generatedTabEvents = canonicalEventsToTabEvents(measures.flatMap((measure) => measure.events));
   const selected = selectedTabEvents(options);

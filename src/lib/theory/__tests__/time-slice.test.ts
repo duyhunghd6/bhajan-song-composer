@@ -8,6 +8,7 @@ import {
   abcNoteToMidi,
   extractChordsFromMeasure,
 } from "../fingerstyle-arranger/time-slice";
+import { getKeySignatureAccidentals, abcNoteToMidiWithKey } from "../abc-key-signature";
 
 describe("Time-Slice conversion", () => {
   describe("abcNoteToMidi & midiToScientificPitch", () => {
@@ -184,6 +185,121 @@ w: ⬤ * ● *`;
         { chord: "Em", onsetUnits: 0 },
         { chord: "D", onsetUnits: 4 },
       ]);
+    });
+  });
+});
+
+describe("Key Signature Accidentals", () => {
+  describe("getKeySignatureAccidentals", () => {
+    it("returns F# for K:Em (1 sharp)", () => {
+      const acc = getKeySignatureAccidentals("Em");
+      expect(acc.size).toBe(1);
+      expect(acc.get("F")).toBe("^");
+    });
+
+    it("returns F# for K:G (1 sharp — relative major of Em)", () => {
+      const acc = getKeySignatureAccidentals("G");
+      expect(acc.size).toBe(1);
+      expect(acc.get("F")).toBe("^");
+    });
+
+    it("returns F# C# for K:D (2 sharps)", () => {
+      const acc = getKeySignatureAccidentals("D");
+      expect(acc.size).toBe(2);
+      expect(acc.get("F")).toBe("^");
+      expect(acc.get("C")).toBe("^");
+    });
+
+    it("returns Bb for K:F (1 flat)", () => {
+      const acc = getKeySignatureAccidentals("F");
+      expect(acc.size).toBe(1);
+      expect(acc.get("B")).toBe("_");
+    });
+
+    it("returns empty map for K:C (no accidentals)", () => {
+      const acc = getKeySignatureAccidentals("C");
+      expect(acc.size).toBe(0);
+    });
+
+    it("handles minor key variants", () => {
+      const accEmin = getKeySignatureAccidentals("Emin");
+      expect(accEmin.get("F")).toBe("^");
+
+      const accEminor = getKeySignatureAccidentals("Eminor");
+      expect(accEminor.get("F")).toBe("^");
+    });
+  });
+
+  describe("abcNoteToMidiWithKey — key-aware conversion", () => {
+    const emAccidentals = getKeySignatureAccidentals("Em");
+
+    it("applies key signature: bare F in Em → F# (MIDI 66)", () => {
+      expect(abcNoteToMidiWithKey("F", emAccidentals)).toBe(66);
+    });
+
+    it("explicit natural overrides key: =F in Em → F natural (MIDI 65)", () => {
+      expect(abcNoteToMidiWithKey("=F", emAccidentals)).toBe(65);
+    });
+
+    it("explicit sharp matches key: ^F in Em → F# (MIDI 66)", () => {
+      expect(abcNoteToMidiWithKey("^F", emAccidentals)).toBe(66);
+    });
+
+    it("non-accidental note is unaffected: C in Em → C natural (MIDI 60)", () => {
+      expect(abcNoteToMidiWithKey("C", emAccidentals)).toBe(60);
+    });
+
+    it("lowercase note with key signature: f in Em → F#5 (MIDI 78)", () => {
+      expect(abcNoteToMidiWithKey("f", emAccidentals)).toBe(78);
+    });
+
+    it("works without key accidentals (backward compatible)", () => {
+      expect(abcNoteToMidiWithKey("F")).toBe(65);
+      expect(abcNoteToMidiWithKey("^F")).toBe(66);
+    });
+  });
+
+  describe("abcNoteToMidi wrapper — key-aware via optional param", () => {
+    const emAccidentals = getKeySignatureAccidentals("Em");
+
+    it("F in Em → F# (MIDI 66) via wrapper", () => {
+      expect(abcNoteToMidi("F", emAccidentals)).toBe(66);
+    });
+
+    it("backward compatible: F without key → F natural (MIDI 65)", () => {
+      expect(abcNoteToMidi("F")).toBe(65);
+    });
+  });
+
+  describe("convertAbcToTimeSliceGrid — key-aware pitch display", () => {
+    it("displays F as F#4 in K:Em", () => {
+      const abc = `X:1
+T:Test
+M:4/4
+L:1/8
+K:Em
+[V:Melody] | F2 E2 G2 A2 |`;
+
+      const measures = convertAbcToTimeSliceGrid(abc, ["Em"]);
+      expect(measures).toHaveLength(1);
+
+      // Beat 1 should be F#4, not F4
+      expect(measures[0].grid[0].melody.pitch).toBe("F#4");
+    });
+
+    it("displays =F as F4 (natural override) in K:Em", () => {
+      const abc = `X:1
+T:Test
+M:4/4
+L:1/8
+K:Em
+[V:Melody] | =F2 E2 G2 A2 |`;
+
+      const measures = convertAbcToTimeSliceGrid(abc, ["Em"]);
+      expect(measures).toHaveLength(1);
+
+      // Beat 1 should be F4 (natural), not F#4
+      expect(measures[0].grid[0].melody.pitch).toBe("F4");
     });
   });
 });

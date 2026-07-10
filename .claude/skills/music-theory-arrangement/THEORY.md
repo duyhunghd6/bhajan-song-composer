@@ -70,7 +70,24 @@ Construct pitch sets using strict interval patterns (W = Whole step/2 semitones,
 | **Octatonic (Dim)** | Alternating W-H or H-W    | 8 notes, symmetric   |
 | **Chromatic**      | All 12 semitones            | No tonal center      |
 
+### 1.4 Key Signature & Accidental Processing in Algorithmic Pipelines
+
+When processing ABC notation programmatically, key signatures (`K:`) must be fully respected to avoid pitch/fret rendering and computation errors:
+
+#### 1. Input Processing (ABC-to-MIDI / Pitch Extraction)
+* **Accidental Inheritance**: Unadorned note symbols (e.g. `F`) automatically inherit the accidental implied by the active key signature (e.g. in `K:Em` or `K:G`, a bare `F` represents `F#` / MIDI 66).
+* **Accidental Overrides**:
+  * An explicit natural indicator `=` (e.g. `=F`) overrides the key signature accidental to force a natural pitch (e.g. in `K:Em`, `=F` is `F♮` / MIDI 65).
+  * Explicit sharp `^` and flat `_` override the key signature to force their respective accidentals.
+  * These rules apply at the octave level matching the ABC note token.
+
+#### 2. Output Processing (MIDI/Pitch-to-ABC Generation)
+When translating absolute scientific pitches (e.g. from physical guitar strings/frets or MIDI notes) back into ABC notation:
+* **Natural Overrides**: If the target pitch is natural but the key signature implies a sharp or flat for that note letter, you **MUST** prepend the ABC token with the explicit natural indicator `=` (e.g. converting `F4` in `K:Em` must output `=f` instead of `f` so that ABCJS does not incorrectly apply the E minor key signature to render it as F#/fret 2).
+* **Accidental Omissions**: If the target pitch's accidental matches the key signature's implied accidental (e.g. converting `F#4` in `K:Em`), you should output the bare note letter `f` (without `^`) to keep the notation clean, though explicit `^f` is also harmonically correct.
+
 ---
+
 
 ## 2. CHORDS, EXTENSIONS, AND HARMONY (The Meso-Level)
 
