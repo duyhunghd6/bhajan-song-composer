@@ -59,9 +59,11 @@ The playback controller is the abcjs adapter seam. Callers pass ABC text and ren
 ABCJS rendering of guitar tablature requires strict enforcement of string mapping to prevent auto-assignment errors and layout collapse:
 
 - **String Forcing**: Always prepend ABC notes with the `!N!` string decoration (e.g., `!1!b`, `!6!B`) to explicitly assign the note to string `N` (1-6). This instructs ABCJS's `getStringDecoration()` to bypass its default lowest-fret auto-assignment algorithm.
+- **Render-time Forcing**: To catch raw LLM outputs or custom ABC that lacks decorations, the playback entrypoint automatically applies the `ensureGuitarStringForcing()` post-processor at render-time, preserving chord symbols (e.g., `"Em"`) and respecting non-Guitar voice isolation.
 - **Duplicate Pitches**: Because string forcing bypasses auto-assignment, it is valid to output the same concert pitch on multiple strings simultaneously (e.g., D3 on string 4 and string 5). Do *not* deduplicate identical ABC pitches in tablature chords.
 - **Octave Convention**: Always output concert-pitch ABC tokens for the `treble-8` clef. ABCJS internally applies a `clefTranspose = -12` to the note *before* computing the fret against its un-transposed tuning `stringPitches`. Manually shifting octaves up +1 will cause the fret computation to fail.
 - **Key Signature Awareness**: Key signatures (like `K:Em` where F is sharped) must be respected on both input and output paths. On the input path (ABC-to-MIDI), bare notes inherit implied accidentals (bare `F` in `K:Em` represents F# / MIDI 66). On the output path (Pitch-to-ABC), if a physical note is natural but the key signature has a sharp/flat on that note letter (e.g., F-natural in `K:Em`), you must output an explicit natural indicator `=` (e.g., `!1!=f`) so ABCJS does not incorrectly apply the key signature and render it as fret 2. Conversely, omit the accidental if the pitch matches the key signature default.
+- **Export Portability**: When exporting or copying ABC notation to the clipboard, `cleanAbcForExport()` automatically strips all `!N!` string decorations (which other software would display as confusing fingering numbers) and normalizes `clef=treble-8` to `clef=treble` so that third-party ABC notation viewers render the staff correctly.
 
 ### Theory engine
 

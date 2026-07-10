@@ -14,6 +14,7 @@ import {
   releasePlayback,
 } from "./playback-registry";
 import { postProcessBeats, parseAbcTempo } from "./abcjs-playback/abc-rendering";
+import { ensureGuitarStringForcing } from "@/lib/theory/guitar-string-forcing";
 import { AbcjsPlaybackControls } from "./abcjs-playback/AbcjsPlaybackControls";
 import { AbcjsPlaybackStyles } from "./abcjs-playback/AbcjsPlaybackStyles";
 import type {
@@ -101,6 +102,11 @@ export default function AbcjsPlaybackController({
     return () => window.removeEventListener("resize", updateWidth);
   }, [useContainerWidth]);
 
+  // Whether tablature rendering is enabled for this instance
+  const tablatureEnabled = Boolean(
+    renderOptions && typeof renderOptions === "object" && "tablature" in renderOptions && renderOptions.tablature
+  );
+
   const finalAbcString = useMemo(() => {
     let result = abcString;
     if (overrideKey) result = result.replace(/^\s*K:\s*(.+)$/m, `K: ${overrideKey}`);
@@ -120,8 +126,13 @@ export default function AbcjsPlaybackController({
         })
         .join("\n");
     }
+    // When tablature is enabled, ensure Guitar voice notes have !N! string-forcing
+    // decorations so ABCJS computes correct fret numbers instead of showing X/? marks.
+    if (tablatureEnabled) {
+      result = ensureGuitarStringForcing(result);
+    }
     return result;
-  }, [abcString, overrideKey, overrideMeter, hideVoiceNames]);
+  }, [abcString, overrideKey, overrideMeter, hideVoiceNames, tablatureEnabled]);
   // Sync tempo from the ABC Q: field when the source ABC string changes
   useEffect(() => {
     const parsedBpm = parseAbcTempo(abcString);

@@ -407,10 +407,18 @@ export function getVisibleAbcVoiceIds(abcString: string, visibility: Record<stri
 export function cleanAbcForExport(abcString: string): string {
   if (!abcString) return "";
   // 1. Remove string-forcing decorations like !1!, !2!, ..., !6!
+  //    These are ABCJS-specific tablature hints that other viewers show as fingering numbers.
   let cleaned = abcString.replace(/![1-6]!/g, "");
 
   // 2. Remove strong beat lyric lines (w: ⬤ * • * ...)
   cleaned = stripStrongBeatLyricLines(cleaned);
+
+  // 3. Normalize clef=treble-8 → clef=treble for universal viewer portability.
+  //    clef=treble-8 is standard ABC 2.1 for guitar (sounds octave lower than written)
+  //    but some ABC viewers don't support it. Removing the "-8" keeps the staff notation
+  //    visually identical — only the small "8" below the clef disappears. MIDI playback
+  //    in other software will sound one octave higher, but the sheet music is correct.
+  cleaned = cleaned.replace(/clef=treble-8/g, "clef=treble");
 
   return cleaned;
 }

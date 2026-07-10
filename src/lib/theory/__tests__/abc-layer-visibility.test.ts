@@ -161,4 +161,12 @@ w: Ha-ri Bol _ Ha-ri Bol _ |
   it("returns empty string if input is null or empty", () => {
     expect(cleanAbcForExport("")).toBe("");
   });
+
+  it("normalizes clef=treble-8 to clef=treble for universal viewer portability", () => {
+    const abc = `V:Guitar clef=treble-8 name="Guitar"\n[V:Guitar] !1!e/2 |`;
+    const result = cleanAbcForExport(abc);
+    expect(result).toContain("clef=treble ");
+    expect(result).not.toContain("clef=treble-8");
+    expect(result).not.toContain("!1!");
+  });
 });
