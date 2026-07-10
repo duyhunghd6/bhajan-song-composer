@@ -1,4 +1,4 @@
-import { buildAbcDurationContext, stripAbcChordSymbols, cleanAbcMeasureSegment, formatAbcDuration, AbcDurationContext } from "../abc-duration";
+import { buildAbcDurationContext, stripAbcChordSymbols, cleanAbcMeasureSegment, formatAbcDuration, AbcDurationContext, measureDurationUnits } from "../abc-duration";
 import { parseNoteDuration } from "../melody-analyzer";
 import { scientificPitchForStringFret } from "../guitar-playability";
 import type { GuitarStringNumber } from "../fingerstyle-compressor";
@@ -55,6 +55,9 @@ export interface TimeSliceMeasure {
     fill_density?: string;
   };
   grid: TimeSliceGridStep[];
+  /** If this measure is a pickup (anacrusis), the actual duration in ABC units.
+   *  Undefined or 0 means it is a normal full measure. */
+  pickupDurationUnits?: number;
   visualTablature?: string;
   source_abc?: {
     melody: string;
@@ -438,7 +441,10 @@ export function convertAbcToTimeSliceGrid(
     const weightTokens = getLyricSyllablesForMeasure(beatWeightStr);
     let weightCursor = 0;
 
-    // Initialize quantized steps for this measure
+    // Initialize quantized steps for this measure (always 16 for 4/4).
+    // Pickup measures keep all 16 steps; melody events fill their onset
+    // positions and the remaining steps stay as rests. The LLM prompt
+    // directs the AI to respect the pickup and only fill active steps.
     const measureGrid = Array.from({ length: stepsPerMeasure }, (_, i) => {
       const stepNum = i + 1;
       const beat = 1.00 + i * 0.25;
@@ -524,6 +530,11 @@ export function convertAbcToTimeSliceGrid(
       tablature: undefined,
     }));
 
+    // Detect pickup: if the melody for this measure is shorter than a full measure,
+    // record the actual duration so the LLM prompt and ABC converter can respect it.
+    const actualMelodyUnits = measureDurationUnits(measureStr);
+    const isPickup = actualMelodyUnits > 0 && actualMelodyUnits < durationContext.fullMeasureUnits;
+
     measuresList.push({
       measure: measureIndex + 1,
       style_profile: {
@@ -533,6 +544,7 @@ export function convertAbcToTimeSliceGrid(
         fill_density: options?.fill_density || "few",
       },
       grid: finalGrid,
+      pickupDurationUnits: isPickup ? actualMelodyUnits : undefined,
       source_abc: {
         melody: measureStr,
         lyric: lyricStr,
@@ -617,20 +629,40 @@ export function convertTimeSliceMeasureToAbc(
   const stepsPerBeat = 4;
   const stepDurationUnits = unitsPerBeat / stepsPerBeat;
 
+  // For pickup measures, cap the total output duration to the actual melody duration.
+  // The grid is always 16 steps, but a pickup only occupies the first N steps.
+  const maxOutputUnits = measure.pickupDurationUnits && measure.pickupDurationUnits > 0
+    ? measure.pickupDurationUnits
+    : undefined;
+
   const rendered: string[] = [];
   
   let currentRestSteps = 0;
+  let totalEmittedUnits = 0;
 
   for (let i = 0; i < measure.grid.length; i++) {
+    // Stop if we've emitted enough for a pickup measure
+    if (maxOutputUnits !== undefined && totalEmittedUnits >= maxOutputUnits) break;
+
     const step = measure.grid[i];
     const isAttack = step.tablature && step.tablature.length > 0;
 
     if (isAttack) {
       // If we accumulated rests before this attack, output them
       if (currentRestSteps > 0) {
-        rendered.push(`z${formatAbcDuration(currentRestSteps * stepDurationUnits)}`);
+        let restUnits = currentRestSteps * stepDurationUnits;
+        if (maxOutputUnits !== undefined) {
+          restUnits = Math.min(restUnits, maxOutputUnits - totalEmittedUnits);
+        }
+        if (restUnits > 0) {
+          rendered.push(`z${formatAbcDuration(restUnits)}`);
+          totalEmittedUnits += restUnits;
+        }
         currentRestSteps = 0;
       }
+
+      // Stop if emitting the rest already filled the pickup
+      if (maxOutputUnits !== undefined && totalEmittedUnits >= maxOutputUnits) break;
 
       // Calculate how long this attack holds
       let durationSteps = 1;
@@ -641,28 +673,15 @@ export function convertTimeSliceMeasureToAbc(
         durationSteps++;
       }
 
-      const durationUnits = durationSteps * stepDurationUnits;
+      let durationUnits = durationSteps * stepDurationUnits;
+      // Cap to remaining pickup budget
+      if (maxOutputUnits !== undefined) {
+        durationUnits = Math.min(durationUnits, maxOutputUnits - totalEmittedUnits);
+      }
       const suffix = formatAbcDuration(durationUnits);
 
       // Convert tablature notes to ABC with !N! string-forcing decorations.
-      // ABCJS's getStringDecoration() (string-patterns.js) recognises decorations
-      // '1'–'6' and uses them to force the note onto the specified guitar string,
-      // bypassing its default lowest-fret auto-assignment. This is critical for:
-      //   - Duplicate pitches on different strings (e.g. D3 on string 4 fret 0
-      //     AND string 5 fret 5) which would otherwise be collapsed.
-      //   - Exact reproduction of the LLM-generated tablature layout.
-      //
-      // scientificPitchToAbc maps concert pitch to ABC tokens at the correct
-      // octave — ABCJS then applies clefTranspose = -12 for treble-8 and
-      // compares against un-transposed tuning stringPitches, which produces
-      // the correct fret numbers without any additional octave adjustment.
-      //
-      // Key signature awareness: scientificPitchToAbc now emits explicit
-      // accidentals (= for natural, ^ for sharp, _ for flat) when the note
-      // conflicts with the key signature, ensuring ABCJS computes the exact
-      // fret from the physical string/fret data.
       const soundingAbc = step.tablature!
-        // Sort melody higher (string 1), bass lower (string 6)
         .sort((a, b) => a.string - b.string)
         .map(tab => {
           const pitch = scientificPitchForStringFret(tab.string, tab.fret);
@@ -670,15 +689,13 @@ export function convertTimeSliceMeasureToAbc(
           return `!${tab.string}!${abcToken}`;
         });
 
-      // No deduplication — with forced string decorations, ABCJS handles
-      // duplicate pitches on different strings correctly.
-
       if (soundingAbc.length === 1) {
         rendered.push(`${soundingAbc[0]}${suffix}`);
       } else if (soundingAbc.length > 1) {
         rendered.push(`[${soundingAbc.join("")}]${suffix}`);
       }
       
+      totalEmittedUnits += durationUnits;
       // Skip the sustained steps
       i += (durationSteps - 1);
     } else {
@@ -688,7 +705,13 @@ export function convertTimeSliceMeasureToAbc(
 
   // If there are leftover rests at the end of the measure
   if (currentRestSteps > 0) {
-    rendered.push(`z${formatAbcDuration(currentRestSteps * stepDurationUnits)}`);
+    let restUnits = currentRestSteps * stepDurationUnits;
+    if (maxOutputUnits !== undefined) {
+      restUnits = Math.min(restUnits, Math.max(0, maxOutputUnits - totalEmittedUnits));
+    }
+    if (restUnits > 0) {
+      rendered.push(`z${formatAbcDuration(restUnits)}`);
+    }
   }
 
   return rendered.join(" ");

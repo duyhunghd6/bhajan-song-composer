@@ -15,8 +15,10 @@ import { applyAbcLayerVisibility, applyAbcLayerVolumes, isAbcLayerVisible, ABC_L
 import { getArrangementRenderOptionsFor, buildArrangementSynthOptions } from "./arrangement-preview-model";
 import { buildAccompanimentAbc } from "@/lib/theory/accompaniment-abc";
 import { getSelectedWorkflowOption } from "@/lib/theory/accompaniment-workflow";
+import { getComposerSongStoragePrefix } from "./storage";
 
 interface GuitarFingerstyleStepProps {
+  slug: string;
   activeAbc: string;
   hasMounted: boolean;
   pipeline: ArrangementPipelineResult | null;
@@ -33,6 +35,7 @@ interface GuitarFingerstyleStepProps {
 }
 
 export function GuitarFingerstyleStep({
+  slug,
   activeAbc,
   workflowAppliedMusicAbc,
   accompanimentPreview,
@@ -43,6 +46,7 @@ export function GuitarFingerstyleStep({
   ws,
   updateState,
 }: GuitarFingerstyleStepProps) {
+  const fingerstyleStorageKey = `${getComposerSongStoragePrefix(slug)}fingerstyle-measures`;
   const [measures, setMeasures] = useState<TimeSliceMeasure[]>([]);
   const [copiedMasterAbc, setCopiedMasterAbc] = useState(false);
   
@@ -83,7 +87,7 @@ export function GuitarFingerstyleStep({
       };
 
       // First try to load from localStorage
-      const saved = localStorage.getItem("fingerstyle-measures-draft");
+      const saved = localStorage.getItem(fingerstyleStorageKey);
       if (saved) {
         const parsedMeasures = JSON.parse(saved);
         // Only use saved if the number of measures matches (basic check for activeAbc changes)
@@ -96,6 +100,7 @@ export function GuitarFingerstyleStep({
             return {
               ...pm,
               style_profile: fresh.style_profile,
+              pickupDurationUnits: fresh.pickupDurationUnits,
               grid: pm.grid.map((step, stepIdx) => {
                 const freshStep = fresh.grid[stepIdx];
                 return {
@@ -119,12 +124,12 @@ export function GuitarFingerstyleStep({
     } catch (e) {
       console.error("Failed to parse measures", e);
     }
-  }, [workflowAppliedMusicAbc, ws.accompanimentWorkflow]);
+  }, [workflowAppliedMusicAbc, ws.accompanimentWorkflow, fingerstyleStorageKey]);
 
   // Save to localStorage and sync to workspace state whenever measures change
   useEffect(() => {
     if (measures.length > 0) {
-      localStorage.setItem("fingerstyle-measures-draft", JSON.stringify(measures));
+      localStorage.setItem(fingerstyleStorageKey, JSON.stringify(measures));
 
       try {
         const baseInputAbc = accompanimentPreview.rawAbc || activeAbc;

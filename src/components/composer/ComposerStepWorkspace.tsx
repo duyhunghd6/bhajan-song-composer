@@ -183,6 +183,7 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
   if (step === "guitar-fingerstyle") {
     return (
       <GuitarFingerstyleStep
+        slug={slug}
         activeAbc={activeAbc}
         hasMounted={hasMounted}
         pipeline={pipeline}

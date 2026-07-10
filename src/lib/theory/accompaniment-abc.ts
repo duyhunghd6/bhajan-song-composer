@@ -398,7 +398,8 @@ function getMelodyMeasureInfo(baseAbc: string) {
   const durationContext = buildAbcDurationContext(baseAbc);
   const musicBody = extractMusicBodyLines(baseAbc).join(" ");
   const segments = splitAbcMeasureSegments(musicBody);
-  const firstSegmentDuration = segments.length > 0 ? measureDurationUnits(segments[0]) : 0;
+  const segmentDurations = segments.map((seg) => measureDurationUnits(seg));
+  const firstSegmentDuration = segmentDurations.length > 0 ? segmentDurations[0] : 0;
   const hasPickup = firstSegmentDuration > 0 && firstSegmentDuration < durationContext.fullMeasureUnits;
   const fullMeasureCount = hasPickup ? Math.max(segments.length - 1, 0) : segments.length;
 
@@ -407,6 +408,7 @@ function getMelodyMeasureInfo(baseAbc: string) {
     hasPickup,
     pickupUnits: hasPickup ? firstSegmentDuration : 0,
     fullMeasureCount,
+    segmentDurations,
   };
 }
 
@@ -545,8 +547,17 @@ function alignVoiceBlockToMelodyLines(block: string, baseAbc: string, melodyLine
   const voiceBody = Array.isArray(musicLines) ? musicLines.join(" ").trim() : "";
   const voiceBars = parsedFingerstyle?.bodyBars ?? splitAbcMeasureSegments(voiceBody);
   let fullMeasureBars = [...voiceBars];
-
+  // When the source has more bars than melody full measures and the melody has a
+  // pickup, the extra first bar might be the source's actual pickup tablature (shorter
+  // than a full measure). Preserve it if so; otherwise fall back to a pickup rest.
+  let pickupBar: string | null = null;
   if (hasPickup && fullMeasureBars.length > fullMeasureCount) {
+    const candidatePickup = fullMeasureBars[0];
+    const candidateDuration = measureDurationUnits(candidatePickup);
+    if (candidateDuration > 0 && candidateDuration <= pickupUnits) {
+      // The source's first bar IS a pickup bar — preserve it.
+      pickupBar = candidatePickup;
+    }
     fullMeasureBars = fullMeasureBars.slice(1);
   }
 
@@ -557,8 +568,10 @@ function alignVoiceBlockToMelodyLines(block: string, baseAbc: string, melodyLine
   const normalizedFullMeasures = fullMeasureBars
     .slice(0, fullMeasureCount)
     .map((bar) => normalizeAbcMeasureDuration(bar, durationContext.fullMeasureUnits));
+  // Use the source's actual pickup bar if it was a real pickup, otherwise rest.
+  const pickupContent = pickupBar ?? buildPickupRest(pickupUnits);
   const alignedMeasures = hasPickup
-    ? [buildPickupRest(pickupUnits), ...normalizedFullMeasures]
+    ? [pickupContent, ...normalizedFullMeasures]
     : normalizedFullMeasures;
 
   const interludeAfterLineIndex = Math.max(0, Math.floor(melodyLinePattern.length / 2) - 1);
@@ -610,8 +623,13 @@ export function buildAccompanimentAbc({
   const normalizedBaseAbc = normalizeAbcVoiceSyntax(baseAbc);
   const baseAbcBlocks = normalizedBaseAbc.split(/(?=^V:)/m).filter(block => block.trim());
   const inlineMelodyBlock = extractInlineMelodyBlock(normalizedBaseAbc);
+  // Merge ALL V:Melody blocks (some ABC files have a declaration block with options/MIDI
+  // followed by a second V:Melody that contains the actual music body). Using find() would
+  // pick only the first block, which may have no notes.
+  const allMelodyBlocks = baseAbcBlocks.filter(b => /^V:Melody\b/.test(b.trim()));
+  const mergedMelodyBlock = allMelodyBlocks.length > 0 ? allMelodyBlocks.join("\n") : null;
   const melodyBlock = inlineMelodyBlock
-    || baseAbcBlocks.find(b => /^V:Melody\b/.test(b.trim()))
+    || mergedMelodyBlock
     || baseAbcBlocks.find(b => !b.trim().startsWith("V:"))
     || "";
   const otherBaseBlocks = hasInlineVoiceBody(normalizedBaseAbc)

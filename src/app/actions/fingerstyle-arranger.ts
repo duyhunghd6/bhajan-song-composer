@@ -62,6 +62,12 @@ export async function generateAIFingerstyleMeasure(
   const stepId = `fingerstyle-measure-${input.measure.measure}`;
   const systemPrompt = `You are an expert devotional fingerstyle guitar arranger. You will receive a 16-step TOON grid. Follow this exact tool-calling workflow sequentially:
 
+0. **Pickup (Anacrusis) Measure Check:**
+   - If the grid header contains \`pickup_beats:\`, this is a PICKUP measure. The melody only occupies the first N steps.
+   - You MUST ONLY place tablature events on steps where the melody has \`"state": "attack"\` or \`"state": "sustain"\`. ALL other steps MUST have empty tablature \`[]\`.
+   - Do NOT add bass notes, fills, pinches, or any other tablature events to the empty/padding steps after the melody ends.
+   - A pickup measure might have only 1 or 2 active steps — that is correct. Submit the grid with tablature only on those active steps.
+
 1. **Lock the Grip & Voicings (Tool Call First):**
    - Scan the grid. On Step 1, Step 9, AND on any step where the \`chord\` symbol changes, you MUST call \`query_guitar_voicings(chord, melody_pitch)\`.
    - **Constraint Check:** You are strictly forbidden from inventing fretted notes. You must exclusively use the strings and frets provided by the tool's returned grip.

@@ -55,7 +55,14 @@ export function FingerstyleMeasureCard({
 
   const abcResult = useMemo(() => {
     try {
-      const measureAbc = convertTimeSliceMeasureToAbc(measure, durationContext, getKeyAccidentalsFromAbc(activeAbc));
+      // For the individual card preview, override pickupDurationUnits so the
+      // guitar renders as a full-length bar. The pickup duration capping is
+      // only needed for master playback alignment.
+      const previewMeasure = measure.pickupDurationUnits
+        ? { ...measure, pickupDurationUnits: undefined }
+        : measure;
+
+      const measureAbc = convertTimeSliceMeasureToAbc(previewMeasure, durationContext, getKeyAccidentalsFromAbc(activeAbc));
       
       const generatedGuitar = [
         'V:Guitar clef=treble-8 name="Fingerstyle"',
@@ -69,7 +76,15 @@ export function FingerstyleMeasureCard({
       
       const sourceAbc = measure.source_abc || parsedMeasures[measure.measure - 1]?.source_abc;
       if (sourceAbc) {
-        miniBaseAbcLines.push(`| ${sourceAbc.melody} |`);
+        // For pickup measures, pad the melody with rests to fill a full measure
+        // so both melody and guitar have matching durations in the card preview.
+        if (measure.pickupDurationUnits && measure.pickupDurationUnits > 0) {
+          const padUnits = durationContext.fullMeasureUnits - measure.pickupDurationUnits;
+          const padRest = padUnits > 0 ? ` z${padUnits > 1 ? padUnits : ''}` : '';
+          miniBaseAbcLines.push(`| ${sourceAbc.melody}${padRest} |`);
+        } else {
+          miniBaseAbcLines.push(`| ${sourceAbc.melody} |`);
+        }
         if (sourceAbc.lyric) {
           miniBaseAbcLines.push(`w: ${sourceAbc.lyric}`);
         }

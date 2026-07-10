@@ -631,4 +631,49 @@ w: Ha-ri Bol _ |`;
     expect(lyricLine).toBeGreaterThan(guitarLine);
     expect(lyricLine).toBeLessThan(pianoLine);
   });
+  it("merges dual V:Melody blocks when the first block has only MIDI directives and the second has music", () => {
+    // This pattern is common in .abc song files: the first V:Melody sets voice options and
+    // MIDI program, then a second bare V:Melody starts the music body.
+    const dualMelodyAbc = `X:1
+T:Dual V:Melody Test
+%%score ( Melody )
+L:1/8
+M:4/4
+Q:1/2=120
+K:G
+V:Melody treble nm="Voice" snm="Voice"
+%%MIDI program 53
+V:Melody
+% Line 1
+B, |: "Em" E E2 F GF E B, | "Em" E E2 F GF E2 | "Am" B2 A2 G2 A2 | "Em" E E3- E2 z B, |
+w: Ga-|ne- sha Ga- ne- * sha Ga-|ne- sha Ga- ne- * sha|Jay jay Shri Ga-|ne- sha! _ Ga|
+% Line 2
+"Em" E E2 F GF E B, | "Em" E E2 F GF E2 | "Am" B2 A2 G2 A2 | "Em" E E3- E2 z2 :|
+w: ne- sha Ga- ne- * sha Ga-|ne- sha Ga- ne- * sha|Jay jay Shri Ga-|ne- sha _|`;
+
+    const guitarAbc = `V:Guitar clef=treble-8
+%%MIDI program 24
+| z | E,2 B,2 G2 z2 | E,2 B,2 G2 z2 | A,2 E2 A2 z2 | E,2 B,2 G2 z2 | E,2 B,2 G2 z2 | E,2 B,2 G2 z2 | A,2 E2 A2 z2 | E,2 B,2 G2 z2 |`;
+
+    const result = buildAccompanimentAbc({
+      baseAbc: dualMelodyAbc,
+      generatedGuitar: guitarAbc,
+      layerVisibility: {},
+    });
+
+    // The result must have actual body lines, not just voice declarations
+    const melodyBody = getVoiceMusicBody(result.abc, "Melody");
+    const guitarBody = getVoiceMusicBody(result.abc, "Guitar");
+
+    expect(melodyBody).toBeTruthy();
+    expect(guitarBody).toBeTruthy();
+    expect(result.abc).toContain("%%score (Melody) (Guitar)");
+
+    // Verify actual melody notes appear in the output
+    const melodyBars = splitAbcMeasureSegments(melodyBody);
+    expect(melodyBars.length).toBeGreaterThan(0);
+
+    // The pickup measure should be present
+    expect(melodyBars[0]).toContain("B,");
+  });
 });

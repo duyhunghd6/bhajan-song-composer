@@ -2,6 +2,10 @@ import { type TimeSliceMeasure, type TimeSliceGridStep } from "./time-slice";
 
 export function formatMeasureAsToon(measure: TimeSliceMeasure): string {
   let toon = `measure: ${measure.measure}\n`;
+  if (measure.pickupDurationUnits && measure.pickupDurationUnits > 0) {
+    toon += `pickup_beats: ${measure.pickupDurationUnits}\n`;
+    toon += `NOTE: This is a PICKUP (anacrusis) measure. The melody only occupies the first ${measure.pickupDurationUnits} unit(s). You MUST ONLY place tablature on steps where the melody has an "attack" or "sustain". All remaining steps are padding and must have EMPTY tablature []. Do NOT add bass, fills, or arpeggios to the empty padding steps.\n`;
+  }
   toon += `style_profile:\n`;
   toon += `  key: ${measure.style_profile.key || "null"}\n`;
   toon += `  comping_style: "${measure.style_profile.comping_style || "null"}"\n`;
