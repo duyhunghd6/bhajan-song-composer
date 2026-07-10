@@ -124,6 +124,11 @@ function buildWorkflowOptionDataProperty(stepId?: AccompanimentWorkflowStepId) {
       additionalProperties: true,
       properties: {
         guitarTab: buildGuitarTabDataProperty(),
+        fillDensity: {
+          type: "string",
+          enum: ["none", "few", "all"],
+          description: "Choose the fill density for the fingerstyle arrangement: 'none' (only melody/bass anchors), 'few' (sparse 2-4 fills per measure), or 'all' (dense continuous fills)."
+        }
       },
       required: ["guitarTab"],
     };

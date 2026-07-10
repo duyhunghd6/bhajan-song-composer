@@ -52,6 +52,7 @@ export interface TimeSliceMeasure {
     key: string;
     comping_style: string;
     voicing_plan: string;
+    fill_density?: string;
   };
   grid: TimeSliceGridStep[];
   visualTablature?: string;
@@ -277,6 +278,7 @@ export function convertAbcToTimeSliceGrid(
     key?: string;
     comping_style?: string;
     voicing_plan?: string;
+    fill_density?: string;
   }
 ): TimeSliceMeasure[] {
   const durationContext = buildAbcDurationContext(abcString);
@@ -528,6 +530,7 @@ export function convertAbcToTimeSliceGrid(
         key: options?.key || key,
         comping_style: options?.comping_style || "PIMA devotional fingerstyle. Sparse fills.",
         voicing_plan: options?.voicing_plan || `Open-position ${options?.key || key} and D shapes. Thumbed E/B and D/A anchors.`,
+        fill_density: options?.fill_density || "few",
       },
       grid: finalGrid,
       source_abc: {

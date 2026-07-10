@@ -67,11 +67,11 @@ export async function generateAIFingerstyleMeasure(
    - **Constraint Check:** You are strictly forbidden from inventing fretted notes. You must exclusively use the strings and frets provided by the tool's returned grip.
    - **Playability Rule:** The tool output now lists all possible bass notes sorted by \`fretDistance\` (the fret distance between the melody note and the bass note). You MUST choose the grip with the smallest \`fretDistance\` to ensure physical playability.
 
-2. **Right-Hand Foundation (Strums vs Pinches):**
-   - **Strumming on Downbeats:** Scan the grid for the strong downbeat weight marker ⬤ (Beat 1). You MUST establish a rich harmonic foundation using a full 5-string or 6-string **Strum** across all active strings from the grip.
-     - *Strum Notation Rule:* To notate a strum, assign the Thumb (\\\`p\\\`) to ALL the bass and inner strings being strummed, leaving the fingers for the melody.
-     - *Example of a full 6-string Em strum:* Str 6 (\\\`p\\\`), Str 5 (\\\`p\\\`), Str 4 (\\\`p\\\`), Str 3 (\\\`p\\\`), Str 2 (\\\`p\\\`), Str 1 (\\\`a\\\` - Melody).
-   - **Standard PIMA Pinches (Max 4 strings):** On secondary strong beats ● (Beat 3) or non-downbeat chord changes, play a lighter 4-note **Pinch**. The Thumb (\\\`p\\\`) plays exactly 1 Bass String. The fingers (\\\`i, m, a\\\`) play up to 3 Treble/Inner Strings.
+2. **Right-Hand Foundation (Strums vs Pinches vs PIMA Anchors):**
+   - **Style Profile Check (CRITICAL):** Inspect the \`style_profile\` under \`comping_style\` and \`voicing_plan\` in the input.
+     - **PIMA-only / Sparse Anchors:** If \`comping_style\` or \`voicing_plan\` contains "PIMA" or "Sparse", you MUST NOT play a full 5-string or 6-string strum on downbeats. Instead, you MUST use standard 4-note PIMA **Pinches** (maximum 4 strings: Thumb \\\`p\\\` on exactly 1 bass string, and fingers \\\`i, m, a\\\` on up to 3 treble/inner strings) or even simpler **double-stops** across all steps, including the downbeat ⬤ (Beat 1).
+     - **Strumming Style:** Only if the \`comping_style\` or \`voicing_plan\` does not restrict to PIMA/Sparse (or explicitly requests strumming/comping), you may use a full 5-string or 6-string **Strum** on the strong downbeat weight marker ⬤ (Beat 1) across all active strings from the grip. Notate a strum by assigning the Thumb \\\`p\\\` to ALL bass and inner strings being strummed, leaving the fingers for the melody.
+   - **PIMA Pinch Notation Rule (Max 4 strings):** When playing a standard 4-note Pinch, the Thumb (\\\`p\\\`) plays exactly 1 Bass String, and the fingers (\\\`i, m, a\\\`) play up to 3 Treble/Inner Strings.
      - *Example of a 4-note C pinch (X32010):* Play Str 5 (\\\`p\\\`), Str 3 (\\\`i\\\`), Str 2 (\\\`m\\\`), Str 1 (\\\`a\\\`).
      - *Example of a 4-note D pinch (XX0232):* Play Str 4 (\\\`p\\\`), Str 3 (\\\`i\\\`), Str 2 (\\\`m\\\`), Str 1 (\\\`a\\\`).
 
@@ -81,7 +81,11 @@ export async function generateAIFingerstyleMeasure(
    - **Simultaneous String Collision:** If a chord voicing requires fretting an inner string, but the melody note is also mapped to that exact same string, the melody note wins. Drop the chord tone from your pinch.
 
 4. **PIMA Fills & The Sustain Rule (Inner Arpeggios):**
-   - Look at the \`null\` steps (the empty 16th-note spaces). You may add light, arpeggiated inner chord tones to keep the rhythm flowing. Keep fills sparse and subservient to the vocal melody.
+   - **Sparse Fill Density Rule (CRITICAL):** Inspect the \`style_profile\` under \`fill_density\` in the input:
+     - **If "none" (Muted Fills):** Do NOT add any fill/arpeggio notes in the empty steps. Only play notes where there is a melody attack or a chord change downbeat/bass anchor.
+     - **If "few" (Sparse Fills):** You MUST NOT fill every single empty step with notes. Limit the total number of fill/arpeggio notes to a maximum of **2 to 4 fill attacks per 16-step measure**. Leave the other empty steps as silence/rests or let previous notes sustain.
+     - **If "all" (Dense/Full Fills):** You may add fills to most of the empty/null steps to keep the rhythm flowing continuously (up to 12-14 notes per measure).
+   - Look at the \`null\` steps (the empty 16th-note spaces) and follow the above density rule. Add light, arpeggiated inner chord tones to keep the rhythm flowing, subservient to the vocal melody.
    - **Sustain Protection Rule (CRITICAL):** If the vocal melody is marked as \`"state": "sustain"\` on a specific string across multiple steps, you are **physically forbidden** from plucking a fill note on that exact same string. Doing so will prematurely cut off the singer's note.
 
 5. **Validate & Submit:**

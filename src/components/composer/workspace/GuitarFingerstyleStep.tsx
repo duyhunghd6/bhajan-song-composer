@@ -59,21 +59,27 @@ export function GuitarFingerstyleStep({
       const workflow = ws.accompanimentWorkflow;
       let compingStyle: string | undefined;
       let voicingPlan: string | undefined;
+      let fillDensity: string | undefined;
 
       if (workflow) {
         const compingOpt = getSelectedWorkflowOption(workflow, "guitar-comping-profile");
         const voicingOpt = getSelectedWorkflowOption(workflow, "guitar-voicing-bass");
+        const fillsOpt = getSelectedWorkflowOption(workflow, "guitar-fills-validation");
         if (compingOpt) {
           compingStyle = (compingOpt.data?.compingProfile as string) || compingOpt.label;
         }
         if (voicingOpt) {
           voicingPlan = (voicingOpt.data?.voicingPlan as string) || voicingOpt.label;
         }
+        if (fillsOpt) {
+          fillDensity = (fillsOpt.data?.fillDensity as string) || undefined;
+        }
       }
 
       const options = {
         comping_style: compingStyle,
         voicing_plan: voicingPlan,
+        fill_density: fillDensity,
       };
 
       // First try to load from localStorage

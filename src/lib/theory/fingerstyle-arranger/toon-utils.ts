@@ -6,6 +6,7 @@ export function formatMeasureAsToon(measure: TimeSliceMeasure): string {
   toon += `  key: ${measure.style_profile.key || "null"}\n`;
   toon += `  comping_style: "${measure.style_profile.comping_style || "null"}"\n`;
   toon += `  voicing_plan: "${measure.style_profile.voicing_plan || "null"}"\n`;
+  toon += `  fill_density: "${measure.style_profile.fill_density || "few"}"\n`;
   
   toon += `grid: [${measure.grid.length}]\n`;
   toon += `{step, chord, weight, melody.pitch, melody.state, lyric, tablature}\n`;

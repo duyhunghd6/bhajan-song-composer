@@ -75,6 +75,7 @@ w: Ha-ri Bol _`;
         key: "Em",
         comping_style: "PIMA devotional fingerstyle. Sparse fills.",
         voicing_plan: "Open-position Em and D shapes. Thumbed E/B and D/A anchors.",
+        fill_density: "few",
       });
 
       const steps = measures[0].grid;
@@ -174,6 +175,7 @@ w: ⬤ * ● *`;
         key: "Em",
         comping_style: "Folk Travis picking",
         voicing_plan: "Open-position Em/D transitions with walking bass",
+        fill_density: "few",
       });
     });
   });
