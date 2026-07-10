@@ -1,0 +1,36 @@
+X:1
+T:Ganesha, Ganesha
+%%score ( Melody )
+L:1/8
+M:4/4
+Q:1/2=120
+K:G
+V:Melody treble nm="Voice" snm="Voice"
+%%MIDI program 53
+V:Melody
+% Line 1
+B, |: "Em" E E2 F GF E B, | "Em" E E2 F GF E2 | "Am" B2 A2 G2 A2 | "Em" E E3- E2 z B, |
+w: Ga-|ne- sha Ga- ne- * sha Ga-|ne- sha Ga- ne- * sha|Jay jay Shri Ga-|ne- sha! _ Ga|
+% Line 2
+"Em" E E2 F GF E B, | "Em" E E2 F GF E2 | "Am" B2 A2 G2 A2 | "Em" E E3- E2 B,2 |
+w: ne- sha Ga- ne- * sha Ga-|ne- sha Ga- ne- * sha|Jay jay Shri Ga-|ne- sha _ 1.Su-|
+w: |||* * * 2.Lam-|
+w: |||* * * 3.Dhumra-|
+% Line 3
+E3 "D" E3 D D | "Em" E3 B,3 B,2 | E3 "D" E3 D D | "Em" E3 B,3- B,2 |
+w: mu- kha E- ka-|dan- ta Su-|mu- kha E- ka-|dan- ta _|
+w: bo- dar Vi- *|ka- ta Lam-|bo- dar Vi- *|ka- ta _|
+w: ke- tu Ga- na-|dya- ksha Dhumra-|ke- tu Ga- na-|dya- ksha _|
+% Line 4
+"C" G F2 E- E2 F F | "Am" G A2 F- "B7" F4 | "C" G F2 E- E2 F F | "Am" G A2 F- "B7" F2 F F |
+w: Ka- pi- la _ Ga- ja-|kar- na- ka _|Ka- pi- la _ Ga- ja-|kar- na- ka _ Ga- ja-|
+w: Vigh- na- na- * sha _|Ga- na- dhip _|Vigh- na- na _ sha _|Ga- na- dhip _ O _|
+w: Ba- la- chan- * dra Ga-|ja- na- na _|Ba- la- chan- * dra Ga-|na- na na _ Ga- *|
+% Line 5
+"Am" G A2 F- "B7" F z F F | "Am" G A2 B- "B7" B4- | B4 B2 z B, :| S E E3- E2 z2 |
+w: kar- na- kar _ Ga- ja-|kar- na- ka _|_ _ Ga-| ne- sha! _|
+w: Ga- na- dhip _ O _|Ga- na- dhip _|_ _|
+w: ja- na- na _ Ga- *|ja- na- na _|_ _|
+% Line 6
+ "Am" B2 A2 G2 A2 | "Em" E E3- E2 z2 | "Am" B2 A2 G2 A2 | "E" B B3- !fermata!B4 |]
+w: Jay jay Shri Ga-|ne-sha! _|Jay jay Shri Ga-|ne- sha! _|
