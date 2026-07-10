@@ -81,10 +81,18 @@ function generatePipelineSafely(abc: string, fallback: ArrangementPipelineResult
   }
 }
 
-export function buildArrangementSynthOptions(layerVisibility: Record<string, boolean>): { voicesOff?: boolean; chordsOff?: boolean } {
+export function buildArrangementSynthOptions(
+  layerVisibility: Record<string, boolean>,
+  abcString?: string
+): { voicesOff?: boolean; chordsOff?: boolean } {
   const normalizedVisibility = normalizeAbcLayerVisibility(layerVisibility);
   const synthOptions: { voicesOff?: boolean; chordsOff?: boolean } = {};
-  if (!isAbcLayerVisible("Melody", normalizedVisibility, true)) synthOptions.voicesOff = true;
+  // Only set voicesOff if Melody is hidden AND the ABC still has a V:Melody voice.
+  // When Melody is promoted away (replaced by an instrument as primary voice),
+  // voicesOff would silence the promoted instrument since it's now the first voice.
+  const melodyHidden = !isAbcLayerVisible("Melody", normalizedVisibility, true);
+  const abcHasMelodyVoice = abcString ? /\bV:Melody\b/.test(abcString) : true;
+  if (melodyHidden && abcHasMelodyVoice) synthOptions.voicesOff = true;
   if (!isAbcLayerVisible(ABC_LAYER_IDS.chordProgression, normalizedVisibility, true)) synthOptions.chordsOff = true;
   return synthOptions;
 }

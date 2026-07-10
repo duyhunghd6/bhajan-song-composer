@@ -11,7 +11,7 @@ import { buildAbcDurationContext } from "@/lib/theory/abc-duration";
 import { convertTimeSliceMeasureToAbc } from "@/lib/theory/fingerstyle-arranger/time-slice";
 import { getKeyAccidentalsFromAbc } from "@/lib/theory/abc-key-signature";
 import { LayerVisibilityControls } from "./LayerVisibilityControls";
-import { applyAbcLayerVisibility, applyAbcLayerVolumes, isAbcLayerVisible, ABC_LAYER_IDS } from "@/lib/theory/abc-layer-visibility";
+import { applyAbcLayerVisibility, applyAbcLayerVolumes, isAbcLayerVisible, ABC_LAYER_IDS, cleanAbcForExport } from "@/lib/theory/abc-layer-visibility";
 import { getArrangementRenderOptionsFor, buildArrangementSynthOptions } from "./arrangement-preview-model";
 import { buildAccompanimentAbc } from "@/lib/theory/accompaniment-abc";
 import { getSelectedWorkflowOption } from "@/lib/theory/accompaniment-workflow";
@@ -44,6 +44,7 @@ export function GuitarFingerstyleStep({
   updateState,
 }: GuitarFingerstyleStepProps) {
   const [measures, setMeasures] = useState<TimeSliceMeasure[]>([]);
+  const [copiedMasterAbc, setCopiedMasterAbc] = useState(false);
   
   // To get individual original measure strings for rendering headers
   const originalAbcMeasures = useMemo(() => {
@@ -196,6 +197,14 @@ export function GuitarFingerstyleStep({
     return applyAbcLayerVisibility(withVolumes, accompLayerVisibility);
   }, [measures, activeAbc, accompanimentPreview.rawAbc, accompLayerVisibility, accompLayerVolumes]);
 
+  const handleCopyMasterAbc = () => {
+    if (masterAbc) {
+      navigator.clipboard.writeText(cleanAbcForExport(masterAbc));
+      setCopiedMasterAbc(true);
+      setTimeout(() => setCopiedMasterAbc(false), 2000);
+    }
+  };
+
   const masterTabEnabled = isAbcLayerVisible(ABC_LAYER_IDS.tab, accompLayerVisibility, false);
 
   return (
@@ -220,7 +229,25 @@ export function GuitarFingerstyleStep({
         </section>
 
         <div className="mb-4">
-          <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-2">Master Playback</h3>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Master Playback</h3>
+            {masterAbc && (
+              <button
+                type="button"
+                onClick={handleCopyMasterAbc}
+                className="flex items-center gap-1 text-[10px] text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded cursor-pointer"
+              >
+                {copiedMasterAbc ? (
+                  <span className="text-emerald-600 dark:text-emerald-400 font-medium">Copied to Clipboard!</span>
+                ) : (
+                  <>
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                    <span>Copy</span>
+                  </>
+                )}
+              </button>
+            )}
+          </div>
           <div className="border border-zinc-200 dark:border-zinc-800 rounded-xl bg-white dark:bg-zinc-900/50 p-2 overflow-hidden">
             <AbcjsPlaybackController
               abcString={masterAbc}
@@ -231,7 +258,7 @@ export function GuitarFingerstyleStep({
               useContainerWidth={true}
               hideVoiceNames={true}
               renderOptions={getArrangementRenderOptionsFor(masterAbc, COMPOSER_PREVIEW_RENDER_OPTIONS, masterTabEnabled)}
-              synthOptions={buildArrangementSynthOptions(accompLayerVisibility)}
+              synthOptions={buildArrangementSynthOptions(accompLayerVisibility, masterAbc)}
             />
           </div>
         </div>

@@ -7,6 +7,12 @@ import {
   type MusicSheetLoopMode,
 } from "./playback";
 import { buildMusicSheetPlaybackCursorEvent } from "./playback-cursor";
+import {
+  registerPlayback,
+  unregisterPlayback,
+  claimPlayback,
+  releasePlayback,
+} from "./playback-registry";
 import { postProcessBeats, parseAbcTempo } from "./abcjs-playback/abc-rendering";
 import { AbcjsPlaybackControls } from "./abcjs-playback/AbcjsPlaybackControls";
 import { AbcjsPlaybackStyles } from "./abcjs-playback/AbcjsPlaybackStyles";
@@ -58,6 +64,10 @@ export default function AbcjsPlaybackController({
   const timingCallbacksRef = useRef<TimingCallbacksType | null>(null);
   const activeNoteElementsRef = useRef<HTMLElement[]>([]);
   const suppressNextEndedRef = useRef(false);
+  /** Tracks whether the synth is paused (vs fully stopped). */
+  const isPausedRef = useRef(false);
+  /** The playback position (in seconds) when the user last paused. */
+  const pausedSecondsRef = useRef(0);
 
   const [containerWidth, setContainerWidth] = useState<number | null>(null);
 
@@ -163,11 +173,14 @@ export default function AbcjsPlaybackController({
     timingCallbacksRef.current?.stop();
     clearActiveNoteHighlight();
     setCurrentSeconds(0);
+    isPausedRef.current = false;
+    pausedSecondsRef.current = 0;
   }, [clearActiveNoteHighlight]);
   const stopSynth = useCallback(() => {
     stopSynthPlayback();
     setPlaybackState(false);
-  }, [setPlaybackState, stopSynthPlayback]);
+    releasePlayback(resolvedCanvasId);
+  }, [setPlaybackState, stopSynthPlayback, resolvedCanvasId]);
   const initSynth = useCallback(async () => {
     if (!abcjsModule || !visualObjRef.current) return null;
     try {
@@ -208,13 +221,25 @@ export default function AbcjsPlaybackController({
   }, [abcjsModule, clearActiveNoteHighlight, setPlaybackState, synthOptions, tempo]);
   const playSynth = async () => {
     if (isPlaying) return;
+    // Stop any other controller that is currently playing
+    claimPlayback(resolvedCanvasId);
     try {
       let synth = synthRef.current;
       if (!synth) {
         synth = await initSynth();
       }
       if (synth) {
-        if (loopMode === "range") {
+        // Determine the resume position
+        const resuming = isPausedRef.current;
+        const resumeSeconds = resuming ? pausedSecondsRef.current : 0;
+        isPausedRef.current = false;
+
+        if (resuming && resumeSeconds > 0) {
+          // Resume from the paused position
+          synth.seek(resumeSeconds, "seconds");
+          timingCallbacksRef.current?.setProgress(resumeSeconds, "seconds");
+          timingCallbacksRef.current?.start(resumeSeconds, "seconds");
+        } else if (loopMode === "range") {
           synth.seek(loopStartSeconds, "seconds");
           timingCallbacksRef.current?.setProgress(loopStartSeconds, "seconds");
           timingCallbacksRef.current?.start(loopStartSeconds, "seconds");
@@ -229,6 +254,7 @@ export default function AbcjsPlaybackController({
           if (message.includes("onended") || message.includes("undefined")) {
             console.warn("abcjs synth.start() failed: Sequence is likely empty (only rests). Playback gracefully skipped.");
             setPlaybackState(false);
+            releasePlayback(resolvedCanvasId);
           } else {
             throw startErr;
           }
@@ -237,14 +263,19 @@ export default function AbcjsPlaybackController({
     } catch (err) {
       console.error("Error playing synth:", err);
       setPlaybackState(false);
+      releasePlayback(resolvedCanvasId);
     }
   };
   const pauseSynth = () => {
     if (!isPlaying || !synthRef.current) return;
     try {
+      // Save the current playback position for resume
+      isPausedRef.current = true;
+      pausedSecondsRef.current = currentSeconds;
       synthRef.current.pause();
       timingCallbacksRef.current?.pause();
       setPlaybackState(false);
+      releasePlayback(resolvedCanvasId);
     } catch (err) {
       console.error("Error pausing synth:", err);
     }
@@ -280,26 +311,37 @@ export default function AbcjsPlaybackController({
   const playFromTimingEvent = useCallback(
     async (event: NoteTimingEvent) => {
       const startSeconds = event.milliseconds / 1000;
+      // Stop any other controller that is playing
+      claimPlayback(resolvedCanvasId);
       highlightTimingEvent(event);
+      // Clear paused state since we're seeking to a new position
+      isPausedRef.current = false;
+      pausedSecondsRef.current = 0;
       try {
         let synth = synthRef.current;
+        const wasRunning = Boolean(synth?.getIsRunning?.());
         if (!synth) {
           synth = await initSynth();
         }
         if (!synth) return;
-        suppressNextEndedRef.current = Boolean(synth.getIsRunning?.());
+        if (wasRunning) {
+          // Suppress the onEnded callback that fires when we seek mid-play
+          suppressNextEndedRef.current = true;
+        }
         synth.seek(startSeconds, "seconds");
         timingCallbacksRef.current?.setProgress(startSeconds, "seconds");
         setCurrentSeconds(startSeconds);
-        if (!isPlayingRef.current && !synth.getIsRunning?.()) {
+        if (!wasRunning) {
+          // Synth wasn't running, so we need to start it fresh
           try {
             synth.start();
-            timingCallbacksRef.current?.start();
+            timingCallbacksRef.current?.start(startSeconds, "seconds");
           } catch (startErr: unknown) {
             const message = startErr instanceof Error ? startErr.message : String(startErr);
             if (message.includes("onended") || message.includes("undefined")) {
               console.warn("abcjs synth.start() failed from note click: Sequence could not start. Playback gracefully skipped.");
               setPlaybackState(false);
+              releasePlayback(resolvedCanvasId);
             } else {
               throw startErr;
             }
@@ -308,9 +350,10 @@ export default function AbcjsPlaybackController({
         setPlaybackState(true);
       } catch (err) {
         console.error("Error playing from clicked note:", err);
+        releasePlayback(resolvedCanvasId);
       }
     },
-    [highlightTimingEvent, initSynth, setPlaybackState]
+    [highlightTimingEvent, initSynth, setPlaybackState, resolvedCanvasId]
   );
   const handleNoteClick = useCallback(
     (abcElement: AbcElement, _tuneNumber: number, _classes: string, analysis?: ClickListenerAnalysis) => {
@@ -423,27 +466,12 @@ export default function AbcjsPlaybackController({
       });
       nextDuration = getSheetDurationSeconds(timingCallbacksRef.current.noteTimings);
       nextMillisecondsPerMeasure = visualObj[0].millisecondsPerMeasure?.(tempo) || 2000;
-      const handleCanvasClick = (event: MouseEvent) => {
-        const target = event.target as Element | null;
-        const noteElement = target?.closest?.(".abcjs-note") as HTMLElement | null;
-        if (!noteElement) return;
-        const timingEvent = timingCallbacksRef.current?.noteTimings.find((timing) =>
-          timing.elements?.flat().some(
-            (element) =>
-              element === noteElement ||
-              element.contains(noteElement) ||
-              noteElement.contains(element)
-          )
-        );
-        if (timingEvent) {
-          void playFromTimingEvent(timingEvent);
-        }
-      };
-      canvas.addEventListener("click", handleCanvasClick);
+      // NOTE: Click-to-seek is handled exclusively by the abcjs `clickListener`
+      // option (handleNoteClick) above. Do NOT add a redundant DOM click listener
+      // here — it would fire on the same click event, causing double playback.
       flushRenderState();
       return () => {
         if (stateTimeoutId !== null) window.clearTimeout(stateTimeoutId);
-        canvas.removeEventListener("click", handleCanvasClick);
         stopRenderedPlayback();
         timingCallbacksRef.current = null;
       };
@@ -457,7 +485,33 @@ export default function AbcjsPlaybackController({
       stopRenderedPlayback();
       timingCallbacksRef.current = null;
     };
-  }, [abcjsModule, finalAbcString, clearActiveNoteHighlight, handleNoteClick, highlightTimingEvent, loopEndMeasure, loopMode, loopStartMeasure, onPlaybackCursor, playFromTimingEvent, renderOptions, setPlaybackState, tempo, useContainerWidth, containerWidth]);
+  }, [abcjsModule, finalAbcString, clearActiveNoteHighlight, handleNoteClick, highlightTimingEvent, loopEndMeasure, loopMode, loopStartMeasure, onPlaybackCursor, renderOptions, setPlaybackState, tempo, useContainerWidth, containerWidth]);
+
+  // Register this instance with the global playback registry for exclusive playback
+  useEffect(() => {
+    registerPlayback(resolvedCanvasId, () => {
+      // External stop: called by the registry when another instance claims playback
+      if (synthRef.current) {
+        try {
+          synthRef.current.stop();
+        } catch { /* ignore */ }
+        synthRef.current = null;
+      }
+      timingCallbacksRef.current?.stop();
+      activeNoteElementsRef.current.forEach((el) => el.classList.remove("abcjs-note-active"));
+      activeNoteElementsRef.current = [];
+      isPausedRef.current = false;
+      pausedSecondsRef.current = 0;
+      isPlayingRef.current = false;
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Registry-initiated stop must sync React state immediately.
+      setIsPlaying(false);
+      setCurrentSeconds(0);
+    });
+    return () => {
+      unregisterPlayback(resolvedCanvasId);
+    };
+  }, [resolvedCanvasId]);
+
   // Invalidate synth when synthOptions change so next play uses updated voicesOff/chordsOff
   const synthOptionsKey = JSON.stringify(synthOptions ?? {});
   useEffect(() => {
@@ -468,6 +522,8 @@ export default function AbcjsPlaybackController({
       synthRef.current = null;
     }
     timingCallbacksRef.current?.stop();
+    isPausedRef.current = false;
+    pausedSecondsRef.current = 0;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- synthOptions invalidation must reset the playback UI immediately after the external abcjs synth is stopped.
     setPlaybackState(false);
   }, [synthOptionsKey, setPlaybackState]);

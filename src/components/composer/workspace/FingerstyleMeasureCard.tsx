@@ -6,7 +6,7 @@ import { buildAbcDurationContext } from "@/lib/theory/abc-duration";
 import { getKeyAccidentalsFromAbc } from "@/lib/theory/abc-key-signature";
 import { COMPOSER_PREVIEW_RENDER_OPTIONS } from "./preview";
 import { buildAccompanimentAbc } from "@/lib/theory/accompaniment-abc";
-import { applyAbcLayerVisibility, isAbcLayerVisible, ABC_LAYER_IDS } from "@/lib/theory/abc-layer-visibility";
+import { applyAbcLayerVisibility, isAbcLayerVisible, ABC_LAYER_IDS, cleanAbcForExport } from "@/lib/theory/abc-layer-visibility";
 import { getArrangementRenderOptionsFor } from "./arrangement-preview-model";
 
 interface FingerstyleMeasureCardProps {
@@ -113,7 +113,7 @@ export function FingerstyleMeasureCard({
 
   const handleCopyAbc = () => {
     if (abcResult) {
-      navigator.clipboard.writeText(abcResult);
+      navigator.clipboard.writeText(cleanAbcForExport(abcResult));
       setCopiedAbc(true);
       setTimeout(() => setCopiedAbc(false), 2000);
     }

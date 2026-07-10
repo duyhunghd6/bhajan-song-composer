@@ -480,4 +480,155 @@ K:Am
     expect(threeFour.abc).not.toContain('"_⬤"');
     expect(sixEight.abc).not.toContain('"_⬤"');
   });
+
+  it("keeps lyrics and chords on melody staff even when melody is unchecked (silent) and no instruments present", () => {
+    const melodyAbc = `X:1
+T:Melody Silence Test
+M:4/4
+L:1/8
+K:Em
+"Em"E2 E2 "G"G2 A2 |
+w: Ha-ri Bol _ |`;
+
+    const result = buildAccompanimentAbc({
+      baseAbc: melodyAbc,
+      layerVisibility: {
+        Melody: false,
+        Lyrics: true,
+        ChordProgression: true,
+        __melody__: false,
+        __chords__: true,
+      },
+    });
+
+    expect(result.abc).toContain('"Em"z2 z2 "G"z2 z2 |');
+    expect(result.abc).toContain("w: Ha-ri Bol _ |");
+  });
+
+  it("promotes Guitar as primary voice with lyrics and chords when Melody is unchecked", () => {
+    const melodyAbc = `X:1
+T:Guitar Promotion Test
+M:4/4
+L:1/8
+K:Em
+"Em"E2 E2 "G"G2 A2 | "D"B4 B2 A2 |
+w: Ha-ri Bol Ha-ri Bol`;
+    const guitarAbc = `V:Guitar clef=treble-8
+%%MIDI program 24
+| E,2 B,2 E2 G2 | D,2 A,2 D2 F2 |`;
+
+    const result = buildAccompanimentAbc({
+      baseAbc: melodyAbc,
+      generatedGuitar: guitarAbc,
+      layerVisibility: {
+        Melody: false,
+        Guitar: true,
+        Lyrics: true,
+        ChordProgression: true,
+        __melody__: false,
+        __chords__: true,
+      },
+    });
+
+    // Melody voice should NOT be in the output
+    expect(result.abc).not.toContain("V:Melody");
+    expect(result.abc).not.toContain("[V:Melody]");
+
+    // Guitar should be the primary voice in the score
+    expect(result.abc).toContain("%%score (Guitar)");
+    expect(result.abc).not.toContain("(Melody)");
+
+    // Guitar should carry chord symbols overlaid from melody at correct beat positions
+    expect(result.abc).toMatch(/\[V:Guitar\].*"Em"/);
+    expect(result.abc).toMatch(/\[V:Guitar\].*"D"/);
+    // No double chords at the same position (like "D""Em")
+    const guitarLines = result.abc.split("\n").filter(l => l.startsWith("[V:Guitar]"));
+    for (const gl of guitarLines) {
+      expect(gl).not.toMatch(/"[^"]+""[^"]+"/);
+    }
+
+    // Lyrics should be attached after the Guitar voice line
+    expect(result.abc).toContain("w: Ha-ri Bol Ha-ri Bol");
+
+    // The lyric line should come after the [V:Guitar] line, not before
+    const lines = result.abc.split("\n");
+    const guitarLine = lines.findIndex(l => l.startsWith("[V:Guitar]"));
+    const lyricLine = lines.findIndex(l => l.startsWith("w: Ha-ri"));
+    expect(guitarLine).toBeGreaterThan(-1);
+    expect(lyricLine).toBeGreaterThan(guitarLine);
+  });
+
+  it("promotes Guitar as primary voice with strong beats when Melody is unchecked", () => {
+    const melodyAbc = `X:1
+T:Guitar Promotion Beats Test
+M:4/4
+L:1/8
+K:Em
+"Em"E2 E2 "G"G2 A2 | "D"B4 B2 A2 |`;
+    const guitarAbc = `V:Guitar clef=treble-8
+%%MIDI program 24
+| E,2 B,2 E2 G2 | D,2 A,2 D2 F2 |`;
+
+    const result = buildAccompanimentAbc({
+      baseAbc: melodyAbc,
+      generatedGuitar: guitarAbc,
+      layerVisibility: {
+        Melody: false,
+        Guitar: true,
+        __melody__: false,
+        __chords__: true,
+        __strong_beats__: true,
+      },
+    });
+
+    // Strong beat lyric lines should be present (attached to Guitar)
+    expect(getBeatLyricLines(result.abc).length).toBeGreaterThan(0);
+
+    // Guitar should be in the score, Melody should not
+    expect(result.abc).toContain("%%score (Guitar)");
+    expect(result.abc).not.toContain("(Melody)");
+  });
+
+  it("promotes first visible instrument when Melody is unchecked with multiple instruments", () => {
+    const melodyAbc = `X:1
+T:Multi Instrument Promotion Test
+M:4/4
+L:1/8
+K:Em
+"Em"E2 E2 "G"G2 A2 |
+w: Ha-ri Bol _ |`;
+    const guitarAbc = `V:Guitar clef=treble-8
+%%MIDI program 24
+| E,2 B,2 E2 G2 |`;
+    const pianoAbc = `V:Piano clef=treble name="Piano"
+%%MIDI program 0
+| E2 G2 B2 E2 |`;
+
+    const result = buildAccompanimentAbc({
+      baseAbc: melodyAbc,
+      generatedGuitar: guitarAbc,
+      generatedPiano: pianoAbc,
+      layerVisibility: {
+        Melody: false,
+        Guitar: true,
+        Piano: true,
+        Lyrics: true,
+        __melody__: false,
+        __chords__: true,
+      },
+    });
+
+    // Guitar is the first visible instrument and should be promoted
+    expect(result.abc).toContain("%%score (Guitar) (Piano)");
+    expect(result.abc).not.toContain("(Melody)");
+    expect(result.abc).not.toContain("V:Melody");
+
+    // Lyrics should appear after Guitar, not after Piano
+    const lines = result.abc.split("\n");
+    const guitarLine = lines.findIndex(l => l.startsWith("[V:Guitar]"));
+    const lyricLine = lines.findIndex(l => l.startsWith("w: Ha-ri"));
+    const pianoLine = lines.findIndex(l => l.startsWith("[V:Piano]"));
+    expect(lyricLine).toBeGreaterThan(guitarLine);
+    expect(lyricLine).toBeLessThan(pianoLine);
+  });
 });

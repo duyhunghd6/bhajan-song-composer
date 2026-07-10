@@ -24,6 +24,7 @@ import {
   ComposerNotationPreviewLayout,
 } from "./workspace/preview";
 import { clearComposerSongStorage, getComposerMelodyStorageKey } from "./workspace/storage";
+import { cleanAbcForExport } from "@/lib/theory/abc-layer-visibility";
 
 interface ComposerStepWorkspaceProps {
   slug: string;
@@ -200,7 +201,8 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
   }
 
   const reviewAbc = accompanimentAbc || melodyAbc;
-  const markdown = `---\ntitle: "${slug}"\nslug: "${slug}"\nabcNotations:\n  - type: "melody"\n    label: "Melody Music Sheet"\n---\n\n## Lyrics\n\nDraft lyrics...\n\n## ABC\n\n\`\`\`abc\n${reviewAbc}\n\`\`\``;
+  const cleanReviewAbc = cleanAbcForExport(reviewAbc);
+  const markdown = `---\ntitle: "${slug}"\nslug: "${slug}"\nabcNotations:\n  - type: "melody"\n    label: "Melody Music Sheet"\n---\n\n## Lyrics\n\nDraft lyrics...\n\n## ABC\n\n\`\`\`abc\n${cleanReviewAbc}\n\`\`\``;
 
   const handleCopyMarkdown = () => {
     navigator.clipboard.writeText(markdown)

@@ -1,4 +1,4 @@
-import { isStrongBeatLyricLine } from "./abc-beat-annotations";
+import { isStrongBeatLyricLine, stripStrongBeatLyricLines } from "./abc-beat-annotations";
 import { stripAbcChordSymbols } from "./abc-duration";
 import {
   normalizeAbcInlineVoiceLine,
@@ -309,11 +309,26 @@ export function applyAbcLayerVolumes(abcString: string, volumes: Record<string, 
 
 export function applyAbcLayerVisibility(abcString: string, visibility: Record<string, boolean>): string {
   const normalizedVisibility = normalizeAbcLayerVisibility(visibility);
-  const allVoices = extractAbcVoiceIds(abcString, true);
-  const visibleVoices = new Set(allVoices.filter((voice) => isAbcLayerVisible(voice, normalizedVisibility, true)));
   const showChordProgression = isAbcLayerVisible(ABC_LAYER_IDS.chordProgression, normalizedVisibility, true);
   const showLyrics = isAbcLayerVisible(ABC_LAYER_IDS.lyrics, normalizedVisibility, true);
   const showStrongBeats = isAbcLayerVisible(ABC_LAYER_IDS.strongBeats, normalizedVisibility, true);
+
+  const lines = abcString.split(/\r?\n/);
+  const hasLyrics = showLyrics && lines.some(line => /^\s*[wW\+]:/.test(line));
+  const hasChords = showChordProgression && lines.some(line => {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("%") || (/^[A-Za-z]:/.test(trimmed) && !/^V:/.test(trimmed))) return false;
+    return /"[^"]+"/.test(trimmed);
+  });
+
+  const melodyVisible = isAbcLayerVisible("Melody", normalizedVisibility, true) || hasLyrics || hasChords;
+  const allVoices = extractAbcVoiceIds(abcString, true);
+  const visibleVoices = new Set(
+    allVoices.filter((voice) => {
+      if (voice === "Melody") return melodyVisible;
+      return isAbcLayerVisible(voice, normalizedVisibility, true);
+    })
+  );
   const normalizedAbc = normalizeAbcVoiceSyntax(abcString);
   const output: string[] = [];
   let currentVoice: string | null = null;
@@ -387,4 +402,15 @@ export function applyAbcLayerVisibility(abcString: string, visibility: Record<st
 export function getVisibleAbcVoiceIds(abcString: string, visibility: Record<string, boolean>): string[] {
   const normalizedVisibility = normalizeAbcLayerVisibility(visibility);
   return extractAbcVoiceIds(abcString, true).filter((voice) => isAbcLayerVisible(voice, normalizedVisibility, true));
+}
+
+export function cleanAbcForExport(abcString: string): string {
+  if (!abcString) return "";
+  // 1. Remove string-forcing decorations like !1!, !2!, ..., !6!
+  let cleaned = abcString.replace(/![1-6]!/g, "");
+
+  // 2. Remove strong beat lyric lines (w: ⬤ * • * ...)
+  cleaned = stripStrongBeatLyricLines(cleaned);
+
+  return cleaned;
 }

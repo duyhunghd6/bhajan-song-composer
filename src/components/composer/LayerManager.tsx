@@ -17,6 +17,7 @@ import {
 import AbcEditor from "./AbcEditor";
 import TheoryAssistant from "./TheoryAssistant";
 import type { TheoryAssistantLayerProposal } from "./theory-assistant-layer";
+import { cleanAbcForExport } from "@/lib/theory/abc-layer-visibility";
 import {
   ArrangementPipelineGatePanel,
   DEFAULT_LAYERS,
@@ -220,7 +221,7 @@ export default function LayerManager({
     if (typeof navigator === "undefined" || !navigator.clipboard) return;
 
     try {
-      await navigator.clipboard.writeText(visibleAbc);
+      await navigator.clipboard.writeText(cleanAbcForExport(visibleAbc));
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1600);
     } catch (err) {

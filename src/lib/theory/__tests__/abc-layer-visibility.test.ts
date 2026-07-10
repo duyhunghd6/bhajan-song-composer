@@ -8,6 +8,7 @@ import {
   extractAbcVoiceIds,
   getVisibleAbcVoiceIds,
   normalizeAbcLayerVisibility,
+  cleanAbcForExport,
 } from "../abc-layer-visibility";
 
 const singleVoiceAbc = `X:1
@@ -118,5 +119,46 @@ describe("ABC layer visibility", () => {
     expect(result).toContain("%%MIDI bassvol 32");
     expect(result).not.toContain("%%MIDI vol ");
     expect(result).not.toContain("%%MIDI program 1");
+  });
+
+  it("keeps Melody voice body lines if Melody is hidden but Lyrics or Chords are visible", () => {
+    const abc = `X:1
+T:Test
+K:C
+C D E F |
+w: Ha-ri Bol _ |`;
+
+    // Both melody and lyrics false -> Melody staff is completely hidden
+    const hidden = applyAbcLayerVisibility(abc, { Melody: false, Lyrics: false, ChordProgression: false });
+    expect(hidden).not.toContain("C D E F");
+    expect(hidden).not.toContain("Ha-ri Bol");
+
+    // Melody false but Lyrics true -> Melody staff is kept to show lyrics
+    const withLyrics = applyAbcLayerVisibility(abc, { Melody: false, Lyrics: true, ChordProgression: false });
+    expect(withLyrics).toContain("C D E F");
+    expect(withLyrics).toContain("w: Ha-ri Bol");
+  });
+});
+
+describe("cleanAbcForExport", () => {
+  it("removes string-forcing decorations from chord notes and individual notes", () => {
+    const abc = `[V:Guitar] | [!1!e!2!B!3!G!4!E!5!B,!6!E,]/2 E/2 e/2 G/2 | [!1!=f!3!A] [!3!A] | !1!b !6!B |`;
+    const expected = `[V:Guitar] | [eBGEB,E,]/2 E/2 e/2 G/2 | [=fA] [A] | b B |`;
+    expect(cleanAbcForExport(abc)).toBe(expected);
+  });
+
+  it("removes strong beat lyric lines containing bullet patterns", () => {
+    const abc = `[V:Melody] | E E (EB,) E E (EB,) |
+w: Ha-ri Bol _ Ha-ri Bol _ |
+w: ⬤ * • * ● * • * |
+[V:Guitar] | [!1!e!2!B!3!G]/2 E/2 |`;
+    const expected = `[V:Melody] | E E (EB,) E E (EB,) |
+w: Ha-ri Bol _ Ha-ri Bol _ |
+[V:Guitar] | [eBG]/2 E/2 |`;
+    expect(cleanAbcForExport(abc)).toBe(expected);
+  });
+
+  it("returns empty string if input is null or empty", () => {
+    expect(cleanAbcForExport("")).toBe("");
   });
 });
