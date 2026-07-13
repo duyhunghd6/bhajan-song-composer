@@ -1,6 +1,6 @@
 export function AbcjsPlaybackStyles({ resolvedCanvasId }: { resolvedCanvasId: string }) {
   return (
-      <style>{`
+    <style>{`
         #${resolvedCanvasId} .abcjs-note,
         #${resolvedCanvasId} .abcjs-chord {
           cursor: pointer;
@@ -54,6 +54,11 @@ export function AbcjsPlaybackStyles({ resolvedCanvasId }: { resolvedCanvasId: st
          */
         #${resolvedCanvasId} svg text.abcjs-annotation {
           display: none;
+        }
+
+        /* Shrink fret numbers inside TAB staves for a cleaner look */
+        #${resolvedCanvasId} svg g.abcjs-tabNumber text {
+          font-size: 12px !important;
         }
       `}</style>
   );

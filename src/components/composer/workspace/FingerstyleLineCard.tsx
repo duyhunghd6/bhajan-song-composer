@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import AbcjsPlaybackController from "@/components/music-sheet/AbcjsPlaybackController";
 import { convertTimeSliceMeasureToAbc, convertAbcToTimeSliceGrid, type TimeSliceMeasure } from "@/lib/theory/fingerstyle-arranger/time-slice";
-import { formatLineAsToon, parseToonToLine, renderAsciiTab } from "@/lib/theory/fingerstyle-arranger/toon-utils";
+import { formatLineAsToon, parseToonToLine, renderAsciiTab, renderCombinedAsciiTab } from "@/lib/theory/fingerstyle-arranger/toon-utils";
 import { buildAbcDurationContext } from "@/lib/theory/abc-duration";
 import { getKeyAccidentalsFromAbc } from "@/lib/theory/abc-key-signature";
 import { COMPOSER_PREVIEW_RENDER_OPTIONS } from "./preview";
@@ -137,7 +137,7 @@ export function FingerstyleLineCard({
 
   // Combined ASCII tab for all measures in the line
   const combinedAsciiTab = useMemo(() => {
-    return lineMeasures.map(m => renderAsciiTab(m.grid)).join("\n");
+    return renderCombinedAsciiTab(lineMeasures);
   }, [lineMeasures]);
 
   // ── Handlers ─────────────────────────────────────────────────────────
@@ -205,9 +205,9 @@ export function FingerstyleLineCard({
         </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-10 gap-4">
         {/* ── Left: TOON Editor + Logs ── */}
-        <div className="flex flex-col h-full">
+        <div className="flex flex-col h-full lg:col-span-3">
           <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
             Time-Slice Grid (TOON) — All Measures
           </label>
@@ -215,17 +215,13 @@ export function FingerstyleLineCard({
             className="flex-grow min-h-[400px] w-full rounded-xl border border-zinc-200 bg-zinc-50 p-3 font-mono text-xs text-zinc-800 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 whitespace-pre"
             value={toonText}
             onChange={(e) => setToonText(e.target.value)}
+            onBlur={handleApply}
           />
-          <div className="mt-2 flex items-center gap-2 flex-wrap">
-            <button
-              type="button"
-              onClick={handleApply}
-              className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-emerald-700 cursor-pointer"
-            >
-              Apply Grid &amp; Preview
-            </button>
-            {error && <span className="text-xs text-rose-500 font-semibold">{error}</span>}
-          </div>
+          {error && (
+            <div className="mt-2 text-xs text-rose-500 font-semibold">
+              {error}
+            </div>
+          )}
 
           {/* Diagnostic Logs */}
           {logs.length > 0 && (
@@ -259,7 +255,7 @@ export function FingerstyleLineCard({
         </div>
 
         {/* ── Right: ABC + ASCII Preview ── */}
-        <div className="flex flex-col">
+        <div className="flex flex-col lg:col-span-7">
           <div className="flex items-center justify-between mb-1">
             <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
               Resulting ABC Tablature — Line {lineIndex + 1}
@@ -276,6 +272,7 @@ export function FingerstyleLineCard({
                 canvasId={`composer-line-${lineIndex}-preview`}
                 minWidthClassName="min-w-[400px]"
                 sheetViewportClassName="max-h-[600px] overflow-auto"
+                useContainerWidth={true}
                 renderOptions={getArrangementRenderOptionsFor(lineAbcResult, COMPOSER_PREVIEW_RENDER_OPTIONS, tabEnabled)}
               />
             </div>

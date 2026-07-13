@@ -285,7 +285,7 @@ export function postProcessChords(container: HTMLDivElement | null) {
   if (tabAdjacentStaves.size === 0) return;
 
   // Clearance above the staff's top line for chord text
-  const CHORD_CLEARANCE_PX = 32;
+  const CHORD_CLEARANCE_PX = 40;
 
   for (const chord of chords) {
     const chordY = parseFloat(chord.getAttribute("y") || "0");
