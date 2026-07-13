@@ -3,7 +3,15 @@ import { type GuitarStringNumber } from "../fingerstyle-compressor";
 import { validateGuitarTab, type GuitarTabEvent } from "../guitar-tab-validation";
 import { scientificPitchForStringFret } from "../guitar-playability";
 
-export function validateFingerstylePhysics(grid: TimeSliceGridStep[]): { valid: boolean; message: string } {
+export interface FingerstylePhysicsOptions {
+  /** Fill density from the style profile: "none", "few", or "all". Defaults to "few". */
+  fillDensity?: string;
+}
+
+export function validateFingerstylePhysics(
+  grid: TimeSliceGridStep[],
+  options?: FingerstylePhysicsOptions
+): { valid: boolean; message: string } {
   const messages: string[] = [];
   const tabEvents: GuitarTabEvent[] = [];
 
@@ -23,17 +31,17 @@ export function validateFingerstylePhysics(grid: TimeSliceGridStep[]): { valid: 
         }
       }
 
-      // Check diagonal stretch playability:
+      // Check fret span playability across all fretted notes in this step:
       const frettedNotes = step.tablature.filter(t => typeof t.fret === "number" && t.fret > 0);
-      for (let j = 0; j < frettedNotes.length; j++) {
-        for (let k = j + 1; k < frettedNotes.length; k++) {
-          const n1 = frettedNotes[j];
-          const n2 = frettedNotes[k];
-          const stringDiff = Math.abs(n1.string - n2.string);
-          const fretDiff = Math.abs(n1.fret - n2.fret);
-          if (stringDiff + fretDiff > 7) {
-            messages.push(`Step ${step.step}: Physically impossible diagonal stretch between String ${n1.string} Fret ${n1.fret} and String ${n2.string} Fret ${n2.fret} (effective stretch index ${stringDiff + fretDiff} exceeds maximum limit of 7).`);
-          }
+      if (frettedNotes.length >= 2) {
+        const allFrets = frettedNotes.map(t => t.fret);
+        const minFret = Math.min(...allFrets);
+        const maxFret = Math.max(...allFrets);
+        const fretSpan = maxFret - minFret;
+        // Position-aware: max 3 frets of left-hand stretch for fingerstyle
+        const maxAllowedFretSpan = 3;
+        if (fretSpan > maxAllowedFretSpan) {
+          messages.push(`Step ${step.step}: Left-hand fret span ${fretSpan} (frets ${minFret}–${maxFret}) exceeds playable limit of ${maxAllowedFretSpan} frets. Notes: ${frettedNotes.map(t => `Str${t.string}/Fr${t.fret}`).join(", ")}.`);
         }
       }
 
@@ -97,6 +105,33 @@ export function validateFingerstylePhysics(grid: TimeSliceGridStep[]): { valid: 
       melodyString = null;
     }
   }
+
+  // --- Density enforcement: Bass placement rule ---
+  // Bass notes must only appear on steps with a metric weight marker (⬤, ●, or *).
+  // Placing bass on unweighted steps clutters the arrangement.
+  for (const step of grid) {
+    if (step.tablature && step.tablature.length > 0) {
+      const hasBass = step.tablature.some(t => t.role === "bass");
+      if (hasBass && !step.weight) {
+        messages.push(`Step ${step.step}: Bass note on unweighted step. Bass should only play on strong (⬤), medium (●), or weak (*) beat positions.`);
+      }
+    }
+  }
+
+  // --- Density enforcement: Fill count rule ---
+  // Enforce the fill_density budget across the entire grid (one measure).
+  const fillDensity = options?.fillDensity ?? "few";
+  const totalFills = grid.reduce((count, step) => {
+    if (!step.tablature) return count;
+    return count + step.tablature.filter(t => t.role === "fill").length;
+  }, 0);
+
+  if (fillDensity === "none" && totalFills > 0) {
+    messages.push(`Fill density violation: ${totalFills} fill attack(s) found but fill_density "none" allows 0.`);
+  } else if (fillDensity === "few" && totalFills > 4) {
+    messages.push(`Fill density violation: ${totalFills} fill attacks found but fill_density "few" allows at most 4.`);
+  }
+  // "all" density has no limit — skip check.
 
   return {
     valid: messages.length === 0,

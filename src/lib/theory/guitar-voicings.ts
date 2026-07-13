@@ -404,12 +404,11 @@ export function query_guitar_voicings(
       }
     }
     
+    // Compute fret span across ALL fretted (non-open, non-muted) notes
+    const frettedFrets = v.frets.filter((f): f is number => typeof f === "number" && f > 0);
     let fretDistance = 0;
-    if (melody) {
-      // Distance between melody fret and bass fret (0 if open strings involved)
-      const maxFret = Math.max(melody.fret, bass.fret);
-      const minFret = Math.min(melody.fret, bass.fret);
-      fretDistance = maxFret > 0 && minFret > 0 ? maxFret - minFret : 0;
+    if (frettedFrets.length >= 2) {
+      fretDistance = Math.max(...frettedFrets) - Math.min(...frettedFrets);
     }
     
     results.push({
@@ -422,8 +421,16 @@ export function query_guitar_voicings(
     });
   }
   
+  // Filter out voicings with unplayable fret spans (> 3 frets between fretted notes)
+  const MAX_FRET_SPAN = 3;
+  const playable = results.filter(r => {
+    const fretted = r.frets.filter((f): f is number => typeof f === "number" && f > 0);
+    if (fretted.length < 2) return true;
+    return Math.max(...fretted) - Math.min(...fretted) <= MAX_FRET_SPAN;
+  });
+
   // Sort by fret distance (closest first)
-  results.sort((a, b) => (a.fretDistance || 0) - (b.fretDistance || 0));
+  playable.sort((a, b) => (a.fretDistance || 0) - (b.fretDistance || 0));
   
-  return results.slice(0, 15);
+  return playable.slice(0, 15);
 }

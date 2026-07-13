@@ -85,11 +85,12 @@ export async function generateAIFingerstyleMeasure(
    - The sung melody is absolute priority. Map the exact melody pitches to the exact \`attack\` steps on the highest available strings.
    - On secondary strong beats ● (Beat 3), do not play a heavy 4-note pinch. Play a simpler **double-stop** (1 Bass note + the Melody note, or Bass + 1 inner tone) to keep the rhythm balanced and flowing.
    - **Simultaneous String Collision:** If a chord voicing requires fretting an inner string, but the melody note is also mapped to that exact same string, the melody note wins. Drop the chord tone from your pinch.
+   - **Bass Placement Rule (CRITICAL — Enforced by Validator):** Bass notes (role \`"bass"\`) MUST ONLY appear on steps that have a weight marker (⬤, ●, or *). Do NOT place bass notes on unweighted (null weight) steps. The validator will reject bass notes on unweighted steps.
 
 4. **PIMA Fills & The Sustain Rule (Inner Arpeggios):**
-   - **Sparse Fill Density Rule (CRITICAL):** Inspect the \`style_profile\` under \`fill_density\` in the input:
-     - **If "none" (Muted Fills):** Do NOT add any fill/arpeggio notes in the empty steps. Only play notes where there is a melody attack or a chord change downbeat/bass anchor.
-     - **If "few" (Sparse Fills):** You MUST NOT fill every single empty step with notes. Limit the total number of fill/arpeggio notes to a maximum of **2 to 4 fill attacks per 16-step measure**. Leave the other empty steps as silence/rests or let previous notes sustain.
+   - **Sparse Fill Density Rule (CRITICAL — Enforced by Validator):** Inspect the \`style_profile\` under \`fill_density\` in the input:
+     - **If "none" (Muted Fills):** Do NOT add any fill/arpeggio notes in the empty steps. Only play notes where there is a melody attack or a chord change downbeat/bass anchor. The validator allows 0 fills.
+     - **If "few" (Sparse Fills):** You MUST NOT fill every single empty step with notes. Limit the total number of fill/arpeggio notes to a maximum of **2 to 4 fill attacks per 16-step measure**. Leave the other empty steps as silence/rests or let previous notes sustain. The validator allows at most 4 fills.
      - **If "all" (Dense/Full Fills):** You may add fills to most of the empty/null steps to keep the rhythm flowing continuously (up to 12-14 notes per measure).
    - Look at the \`null\` steps (the empty 16th-note spaces) and follow the above density rule. Add light, arpeggiated inner chord tones to keep the rhythm flowing, subservient to the vocal melody.
    - **Sustain Protection Rule (CRITICAL):** If the vocal melody is marked as \`"state": "sustain"\` on a specific string across multiple steps, you are **physically forbidden** from plucking a fill note on that exact same string. Doing so will prematurely cut off the singer's note.
@@ -218,13 +219,13 @@ ${formatMeasureAsToon(input.measure)}`;
           name: "validate_fingerstyle_physics",
           execute: (args) => {
             const { grid } = args as { grid: TimeSliceGridStep[] };
-            return validateFingerstylePhysics(grid);
+            return validateFingerstylePhysics(grid, { fillDensity: input.measure.style_profile.fill_density });
           }
         }
       ],
       validateFinalResult: (args) => {
         const { grid } = args as { grid: TimeSliceGridStep[] };
-        const validation = validateFingerstylePhysics(grid);
+        const validation = validateFingerstylePhysics(grid, { fillDensity: input.measure.style_profile.fill_density });
         if (validation.valid) {
           finalOutput = {
             success: true,

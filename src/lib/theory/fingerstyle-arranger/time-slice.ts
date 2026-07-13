@@ -48,6 +48,8 @@ export interface TimeSliceGridStep {
 
 export interface TimeSliceMeasure {
   measure: number;
+  /** 0-based index of the ABC source line this measure belongs to. */
+  lineIndex: number;
   style_profile: {
     key: string;
     comping_style: string;
@@ -396,6 +398,7 @@ export function convertAbcToTimeSliceGrid(
   const finalMelodyMeasures: string[] = [];
   const finalLyricMeasures: string[] = [];
   const finalBeatWeightMeasures: string[] = [];
+  const finalLineIndices: number[] = [];
   let measureCounter = 0;
   for (let k = 0; k < melodySegmentMeasures.length; k++) {
     const melodyMeasures = melodySegmentMeasures[k];
@@ -405,6 +408,7 @@ export function convertAbcToTimeSliceGrid(
       finalMelodyMeasures[measureCounter] = melodyMeasures[m];
       finalLyricMeasures[measureCounter] = lyricMeasures[m] || "";
       finalBeatWeightMeasures[measureCounter] = beatWeightMeasures[m] || "";
+      finalLineIndices[measureCounter] = k;
       measureCounter++;
     }
   }
@@ -537,6 +541,7 @@ export function convertAbcToTimeSliceGrid(
 
     measuresList.push({
       measure: measureIndex + 1,
+      lineIndex: finalLineIndices[measureIndex] ?? 0,
       style_profile: {
         key: options?.key || key,
         comping_style: options?.comping_style || "PIMA devotional fingerstyle. Sparse fills.",
@@ -715,5 +720,20 @@ export function convertTimeSliceMeasureToAbc(
   }
 
   return rendered.join(" ");
+}
+
+/**
+ * Group measures by their lineIndex (ABC source line).
+ * Returns an array of arrays, sorted by lineIndex.
+ */
+export function groupMeasuresByLine(measures: TimeSliceMeasure[]): TimeSliceMeasure[][] {
+  const lines: Map<number, TimeSliceMeasure[]> = new Map();
+  for (const m of measures) {
+    if (!lines.has(m.lineIndex)) lines.set(m.lineIndex, []);
+    lines.get(m.lineIndex)!.push(m);
+  }
+  return Array.from(lines.entries())
+    .sort(([a], [b]) => a - b)
+    .map(([, lineMeasures]) => lineMeasures);
 }
 

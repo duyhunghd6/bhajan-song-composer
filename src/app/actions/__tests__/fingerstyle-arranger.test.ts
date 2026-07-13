@@ -100,7 +100,7 @@ describe("validateFingerstylePhysics", () => {
 
     const result = validateFingerstylePhysics(grid);
     expect(result.valid).toBe(false);
-    expect(result.message).toContain("Physically impossible diagonal stretch");
+    expect(result.message).toContain("Left-hand fret span");
   });
 
   it("accepts a playable diagonal stretch (String 6 Fret 3 and String 1 Fret 3)", () => {
@@ -116,6 +116,153 @@ describe("validateFingerstylePhysics", () => {
     ];
 
     const result = validateFingerstylePhysics(grid);
+    expect(result.valid).toBe(true);
+  });
+
+  // --- Bass placement rule tests ---
+
+  it("rejects bass on an unweighted step", () => {
+    const grid: TimeSliceGridStep[] = [
+      {
+        step: 7,
+        chord: "Em",
+        weight: null, // no weight marker
+        melody: { pitch: "F#4", state: "attack" },
+        lyric: "Ga-",
+        tablature: [
+          { string: 6, fret: 0, finger: "p", role: "bass" },
+          { string: 1, fret: 2, finger: "a", role: "melody" },
+        ],
+      },
+    ];
+
+    const result = validateFingerstylePhysics(grid);
+    expect(result.valid).toBe(false);
+    expect(result.message).toContain("Bass note on unweighted step");
+  });
+
+  it("accepts bass on a weighted step (⬤)", () => {
+    const grid: TimeSliceGridStep[] = [
+      {
+        step: 1,
+        chord: "Em",
+        weight: "⬤",
+        melody: { pitch: "E4", state: "attack" },
+        lyric: "ne-",
+        tablature: [
+          { string: 6, fret: 0, finger: "p", role: "bass" },
+          { string: 1, fret: 0, finger: "a", role: "melody" },
+        ],
+      },
+    ];
+
+    const result = validateFingerstylePhysics(grid);
+    expect(result.valid).toBe(true);
+  });
+
+  it("accepts bass on a medium-weight step (●)", () => {
+    const grid: TimeSliceGridStep[] = [
+      {
+        step: 9,
+        chord: "Em",
+        weight: "●",
+        melody: { pitch: "G4", state: "attack" },
+        lyric: "ne-",
+        tablature: [
+          { string: 6, fret: 0, finger: "p", role: "bass" },
+          { string: 1, fret: 3, finger: "a", role: "melody" },
+        ],
+      },
+    ];
+
+    const result = validateFingerstylePhysics(grid);
+    expect(result.valid).toBe(true);
+  });
+
+  // --- Fill density rule tests ---
+
+  it("rejects 6 fills when fill_density is 'few'", () => {
+    const grid: TimeSliceGridStep[] = Array.from({ length: 16 }, (_, i) => ({
+      step: i + 1,
+      chord: "Em",
+      weight: i === 0 ? "⬤" as const : null,
+      melody: { pitch: "E4", state: i === 0 ? "attack" as const : "sustain" as const },
+      lyric: null,
+      tablature: i >= 2 && i <= 7
+        ? [{ string: 3, fret: 0, finger: "i" as const, role: "fill" as const }]
+        : i === 0
+          ? [{ string: 1, fret: 0, finger: "a" as const, role: "melody" as const }]
+          : [],
+    }));
+
+    const result = validateFingerstylePhysics(grid, { fillDensity: "few" });
+    expect(result.valid).toBe(false);
+    expect(result.message).toContain("Fill density violation");
+    expect(result.message).toContain("6 fill attacks");
+  });
+
+  it("accepts 3 fills when fill_density is 'few'", () => {
+    const grid: TimeSliceGridStep[] = Array.from({ length: 16 }, (_, i) => ({
+      step: i + 1,
+      chord: "Em",
+      weight: i === 0 ? "⬤" as const : null,
+      melody: { pitch: "E4", state: i === 0 ? "attack" as const : "sustain" as const },
+      lyric: null,
+      tablature: i >= 2 && i <= 4
+        ? [{ string: 3, fret: 0, finger: "i" as const, role: "fill" as const }]
+        : i === 0
+          ? [{ string: 1, fret: 0, finger: "a" as const, role: "melody" as const }]
+          : [],
+    }));
+
+    const result = validateFingerstylePhysics(grid, { fillDensity: "few" });
+    expect(result.valid).toBe(true);
+  });
+
+  it("rejects 1 fill when fill_density is 'none'", () => {
+    const grid: TimeSliceGridStep[] = [
+      {
+        step: 1,
+        chord: "Em",
+        weight: "⬤",
+        melody: { pitch: "E4", state: "attack" },
+        lyric: "ne-",
+        tablature: [
+          { string: 1, fret: 0, finger: "a", role: "melody" },
+        ],
+      },
+      {
+        step: 2,
+        chord: "Em",
+        weight: null,
+        melody: { pitch: "E4", state: "sustain" },
+        lyric: null,
+        tablature: [
+          { string: 3, fret: 0, finger: "i", role: "fill" },
+        ],
+      },
+    ];
+
+    const result = validateFingerstylePhysics(grid, { fillDensity: "none" });
+    expect(result.valid).toBe(false);
+    expect(result.message).toContain("fill_density \"none\" allows 0");
+  });
+
+  it("accepts 0 fills when fill_density is 'none'", () => {
+    const grid: TimeSliceGridStep[] = [
+      {
+        step: 1,
+        chord: "Em",
+        weight: "⬤",
+        melody: { pitch: "E4", state: "attack" },
+        lyric: "ne-",
+        tablature: [
+          { string: 1, fret: 0, finger: "a", role: "melody" },
+        ],
+      },
+    ];
+
+    const result = validateFingerstylePhysics(grid, { fillDensity: "none" });
     expect(result.valid).toBe(true);
   });
 });

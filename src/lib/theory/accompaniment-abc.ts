@@ -443,29 +443,46 @@ interface AlignedVoiceBlock {
   formSystems?: FingerstyleFormSystem[];
 }
 
-function regroupMeasureSegmentsForMelodyLines(
-  measures: string[],
-  pattern: number[],
-  firstLineStartsWithPickup = false
+function injectMeasuresIntoMelodyLines(
+  instrumentMeasures: string[],
+  melodyLines: string[]
 ): string[] {
-  const effectivePattern = pattern.length > 0 ? pattern : [Math.max(measures.length, 1)];
-  const output: string[] = [];
-  let cursor = 0;
+  const outputLines: string[] = [];
+  let instrIndex = 0;
 
-  for (let lineIndex = 0; lineIndex < effectivePattern.length; lineIndex += 1) {
-    const count = effectivePattern[lineIndex];
-    const group = measures.slice(cursor, cursor + count);
-    if (group.length === 0) break;
-    const joinedGroup = group.join(" | ");
-    output.push(lineIndex === 0 && firstLineStartsWithPickup ? `${joinedGroup} |` : `| ${joinedGroup} |`);
-    cursor += count;
+  for (const line of melodyLines) {
+    const rawSegments = line.split("|");
+    const outputSegments: string[] = [];
+
+    for (const raw of rawSegments) {
+      const clean = cleanAbcMeasureSegment(raw);
+      if (!clean) {
+        outputSegments.push(raw);
+        continue;
+      }
+
+      const idx = raw.indexOf(clean);
+      if (idx !== -1) {
+        const prefix = raw.substring(0, idx);
+        const suffix = raw.substring(idx + clean.length);
+
+        const replacement = instrumentMeasures[instrIndex] || clean;
+        instrIndex++;
+        outputSegments.push(prefix + replacement + suffix);
+      } else {
+        outputSegments.push(raw.replace(clean, instrumentMeasures[instrIndex] || clean));
+        instrIndex++;
+      }
+    }
+    outputLines.push(outputSegments.join("|"));
   }
 
-  if (cursor < measures.length) {
-    output.push(`| ${measures.slice(cursor).join(" | ")} |`);
+  if (instrIndex < instrumentMeasures.length) {
+    const leftover = instrumentMeasures.slice(instrIndex);
+    outputLines.push(`| ${leftover.join(" | ")} |`);
   }
 
-  return output;
+  return outputLines;
 }
 
 function getMelodyMeasureLinePattern(melodyMusicLines: string[]): number[] {
@@ -525,11 +542,13 @@ function buildFormSystem(label: string, position: FingerstyleFormSystem["positio
   };
 }
 
-function alignVoiceBlockToMelodyLines(block: string, baseAbc: string, melodyLinePattern: number[], disablePickupLogic: boolean = false): AlignedVoiceBlock | null {
+function alignVoiceBlockToMelodyLines(block: string, baseAbc: string, melodyLines: string[], disablePickupLogic: boolean = false): AlignedVoiceBlock | null {
   const lines = stripStrongBeatLyricLines(block).split("\n").map(stripBeatAnnotations);
   const voiceLine = normalizeGeneratedVoiceLine(lines[0].trim());
   const name = getVoiceName(voiceLine);
   if (!name) return null;
+
+  const melodyLinePattern = getMelodyMeasureLinePattern(melodyLines);
 
   const info = getMelodyMeasureInfo(baseAbc);
   const hasPickup = disablePickupLogic ? false : info.hasPickup;
@@ -587,7 +606,7 @@ function alignVoiceBlockToMelodyLines(block: string, baseAbc: string, melodyLine
     name,
     voiceLine,
     directives: normalizedDirectives,
-    musicLines: regroupMeasureSegmentsForMelodyLines(alignedMeasures, melodyLinePattern, hasPickup),
+    musicLines: injectMeasuresIntoMelodyLines(alignedMeasures, melodyLines),
     formSystems,
   };
 }
@@ -700,9 +719,8 @@ export function buildAccompanimentAbc({
     }
   }
 
-  const melodyLinePattern = getMelodyMeasureLinePattern(melodyMusicLines);
   const alignedBlocks = [...voiceBlockMap.values()]
-    .map((block) => alignVoiceBlockToMelodyLines(block, melodyReferenceAbc, melodyLinePattern, disablePickupLogic))
+    .map((block) => alignVoiceBlockToMelodyLines(block, melodyReferenceAbc, melodyMusicLines, disablePickupLogic))
     .filter(Boolean) as AlignedVoiceBlock[];
   const voiceNames = alignedBlocks.map((block) => block.name);
   const visibleBlocks = alignedBlocks.filter((block) => layerVisibility[block.name] !== false);

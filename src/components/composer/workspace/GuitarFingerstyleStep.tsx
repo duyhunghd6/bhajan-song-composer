@@ -1,11 +1,11 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import AbcjsPlaybackController from "@/components/music-sheet/AbcjsPlaybackController";
 import type { ArrangementPipelineResult } from "@/lib/theory/arrangement-pipeline";
 import type { WorkspaceState } from "../useWorkspaceState";
 import type { AccompanimentPreviewModel } from "./arrangement-preview-model";
-import { convertAbcToTimeSliceGrid, type TimeSliceMeasure } from "@/lib/theory/fingerstyle-arranger/time-slice";
-import { FingerstyleMeasureCard } from "./FingerstyleMeasureCard";
+import { convertAbcToTimeSliceGrid, groupMeasuresByLine, type TimeSliceMeasure } from "@/lib/theory/fingerstyle-arranger/time-slice";
+import { FingerstyleLineCard } from "./FingerstyleLineCard";
 import { COMPOSER_PREVIEW_RENDER_OPTIONS } from "./preview";
 import { buildAbcDurationContext } from "@/lib/theory/abc-duration";
 import { convertTimeSliceMeasureToAbc } from "@/lib/theory/fingerstyle-arranger/time-slice";
@@ -16,6 +16,8 @@ import { getArrangementRenderOptionsFor, buildArrangementSynthOptions } from "./
 import { buildAccompanimentAbc } from "@/lib/theory/accompaniment-abc";
 import { getSelectedWorkflowOption } from "@/lib/theory/accompaniment-workflow";
 import { getComposerSongStoragePrefix } from "./storage";
+import { formatLineAsToon } from "@/lib/theory/fingerstyle-arranger/toon-utils";
+import type { PreviousLineContext } from "@/app/actions/fingerstyle-line-arranger";
 
 interface GuitarFingerstyleStepProps {
   slug: string;
@@ -49,14 +51,7 @@ export function GuitarFingerstyleStep({
   const fingerstyleStorageKey = `${getComposerSongStoragePrefix(slug)}fingerstyle-measures`;
   const [measures, setMeasures] = useState<TimeSliceMeasure[]>([]);
   const [copiedMasterAbc, setCopiedMasterAbc] = useState(false);
-  
-  // To get individual original measure strings for rendering headers
-  const originalAbcMeasures = useMemo(() => {
-    // Basic extraction of just the melody measures
-    const lines = activeAbc.split(/\r?\n/).filter(line => !line.startsWith("w:") && !line.startsWith("%") && (!line.match(/^[A-Za-z]:/) || line.startsWith("V:")));
-    const merged = lines.join(" ");
-    return merged.split("|").map(m => m.trim()).filter(Boolean);
-  }, [activeAbc]);
+  const [generatingLineIndex, setGeneratingLineIndex] = useState<number | null>(null);
 
   useEffect(() => {
     try {
@@ -69,39 +64,28 @@ export function GuitarFingerstyleStep({
         const compingOpt = getSelectedWorkflowOption(workflow, "guitar-comping-profile");
         const voicingOpt = getSelectedWorkflowOption(workflow, "guitar-voicing-bass");
         const fillsOpt = getSelectedWorkflowOption(workflow, "guitar-fills-validation");
-        if (compingOpt) {
-          compingStyle = (compingOpt.data?.compingProfile as string) || compingOpt.label;
-        }
-        if (voicingOpt) {
-          voicingPlan = (voicingOpt.data?.voicingPlan as string) || voicingOpt.label;
-        }
-        if (fillsOpt) {
-          fillDensity = (fillsOpt.data?.fillDensity as string) || undefined;
-        }
+        if (compingOpt) compingStyle = (compingOpt.data?.compingProfile as string) || compingOpt.label;
+        if (voicingOpt) voicingPlan = (voicingOpt.data?.voicingPlan as string) || voicingOpt.label;
+        if (fillsOpt) fillDensity = (fillsOpt.data?.fillDensity as string) || undefined;
       }
 
-      const options = {
-        comping_style: compingStyle,
-        voicing_plan: voicingPlan,
-        fill_density: fillDensity,
-      };
+      const options = { comping_style: compingStyle, voicing_plan: voicingPlan, fill_density: fillDensity };
 
-      // First try to load from localStorage
+      // Try loading from localStorage first
       const saved = localStorage.getItem(fingerstyleStorageKey);
       if (saved) {
         const parsedMeasures = JSON.parse(saved);
-        // Only use saved if the number of measures matches (basic check for activeAbc changes)
         const newParsed = convertAbcToTimeSliceGrid(workflowAppliedMusicAbc, [], options);
         if (parsedMeasures.length === newParsed.length) {
-          // Sync fresh chords/weights to the saved draft to prevent stale chords
           const updatedMeasures = parsedMeasures.map((pm: TimeSliceMeasure, idx: number) => {
             const fresh = newParsed[idx];
             if (!fresh) return pm;
             return {
               ...pm,
+              lineIndex: fresh.lineIndex,
               style_profile: fresh.style_profile,
               pickupDurationUnits: fresh.pickupDurationUnits,
-              grid: pm.grid.map((step, stepIdx) => {
+              grid: pm.grid.map((step: TimeSliceMeasure["grid"][number], stepIdx: number) => {
                 const freshStep = fresh.grid[stepIdx];
                 return {
                   ...step,
@@ -130,19 +114,16 @@ export function GuitarFingerstyleStep({
   useEffect(() => {
     if (measures.length > 0) {
       localStorage.setItem(fingerstyleStorageKey, JSON.stringify(measures));
-
       try {
         const baseInputAbc = accompanimentPreview.rawAbc || activeAbc;
         const durationContext = buildAbcDurationContext(baseInputAbc);
         const keyAccidentals = getKeyAccidentalsFromAbc(baseInputAbc);
         const tablatureLines = measures.map(m => convertTimeSliceMeasureToAbc(m, durationContext, keyAccidentals)).join(" | ");
-        
         const generatedGuitar = [
           'V:Guitar clef=treble-8 name="Fingerstyle Tablature"',
           "%%MIDI program 24",
           `| ${tablatureLines} |`
         ].join("\n");
-
         updateState({ generatedGuitar });
       } catch (e) {
         console.error("Failed to sync generated guitar to workspace state", e);
@@ -150,45 +131,59 @@ export function GuitarFingerstyleStep({
     }
   }, [measures, activeAbc, accompanimentPreview.rawAbc, updateState]);
 
-  const handleUpdateMeasure = (updatedMeasure: TimeSliceMeasure) => {
-    setMeasures(prev => prev.map(m => m.measure === updatedMeasure.measure ? updatedMeasure : m));
-  };
+  // Group measures by line
+  const lineGroups = useMemo(() => groupMeasuresByLine(measures), [measures]);
+
+  // Handle updates from a line card (replace all measures in that line)
+  const handleUpdateLineMeasures = useCallback((lineGroupIndex: number, updated: TimeSliceMeasure[]) => {
+    setMeasures(prev => {
+      const next = [...prev];
+      for (const m of updated) {
+        const idx = next.findIndex(existing => existing.measure === m.measure);
+        if (idx !== -1) next[idx] = m;
+      }
+      return next;
+    });
+  }, []);
+
+  // Build previous-line context for a given lineGroupIndex
+  const buildPreviousLineContext = useCallback((lineGroupIndex: number): PreviousLineContext[] => {
+    const context: PreviousLineContext[] = [];
+    for (let i = 0; i < lineGroupIndex; i++) {
+      const lineMeasures = lineGroups[i];
+      if (!lineMeasures || lineMeasures.length === 0) continue;
+      context.push({
+        lineIndex: lineMeasures[0].lineIndex,
+        inputToon: formatLineAsToon(lineMeasures.map(m => ({
+          ...m,
+          grid: m.grid.map(s => ({ ...s, tablature: undefined }))
+        }))),
+        outputToon: formatLineAsToon(lineMeasures),
+      });
+    }
+    return context;
+  }, [lineGroups]);
 
   const masterAbc = useMemo(() => {
     const baseInputAbc = accompanimentPreview.rawAbc || activeAbc;
-
     if (measures.length > 0) {
       try {
         const durationContext = buildAbcDurationContext(baseInputAbc);
         const keyAccidentals = getKeyAccidentalsFromAbc(baseInputAbc);
         const tablatureLines = measures.map(m => convertTimeSliceMeasureToAbc(m, durationContext, keyAccidentals)).join(" | ");
-        
         const generatedGuitar = [
           'V:Guitar clef=treble-8 name="Fingerstyle Tablature"',
           "%%MIDI program 24",
           `| ${tablatureLines} |`
         ].join("\n");
-
-        // Strip the old Guitar voice notes from baseInputAbc first to avoid overlap/duplication
         const strippedAbc = applyAbcLayerVisibility(baseInputAbc, {
-          "Melody": true,
-          "Piano": true,
-          "Harmonium": true,
-          "Flute": true,
-          "Djembe": true,
-          "Violin": true,
-          "Guitar": false,
-          "Lyrics": true,
-          "ChordProgression": true,
-          "StrongBeats": true,
+          "Melody": true, "Piano": true, "Harmonium": true, "Flute": true,
+          "Djembe": true, "Violin": true, "Guitar": false, "Lyrics": true,
+          "ChordProgression": true, "StrongBeats": true,
         });
-
-        // Use buildAccompanimentAbc to properly format and align the generated fingerstyle guitar
-        // with other instruments, preserving visual line breaks (melodyLinePattern)
-        // and setting the correct %%score line with Guitar.
         const buildResult = buildAccompanimentAbc({
           baseAbc: strippedAbc,
-          generatedGuitar: generatedGuitar,
+          generatedGuitar,
           layerVisibility: {
             ...accompLayerVisibility,
             __melody__: isAbcLayerVisible("Melody", accompLayerVisibility, true),
@@ -196,16 +191,12 @@ export function GuitarFingerstyleStep({
             __strong_beats__: isAbcLayerVisible("StrongBeats", accompLayerVisibility, true),
           },
         });
-
-        const withVolumes = applyAbcLayerVolumes(buildResult.abc, accompLayerVolumes);
-        return withVolumes;
+        return applyAbcLayerVolumes(buildResult.abc, accompLayerVolumes);
       } catch (e) {
         console.error("Failed to inject generated guitar", e);
       }
     }
-
-    const withVolumes = applyAbcLayerVolumes(baseInputAbc, accompLayerVolumes);
-    return applyAbcLayerVisibility(withVolumes, accompLayerVisibility);
+    return applyAbcLayerVisibility(applyAbcLayerVolumes(baseInputAbc, accompLayerVolumes), accompLayerVisibility);
   }, [measures, activeAbc, accompanimentPreview.rawAbc, accompLayerVisibility, accompLayerVolumes]);
 
   const handleCopyMasterAbc = () => {
@@ -222,10 +213,10 @@ export function GuitarFingerstyleStep({
     <div className="space-y-6">
       <section className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950/60">
         <div className="flex items-center justify-between gap-2 mb-4">
-          <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">AI Guitar Fingerstyle Generation (Measure by Measure)</h2>
+          <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">AI Guitar Fingerstyle — Line by Line</h2>
         </div>
         <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-6">
-          Work on the arrangement measure by measure. Copy the JSON grid, have the AI generate the tablature events, and apply it to see individual playbacks.
+          Generate the arrangement line by line. Each line sees the context of all previous lines for musical consistency.
         </p>
 
         <section className="mb-4">
@@ -275,15 +266,19 @@ export function GuitarFingerstyleStep({
         </div>
       </section>
 
-      <div className="space-y-4">
-        {measures.map((measure, idx) => (
-          <FingerstyleMeasureCard
-            key={measure.measure}
-            measure={measure}
-            originalAbcMeasure={originalAbcMeasures[idx] || ""}
+      {/* Line cards */}
+      <div className="space-y-6">
+        {lineGroups.map((lineMeasures, lineGroupIdx) => (
+          <FingerstyleLineCard
+            key={`line-${lineMeasures[0]?.lineIndex ?? lineGroupIdx}`}
+            lineIndex={lineMeasures[0]?.lineIndex ?? lineGroupIdx}
+            lineMeasures={lineMeasures}
             activeAbc={workflowAppliedMusicAbc}
-            onUpdateMeasure={handleUpdateMeasure}
+            onUpdateMeasures={(updated) => handleUpdateLineMeasures(lineGroupIdx, updated)}
             accompLayerVisibility={accompLayerVisibility}
+            buildPreviousContext={() => buildPreviousLineContext(lineGroupIdx)}
+            workflowAppliedMusicAbc={workflowAppliedMusicAbc}
+            isAnotherLineGenerating={generatingLineIndex !== null && generatingLineIndex !== lineGroupIdx}
           />
         ))}
       </div>

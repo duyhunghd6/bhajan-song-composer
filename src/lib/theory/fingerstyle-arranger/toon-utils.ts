@@ -136,3 +136,33 @@ export function parseToonToMeasure(toon: string, originalMeasure: TimeSliceMeasu
 
   return { ...originalMeasure, grid: newGrid };
 }
+
+/**
+ * Format multiple measures as a single multi-measure TOON block,
+ * separated by `---` dividers. Used for per-line LLM processing.
+ */
+export function formatLineAsToon(measures: TimeSliceMeasure[]): string {
+  if (measures.length === 0) return "";
+  const measureRange = measures.map(m => m.measure);
+  let toon = `# Line: Measures ${measureRange[0]}–${measureRange[measureRange.length - 1]}\n\n`;
+  for (let i = 0; i < measures.length; i++) {
+    if (i > 0) toon += "\n---\n\n";
+    toon += formatMeasureAsToon(measures[i]);
+  }
+  return toon;
+}
+
+/**
+ * Parse a multi-measure TOON block (separated by `---`) back into measures.
+ * Each measure section is matched to the corresponding originalMeasure by order.
+ */
+export function parseToonToLine(toon: string, originalMeasures: TimeSliceMeasure[]): TimeSliceMeasure[] {
+  // Split by --- separator, filtering out empty chunks
+  const chunks = toon.split(/\n---\n/).map(c => c.trim()).filter(c => c.length > 0);
+  
+  const results: TimeSliceMeasure[] = [];
+  for (let i = 0; i < chunks.length && i < originalMeasures.length; i++) {
+    results.push(parseToonToMeasure(chunks[i], originalMeasures[i]));
+  }
+  return results;
+}
