@@ -1,4 +1,4 @@
-import { splitAbcMeasureSegments } from "./abc-duration";
+import { splitAbcMeasureSegments, splitAbcMeasureSegmentsWithBarlines, type AbcBarlineInfo, joinAbcMeasuresWithBarlines } from "./abc-duration";
 import { normalizeAbcVoiceSyntax } from "./abc-voice-normalization";
 import { resolveProgression } from "./arranger-utils";
 import { convertAbcToTimeSliceGrid } from "./fingerstyle-arranger/time-slice";
@@ -631,6 +631,33 @@ export function getAbcMeasureLinePattern(abcString: string): number[] {
   return measureLinePatternFromLines(lines);
 }
 
+function getReferenceBarlines(abcString: string): AbcBarlineInfo[] {
+  const lines = normalizeAbcVoiceSyntax(abcString).split(/\r?\n/);
+  
+  const extractFromLines = (targetLines: string[]) => 
+    targetLines.filter(isMusicBodyLine).flatMap((line) => 
+      splitAbcMeasureSegmentsWithBarlines(line).map(s => s.barline)
+    );
+
+  const inlineMelodyLines = lines
+    .map((line) => line.trim())
+    .filter((line) => /^\[V:Melody\]\s*/.test(line));
+
+  if (inlineMelodyLines.length > 0) {
+    return extractFromLines(inlineMelodyLines.map(stripInlineVoicePrefix));
+  }
+
+  const melodyStart = lines.findIndex((line) => /^V:Melody\b/.test(line.trim()));
+
+  if (melodyStart >= 0) {
+    const nextVoiceOffset = lines.slice(melodyStart + 1).findIndex((line) => /^V:/.test(line.trim()));
+    const melodyEnd = nextVoiceOffset >= 0 ? melodyStart + 1 + nextVoiceOffset : lines.length;
+    return extractFromLines(lines.slice(melodyStart + 1, melodyEnd));
+  }
+
+  return extractFromLines(lines);
+}
+
 function referenceMeasureLinePattern(referenceAbc: string): number[] {
   return getAbcMeasureLinePattern(referenceAbc);
 }
@@ -644,7 +671,7 @@ export function abcMatchesReferenceMeasureLinePattern(generatedAbc: string, refe
     && actualPattern.every((count, index) => count === expectedPattern[index]);
 }
 
-function regroupMeasures(measures: string[], pattern: number[], fallbackLineCount: number): string[] {
+function regroupMeasures(measures: string[], pattern: number[], fallbackLineCount: number, barlines: AbcBarlineInfo[] = []): string[] {
   const effectivePattern = pattern.length > 0 ? pattern : [Math.max(measures.length, 1)];
   const output: string[] = [];
   let cursor = 0;
@@ -652,7 +679,8 @@ function regroupMeasures(measures: string[], pattern: number[], fallbackLineCoun
   for (const count of effectivePattern) {
     const group = measures.slice(cursor, cursor + count);
     if (group.length === 0) break;
-    output.push(`| ${group.join(" | ")} |`);
+    const groupBarlines = barlines.slice(cursor, cursor + count);
+    output.push(joinAbcMeasuresWithBarlines(group, groupBarlines));
     cursor += count;
   }
 
@@ -661,7 +689,10 @@ function regroupMeasures(measures: string[], pattern: number[], fallbackLineCoun
     const remaining = measures.slice(cursor);
     const chunkSize = Math.max(1, Math.ceil(remaining.length / remainingLineCount));
     for (let index = 0; index < remaining.length; index += chunkSize) {
-      output.push(`| ${remaining.slice(index, index + chunkSize).join(" | ")} |`);
+      output.push(joinAbcMeasuresWithBarlines(
+        remaining.slice(index, index + chunkSize),
+        barlines.slice(cursor + index, cursor + index + chunkSize)
+      ));
     }
   }
 
@@ -671,15 +702,20 @@ function regroupMeasures(measures: string[], pattern: number[], fallbackLineCoun
 function rebuildMusicLinesForPattern(
   lines: string[],
   pattern: number[],
-  fallbackLyricLineGroups: string[][] = []
+  fallbackLyricLineGroups: string[][] = [],
+  referenceBarlines?: AbcBarlineInfo[]
 ): string[] {
   const musicLineIndices = lines.flatMap((line, index) => isMusicBodyLine(line) ? [index] : []);
   if (musicLineIndices.length === 0) return lines;
 
-  const measures = musicLineIndices.flatMap((index) => splitAbcMeasureSegments(stripInlineVoicePrefix(lines[index])));
+  const segmentsWithBarlines = musicLineIndices.flatMap((index) => splitAbcMeasureSegmentsWithBarlines(stripInlineVoicePrefix(lines[index])));
+  const measures = segmentsWithBarlines.map((s) => s.content);
+  // Default to extracted barlines, but override with referenceBarlines if provided
+  // (to force the LLM-generated string to retain the reference repeats).
+  const barlines = referenceBarlines ?? segmentsWithBarlines.map((s) => s.barline);
   if (measures.length === 0) return lines;
 
-  const regroupedMusicLines = regroupMeasures(measures, pattern, musicLineIndices.length);
+  const regroupedMusicLines = regroupMeasures(measures, pattern, musicLineIndices.length, barlines);
   const generatedLyricLineGroups = extractSequentialLyricLineGroups(lines);
   const lyricLineGroups = hasLyricGroups(generatedLyricLineGroups, regroupedMusicLines.length)
     ? generatedLyricLineGroups
@@ -757,14 +793,19 @@ function getReferenceLyricLineGroups(referenceAbc: string): string[][] {
   return extractSequentialLyricLineGroups(lines);
 }
 
-function regroupInlineVoiceLines(lines: string[], pattern: number[], fallbackLyricLineGroups: string[][] = []): string[] {
+function regroupInlineVoiceLines(
+  lines: string[],
+  pattern: number[],
+  fallbackLyricLineGroups: string[][] = [],
+  referenceBarlines?: AbcBarlineInfo[]
+): string[] {
   const { prefix, voiceLines, suffix } = splitInlineVoiceBody(lines);
   const melodyLines = voiceLines.get("Melody");
   if (!melodyLines || melodyLines.length === 0) return lines;
 
   const regroupedByVoice = new Map<string, string[]>();
   for (const [voiceName, bodyLines] of voiceLines) {
-    regroupedByVoice.set(voiceName, rebuildMusicLinesForPattern(bodyLines, pattern));
+    regroupedByVoice.set(voiceName, rebuildMusicLinesForPattern(bodyLines, pattern, [], voiceName === "Melody" ? referenceBarlines : undefined));
   }
 
   const orderedVoiceNames = Array.from(voiceLines.keys());
@@ -794,8 +835,9 @@ export function break_measures_line(generatedAbc: string, referenceAbc: string):
 
   const lines = normalizedGeneratedAbc.split(/\r?\n/);
   const fallbackLyricLineGroups = getReferenceLyricLineGroups(referenceAbc);
+  const referenceBarlines = getReferenceBarlines(referenceAbc);
   if (lines.some((line) => /^\[V:Melody\]\s*/.test(line.trim()))) {
-    return regroupInlineVoiceLines(lines, pattern, fallbackLyricLineGroups).join("\n");
+    return regroupInlineVoiceLines(lines, pattern, fallbackLyricLineGroups, referenceBarlines).join("\n");
   }
 
   const melodyStart = lines.findIndex((line) => /^V:Melody\b/.test(line.trim()));
@@ -805,12 +847,12 @@ export function break_measures_line(generatedAbc: string, referenceAbc: string):
     const melodyEnd = nextVoiceOffset >= 0 ? melodyStart + 1 + nextVoiceOffset : lines.length;
     return [
       ...lines.slice(0, melodyStart + 1),
-      ...rebuildMusicLinesForPattern(lines.slice(melodyStart + 1, melodyEnd), pattern, fallbackLyricLineGroups),
+      ...rebuildMusicLinesForPattern(lines.slice(melodyStart + 1, melodyEnd), pattern, fallbackLyricLineGroups, referenceBarlines),
       ...lines.slice(melodyEnd),
     ].join("\n");
   }
 
-  return rebuildMusicLinesForPattern(lines, pattern, fallbackLyricLineGroups).join("\n");
+  return rebuildMusicLinesForPattern(lines, pattern, fallbackLyricLineGroups, referenceBarlines).join("\n");
 }
 
 const ABC_OPTION_DATA_KEYS = ["harmonizedAbc", "validatedAbc", "chordAnnotatedAbc", "abc"] as const;

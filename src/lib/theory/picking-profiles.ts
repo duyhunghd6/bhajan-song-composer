@@ -2,7 +2,18 @@ import type { GuitarStringNumber } from "./fingerstyle-compressor";
 
 export type PickingFinger = "p" | "i" | "m" | "a";
 export type FingerstylePickingProfileId = "strict-pima" | "folk-travis";
-export type FingerstylePhysicalTechnique = "thumb-clock" | "pinch" | "guide-tone" | "syncopation" | "string-slap";
+export type FingerstylePhysicalTechnique =
+  // Original techniques
+  | "thumb-clock" | "pinch" | "guide-tone" | "syncopation" | "string-slap"
+  // Left-hand legato (DP optimizer)
+  | "hammer-on" | "pull-off" | "slide-shift" | "slide-guide"
+  | "vibrato" | "natural-harmonic"
+  // Left-hand fretting (DP optimizer)
+  | "barre" | "partial-barre" | "guide-finger-pivot" | "left-hand-mute"
+  // Right-hand articulation (DP optimizer)
+  | "rest-stroke" | "free-stroke" | "palm-mute"
+  // Expressive / ornamental (DP optimizer)
+  | "grace-note" | "bend";
 
 export interface FingerstylePickingProfile {
   id: FingerstylePickingProfileId;

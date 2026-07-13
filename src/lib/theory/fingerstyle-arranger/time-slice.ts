@@ -1,4 +1,4 @@
-import { buildAbcDurationContext, stripAbcChordSymbols, cleanAbcMeasureSegment, formatAbcDuration, AbcDurationContext, measureDurationUnits } from "../abc-duration";
+import { buildAbcDurationContext, stripAbcChordSymbols, cleanAbcMeasureSegment, formatAbcDuration, AbcDurationContext, measureDurationUnits, AbcBarlineInfo, EMPTY_BARLINE_INFO, extractBarlineInfo, joinAbcMeasuresWithBarlines } from "../abc-duration";
 import { parseNoteDuration } from "../melody-analyzer";
 import { scientificPitchForStringFret } from "../guitar-playability";
 import type { GuitarStringNumber } from "../fingerstyle-compressor";
@@ -60,6 +60,8 @@ export interface TimeSliceMeasure {
   /** If this measure is a pickup (anacrusis), the actual duration in ABC units.
    *  Undefined or 0 means it is a normal full measure. */
   pickupDurationUnits?: number;
+  /** Repeat barline metadata (|:, :|, volta brackets) from the source ABC. */
+  barline?: AbcBarlineInfo;
   visualTablature?: string;
   source_abc?: {
     melody: string;
@@ -296,6 +298,7 @@ export function convertAbcToTimeSliceGrid(
   const lines = abcString.split(/\r?\n/);
   let activeVoiceIsMelody = true;
   const melodySegmentMeasures: string[][] = [];
+  const melodySegmentBarlines: AbcBarlineInfo[][] = [];
   const lyricSegmentMeasures: string[][] = [];
   const beatWeightSegmentMeasures: string[][] = [];
 
@@ -315,8 +318,17 @@ export function convertAbcToTimeSliceGrid(
       const voiceId = inlineMatch[1].trim();
       const content = inlineMatch[2].trim();
       if (voiceId === "Melody") {
-        const measures = content.split("|").map((m) => m.trim()).filter(Boolean);
+        const rawSplits = content.split("|");
+        const measures: string[] = [];
+        const segBarlines: AbcBarlineInfo[] = [];
+        for (const raw of rawSplits) {
+          const trimmed = raw.trim();
+          if (!trimmed) continue;
+          measures.push(trimmed);
+          segBarlines.push(extractBarlineInfo(raw));
+        }
         melodySegmentMeasures.push(measures);
+        melodySegmentBarlines.push(segBarlines);
 
         const lyricsForThisLine: string[][] = [];
         const beatWeightsForThisLine: string[][] = [];
@@ -358,8 +370,17 @@ export function convertAbcToTimeSliceGrid(
     }
 
     if (activeVoiceIsMelody) {
-      const measures = line.split("|").map((m) => m.trim()).filter(Boolean);
+      const rawSplits = line.split("|");
+      const measures: string[] = [];
+      const segBarlines: AbcBarlineInfo[] = [];
+      for (const raw of rawSplits) {
+        const trimmed = raw.trim();
+        if (!trimmed) continue;
+        measures.push(trimmed);
+        segBarlines.push(extractBarlineInfo(raw));
+      }
       melodySegmentMeasures.push(measures);
+      melodySegmentBarlines.push(segBarlines);
 
       const lyricsForThisLine: string[][] = [];
       const beatWeightsForThisLine: string[][] = [];
@@ -399,9 +420,11 @@ export function convertAbcToTimeSliceGrid(
   const finalLyricMeasures: string[] = [];
   const finalBeatWeightMeasures: string[] = [];
   const finalLineIndices: number[] = [];
+  const finalBarlines: AbcBarlineInfo[] = [];
   let measureCounter = 0;
   for (let k = 0; k < melodySegmentMeasures.length; k++) {
     const melodyMeasures = melodySegmentMeasures[k];
+    const melBarlines = melodySegmentBarlines[k] || [];
     const lyricMeasures = lyricSegmentMeasures[k] || [];
     const beatWeightMeasures = beatWeightSegmentMeasures[k] || [];
     for (let m = 0; m < melodyMeasures.length; m++) {
@@ -409,6 +432,7 @@ export function convertAbcToTimeSliceGrid(
       finalLyricMeasures[measureCounter] = lyricMeasures[m] || "";
       finalBeatWeightMeasures[measureCounter] = beatWeightMeasures[m] || "";
       finalLineIndices[measureCounter] = k;
+      finalBarlines[measureCounter] = melBarlines[m] || EMPTY_BARLINE_INFO;
       measureCounter++;
     }
   }
@@ -539,6 +563,9 @@ export function convertAbcToTimeSliceGrid(
     const actualMelodyUnits = measureDurationUnits(measureStr);
     const isPickup = actualMelodyUnits > 0 && actualMelodyUnits < durationContext.fullMeasureUnits;
 
+    const bi = finalBarlines[measureIndex];
+    const hasBarline = bi && (bi.repeatStart || bi.repeatEnd || bi.volta !== null);
+
     measuresList.push({
       measure: measureIndex + 1,
       lineIndex: finalLineIndices[measureIndex] ?? 0,
@@ -550,6 +577,7 @@ export function convertAbcToTimeSliceGrid(
       },
       grid: finalGrid,
       pickupDurationUnits: isPickup ? actualMelodyUnits : undefined,
+      barline: hasBarline ? bi : undefined,
       source_abc: {
         melody: measureStr,
         lyric: lyricStr,
@@ -737,3 +765,16 @@ export function groupMeasuresByLine(measures: TimeSliceMeasure[]): TimeSliceMeas
     .map(([, lineMeasures]) => lineMeasures);
 }
 
+/**
+ * Join measure ABC strings with barlines, preserving repeat markers
+ * (|: :| and [N volta brackets) from the TimeSliceMeasure barline metadata.
+ */
+export function joinMeasureAbcWithBarlines(
+  abcMeasures: string[],
+  measures: TimeSliceMeasure[]
+): string {
+  return joinAbcMeasuresWithBarlines(
+    abcMeasures,
+    measures.map((m) => m.barline ?? EMPTY_BARLINE_INFO)
+  );
+}

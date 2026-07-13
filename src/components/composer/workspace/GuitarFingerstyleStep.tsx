@@ -4,7 +4,7 @@ import AbcjsPlaybackController from "@/components/music-sheet/AbcjsPlaybackContr
 import type { ArrangementPipelineResult } from "@/lib/theory/arrangement-pipeline";
 import type { WorkspaceState } from "../useWorkspaceState";
 import type { AccompanimentPreviewModel } from "./arrangement-preview-model";
-import { convertAbcToTimeSliceGrid, groupMeasuresByLine, type TimeSliceMeasure } from "@/lib/theory/fingerstyle-arranger/time-slice";
+import { convertAbcToTimeSliceGrid, groupMeasuresByLine, type TimeSliceMeasure, joinMeasureAbcWithBarlines } from "@/lib/theory/fingerstyle-arranger/time-slice";
 import { FingerstyleLineCard } from "./FingerstyleLineCard";
 import { COMPOSER_PREVIEW_RENDER_OPTIONS } from "./preview";
 import { buildAbcDurationContext } from "@/lib/theory/abc-duration";
@@ -85,6 +85,7 @@ export function GuitarFingerstyleStep({
               lineIndex: fresh.lineIndex,
               style_profile: fresh.style_profile,
               pickupDurationUnits: fresh.pickupDurationUnits,
+              barline: fresh.barline,
               grid: pm.grid.map((step: TimeSliceMeasure["grid"][number], stepIdx: number) => {
                 const freshStep = fresh.grid[stepIdx];
                 return {
@@ -118,11 +119,12 @@ export function GuitarFingerstyleStep({
         const baseInputAbc = accompanimentPreview.rawAbc || activeAbc;
         const durationContext = buildAbcDurationContext(baseInputAbc);
         const keyAccidentals = getKeyAccidentalsFromAbc(baseInputAbc);
-        const tablatureLines = measures.map(m => convertTimeSliceMeasureToAbc(m, durationContext, keyAccidentals)).join(" | ");
+        const tablatureAbcList = measures.map(m => convertTimeSliceMeasureToAbc(m, durationContext, keyAccidentals));
+        const tablatureLines = joinMeasureAbcWithBarlines(tablatureAbcList, measures);
         const generatedGuitar = [
           'V:Guitar clef=treble-8 name="Fingerstyle Tablature"',
           "%%MIDI program 24",
-          `| ${tablatureLines} |`
+          tablatureLines,
         ].join("\n");
         updateState({ generatedGuitar });
       } catch (e) {
@@ -170,11 +172,12 @@ export function GuitarFingerstyleStep({
       try {
         const durationContext = buildAbcDurationContext(baseInputAbc);
         const keyAccidentals = getKeyAccidentalsFromAbc(baseInputAbc);
-        const tablatureLines = measures.map(m => convertTimeSliceMeasureToAbc(m, durationContext, keyAccidentals)).join(" | ");
+        const tablatureAbcList = measures.map(m => convertTimeSliceMeasureToAbc(m, durationContext, keyAccidentals));
+        const tablatureLines = joinMeasureAbcWithBarlines(tablatureAbcList, measures);
         const generatedGuitar = [
           'V:Guitar clef=treble-8 name="Fingerstyle Tablature"',
           "%%MIDI program 24",
-          `| ${tablatureLines} |`
+          tablatureLines,
         ].join("\n");
         const strippedAbc = applyAbcLayerVisibility(baseInputAbc, {
           "Melody": true, "Piano": true, "Harmonium": true, "Flute": true,

@@ -5,6 +5,7 @@ import { query_guitar_voicings } from "@/lib/theory/guitar-voicings";
 import type { TimeSliceMeasure, TimeSliceGridStep } from "@/lib/theory/fingerstyle-arranger/time-slice";
 import { validateFingerstylePhysics } from "@/lib/theory/fingerstyle-arranger/physics-validation";
 import { formatLineAsToon, formatMeasureAsToon, renderAsciiTab } from "@/lib/theory/fingerstyle-arranger/toon-utils";
+import { applyDPToTimeSliceMeasures } from "@/lib/theory/fingerstyle-arranger/dp-integration";
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -294,13 +295,28 @@ export async function generateAIFingerstyleLine(
         }
         
         // Map LLM output back to TimeSliceMeasure objects
-        const updatedMeasures: TimeSliceMeasure[] = [];
+        let updatedMeasures: TimeSliceMeasure[] = [];
         for (const submittedMeasure of measures) {
           const original = input.lineMeasures.find(m => m.measure === submittedMeasure.measure_number);
           if (original) {
             updatedMeasures.push({ ...original, grid: submittedMeasure.grid });
           }
         }
+        
+        // --- Apply DP Optimization ---
+        try {
+          // Use standard 120 bpm since it's just a line generator without tempo context
+          const dpResult = applyDPToTimeSliceMeasures(updatedMeasures, 120, { 
+            skillLevel: "intermediate",
+            autoCapo: false, // Don't sweep capo per line, assume 0 for now (could parse from ABC later)
+            capo: 0 
+          });
+          updatedMeasures = dpResult.measures;
+          logs.push(...dpResult.logs);
+        } catch (dpError) {
+          logs.push(`\n[DP OPTIMIZER ERROR] ${dpError instanceof Error ? dpError.message : String(dpError)}\n`);
+        }
+        // -----------------------------
         
         // Append ASCII tab + summary to logs
         for (const um of updatedMeasures) {
