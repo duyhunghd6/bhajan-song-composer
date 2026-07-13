@@ -38,13 +38,14 @@ export function AbcjsPlaybackStyles({ resolvedCanvasId }: { resolvedCanvasId: st
           opacity: 0.6;
         }
 
-        /* Style chords above notes */
-        #${resolvedCanvasId} svg text.abcjs-chord {
+        /* Style chords above notes - cleared for testing
+        #\${resolvedCanvasId} svg text.abcjs-chord {
           transform: translateY(-6px);
           font-size: 13px !important;
           font-weight: 600 !important;
-          fill: #a5b4fc !important; /* Indigo-300 style chord */
+          fill: #a5b4fc !important;
         }
+        */
 
         /* 
          * ABCJS Tablature Rendering and String Mapping Rules:
