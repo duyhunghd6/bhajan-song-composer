@@ -188,7 +188,7 @@ export function postProcessBeats(container: HTMLDivElement | null) {
     // Find the corresponding staff system
     let bestStaff: StaffDataItem | null = null;
     let minStaffDist = Infinity;
-    
+
     for (const sd of staffData) {
       const dist = Math.abs(sd.y + sd.height / 2 - nodeY);
       if (dist < minStaffDist) {
@@ -208,5 +208,109 @@ export function postProcessBeats(container: HTMLDivElement | null) {
     } else {
       node.setAttribute("y", String(nodeY + 12)); // Fallback shift
     }
+  }
+}
+
+/**
+ * Post-process chord symbol positions to prevent overlap with tablature staves.
+ *
+ * ABCJS positions chord text (`text.abcjs-chord`) based on the note's pitch
+ * within the standard staff. For low-pitched guitar notes this places the chord
+ * text directly on top of the TAB staff lines below. This function detects
+ * chords that belong to a staff system with an adjacent tablature staff and
+ * repositions them above the standard notation staff.
+ *
+ * Must be called AFTER `postProcessBeats` because that function tags staves
+ * with the `.abcjs-tablature-staff` class that we rely on here.
+ */
+export function postProcessChords(container: HTMLDivElement | null) {
+  if (!container) return;
+
+  const chords = Array.from(container.querySelectorAll("text.abcjs-chord"));
+  if (chords.length === 0) return;
+
+  const staves = Array.from(container.querySelectorAll("g.abcjs-staff"));
+  if (staves.length === 0) return;
+
+  // Build staff data with bounding boxes and tablature classification
+  interface ChordStaffData {
+    element: Element;
+    y: number;
+    height: number;
+    bottom: number;
+    isTab: boolean;
+  }
+
+  const staffData: ChordStaffData[] = [];
+  for (const staff of staves) {
+    try {
+      const box = (staff as unknown as SVGGraphicsElement).getBBox();
+      staffData.push({
+        element: staff,
+        y: box.y,
+        height: box.height,
+        bottom: box.y + box.height,
+        isTab: staff.classList.contains("abcjs-tablature-staff"),
+      });
+    } catch {
+      // ignore
+    }
+  }
+
+  if (staffData.length === 0) return;
+
+  // Sort staves by vertical position (top to bottom)
+  staffData.sort((a, b) => a.y - b.y);
+
+  // Identify which non-tab staves have a tablature staff directly below them.
+  // In a typical multi-voice layout: [Melody staff] [Guitar staff] [TAB staff]
+  // The "Guitar staff" (non-tab) is the one whose chords need repositioning.
+  const tabAdjacentStaves = new Set<ChordStaffData>();
+  for (let i = 0; i < staffData.length; i++) {
+    const current = staffData[i];
+    if (current.isTab) continue;
+
+    // Look for a TAB staff below this one within the same staff system
+    // (reasonable vertical proximity — within 200px)
+    for (let j = i + 1; j < staffData.length; j++) {
+      const candidate = staffData[j];
+      if (candidate.y - current.bottom > 200) break; // too far away
+      if (candidate.isTab) {
+        tabAdjacentStaves.add(current);
+        break;
+      }
+    }
+  }
+
+  if (tabAdjacentStaves.size === 0) return;
+
+  // Clearance above the staff's top line for chord text
+  const CHORD_CLEARANCE_PX = 32;
+
+  for (const chord of chords) {
+    const chordY = parseFloat(chord.getAttribute("y") || "0");
+
+    // Find the non-tab staff this chord is closest to
+    let bestStaff: ChordStaffData | null = null;
+    let minDist = Infinity;
+
+    for (const sd of staffData) {
+      if (sd.isTab) continue;
+      // Chord should be vertically within or near this staff
+      const dist = Math.abs(sd.y + sd.height / 2 - chordY);
+      if (dist < minDist) {
+        minDist = dist;
+        bestStaff = sd;
+      }
+    }
+
+    if (!bestStaff) continue;
+
+    // Only reposition chords that belong to a staff with TAB below it
+    if (!tabAdjacentStaves.has(bestStaff)) continue;
+
+    // Move the chord above the standard staff's top line
+    const targetY = bestStaff.y - CHORD_CLEARANCE_PX;
+    chord.setAttribute("y", String(targetY));
   }
 }

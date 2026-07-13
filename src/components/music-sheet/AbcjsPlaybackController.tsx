@@ -13,7 +13,7 @@ import {
   claimPlayback,
   releasePlayback,
 } from "./playback-registry";
-import { postProcessBeats, parseAbcTempo } from "./abcjs-playback/abc-rendering";
+import { postProcessBeats, postProcessChords, parseAbcTempo } from "./abcjs-playback/abc-rendering";
 import { ensureGuitarStringForcing } from "@/lib/theory/guitar-string-forcing";
 import { AbcjsPlaybackControls } from "./abcjs-playback/AbcjsPlaybackControls";
 import { AbcjsPlaybackStyles } from "./abcjs-playback/AbcjsPlaybackStyles";
@@ -438,6 +438,8 @@ export default function AbcjsPlaybackController({
       const visualObj = abcjsModule.renderAbc(canvas, finalAbcString, mergedRenderOptions);
       // Post-process beat indicator circles below the lyric line
       postProcessBeats(canvas);
+      // Reposition chord symbols above TAB staves to prevent overlap
+      postProcessChords(canvas);
       if (!visualObj || visualObj.length === 0) {
         renderErrorMessage = "ABC notation could not be rendered. Check the header and note syntax.";
         flushRenderState();
