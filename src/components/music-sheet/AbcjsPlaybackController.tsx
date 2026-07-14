@@ -44,6 +44,7 @@ export default function AbcjsPlaybackController({
   useContainerWidth = false,
   hideVoiceNames = false,
   showExactRenderAbcCopy = false,
+  allowPdfDownload = true,
 }: AbcjsPlaybackControllerProps) {
   const generatedId = useId().replace(/:/g, "");
   const resolvedCanvasId = canvasId ?? `music-sheet-canvas-${generatedId}`;
@@ -73,6 +74,79 @@ export default function AbcjsPlaybackController({
 
   const [containerWidth, setContainerWidth] = useState<number | null>(null);
   const [exactRenderCopyStatus, setExactRenderCopyStatus] = useState<"idle" | "copied">("idle");
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+
+  const handleDownloadPdf = useCallback(async () => {
+    if (!containerRef.current || !abcjsModule) return;
+    try {
+      setIsDownloadingPdf(true);
+      // Dynamically import to avoid SSR issues
+      const { toPng } = await import('html-to-image');
+      const { jsPDF } = await import('jspdf');
+      
+      // Find all annotation elements and hide them via inline styles 
+      // because html-to-image sometimes fails to capture external display: none rules for SVG text
+      const annotations = containerRef.current.querySelectorAll('.abcjs-annotation');
+      annotations.forEach((node) => {
+        (node as HTMLElement).style.setProperty('display', 'none', 'important');
+      });
+      
+      const dataUrl = await toPng(containerRef.current, { backgroundColor: '#ffffff' });
+      
+      // Restore inline styles (they are still hidden by CSS, but we clean up our inline modification)
+      annotations.forEach((node) => {
+        (node as HTMLElement).style.removeProperty('display');
+      });
+      
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const margin = 10;
+      const printableWidth = pdfWidth - margin * 2;
+      
+      const imgProps = pdf.getImageProperties(dataUrl);
+      const ratio = imgProps.width / printableWidth;
+      const scaledHeight = imgProps.height / ratio;
+
+      let heightLeft = scaledHeight;
+      let position = margin;
+      const pageHeightWithoutMargins = pdfHeight - margin * 2;
+
+      pdf.addImage(dataUrl, 'PNG', margin, position, printableWidth, scaledHeight);
+      pdf.setFillColor(255, 255, 255);
+      pdf.rect(0, pdfHeight - margin, pdfWidth, margin, 'F'); // bottom margin
+      pdf.rect(0, 0, pdfWidth, margin, 'F'); // top margin
+      heightLeft -= pageHeightWithoutMargins;
+
+      while (heightLeft > 0) {
+        position -= pageHeightWithoutMargins;
+        pdf.addPage();
+        pdf.addImage(dataUrl, 'PNG', margin, position, printableWidth, scaledHeight);
+        pdf.setFillColor(255, 255, 255);
+        pdf.rect(0, pdfHeight - margin, pdfWidth, margin, 'F'); // bottom margin
+        pdf.rect(0, 0, pdfWidth, margin, 'F'); // top margin
+        heightLeft -= pageHeightWithoutMargins;
+      }
+      
+      const titleMatch = abcString.match(/^\s*T:\s*(.+)$/m);
+      const extractedTitle = titleMatch ? titleMatch[1].trim() : title;
+      const keyMatch = abcString.match(/^\s*K:\s*(.+)$/m);
+      const extractedKey = keyMatch ? keyMatch[1].trim() : "C";
+      const meterMatch = abcString.match(/^\s*M:\s*(.+)$/m);
+      const extractedMeter = meterMatch ? meterMatch[1].trim() : "4/4";
+      
+      const safeTitle = extractedTitle ? extractedTitle.replace(/[\/\\]/g, '-') : 'sheet_music';
+      const safeKey = extractedKey.replace(/[\/\\]/g, '-');
+      const safeMeter = extractedMeter.replace(/\//g, '-').replace(/[\\]/g, '-');
+      
+      const filename = `${safeTitle} - Key ${safeKey}, M${safeMeter}.pdf`;
+      pdf.save(filename);
+    } catch (err) {
+      console.error("Error generating PDF:", err);
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  }, [title, abcString, abcjsModule]);
 
   useEffect(() => {
     if (!useContainerWidth || typeof window === "undefined" || !containerRef.current) return;
@@ -564,15 +638,27 @@ export default function AbcjsPlaybackController({
           setLoopEndMeasure={setLoopEndMeasure}
         />
       )}
-      {showExactRenderAbcCopy && (
-        <div className="flex justify-end border-b border-zinc-800 bg-zinc-900 px-4 py-2">
-          <button
-            type="button"
-            onClick={handleCopyExactRenderAbc}
-            className="rounded bg-zinc-800 px-2 py-1 text-[10px] font-semibold text-zinc-300 transition hover:text-white"
-          >
-            {exactRenderCopyStatus === "copied" ? "Copied exact render ABC" : "Copy exact render ABC"}
-          </button>
+      {(showExactRenderAbcCopy || allowPdfDownload) && (
+        <div className="flex justify-end gap-2 border-b border-zinc-800 bg-zinc-900 px-4 py-2">
+          {allowPdfDownload && (
+            <button
+              type="button"
+              onClick={handleDownloadPdf}
+              disabled={isDownloadingPdf}
+              className="rounded bg-zinc-800 px-2 py-1 text-[10px] font-semibold text-zinc-300 transition hover:text-white disabled:opacity-50"
+            >
+              {isDownloadingPdf ? "Generating PDF..." : "Download PDF"}
+            </button>
+          )}
+          {showExactRenderAbcCopy && (
+            <button
+              type="button"
+              onClick={handleCopyExactRenderAbc}
+              className="rounded bg-zinc-800 px-2 py-1 text-[10px] font-semibold text-zinc-300 transition hover:text-white"
+            >
+              {exactRenderCopyStatus === "copied" ? "Copied exact render ABC" : "Copy exact render ABC"}
+            </button>
+          )}
         </div>
       )}
       {renderError && (

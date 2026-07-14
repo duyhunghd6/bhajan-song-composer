@@ -104,4 +104,6 @@ export interface AbcjsPlaybackControllerProps {
   hideVoiceNames?: boolean;
   /** Show a copy action for the exact ABC string passed to abcjs.renderAbc(). */
   showExactRenderAbcCopy?: boolean;
+  /** Allow downloading the rendered ABC sheet as a PDF. */
+  allowPdfDownload?: boolean;
 }
