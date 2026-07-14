@@ -1,0 +1,139 @@
+--- src/lib/theory/fingerstyle-arranger/dp-integration.ts
++++ src/lib/theory/fingerstyle-arranger/dp-integration.ts
+@@ -10,6 +10,7 @@
+ import { optimizeWithCapo } from "./dp-capo";
++import type { TimeSliceMeasure, TimeSliceGridStep } from "./time-slice";
+ 
+ // ---------------------------------------------------------------------------
+@@ -277,3 +278,136 @@
+   return { matrix: updatedMatrix, result: { ...result, logs: allLogs }, logs: allLogs };
+ }
++
++// ---------------------------------------------------------------------------
++// Apply DP Result back onto TimeSliceMeasure array (LLM Integration)
++// ---------------------------------------------------------------------------
++
++export function applyDPToTimeSliceMeasures(
++  measures: TimeSliceMeasure[],
++  bpm: number = 120,
++  options: DPOptions = {}
++): { measures: TimeSliceMeasure[]; logs: string[] } {
++  const log = new DPDiagnosticLogger();
++  const skillLevel = options.skillLevel ?? "intermediate";
++
++  log.section("DP FINGERSTYLE OPTIMIZATION (TIME-SLICE)");
++  log.entry("Skill level", skillLevel);
++  log.entry("BPM", bpm);
++  log.entry("Auto capo", options.autoCapo ?? false);
++  log.entry("Fixed capo", options.capo ?? 0);
++  log.entry("Measures", measures.length);
++
++  const dpEvents: DPNoteEvent[] = [];
++  let eventIndex = 0;
++
++  log.section("EXTRACT DP EVENTS FROM TIME-SLICE");
++
++  const stepKeys: { measureIndex: number; stepIndex: number; chord: string; hasEvents: boolean }[] = [];
++
++  for (let m = 0; m < measures.length; m++) {
++    const measure = measures[m];
++    for (let s = 0; s < measure.grid.length; s++) {
++      const step = measure.grid[s];
++      const hasEvents = step.tablature && step.tablature.length > 0;
++      if (hasEvents || step.weight) {
++        stepKeys.push({ measureIndex: m, stepIndex: s, chord: step.chord, hasEvents: !!hasEvents });
++      }
++    }
++  }
++
++  for (let i = 0; i < stepKeys.length; i++) {
++    const { measureIndex, stepIndex, chord, hasEvents } = stepKeys[i];
++    const step = measures[measureIndex].grid[stepIndex];
++
++    if (!hasEvents) continue;
++
++    let nextMeasureIndex = measureIndex;
++    let nextStepIndex = measures[measureIndex].grid.length;
++    for (let j = i + 1; j < stepKeys.length; j++) {
++      if (stepKeys[j].hasEvents) {
++        nextMeasureIndex = stepKeys[j].measureIndex;
++        nextStepIndex = stepKeys[j].stepIndex;
++        break;
++      }
++    }
++
++    let durationSteps = 0;
++    if (nextMeasureIndex === measureIndex) {
++      durationSteps = nextStepIndex - stepIndex;
++    } else {
++      durationSteps = (measures[measureIndex].grid.length - stepIndex) + nextStepIndex;
++    }
++    durationSteps = Math.max(1, durationSteps);
++
++    const melodyEvent = step.tablature?.find(t => t.role === "melody");
++    const bassEvent = step.tablature?.find(t => t.role === "bass" || t.role === "root" || t.role === "fifth");
++
++    const melodyMidi = melodyEvent ? midiForStringFret(melodyEvent.string as GuitarStringNumber, melodyEvent.fret) : null;
++    const bassMidi = bassEvent ? midiForStringFret(bassEvent.string as GuitarStringNumber, bassEvent.fret) : null;
++
++    dpEvents.push({
++      index: eventIndex++,
++      melodyMidi,
++      bassMidi,
++      chord: chord || "N.C.",
++      durationSteps,
++      bpm,
++      isRest: !melodyEvent && !bassEvent,
++    });
++  }
++
++  log.entry("Total DP events extracted", dpEvents.length);
++
++  let result: DPResult;
++  if (options.autoCapo) {
++    result = optimizeWithCapo(dpEvents, skillLevel, options.maxCapo, log);
++  } else {
++    result = optimizeFingerstylePath(dpEvents, skillLevel, options.capo ?? 0, log);
++  }
++
++  log.section("APPLY DP RESULT TO TIME-SLICE");
++
++  let dpIndex = 0;
++  let changedCount = 0;
++
++  const updatedMeasures: TimeSliceMeasure[] = JSON.parse(JSON.stringify(measures));
++
++  for (let m = 0; m < updatedMeasures.length; m++) {
++    const measure = updatedMeasures[m];
++    for (let s = 0; s < measure.grid.length; s++) {
++      const step = measure.grid[s];
++      const hasEvents = step.tablature && step.tablature.length > 0;
++      if (!hasEvents) continue;
++
++      const dpCandidate = dpIndex < result.path.length ? result.path[dpIndex] : null;
++      dpIndex++;
++
++      if (dpCandidate && step.tablature) {
++        for (const tab of step.tablature) {
++          if (tab.role === "melody" && dpCandidate.melodyString !== null) {
++            if (tab.string !== dpCandidate.melodyString || tab.fret !== dpCandidate.melodyFret) changedCount++;
++            tab.string = dpCandidate.melodyString;
++            tab.fret = dpCandidate.melodyFret;
++          } else if ((tab.role === "bass" || tab.role === "root" || tab.role === "fifth") && dpCandidate.bassString !== null) {
++            if (tab.string !== dpCandidate.bassString || tab.fret !== dpCandidate.bassFret) changedCount++;
++            tab.string = dpCandidate.bassString;
++            tab.fret = dpCandidate.bassFret;
++          }
++        }
++      }
++    }
++  }
++
++  log.entry("Events updated", changedCount);
++  log.section("DP FINGERSTYLE OPTIMIZATION COMPLETE");
++  log.entry("Final total cost", result.totalCost.toFixed(2));
++  log.entry("Selected capo", result.capo);
++
++  const allLogs = log.getLines();
++  return { measures: updatedMeasures, logs: allLogs };
++}

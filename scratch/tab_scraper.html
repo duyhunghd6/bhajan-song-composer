@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <script src="../public/abcjs-basic-min.js"></script>
+</head>
+<body>
+  <div id="paper"></div>
+  <script>
+    var abc = `X:1\nK:G\nV:Guitar\n[!2!B!3!G!6!E,] !2!e !3!G !2!B4 !3!B`;
+    var visualObj = ABCJS.renderAbc("paper", abc, { tabVoices: [{ voice: "Guitar", instrument: "guitar" }] });
+    var svg = document.querySelector("#paper svg");
+    console.log(svg.innerHTML);
+  </script>
+</body>
+</html>
