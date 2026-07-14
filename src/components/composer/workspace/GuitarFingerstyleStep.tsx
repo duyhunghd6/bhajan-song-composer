@@ -62,8 +62,6 @@ export function GuitarFingerstyleStep({
   );
   const [measures, setMeasures] = useState<TimeSliceMeasure[]>([]);
   const [restoredSourceFingerprint, setRestoredSourceFingerprint] = useState<string | null>(null);
-  const [generatingLineIndex, setGeneratingLineIndex] = useState<number | null>(null);
-  const [autoGenerateQueue, setAutoGenerateQueue] = useState<number[]>([]);
 
   useEffect(() => {
     if (!hasMounted || !isWorkspaceHydrated || !workflowAppliedMusicAbc.trim()) return;
@@ -151,17 +149,6 @@ export function GuitarFingerstyleStep({
     });
   }, []);
 
-  const handleGenerateAllLines = useCallback(() => {
-    setAutoGenerateQueue(lineGroups.map((_, i) => i));
-  }, [lineGroups]);
-
-  const handleAutoGenerateComplete = useCallback((success: boolean) => {
-    setAutoGenerateQueue(prev => {
-      if (!success) return [];
-      return prev.slice(1);
-    });
-  }, []);
-
   // Build previous-line context for a given lineGroupIndex
   const buildPreviousLineContext = useCallback((lineGroupIndex: number): PreviousLineContext[] => {
     const context: PreviousLineContext[] = [];
@@ -221,28 +208,8 @@ export function GuitarFingerstyleStep({
   return (
     <div className="space-y-6">
       <section className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950/60">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+        <div className="flex items-center justify-between gap-2 mb-4">
           <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">AI Guitar Fingerstyle — Line by Line</h2>
-          {autoGenerateQueue.length > 0 ? (
-            <button
-              type="button"
-              onClick={() => setAutoGenerateQueue([])}
-              className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-rose-700 cursor-pointer flex items-center gap-2"
-            >
-              <span>⏹</span>
-              Stop Generating (Line {autoGenerateQueue[0] + 1})
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={handleGenerateAllLines}
-              disabled={generatingLineIndex !== null}
-              className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-indigo-700 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed flex items-center gap-2 whitespace-nowrap"
-            >
-              <span>✨</span>
-              Generate All Lines with AI
-            </button>
-          )}
         </div>
         <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-4">
           Generate the arrangement line by line. Each line sees previous context and the next melody entrance while deterministic scoring exposes every legal fill choice.
@@ -259,7 +226,6 @@ export function GuitarFingerstyleStep({
                   skillLevel: event.target.value as typeof generationSettings.skillLevel,
                 },
               })}
-              disabled={generatingLineIndex !== null}
               className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-xs dark:border-zinc-700 dark:bg-zinc-950"
             >
               <option value="beginner">Beginner</option>
@@ -277,7 +243,6 @@ export function GuitarFingerstyleStep({
                   densityMode: event.target.value as typeof generationSettings.densityMode,
                 },
               })}
-              disabled={generatingLineIndex !== null}
               className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-xs dark:border-zinc-700 dark:bg-zinc-950"
             >
               <option value="auto">Auto (from skill)</option>
@@ -354,12 +319,6 @@ export function GuitarFingerstyleStep({
             generationSettings={generationSettings}
             previousLineMeasures={lineGroups[lineGroupIdx - 1]}
             nextLineMeasures={lineGroups[lineGroupIdx + 1]}
-            isAnotherLineGenerating={generatingLineIndex !== null && generatingLineIndex !== lineGroupIdx}
-            onGenerationStateChange={(isGenerating) => {
-              setGeneratingLineIndex(current => isGenerating ? lineGroupIdx : current === lineGroupIdx ? null : current);
-            }}
-            autoTriggerGenerate={autoGenerateQueue.length > 0 && autoGenerateQueue[0] === lineGroupIdx}
-            onAutoGenerateComplete={handleAutoGenerateComplete}
           />
         ))}
       </div>

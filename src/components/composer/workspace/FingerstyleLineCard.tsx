@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import AbcjsPlaybackController from "@/components/music-sheet/AbcjsPlaybackController";
 import { convertTimeSliceMeasureToAbc, convertAbcToTimeSliceGrid, type TimeSliceMeasure } from "@/lib/theory/fingerstyle-arranger/time-slice";
 import { formatLineAsToon, parseToonToLine, renderCombinedAsciiTab } from "@/lib/theory/fingerstyle-arranger/toon-utils";
@@ -35,11 +35,6 @@ interface FingerstyleLineCardProps {
   generationSettings: FingerstyleGenerationSettings;
   previousLineMeasures?: TimeSliceMeasure[];
   nextLineMeasures?: TimeSliceMeasure[];
-  /** Whether any other line is currently generating */
-  isAnotherLineGenerating: boolean;
-  onGenerationStateChange: (isGenerating: boolean) => void;
-  autoTriggerGenerate?: boolean;
-  onAutoGenerateComplete?: (success: boolean) => void;
 }
 
 // ── Inline copy button ─────────────────────────────────────────────────
@@ -84,10 +79,6 @@ export function FingerstyleLineCard({
   generationSettings,
   previousLineMeasures,
   nextLineMeasures,
-  isAnotherLineGenerating,
-  onGenerationStateChange,
-  autoTriggerGenerate,
-  onAutoGenerateComplete,
 }: FingerstyleLineCardProps) {
   const measureNums = lineMeasures.map(m => m.measure);
   const [toonText, setToonText] = useState(() => formatLineAsToon(lineMeasures));
@@ -211,10 +202,9 @@ export function FingerstyleLineCard({
     }
   }, [toonText, lineMeasures, onUpdateMeasures]);
 
-  const handleGenerate = useCallback(async (): Promise<boolean> => {
+  const handleGenerate = useCallback(async () => {
     try {
       setIsGenerating(true);
-      onGenerationStateChange(true);
       setError(null);
       setLogs([]);
       setFillSummary(null);
@@ -243,17 +233,13 @@ export function FingerstyleLineCard({
       }
       if (result.success && result.measures) {
         onUpdateMeasures(result.measures);
-        return true;
       } else {
         setError(result.error || "AI Generation Failed");
-        return false;
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "AI Generation Failed");
-      return false;
     } finally {
       setIsGenerating(false);
-      onGenerationStateChange(false);
     }
   }, [
     songSlug,
@@ -266,23 +252,7 @@ export function FingerstyleLineCard({
     nextLineMeasures,
     onUpdateMeasures,
     diagnosticStorageKey,
-    onGenerationStateChange,
   ]);
-
-  const hasTriggeredRef = useRef(false);
-
-  useEffect(() => {
-    if (autoTriggerGenerate && !isGenerating) {
-      if (!hasTriggeredRef.current) {
-        hasTriggeredRef.current = true;
-        handleGenerate().then((success) => {
-          onAutoGenerateComplete?.(success);
-        });
-      }
-    } else if (!autoTriggerGenerate) {
-      hasTriggeredRef.current = false;
-    }
-  }, [autoTriggerGenerate, isGenerating, handleGenerate, onAutoGenerateComplete]);
 
   const tabEnabled = isAbcLayerVisible(ABC_LAYER_IDS.tab, accompLayerVisibility, false);
 
@@ -298,7 +268,7 @@ export function FingerstyleLineCard({
         <button
           type="button"
           onClick={handleGenerate}
-          disabled={isGenerating || isAnotherLineGenerating}
+          disabled={isGenerating}
           className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-indigo-700 flex items-center gap-1.5 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
         >
           <span>✨</span>
