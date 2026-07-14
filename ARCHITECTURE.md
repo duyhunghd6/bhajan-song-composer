@@ -13,6 +13,7 @@ Composer screens live under `src/components/composer/`.
   - `HarmonyStep.tsx` handles harmonization selection and preview.
   - `AccompanimentStep.tsx` handles accompaniment workflow review, setup persistence, layer visibility, and instrument previews.
   - `arrangement-preview-model.ts` derives harmony and accompaniment preview models from workspace state, workflow state, ABC builders, and layer visibility.
+  - `fingerstyle-measure-persistence.ts` versions source-bound time-slice persistence, restores only compatible tablature events, and rebuilds canonical forced Guitar ABC after hydration.
   - `preview.tsx` contains shared preview layout, render options, and harmonization display helpers.
 - `LayerManager.tsx` remains the public layer-stack entrypoint.
 - `layers/layer-manager-parts.tsx` contains layer stack defaults, layer parsing/combining utilities, and the extracted pipeline/fingerstyle panels.
@@ -35,6 +36,7 @@ Music notation playback lives under `src/components/music-sheet/`.
 - `AbcjsPlaybackController.tsx` is the public playback controller entrypoint.
 - `abcjs-playback/types.ts` defines the local abcjs adapter types and controller props.
 - `abcjs-playback/abc-rendering.ts` contains tempo parsing and SVG post-processing for beat indicators, lyrics, and tablature staff spacing.
+- `abcjs-playback/render-input.ts` resolves the exact ABC sent to abcjs, including render-only Guitar forcing, abcjs single-note decoration adaptation, and key/meter/name overrides.
 - `abcjs-playback/AbcjsPlaybackControls.tsx` contains transport, metadata override, tempo, and loop-range controls.
 - `abcjs-playback/AbcjsPlaybackStyles.tsx` contains the scoped styles applied to rendered abcjs output.
 
