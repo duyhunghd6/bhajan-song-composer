@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type SetStateAction } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition, type SetStateAction } from "react";
 import {
   DEFAULT_ACCOMPANIMENT_LAYER_VISIBILITY,
   DEFAULT_HARMONY_LAYER_VISIBILITY,
@@ -10,6 +10,7 @@ import {
 import AbcjsPlaybackController from "@/components/music-sheet/AbcjsPlaybackController";
 import PianoPedalIndicator from "@/components/instruments/PianoPedalIndicator";
 import AbcEditor, { DEFAULT_ABC } from "./AbcEditor";
+import { saveAbcToDisk } from "@/app/actions/save-abc-to-disk";
 import type { ComposerStepId } from "./composer-steps";
 import { AccompanimentStep } from "./workspace/AccompanimentStep";
 import { GuitarFingerstyleStep } from "./workspace/GuitarFingerstyleStep";
@@ -50,6 +51,8 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
   const [layerVisibility, setLayerVisibility] = useState<Record<string, boolean>>(DEFAULT_HARMONY_LAYER_VISIBILITY);
   const [layerVolumes, setLayerVolumes] = useState<Record<string, number>>(DEFAULT_LAYER_VOLUMES);
   const [copyStatus, setCopyStatus] = useState("Copy Markdown");
+  const [isPending, startTransition] = useTransition();
+
   const accompLayerVisibility = ws.accompanimentLayerVisibility ?? DEFAULT_ACCOMPANIMENT_LAYER_VISIBILITY;
   const accompLayerVolumes = ws.accompanimentLayerVolumes ?? DEFAULT_LAYER_VOLUMES;
   const setAccompLayerVisibility = useCallback((nextVisibility: SetStateAction<Record<string, boolean>>) => {
@@ -233,6 +236,17 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
       });
   };
 
+  const handleSaveArrangement = () => {
+    startTransition(async () => {
+      const res = await saveAbcToDisk(slug, "melody", cleanReviewAbc);
+      if (res.success) {
+        alert("Successfully saved arrangement to disk!");
+      } else {
+        alert("Failed to save: " + res.error);
+      }
+    });
+  };
+
   return (
     <ComposerNotationPreviewLayout
       source={(
@@ -241,7 +255,14 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
           <textarea readOnly value={markdown} className="mt-3 min-h-72 w-full rounded-xl border border-zinc-200 bg-zinc-50 p-3 font-mono text-xs text-zinc-800 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200" />
           <div className="mt-3 flex flex-wrap gap-2">
             <button type="button" onClick={handleCopyMarkdown} className="rounded-xl border border-zinc-200 px-3 py-2 text-xs font-bold text-zinc-700 dark:border-zinc-800 dark:text-zinc-200 font-sans">{copyStatus}</button>
-            <button type="button" className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white font-sans">Submit as PR</button>
+            <button 
+              type="button" 
+              onClick={handleSaveArrangement}
+              disabled={isPending}
+              className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white font-sans disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isPending ? "Saving..." : "Save Arrangement to Disk"}
+            </button>
           </div>
         </section>
       )}

@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useMemo, useState, useTransition } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Song, SongMetadata } from "@/lib/songs/schema";
 import SongForm from "./SongForm";
 import { getComposerStepHref } from "./composer-steps";
+import { saveSongMetadataToDisk } from "@/app/actions/save-song-metadata";
 
 interface ComposerWorkstationProps {
   songs: Song[];
@@ -32,6 +33,22 @@ export default function ComposerWorkstation({ songs }: ComposerWorkstationProps)
     };
   }, [initialSong, metadata]);
 
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+
+  const handleSaveAndContinue = () => {
+    if (!metadata) return;
+
+    startTransition(async () => {
+      const res = await saveSongMetadataToDisk(metadata);
+      if (res.success) {
+        router.push(startHref);
+      } else {
+        alert("Failed to save song metadata to disk: " + res.error);
+      }
+    });
+  };
+
   return (
     <div className="space-y-8">
       <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
@@ -56,12 +73,13 @@ export default function ComposerWorkstation({ songs }: ComposerWorkstationProps)
             >
               ← Back to Edit List
             </Link>
-            <Link
-              href={startHref}
-              className="inline-flex items-center justify-center rounded-xl bg-amber-500 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition-all hover:bg-amber-600"
+            <button
+              onClick={handleSaveAndContinue}
+              disabled={isPending || !metadata}
+              className="inline-flex items-center justify-center rounded-xl bg-amber-500 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition-all hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
-              {initialSong ? "Continue arrangement" : "Save & Start Melody"}
-            </Link>
+              {isPending ? "Saving..." : initialSong ? "Save & Continue" : "Save to Catalogue & Start"}
+            </button>
           </div>
         </div>
       </section>
