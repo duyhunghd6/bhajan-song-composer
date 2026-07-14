@@ -260,12 +260,17 @@ function maxFretUsed(candidate: DPCandidate): number {
 export function skillMultiplier(
   candidate: DPCandidate,
   technique: FingerstyleTechnique,
-  skillLevel: SkillLevel
+  skillLevel: SkillLevel,
+  maxMelodyFret?: number,
 ): number {
   const constraints = SKILL_LEVEL_CONSTRAINTS[skillLevel];
   if (constraints.forbiddenTechniques.includes(technique)) return Infinity;
   const maxFret = maxFretUsed(candidate);
-  if (maxFret > constraints.maxFret) return Infinity;
+  const melodyStringIndex = candidate.melodyString === null ? null : stringToIndex(candidate.melodyString);
+  const nonMelodyMaxFret = Math.max(0, ...candidate.shapeFrets
+    .filter((fret, index): fret is number => index !== melodyStringIndex && fret !== null));
+  if (nonMelodyMaxFret > constraints.maxFret) return Infinity;
+  if (candidate.melodyFret > (maxMelodyFret ?? constraints.maxFret)) return Infinity;
   let multiplier = 1;
   if (skillLevel === "beginner") {
     if (candidate.usesBarre) multiplier *= DP_COST_CONSTANTS.beginnerBarreMultiplier;
@@ -320,7 +325,7 @@ export function transitionCostDetailed(
       + DP_COST_CONSTANTS.barrePerConsecutiveMeasure * fromState.consecutiveBarreMeasures
     : 0;
   const placementValue = placementCost(toCandidate);
-  const multiplier = skillMultiplier(toCandidate, technique, skillLevel);
+  const multiplier = skillMultiplier(toCandidate, technique, skillLevel, event.maxMelodyFret);
   const maximumFret = maxFretUsed(toCandidate);
   const constraints = SKILL_LEVEL_CONSTRAINTS[skillLevel];
   const candidateShape = options.candidateShape ?? toCandidate.shapeFrets.map(fret => fret ?? "x").join(":");
@@ -348,7 +353,7 @@ export function transitionCostDetailed(
       level: skillLevel,
       allowed: Number.isFinite(multiplier),
       maxFretUsed: maximumFret,
-      maxFretAllowed: constraints.maxFret,
+      maxFretAllowed: Math.max(constraints.maxFret, event.maxMelodyFret ?? constraints.maxFret),
       forbiddenTechnique: constraints.forbiddenTechniques.includes(technique),
       multiplier,
     },

@@ -39,6 +39,7 @@ import {
 import { renderFingerstyleDiagnosticPlaintext } from "@/lib/theory/fingerstyle-arranger/diagnostic-plaintext";
 import { applyFingerstyleTablatureToon } from "@/lib/theory/fingerstyle-arranger/llm-codec";
 import { validateFingerstylePhysics } from "@/lib/theory/fingerstyle-arranger/physics-validation";
+import { analyzeAuthoritativeMelodyPlayability } from "@/lib/theory/fingerstyle-arranger/source-playability";
 import { renderAsciiTab } from "@/lib/theory/fingerstyle-arranger/toon-utils";
 import type { TimeSliceMeasure } from "@/lib/theory/fingerstyle-arranger/time-slice";
 
@@ -63,6 +64,7 @@ function parseAbcTempo(abc: string, fallback = 120): number {
 function validateFoundation(
   measures: TimeSliceMeasure[],
   skillLevel: GenerateFingerstyleLineInput["skillLevel"],
+  maxMelodyFret: number,
 ): string[] {
   const errors: string[] = [];
   for (const measure of measures) {
@@ -85,6 +87,7 @@ function validateFoundation(
     const physics = validateFingerstylePhysics(measure.grid, {
       fillDensity: "none",
       skillLevel: skillLevel ?? "beginner",
+      maxMelodyFret,
     });
     if (!physics.valid) errors.push(`Measure ${measure.measure}: ${physics.message}`);
   }
@@ -107,12 +110,14 @@ function freezeFoundationDurations(measures: TimeSliceMeasure[]): TimeSliceMeasu
 function physicalValidationErrors(
   measures: TimeSliceMeasure[],
   policy: ReturnType<typeof normalizeFillPolicy>,
+  maxMelodyFret: number,
 ): string[] {
   const errors: string[] = [];
   for (const measure of measures) {
     const physics = validateFingerstylePhysics(measure.grid, {
       fillDensity: policy.resolvedDensity === "off" ? "none" : policy.resolvedDensity,
       skillLevel: policy.skillLevel,
+      maxMelodyFret,
     });
     if (!physics.valid) errors.push(`Measure ${measure.measure}: ${physics.message}`);
   }
@@ -133,10 +138,16 @@ export async function runFingerstyleLineWorkflow(
   const lineIndex = input.lineMeasures[0]?.lineIndex ?? input.previousLines.length;
   const measureNumbers = input.lineMeasures.map(measure => measure.measure);
   const policy = normalizeFillPolicy(input);
+  const melodyPlayability = analyzeAuthoritativeMelodyPlayability(input.lineMeasures, policy.skillLevel);
   const bpm = parseAbcTempo(input.activeAbc);
-  const dpOptions = { skillLevel: policy.skillLevel, autoCapo: false, capo: 0 } as const;
+  const dpOptions = {
+    skillLevel: policy.skillLevel,
+    maxMelodyFret: melodyPlayability.melodyMaxFret,
+    autoCapo: false,
+    capo: 0,
+  } as const;
   const systemPrompt = buildLineSystemPrompt();
-  const userPrompt = buildLineUserPrompt(input);
+  const userPrompt = buildLineUserPrompt(input, melodyPlayability);
   const tools = [
     GUITAR_VOICING_TOOL_DEFINITION,
     buildFingerstyleTablatureToolDefinition(
@@ -184,7 +195,19 @@ export async function runFingerstyleLineWorkflow(
         userPrompt,
         tools,
       },
-      conditioning: { policy, bpm, finalToolName: "submit_arranged_line", temperature: 0.25, maxIterations: 24, dpOptions },
+      conditioning: {
+        policy,
+        bpm,
+        melodyPlayability,
+        finalToolName: "submit_arranged_line",
+        temperature: 0.25,
+        maxIterations: 24,
+        maxValidationAttempts: 3,
+        requestTimeoutMs: 60_000,
+        maxRequestAttempts: 2,
+        maxDurationMs: 5 * 60_000,
+        dpOptions,
+      },
     },
   }];
 
@@ -254,6 +277,20 @@ export async function runFingerstyleLineWorkflow(
   logs.push(`=== USER PROMPT ===\n${userPrompt}\n`);
 
   try {
+    if (!melodyPlayability.playable) {
+      const message = melodyPlayability.issues.map(issue => issue.message).join(" ");
+      recordWorkflowEvent("foundation-rejected", "source-playability", "failed", message, melodyPlayability);
+      throw new Error(message);
+    }
+    recordWorkflowEvent(
+      "foundation-validated",
+      "source-playability",
+      melodyPlayability.exceptions.length > 0 ? "info" : "success",
+      melodyPlayability.exceptions.length > 0
+        ? `${melodyPlayability.exceptions.length} authoritative melody attack(s) require a melody-only fret exception up to fret ${melodyPlayability.melodyMaxFret}; discretionary ${policy.skillLevel} notes remain capped at fret ${melodyPlayability.accompanimentMaxFret}.`
+        : `All authoritative melody attacks fit the ${policy.skillLevel} fret limit.`,
+      melodyPlayability,
+    );
     await requestOpenAiCompatibleToolLoop({
       systemPrompt,
       userPrompt,
@@ -277,7 +314,7 @@ export async function runFingerstyleLineWorkflow(
               recordWorkflowEvent("foundation-rejected", "foundation", "warning", decoded.error.message, decoded.error);
               return { valid: false, code: decoded.error.code, message: decoded.error.message };
             }
-            const errors = validateFoundation(decoded.measures, policy.skillLevel);
+            const errors = validateFoundation(decoded.measures, policy.skillLevel, melodyPlayability.melodyMaxFret);
             if (errors.length > 0) {
               const message = errors.join(" ");
               recordWorkflowEvent("foundation-rejected", "foundation", "warning", message, { errors });
@@ -285,16 +322,22 @@ export async function runFingerstyleLineWorkflow(
             }
             try {
               const dpResult = applyDPToTimeSliceMeasures(decoded.measures, bpm, dpOptions);
-              frozenFoundation = freezeFoundationDurations(dpResult.measures);
               logs.push(...dpResult.logs);
               diagnosticEvents.push(...projectDpDiagnosticEvents(runId, dpResult.diagnostics, diagnosticEvents.length));
               for (const event of dpResult.diagnostics.events) {
                 storedRecords.push({ type: "dp-event", timestamp: event.timestamp, runId, payload: event });
               }
               diagnosticSummary = summaryFromDpRun(dpResult.diagnostics, Date.now() - startedAtMs);
-              recordWorkflowEvent("foundation-validated", "foundation", "success", `Foundation frozen after DP at ${bpm} BPM using ${policy.skillLevel} constraints.`, {
+              if (diagnosticSummary.outcome === "rolled-back" || diagnosticSummary.unresolvedEventCount > 0) {
+                const message = `Foundation DP did not resolve every required event (${diagnosticSummary.outcome}, unresolved=${diagnosticSummary.unresolvedEventCount}).`;
+                recordWorkflowEvent("foundation-rejected", "foundation", "warning", message, diagnosticSummary);
+                return { valid: false, message };
+              }
+              frozenFoundation = freezeFoundationDurations(dpResult.measures);
+              recordWorkflowEvent("foundation-validated", "foundation", "success", `Foundation frozen after DP at ${bpm} BPM using ${policy.skillLevel} accompaniment constraints.`, {
                 measureCount: frozenFoundation.length,
                 dpOutcome: diagnosticSummary.outcome,
+                maxMelodyFret: melodyPlayability.melodyMaxFret,
               });
               return { valid: true, message: "Foundation accepted and frozen. Inspect fill opportunities next.", bpm, policy, dpOutcome: diagnosticSummary.outcome };
             } catch (error) {
@@ -303,6 +346,7 @@ export async function runFingerstyleLineWorkflow(
               return { valid: false, message: `Foundation DP failed: ${message}` };
             }
           },
+          maxInvalidResults: 3,
         },
         {
           name: "inspect_fill_opportunities",
@@ -336,6 +380,7 @@ export async function runFingerstyleLineWorkflow(
             });
             return page.toon;
           },
+          maxInvalidResults: 3,
         },
         {
           name: "select_fill_windows",
@@ -369,6 +414,7 @@ export async function runFingerstyleLineWorkflow(
             });
             return { valid: true, selectedWindowIds: validated.selectedWindowIds, maxNotesPerWindow: opportunityAnalysis.budget.maxNotesPerWindow };
           },
+          maxInvalidResults: 3,
         },
         {
           name: "validate_composed_fills",
@@ -390,7 +436,7 @@ export async function runFingerstyleLineWorkflow(
               return { valid: false, message: validated.message };
             }
             const merged = mergeAcceptedFills(frozenFoundation, opportunityAnalysis, validated);
-            const physicalErrors = physicalValidationErrors(merged, policy);
+            const physicalErrors = physicalValidationErrors(merged, policy, melodyPlayability.melodyMaxFret);
             if (physicalErrors.length > 0) {
               const message = physicalErrors.join(" ");
               recordWorkflowEvent("composition-rejected", "fill-composition", "warning", message, { physicalErrors });
@@ -404,6 +450,7 @@ export async function runFingerstyleLineWorkflow(
             });
             return { valid: true, message: "Composed fills accepted. Submit the exact same fills_toon payload." };
           },
+          maxInvalidResults: 3,
         },
       ],
       validateFinalResult: args => {
@@ -418,7 +465,7 @@ export async function runFingerstyleLineWorkflow(
           recordWorkflowEvent("final-merge-rejected", "final-validation", "warning", message);
           return { valid: false, message, toolResult: { valid: false, message } };
         }
-        const physicalErrors = physicalValidationErrors(acceptedFinalMeasures, policy);
+        const physicalErrors = physicalValidationErrors(acceptedFinalMeasures, policy, melodyPlayability.melodyMaxFret);
         if (physicalErrors.length > 0) {
           const message = physicalErrors.join(" ");
           recordWorkflowEvent("final-merge-rejected", "final-validation", "failed", message, { physicalErrors });
@@ -435,7 +482,10 @@ export async function runFingerstyleLineWorkflow(
       },
       temperature: 0.25,
       maxIterations: 24,
-      maxValidationAttempts: 8,
+      maxValidationAttempts: 3,
+      requestTimeoutMs: 60_000,
+      maxRequestAttempts: 2,
+      maxDurationMs: 5 * 60_000,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error during AI generation.";

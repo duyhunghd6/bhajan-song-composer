@@ -62,6 +62,7 @@ export function emitDPConfiguration(
       candidateCap: DP_CANDIDATE_LIMIT,
       tuningMidi: [...STANDARD_TUNING_MIDI],
       skillConstraints: { ...SKILL_LEVEL_CONSTRAINTS[skillLevel] },
+      maxMelodyFret: options.maxMelodyFret ?? SKILL_LEVEL_CONSTRAINTS[skillLevel].maxFret,
       recurringShapeMismatchCost: RECURRING_SHAPE_MISMATCH_COST,
       costConstants: { ...DP_COST_CONSTANTS },
     },
@@ -74,6 +75,7 @@ export function emitDPConfiguration(
       candidateCap: "constant",
       tuningMidi: "constant",
       skillConstraints: "derived",
+      maxMelodyFret: options.maxMelodyFret === undefined ? "derived" : "supplied",
       recurringShapeMismatchCost: "constant",
       costConstants: "constant",
     },
@@ -83,7 +85,8 @@ export function emitDPConfiguration(
 export function extractTimeSliceEvents(
   measures: TimeSliceMeasure[],
   bpm: number,
-  log: DPDiagnosticLogger
+  log: DPDiagnosticLogger,
+  maxMelodyFret?: number,
 ): { events: DPNoteEvent[]; bindings: TimeSliceDPBinding[]; totalGridSteps: number } {
   const events: DPNoteEvent[] = [];
   const bindings: TimeSliceDPBinding[] = [];
@@ -189,6 +192,7 @@ export function extractTimeSliceEvents(
         absoluteOnsetStep,
         fixedFrets,
         melodyMidi,
+        maxMelodyFret,
         bassMidi,
         chord: step.chord || "N.C.",
         durationSteps: 1,

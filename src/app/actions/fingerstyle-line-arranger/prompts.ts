@@ -1,4 +1,6 @@
 import { FINGERSTYLE_TABLATURE_TOON_CONTRACT } from "@/lib/theory/fingerstyle-arranger/llm-codec";
+import type { AuthoritativeMelodyPlayabilityAnalysis } from "@/lib/theory/fingerstyle-arranger/source-playability";
+import { formatAuthoritativeMelodyExceptions } from "@/lib/theory/fingerstyle-arranger/source-playability";
 import { formatLineAsToon } from "@/lib/theory/fingerstyle-arranger/toon-utils";
 
 import type { GenerateFingerstyleLineInput } from "./types";
@@ -19,6 +21,7 @@ MANDATORY TOOL ORDER
 
 FOUNDATION RULES
 - Preserve authoritative melody exactly. Every melody attack needs exactly one role=melody note with the correct pitch.
+- A listed source-melody exception may exceed the selected skill fret limit only for role=melody. Never lower, octave-shift, or transpose it; all discretionary notes remain skill-limited.
 - Never retrigger role=melody on sustain or rest steps.
 - Use root, fifth, bass, or harmony for the non-fill foundation. role=fill is forbidden before opportunity analysis.
 - Non-melody foundation attacks belong on weighted structural steps or in a pinch with a melody attack; leave unweighted sustain/rest steps empty for scored fill analysis.
@@ -47,10 +50,20 @@ notes: [N,candidate,durationSteps,finger]
 N,<candidate-id>,<positive integer>,i|m|a`;
 }
 
-export function buildLineUserPrompt(input: GenerateFingerstyleLineInput): string {
+export function buildLineUserPrompt(
+  input: GenerateFingerstyleLineInput,
+  melodyPlayability?: AuthoritativeMelodyPlayabilityAnalysis,
+): string {
   const measureRange = input.lineMeasures.map(measure => measure.measure);
   const key = input.lineMeasures[0]?.style_profile.key || "G";
   let prompt = `Arrange line measures ${measureRange[0]}–${measureRange.at(-1)} in ${key}.\n\n`;
+
+  if (melodyPlayability && melodyPlayability.exceptions.length > 0) {
+    prompt += "## Authoritative melody-only fret exceptions\n";
+    prompt += `Discretionary ${melodyPlayability.skillLevel} notes must stay at fret ${melodyPlayability.accompanimentMaxFret} or below. Use these exact source anchors even though they are higher:\n`;
+    prompt += formatAuthoritativeMelodyExceptions(melodyPlayability).map(row => `- ${row}`).join("\n");
+    prompt += "\nDo not replace these pitches with lower-fret notes or omit their melody attacks.\n\n";
+  }
 
   if (input.previousLines.length > 0) {
     prompt += "## Previous lines (consistency context)\n\n";

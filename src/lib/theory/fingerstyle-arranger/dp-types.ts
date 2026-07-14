@@ -129,6 +129,8 @@ export interface DPNoteEvent {
   fixedFrets?: (number | null)[];
   /** Melody pitch as MIDI number, or null for bass-only / rest. */
   melodyMidi: number | null;
+  /** Role-specific melody ceiling; discretionary notes still use the selected skill limit. */
+  maxMelodyFret?: number;
   /** Bass pitch as MIDI number, or null for melody-only / rest. */
   bassMidi: number | null;
   /** Chord symbol at this point. */
@@ -194,6 +196,8 @@ export interface DPResult {
  */
 export interface DPOptions {
   skillLevel?: SkillLevel;
+  /** Allow exact authoritative melody notes above the selected skill's discretionary fret ceiling. */
+  maxMelodyFret?: number;
   bpm?: number;
   capo?: number;
   maxCapo?: number;

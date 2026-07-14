@@ -68,8 +68,6 @@ describe("FingerstyleLineCard", () => {
         buildPreviousContext={() => []}
         workflowAppliedMusicAbc={activeAbc}
         generationSettings={{ skillLevel: "beginner", densityMode: "auto" }}
-        isAnotherLineGenerating={false}
-        onGenerationStateChange={() => {}}
       />
     );
 
@@ -78,27 +76,5 @@ describe("FingerstyleLineCard", () => {
     );
     expect(markup).toContain('data-exact-copy="true"');
     expect(markup).toContain("Copy portable ABC");
-  });
-
-  it("disables generation while another line owns the route-level generation lock", () => {
-    const activeAbc = `X:1\nM:4/4\nL:1/8\nK:Em\n| E8 |`;
-    const markup = renderToStaticMarkup(
-      <FingerstyleLineCard
-        songSlug="ganesha"
-        sourceFingerprint="test-source"
-        lineIndex={0}
-        lineMeasures={[makeFinalMeasure()]}
-        activeAbc={activeAbc}
-        onUpdateMeasures={() => {}}
-        accompLayerVisibility={{ Melody: true, Guitar: true, TAB: true }}
-        buildPreviousContext={() => []}
-        workflowAppliedMusicAbc={activeAbc}
-        generationSettings={{ skillLevel: "beginner", densityMode: "auto" }}
-        isAnotherLineGenerating={true}
-        onGenerationStateChange={() => {}}
-      />
-    );
-
-    expect(markup).toContain("disabled=\"\"");
   });
 });

@@ -303,6 +303,57 @@ describe("requestOpenAiCompatibleToolLoop", () => {
     ]));
   });
 
+  it("stops after a local tool reaches its invalid-result budget", async () => {
+    vi.stubEnv("AI_API_URL", "http://llm.test");
+    vi.stubEnv("AI_API_KEY", "test-key");
+    vi.stubEnv("AI_MODEL", "test-model");
+
+    const invalidLocalResponse = new Response(JSON.stringify({
+      choices: [{
+        message: {
+          role: "assistant",
+          content: null,
+          tool_calls: [{
+            id: "call-foundation-invalid",
+            function: { name: "submit_foundation", arguments: JSON.stringify({ value: "bad" }) },
+          }],
+        },
+      }],
+    }), { status: 200 });
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(invalidLocalResponse.clone())
+      .mockResolvedValueOnce(invalidLocalResponse.clone());
+    vi.stubGlobal("fetch", fetchMock);
+    const events: unknown[] = [];
+
+    await expect(requestOpenAiCompatibleToolLoop({
+      systemPrompt: "system",
+      userPrompt: "user",
+      tools: [
+        { type: "function", function: { name: "submit_foundation", parameters: { type: "object" } } },
+        { type: "function", function: { name: "generate_guitar", parameters: { type: "object" } } },
+      ],
+      finalToolName: "generate_guitar",
+      localTools: [{
+        name: "submit_foundation",
+        maxInvalidResults: 2,
+        execute: () => ({ valid: false, message: "still impossible" }),
+      }],
+      validateFinalResult: () => ({ valid: true }),
+      maxIterations: 8,
+      onDiagnostic: event => { events.push(event); },
+    })).rejects.toThrow("2 invalid submit_foundation result");
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(events).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        type: "loop-exhausted",
+        reason: "local-validation-limit",
+        localInvalidResultAttempts: { submit_foundation: 2 },
+      }),
+    ]));
+  });
+
   it("feeds break_measures_line tool output back before accepting final ABCNotation", async () => {
     vi.stubEnv("AI_API_URL", "http://llm.test");
     vi.stubEnv("AI_API_KEY", "test-key");

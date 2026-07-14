@@ -35,6 +35,7 @@ interface ChatMessage {
 interface LocalToolDefinition {
   name: string;
   execute: (args: unknown) => unknown | Promise<unknown>;
+  maxInvalidResults?: number;
 }
 
 export interface ToolLoopValidationResult {
@@ -44,13 +45,13 @@ export interface ToolLoopValidationResult {
 }
 
 export type ToolDiagnosticEvent =
-  | { type: "chat-request"; iteration?: number; messageCount: number; toolChoice: unknown; toolNames: string[] }
-  | { type: "chat-response"; iteration?: number; toolCallNames: string[] }
-  | { type: "chat-error"; iteration?: number; status?: number; message: string }
+  | { type: "chat-request"; iteration?: number; messageCount: number; toolChoice: unknown; toolNames: string[]; requestTimeoutMs?: number; maxRequestAttempts?: number }
+  | { type: "chat-response"; iteration?: number; toolCallNames: string[]; elapsedMs?: number; requestAttempts?: number }
+  | { type: "chat-error"; iteration?: number; status?: number; message: string; elapsedMs?: number; requestAttempts?: number }
   | { type: "tool-call"; iteration: number; toolName: string; toolCallId: string; local: boolean; final: boolean; input?: unknown }
-  | { type: "tool-result"; iteration: number; toolName: string; toolCallId: string; result: unknown }
+  | { type: "tool-result"; iteration: number; toolName: string; toolCallId: string; result: unknown; invalidResultAttempts?: number; maxInvalidResults?: number }
   | { type: "final-validation"; iteration: number; toolName: string; valid: boolean; failedValidationAttempts: number; maxValidationAttempts: number; message?: string; toolResult?: unknown }
-  | { type: "loop-exhausted"; maxIterations: number; failedValidationAttempts: number; maxValidationAttempts: number; lastValidationMessage: string };
+  | { type: "loop-exhausted"; maxIterations: number; failedValidationAttempts: number; maxValidationAttempts: number; lastValidationMessage: string; reason?: "iteration-limit" | "final-validation-limit" | "local-validation-limit" | "deadline"; localInvalidResultAttempts?: Record<string, number> };
 
 export type ToolDiagnosticRecorder = (event: ToolDiagnosticEvent) => void | Promise<void>;
 
@@ -120,21 +121,38 @@ async function requestChatCompletion(input: {
   temperature?: number;
   iteration?: number;
   onDiagnostic?: ToolDiagnosticRecorder;
+  requestTimeoutMs?: number;
+  maxRequestAttempts?: number;
+  deadlineAtMs?: number;
 }): Promise<ToolCallMessage> {
   const config = await readAiConfig();
+  const startedAtMs = Date.now();
+  const requestTimeoutMs = input.requestTimeoutMs ?? 90_000;
+  const maxRequestAttempts = input.maxRequestAttempts ?? 2;
   await emitDiagnostic(input.onDiagnostic, {
     type: "chat-request",
     iteration: input.iteration,
     messageCount: input.messages.length,
     toolChoice: input.toolChoice,
     toolNames: input.tools.map((tool) => (tool as { function?: { name?: string } }).function?.name).filter((name): name is string => Boolean(name)),
+    requestTimeoutMs,
+    maxRequestAttempts,
   });
 
   let res: Response | undefined;
   let lastError: Error | undefined;
-  const maxRetries = 3;
+  let requestAttempts = 0;
 
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+  for (let attempt = 1; attempt <= maxRequestAttempts; attempt++) {
+    requestAttempts = attempt;
+    res = undefined;
+    const remainingMs = input.deadlineAtMs === undefined ? requestTimeoutMs : input.deadlineAtMs - Date.now();
+    if (remainingMs <= 0) {
+      lastError = new Error("LLM tool loop deadline exceeded before the next request.");
+      break;
+    }
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), Math.min(requestTimeoutMs, remainingMs));
     try {
       res = await fetch(`${config.url}/chat/completions`, {
         method: "POST",
@@ -149,43 +167,66 @@ async function requestChatCompletion(input: {
           tool_choice: input.toolChoice,
           ...(typeof input.temperature === "number" ? { temperature: input.temperature } : {}),
         }),
+        signal: controller.signal,
       });
-      break; // Success
+      if (res.ok || ![408, 409, 429].includes(res.status) && res.status < 500) break;
+      lastError = new Error(`LLM API returned retryable status ${res.status}`);
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
-      const cause = (lastError as any).cause;
-      console.warn(`LLM API fetch attempt ${attempt} failed:`, lastError.message, cause ? `(Cause: ${cause})` : "");
-      if (attempt < maxRetries) {
-        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-      }
+    } finally {
+      clearTimeout(timeout);
+    }
+    if (attempt < maxRequestAttempts) {
+      const backoffMs = Math.min(1000 * attempt, Math.max(0, (input.deadlineAtMs ?? Infinity) - Date.now()));
+      if (backoffMs > 0) await new Promise(resolve => setTimeout(resolve, backoffMs));
     }
   }
 
   if (!res) {
-    const causeMsg = (lastError as any)?.cause ? ` (Cause: ${(lastError as any).cause.message || (lastError as any).cause})` : "";
-    const message = lastError ? `${lastError.message}${causeMsg}` : "LLM request failed after retries";
-    console.error("LLM API request failed permanently:", lastError);
-    await emitDiagnostic(input.onDiagnostic, { type: "chat-error", iteration: input.iteration, message });
-    throw lastError || new Error(message);
+    const message = lastError?.name === "AbortError"
+      ? `LLM request timed out after ${requestTimeoutMs}ms.`
+      : lastError?.message ?? "LLM request failed after retries";
+    await emitDiagnostic(input.onDiagnostic, {
+      type: "chat-error",
+      iteration: input.iteration,
+      message,
+      elapsedMs: Date.now() - startedAtMs,
+      requestAttempts,
+    });
+    throw new Error(message);
   }
 
   if (!res.ok) {
     const err = await res.text();
-    console.error("LLM API Error:", err);
-    await emitDiagnostic(input.onDiagnostic, { type: "chat-error", iteration: input.iteration, status: res.status, message: err });
+    await emitDiagnostic(input.onDiagnostic, {
+      type: "chat-error",
+      iteration: input.iteration,
+      status: res.status,
+      message: err,
+      elapsedMs: Date.now() - startedAtMs,
+      requestAttempts,
+    });
     throw new Error(`LLM API returned status: ${res.status}`);
   }
 
   const data = await res.json() as ToolCallResponse;
   const message = data.choices?.[0]?.message;
   if (!message) {
-    await emitDiagnostic(input.onDiagnostic, { type: "chat-error", iteration: input.iteration, message: "LLM returned no chat message" });
+    await emitDiagnostic(input.onDiagnostic, {
+      type: "chat-error",
+      iteration: input.iteration,
+      message: "LLM returned no chat message",
+      elapsedMs: Date.now() - startedAtMs,
+      requestAttempts,
+    });
     throw new Error("LLM returned no chat message");
   }
   await emitDiagnostic(input.onDiagnostic, {
     type: "chat-response",
     iteration: input.iteration,
     toolCallNames: (message.tool_calls ?? []).map((toolCall) => toolCall.function?.name).filter((name): name is string => Boolean(name)),
+    elapsedMs: Date.now() - startedAtMs,
+    requestAttempts,
   });
   return message;
 }
@@ -249,6 +290,9 @@ export async function requestOpenAiCompatibleToolLoop(input: {
   temperature?: number;
   maxIterations?: number;
   maxValidationAttempts?: number;
+  requestTimeoutMs?: number;
+  maxRequestAttempts?: number;
+  maxDurationMs?: number;
   onDiagnostic?: ToolDiagnosticRecorder;
 }): Promise<unknown> {
   const messages: ChatMessage[] = [
@@ -260,8 +304,22 @@ export async function requestOpenAiCompatibleToolLoop(input: {
   const maxValidationAttempts = input.maxValidationAttempts ?? maxIterations;
   let failedValidationAttempts = 0;
   let lastValidationMessage = "The LLM did not call a validation tool before the loop ended.";
+  const localInvalidResultAttempts: Record<string, number> = {};
+  const deadlineAtMs = input.maxDurationMs === undefined ? undefined : Date.now() + input.maxDurationMs;
 
   for (let iteration = 0; iteration < maxIterations; iteration += 1) {
+    if (deadlineAtMs !== undefined && Date.now() >= deadlineAtMs) {
+      await emitDiagnostic(input.onDiagnostic, {
+        type: "loop-exhausted",
+        maxIterations,
+        failedValidationAttempts,
+        maxValidationAttempts,
+        lastValidationMessage,
+        reason: "deadline",
+        localInvalidResultAttempts,
+      });
+      throw new Error(`LLM tool loop exceeded its ${input.maxDurationMs}ms deadline. Last validation: ${lastValidationMessage}`);
+    }
     const message = await requestChatCompletion({
       messages,
       tools: input.tools,
@@ -269,6 +327,9 @@ export async function requestOpenAiCompatibleToolLoop(input: {
       temperature: input.temperature,
       iteration,
       onDiagnostic: input.onDiagnostic,
+      requestTimeoutMs: input.requestTimeoutMs,
+      maxRequestAttempts: input.maxRequestAttempts,
+      deadlineAtMs,
     });
     const toolCalls = message.tool_calls ?? [];
 
@@ -331,7 +392,15 @@ export async function requestOpenAiCompatibleToolLoop(input: {
 
         lastValidationMessage = validation.message ?? "Final tool result did not pass local validation.";
         if (failedValidationAttempts >= maxValidationAttempts) {
-          await emitDiagnostic(input.onDiagnostic, { type: "loop-exhausted", maxIterations, failedValidationAttempts, maxValidationAttempts, lastValidationMessage });
+          await emitDiagnostic(input.onDiagnostic, {
+            type: "loop-exhausted",
+            maxIterations,
+            failedValidationAttempts,
+            maxValidationAttempts,
+            lastValidationMessage,
+            reason: "final-validation-limit",
+            localInvalidResultAttempts,
+          });
           throw new Error(`LLM did not produce validated ${input.finalToolName} output after ${maxValidationAttempts} validation attempt${maxValidationAttempts === 1 ? "" : "s"}. Last validation: ${lastValidationMessage}`);
         }
         // The loop stops only after the final tool payload passes local validation.
@@ -358,9 +427,33 @@ export async function requestOpenAiCompatibleToolLoop(input: {
 
       const args = parsedInput;
       const result = await localTool.execute(args);
-      await emitDiagnostic(input.onDiagnostic, { type: "tool-result", iteration, toolName, toolCallId, result });
-      if (typeof result === "object" && result && "valid" in result && (result as { valid?: boolean }).valid === false) {
+      const invalidResult = typeof result === "object" && result && "valid" in result
+        && (result as { valid?: boolean }).valid === false;
+      if (invalidResult) {
+        localInvalidResultAttempts[toolName] = (localInvalidResultAttempts[toolName] ?? 0) + 1;
         lastValidationMessage = JSON.stringify(result);
+      }
+      await emitDiagnostic(input.onDiagnostic, {
+        type: "tool-result",
+        iteration,
+        toolName,
+        toolCallId,
+        result,
+        invalidResultAttempts: localInvalidResultAttempts[toolName] ?? 0,
+        maxInvalidResults: localTool.maxInvalidResults,
+      });
+      if (invalidResult && localTool.maxInvalidResults !== undefined
+        && localInvalidResultAttempts[toolName] >= localTool.maxInvalidResults) {
+        await emitDiagnostic(input.onDiagnostic, {
+          type: "loop-exhausted",
+          maxIterations,
+          failedValidationAttempts,
+          maxValidationAttempts,
+          lastValidationMessage,
+          reason: "local-validation-limit",
+          localInvalidResultAttempts,
+        });
+        throw new Error(`LLM produced ${localInvalidResultAttempts[toolName]} invalid ${toolName} result(s). Last validation: ${lastValidationMessage}`);
       }
       toolResults.push({
         role: "tool",
@@ -373,6 +466,14 @@ export async function requestOpenAiCompatibleToolLoop(input: {
     messages.push(...toolResults);
   }
 
-  await emitDiagnostic(input.onDiagnostic, { type: "loop-exhausted", maxIterations, failedValidationAttempts, maxValidationAttempts, lastValidationMessage });
+  await emitDiagnostic(input.onDiagnostic, {
+    type: "loop-exhausted",
+    maxIterations,
+    failedValidationAttempts,
+    maxValidationAttempts,
+    lastValidationMessage,
+    reason: "iteration-limit",
+    localInvalidResultAttempts,
+  });
   throw new Error(`LLM did not produce validated ${input.finalToolName} output after ${maxIterations} loop iteration${maxIterations === 1 ? "" : "s"}. Failed final validation attempts: ${failedValidationAttempts}/${maxValidationAttempts}. Last validation: ${lastValidationMessage}`);
 }

@@ -2,8 +2,8 @@
 
 ## Model selection
 
-- Force Claude Code model selection to `gpt-5.6-sol` for this project.
-- If the model is changed or reset, switch it back with `/model gpt-5.6-sol` before doing substantial project work.
+- Force Claude Code model selection to `gpt-5.6-terra` for this project.
+- If the model is changed or reset, switch it back with `/model gpt-5.6-terra` before doing substantial project work.
 - Do not intentionally downgrade to a smaller model for architecture, music-arrangement, validation, or refactoring tasks.
 
 ## Development constraints
@@ -200,7 +200,7 @@ Important accompaniment rules:
 - Guitar tab validation steps must provide concrete tab events with measure, beat, note, string, fret, and role.
 - Guitar Fingerstyle must be a solo guitar plan: the Guitar voice carries the melody itself, adds bass from chord progression roots/fifths/approaches, exposes intro/interlude/outro section metadata, and renders GUITAR TAB.
 - Line-level Guitar Fingerstyle generation is staged: non-fill foundation → skill-aware DP freeze → exhaustive paginated fill opportunities → LLM use/skip selection → LLM candidate/duration composition → deterministic server merge/final validation. Do not let the LLM replace the source grid or run mutating DP after opportunity scoring.
-- Fingerstyle skill defaults to beginner; density defaults to auto (beginner→few, intermediate→normal, advanced→many). Preserve their independence.
+- Fingerstyle skill defaults to beginner; density defaults to auto (beginner→few, intermediate→normal, advanced→many). Preserve their independence. Skill fret ceilings constrain discretionary accompaniment and fills; if an authoritative melody attack is physically playable only above that ceiling, preserve its exact pitch with a labelled melody-only exception rather than transposing it or relaxing the rest of the line.
 - Piano output should expose pedal automation, key highlights, fingering metadata, and physical validation where available.
 - Djembe, Flute, and Violin accompaniment branches may render support ABC layers directly on the accompaniment page once their validation/polish branch step is selected.
 - Keep generated ABC previewable with `AbcjsPlaybackController`.

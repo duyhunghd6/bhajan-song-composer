@@ -252,7 +252,7 @@ export function GuitarFingerstyleStep({
             </select>
           </label>
           <p className="text-[11px] text-zinc-500 sm:col-span-2">
-            Skill limits frets, hand span, and notes per figure. Density independently controls how many scored windows may be selected. Existing lines are not regenerated when these settings change.
+            Skill limits discretionary accompaniment and fills, including frets, hand span, and notes per figure. The authoritative melody is never transposed; a labelled melody-only fret exception is used when its exact pitch requires one. Density independently controls how many scored windows may be selected. Existing lines are not regenerated when these settings change.
           </p>
         </div>
 

@@ -15,6 +15,7 @@ import type {
 } from "@/app/actions/fingerstyle-line-arranger";
 import type { FingerstyleGenerationSettings } from "../useWorkspaceState";
 import type { FingerstyleGenerationDiagnosticRun } from "@/lib/theory/fingerstyle-arranger/generation-diagnostics";
+import { analyzeAuthoritativeMelodyPlayability } from "@/lib/theory/fingerstyle-arranger/source-playability";
 import {
   persistFingerstyleDiagnosticRun,
   restoreFingerstyleDiagnosticRuns,
@@ -90,6 +91,10 @@ export function FingerstyleLineCard({
   const diagnosticStorageKey = useMemo(
     () => getComposerFingerstyleDiagnosticsStorageKey(songSlug),
     [songSlug],
+  );
+  const melodyPlayability = useMemo(
+    () => analyzeAuthoritativeMelodyPlayability(lineMeasures, generationSettings.skillLevel),
+    [generationSettings.skillLevel, lineMeasures],
   );
 
   useEffect(() => {
@@ -268,13 +273,28 @@ export function FingerstyleLineCard({
         <button
           type="button"
           onClick={handleGenerate}
-          disabled={isGenerating}
+          disabled={isGenerating || !melodyPlayability.playable}
           className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-indigo-700 flex items-center gap-1.5 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
         >
           <span>✨</span>
           {isGenerating ? "Generating Line..." : "Generate Line with AI"}
         </button>
       </div>
+
+      {melodyPlayability.exceptions.length > 0 && (
+        <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+          {melodyPlayability.exceptions.map(anchor => (
+            <div key={`${anchor.measure}-${anchor.step}`}>
+              {anchor.pitch} in measure {anchor.measure}, step {anchor.step} requires string {anchor.preferredPosition.string} fret {anchor.preferredPosition.fret}. Accompaniment and fills remain {generationSettings.skillLevel}-limited to fret {melodyPlayability.accompanimentMaxFret}.
+            </div>
+          ))}
+        </div>
+      )}
+      {!melodyPlayability.playable && (
+        <div className="mb-4 rounded-xl border border-rose-300 bg-rose-50 px-3 py-2 text-xs text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200">
+          {melodyPlayability.issues.map(issue => <div key={`${issue.measure}-${issue.step}`}>{issue.message}</div>)}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-10 gap-4">
         {/* ── Left: TOON Editor + Logs ── */}

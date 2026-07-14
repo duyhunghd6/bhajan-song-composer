@@ -32,6 +32,8 @@ export interface DPCandidateGenerationDetails {
   eventIndex: number;
   capo: number;
   skillLevel: SkillLevel;
+  accompanimentMaxFret: number;
+  melodyMaxFret: number;
   melodyPositionsTested: number;
   melodyPositions: DPPitchPosition[];
   bassPositionsTested: number;
@@ -129,6 +131,7 @@ export function generateCandidatesDetailed(
   capo: number = 0
 ): DPCandidateGenerationDetails {
   const constraints = SKILL_LEVEL_CONSTRAINTS[skillLevel];
+  const melodyMaxFret = Math.max(constraints.maxFret, event.maxMelodyFret ?? constraints.maxFret);
   const rejectionCounts = emptyRejectionCounts();
 
   if (event.isRest) {
@@ -137,6 +140,8 @@ export function generateCandidatesDetailed(
       eventIndex: event.index,
       capo,
       skillLevel,
+      accompanimentMaxFret: constraints.maxFret,
+      melodyMaxFret,
       melodyPositionsTested: 0,
       melodyPositions: [],
       bassPositionsTested: 0,
@@ -157,7 +162,7 @@ export function generateCandidatesDetailed(
   const bassFirstStrings = [...BASS_STRINGS, ...TREBLE_STRINGS];
   const melodySearch = event.melodyMidi === null
     ? { tested: 0, positions: [] }
-    : findPositionsDetailed(event.melodyMidi, allStrings, constraints.maxFret, capo, "melody", rejectionCounts);
+    : findPositionsDetailed(event.melodyMidi, allStrings, melodyMaxFret, capo, "melody", rejectionCounts);
   const bassSearch = event.bassMidi === null
     ? { tested: 0, positions: [] }
     : findPositionsDetailed(event.bassMidi, bassFirstStrings, constraints.maxFret, capo, "bass", rejectionCounts);
@@ -237,6 +242,8 @@ export function generateCandidatesDetailed(
     eventIndex: event.index,
     capo,
     skillLevel,
+    accompanimentMaxFret: constraints.maxFret,
+    melodyMaxFret,
     melodyPositionsTested: melodySearch.tested,
     melodyPositions: melodySearch.positions,
     bassPositionsTested: bassSearch.tested,

@@ -13,6 +13,7 @@ vi.mock("../fingerstyle-diagnostics", () => ({
 
 vi.mock("../ai-config", () => ({
   requestOpenAiCompatibleToolLoop: vi.fn(async (input: {
+    userPrompt: string;
     finalToolName: string;
     localTools: Array<{ name: string; execute: (args: unknown) => unknown | Promise<unknown> }>;
     onDiagnostic?: (event: unknown) => void | Promise<void>;
@@ -23,11 +24,12 @@ vi.mock("../ai-config", () => ({
       valid: false,
       message: "Submit and freeze the foundation first.",
     });
+    const highMelody = input.userPrompt.includes("B4=string 1 fret 7");
     const tablatureToon = [
       "tablature:v1",
       "{measure,step,string,fret,finger,role}",
-      "1,1,6,0,p,root",
-      "1,1,1,0,a,melody",
+      ...(highMelody ? [] : ["1,1,6,0,p,root"]),
+      highMelody ? "1,1,1,7,a,melody" : "1,1,1,0,a,melody",
     ].join("\n");
     const foundation = await localTool("submit_fingerstyle_foundation").execute({ tablature_toon: tablatureToon });
     expect(foundation).toMatchObject({ valid: true });
@@ -103,7 +105,7 @@ vi.mock("../ai-config", () => ({
 
 import { generateAIFingerstyleLine } from "../fingerstyle-line-arranger";
 
-function makeMeasure(): TimeSliceMeasure {
+function makeMeasure(pitch = "E4"): TimeSliceMeasure {
   return {
     measure: 1,
     lineIndex: 0,
@@ -118,7 +120,7 @@ function makeMeasure(): TimeSliceMeasure {
       chord: "Em",
       weight: index === 0 ? "⬤" as const : null,
       melody: {
-        pitch: index === 0 ? "E4" : null,
+        pitch: index === 0 ? pitch : null,
         state: index === 0 ? "attack" as const : "rest" as const,
       },
       lyric: index === 0 ? "Ga-" : null,
@@ -168,5 +170,21 @@ describe("generateAIFingerstyleLine diagnostics", () => {
     expect(lastRecord.type).toBe("run-complete");
     expect(records.filter((record: { type: string }) => record.type === "run-complete")).toHaveLength(1);
     expect(lastRecord.payload.plaintext).toBe(result.diagnostics?.plaintext);
+  });
+
+  it("preserves a high authoritative melody with a beginner melody-only exception", async () => {
+    const result = await generateAIFingerstyleLine({
+      songSlug: "ganesha",
+      sourceFingerprint: "source-b4",
+      lineMeasures: [makeMeasure("B4")],
+      previousLines: [],
+      activeAbc: "Q:1/4=90\nK:G\nB2",
+      skillLevel: "beginner",
+    });
+
+    expect(result.success, `${result.error}\n${result.logs.join("\n")}`).toBe(true);
+    const melody = result.measures?.[0].grid[0].tablature?.find(event => event.role === "melody");
+    expect(melody).toMatchObject({ string: 1, fret: 7, role: "melody" });
+    expect(result.logs.join("\n")).toContain("melody-only fret exception up to fret 7");
   });
 });

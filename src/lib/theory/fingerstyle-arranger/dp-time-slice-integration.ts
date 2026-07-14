@@ -99,7 +99,7 @@ export function applyDPToTimeSliceMeasures(
   emitDPConfiguration(log, options, bpm, skillLevel, bpmWasSupplied);
 
   const extractionStartedAt = Date.now();
-  const { events, bindings } = extractTimeSliceEvents(measures, bpm, log);
+  const { events, bindings } = extractTimeSliceEvents(measures, bpm, log, options.maxMelodyFret);
   log.event({ type: "phase-timing", phase: "extraction", name: "extraction", elapsedMs: Date.now() - extractionStartedAt });
   const result: DPResult = options.autoCapo
     ? optimizeWithCapo(events, skillLevel, options.maxCapo, log)
@@ -232,7 +232,11 @@ export function applyDPToTimeSliceMeasures(
   const validationStartedAt = Date.now();
   if (writebackValid) {
     for (let measureIndex = 0; measureIndex < updatedMeasures.length; measureIndex++) {
-      const validationOptions = { fillDensity: updatedMeasures[measureIndex].style_profile.fill_density };
+      const validationOptions = {
+        fillDensity: updatedMeasures[measureIndex].style_profile.fill_density,
+        skillLevel,
+        maxMelodyFret: options.maxMelodyFret,
+      };
       const before = validateFingerstylePhysicsDetailed(measures[measureIndex].grid, validationOptions);
       const after = validateFingerstylePhysicsDetailed(updatedMeasures[measureIndex].grid, validationOptions);
       const beforeCodes = uniqueIssueCodes(before.issues);

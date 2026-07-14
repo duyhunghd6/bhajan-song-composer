@@ -147,6 +147,17 @@ describe("DP Candidates", () => {
     }
   });
 
+  it("allows only the authoritative melody to use an explicit higher fret ceiling", () => {
+    const event = makeEvent({ melodyMidi: 71, maxMelodyFret: 7, bassMidi: null });
+    const candidates = generateCandidates(event, "beginner");
+
+    expect(candidates).toEqual(expect.arrayContaining([
+      expect.objectContaining({ melodyString: 1, melodyFret: 7 }),
+    ]));
+    expect(candidates.every(candidate => candidate.bassFret <= 5)).toBe(true);
+    expect(transitionCost(initialHandState(), candidates[0], event, "beginner")).toBeLessThan(Infinity);
+  });
+
   it("rest event returns a single no-op candidate", () => {
     const event = makeRestEvent();
     const candidates = generateCandidates(event, "advanced");

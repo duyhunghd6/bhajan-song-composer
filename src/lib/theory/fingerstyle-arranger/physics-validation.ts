@@ -13,6 +13,8 @@ export interface FingerstylePhysicsOptions {
   fillDensity?: string;
   /** Physical left-hand limits. Legacy callers default to intermediate; new generation passes its explicit policy. */
   skillLevel?: SkillLevel;
+  /** Exact authoritative melody may exceed the discretionary skill fret ceiling up to this fret. */
+  maxMelodyFret?: number;
 }
 
 export type FingerstylePhysicsIssueCode =
@@ -120,11 +122,15 @@ export function validateFingerstylePhysicsDetailed(
 
     const stringsInUse = new Set<number>();
     for (const tab of tablature) {
-      if (options?.skillLevel && tab.fret > skillConstraints.maxFret) {
-        issue(issues, "fret-limit-exceeded", `Step ${step.step}: Fret ${tab.fret} exceeds the ${skillLevel} limit of ${skillConstraints.maxFret}.`, {
+      const maxFret = tab.role === "melody"
+        ? Math.max(skillConstraints.maxFret, options?.maxMelodyFret ?? skillConstraints.maxFret)
+        : skillConstraints.maxFret;
+      if (options?.skillLevel && tab.fret > maxFret) {
+        const roleLabel = tab.role === "melody" && maxFret > skillConstraints.maxFret ? "melody exception" : skillLevel;
+        issue(issues, "fret-limit-exceeded", `Step ${step.step}: Fret ${tab.fret} exceeds the ${roleLabel} limit of ${maxFret}.`, {
           stepIndex,
           step: step.step,
-          details: { fret: tab.fret, skillLevel, maxFret: skillConstraints.maxFret },
+          details: { fret: tab.fret, role: tab.role, skillLevel, maxFret, accompanimentMaxFret: skillConstraints.maxFret },
         });
       }
       if (stringsInUse.has(tab.string)) {
