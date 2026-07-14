@@ -1,6 +1,14 @@
 import { type TimeSliceMeasure, type TimeSliceGridStep } from "./time-slice";
 
-export function formatMeasureAsToon(measure: TimeSliceMeasure): string {
+export interface FormatMeasureAsToonOptions {
+  tablature?: "include" | "omit";
+}
+
+export function formatMeasureAsToon(
+  measure: TimeSliceMeasure,
+  options: FormatMeasureAsToonOptions = {},
+): string {
+  const includeTablature = options.tablature !== "omit";
   let toon = `measure: ${measure.measure}\n`;
   if (measure.pickupDurationUnits && measure.pickupDurationUnits > 0) {
     toon += `pickup_beats: ${measure.pickupDurationUnits}\n`;
@@ -13,8 +21,10 @@ export function formatMeasureAsToon(measure: TimeSliceMeasure): string {
   toon += `  fill_density: "${measure.style_profile.fill_density || "few"}"\n`;
   
   toon += `grid: [${measure.grid.length}]\n`;
-  toon += `{step, chord, weight, melody.pitch, melody.state, lyric, tablature}\n`;
-  
+  toon += includeTablature
+    ? `{step, chord, weight, melody.pitch, melody.state, lyric, tablature}\n`
+    : `{step, chord, weight, melody.pitch, melody.state, lyric}\n`;
+
   for (const step of measure.grid) {
     const s = step.step;
     const c = step.chord ? `"${step.chord}"` : "null";
@@ -22,8 +32,12 @@ export function formatMeasureAsToon(measure: TimeSliceMeasure): string {
     const mp = step.melody?.pitch ? `"${step.melody.pitch}"` : "null";
     const ms = step.melody?.state ? `"${step.melody.state}"` : "null";
     const l = step.lyric ? `"${step.lyric}"` : "null";
-    const t = step.tablature && step.tablature.length > 0 ? JSON.stringify(step.tablature) : "[]";
-    toon += `${s}, ${c}, ${w}, ${mp}, ${ms}, ${l}, ${t}\n`;
+    if (includeTablature) {
+      const t = step.tablature && step.tablature.length > 0 ? JSON.stringify(step.tablature) : "[]";
+      toon += `${s}, ${c}, ${w}, ${mp}, ${ms}, ${l}, ${t}\n`;
+    } else {
+      toon += `${s}, ${c}, ${w}, ${mp}, ${ms}, ${l}\n`;
+    }
   }
   return toon;
 }
@@ -209,13 +223,16 @@ export function parseToonToMeasure(toon: string, originalMeasure: TimeSliceMeasu
  * Format multiple measures as a single multi-measure TOON block,
  * separated by `---` dividers. Used for per-line LLM processing.
  */
-export function formatLineAsToon(measures: TimeSliceMeasure[]): string {
+export function formatLineAsToon(
+  measures: TimeSliceMeasure[],
+  options: FormatMeasureAsToonOptions = {},
+): string {
   if (measures.length === 0) return "";
   const measureRange = measures.map(m => m.measure);
   let toon = `# Line: Measures ${measureRange[0]}–${measureRange[measureRange.length - 1]}\n\n`;
   for (let i = 0; i < measures.length; i++) {
     if (i > 0) toon += "\n---\n\n";
-    toon += formatMeasureAsToon(measures[i]);
+    toon += formatMeasureAsToon(measures[i], options);
   }
   return toon;
 }

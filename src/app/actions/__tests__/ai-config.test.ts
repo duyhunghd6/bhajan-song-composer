@@ -83,6 +83,57 @@ describe("requestOpenAiCompatibleToolLoop", () => {
     );
   });
 
+  it("feeds multiline string tool results back without JSON quoting", async () => {
+    vi.stubEnv("AI_API_URL", "http://llm.test");
+    vi.stubEnv("AI_API_KEY", "test-key");
+    vi.stubEnv("AI_MODEL", "test-model");
+
+    const rawToon = "voicings:v1 rows=1\n{rank,span,frets_6_to_1,bass,melody,inner,barre}\n1,0,0/2/2/0/0/0,6/0,1/0,5/4/3/2,-";
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        choices: [{
+          message: {
+            role: "assistant",
+            content: null,
+            tool_calls: [{
+              id: "call-voicings",
+              function: { name: "query_guitar_voicings", arguments: JSON.stringify({ chord: "Em" }) },
+            }],
+          },
+        }],
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        choices: [{
+          message: {
+            role: "assistant",
+            content: null,
+            tool_calls: [{
+              id: "call-final",
+              function: { name: "submit_arranged_measure", arguments: JSON.stringify({ tablature_toon: "tablature:v1\n{measure,step,string,fret,finger,role}" }) },
+            }],
+          },
+        }],
+      }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await requestOpenAiCompatibleToolLoop({
+      systemPrompt: "system",
+      userPrompt: "user",
+      tools: [
+        { type: "function", function: { name: "query_guitar_voicings", parameters: { type: "object" } } },
+        { type: "function", function: { name: "submit_arranged_measure", parameters: { type: "object" } } },
+      ],
+      finalToolName: "submit_arranged_measure",
+      localTools: [{ name: "query_guitar_voicings", execute: () => rawToon }],
+      validateFinalResult: () => ({ valid: true }),
+    });
+
+    const secondRequest = JSON.parse(fetchMock.mock.calls[1][1].body as string);
+    const toolMessage = secondRequest.messages.find((message: { tool_call_id?: string }) => message.tool_call_id === "call-voicings");
+    expect(toolMessage.content).toBe(rawToon);
+    expect(toolMessage.content).not.toBe(JSON.stringify(rawToon));
+  });
+
   it("returns validation feedback instead of accepting an invalid final tool result", async () => {
     vi.stubEnv("AI_API_URL", "http://llm.test");
     vi.stubEnv("AI_API_KEY", "test-key");

@@ -13,6 +13,7 @@ import { getArrangementRenderOptionsFor, buildArrangementSynthOptions } from "./
 import { buildAccompanimentAbc } from "@/lib/theory/accompaniment-abc";
 import { fingerprintAccompanimentSource, getSelectedWorkflowOption } from "@/lib/theory/accompaniment-workflow";
 import { getComposerFingerstyleMeasuresStorageKey } from "./storage";
+import { formatFingerstyleTablatureAsToon } from "@/lib/theory/fingerstyle-arranger/llm-codec";
 import { formatLineAsToon } from "@/lib/theory/fingerstyle-arranger/toon-utils";
 import { extractRenderedTabFromSvg } from "@/components/music-sheet/abcjs-playback/abc-rendering";
 import type { PreviousLineContext } from "@/app/actions/fingerstyle-line-arranger";
@@ -156,11 +157,8 @@ export function GuitarFingerstyleStep({
       if (!lineMeasures || lineMeasures.length === 0) continue;
       context.push({
         lineIndex: lineMeasures[0].lineIndex,
-        inputToon: formatLineAsToon(lineMeasures.map(m => ({
-          ...m,
-          grid: m.grid.map(s => ({ ...s, tablature: undefined }))
-        }))),
-        outputToon: formatLineAsToon(lineMeasures),
+        inputToon: formatLineAsToon(lineMeasures, { tablature: "omit" }),
+        outputToon: formatFingerstyleTablatureAsToon(lineMeasures),
       });
     }
     return context;

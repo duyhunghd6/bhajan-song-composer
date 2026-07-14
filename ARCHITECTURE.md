@@ -51,6 +51,7 @@ Music-theory logic lives under `src/lib/theory/`.
 - `piano-accompaniment/pedal-automation.ts` contains sustain pedal automation and UI metadata generation.
 - `piano-accompaniment/output-contract.ts` contains piano key highlights, fingering metadata, and physical hand events.
 - `fingerstyle-arranger.ts` remains the public fingerstyle arrangement interface. It generates solo Guitar Fingerstyle parts that carry melody, add chord-derived bass, and emit intro/interlude/outro section markers for staff-system assembly.
+- `fingerstyle-arranger/llm-codec.ts` owns the compact model-bound voicing and tablature tables. It reconstructs canonical grids from server-owned source metadata before the existing physics validator runs.
 - `fingerstyle-arranger/types.ts` contains the exported fingerstyle source-layer, playability, section metadata, validation-compatible guitar tab events, artifact, and output contract types.
 - `accompaniment-workflow.ts` remains the public accompaniment workflow interface. It owns setup normalization, legacy setup fallback, ordered-instrument role hints, and enabled-step planning. Solo/Fingerstyle and combined Accompaniment planning both enable branch steps only for checked instrument scopes in stack order; active sessions can be re-planned from setup checkbox changes so disabled instruments do not appear or block completion.
 - `accompaniment-workflow/definition.ts` contains workflow ids, setup types, instrument branch scopes, constants, and step definitions for shared, Guitar, Piano, Harmonium, Djembe, Flute, and Violin branches.

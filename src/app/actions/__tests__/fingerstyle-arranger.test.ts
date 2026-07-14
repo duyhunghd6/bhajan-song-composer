@@ -1,8 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { generateAIFingerstyleMeasure } from "../fingerstyle-arranger";
 import { validateFingerstylePhysics } from "@/lib/theory/fingerstyle-arranger/physics-validation";
 import type { TimeSliceGridStep } from "@/lib/theory/fingerstyle-arranger/time-slice";
 
 describe("validateFingerstylePhysics", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
   const baseStep: Omit<TimeSliceGridStep, "tablature"> = {
     step: 1,
     chord: "Em",
@@ -264,5 +270,93 @@ describe("validateFingerstylePhysics", () => {
 
     const result = validateFingerstylePhysics(grid, { fillDensity: "none" });
     expect(result.valid).toBe(true);
+  });
+
+  it("uses compact tablature tool schemas and preserves source measure metadata", async () => {
+    vi.stubEnv("AI_API_URL", "http://llm.test");
+    vi.stubEnv("AI_API_KEY", "test-key");
+    vi.stubEnv("AI_MODEL", "test-model");
+
+    const tablatureToon = [
+      "tablature:v1",
+      "{measure,step,string,fret,finger,role}",
+      "1,1,6,0,p,bass",
+      "1,1,1,0,a,melody",
+    ].join("\n");
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        choices: [{
+          message: {
+            role: "assistant",
+            content: null,
+            tool_calls: [{
+              id: "call-validate",
+              function: {
+                name: "validate_fingerstyle_physics",
+                arguments: JSON.stringify({ tablature_toon: tablatureToon }),
+              },
+            }],
+          },
+        }],
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        choices: [{
+          message: {
+            role: "assistant",
+            content: null,
+            tool_calls: [{
+              id: "call-submit",
+              function: {
+                name: "submit_arranged_measure",
+                arguments: JSON.stringify({ tablature_toon: tablatureToon }),
+              },
+            }],
+          },
+        }],
+      }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const measure = {
+      measure: 1,
+      lineIndex: 0,
+      style_profile: {
+        key: "Em",
+        comping_style: "Sparse PIMA",
+        voicing_plan: "Open anchors",
+        fill_density: "few",
+      },
+      pickupDurationUnits: 4,
+      source_abc: { melody: "E2", lyric: "Ja-", beatWeight: "⬤" },
+      grid: [{ ...baseStep, tablature: [] }],
+    };
+
+    const result = await generateAIFingerstyleMeasure({ measure, activeAbc: "K:Em\nE2" });
+
+    expect(result.success).toBe(true);
+    expect(result.measure).toMatchObject({
+      measure: 1,
+      lineIndex: 0,
+      style_profile: measure.style_profile,
+      pickupDurationUnits: 4,
+      source_abc: measure.source_abc,
+    });
+    expect(result.measure?.grid[0]).toMatchObject({
+      chord: "Em",
+      weight: "⬤",
+      melody: { pitch: "E4", state: "attack" },
+      lyric: "Ha-",
+      tablature: [
+        { string: 6, fret: 0, finger: "p", role: "bass" },
+        { string: 1, fret: 0, finger: "a", role: "melody" },
+      ],
+    });
+
+    const firstRequest = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    const validationTool = firstRequest.tools.find((tool: { function?: { name?: string } }) => tool.function?.name === "validate_fingerstyle_physics");
+    const finalTool = firstRequest.tools.find((tool: { function?: { name?: string } }) => tool.function?.name === "submit_arranged_measure");
+    expect(validationTool.function.parameters.required).toEqual(["tablature_toon"]);
+    expect(finalTool.function.parameters.required).toEqual(["tablature_toon"]);
+    expect(validationTool.function.parameters.properties).not.toHaveProperty("grid");
+    expect(firstRequest.messages[1].content).not.toContain("tablature}");
   });
 });

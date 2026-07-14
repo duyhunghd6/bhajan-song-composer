@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getGuitarVoicings, generateAlgorithmicVoicings } from "../guitar-voicings";
+import { getGuitarVoicings, generateAlgorithmicVoicings, query_guitar_voicings } from "../guitar-voicings";
 
 describe("Guitar Voicings Generator", () => {
   it("generates algorithmic voicings for a standard chord", () => {
@@ -28,6 +28,19 @@ describe("Guitar Voicings Generator", () => {
     const firstVoicing = voicings[0];
     expect(firstVoicing.frets).toHaveLength(6);
     expect(firstVoicing.isPrimary).toBe(true);
+  });
+
+  it("returns playable query matches sorted by fret span and capped at 15", () => {
+    const matches = query_guitar_voicings("C", "E4");
+
+    expect(matches.length).toBeLessThanOrEqual(15);
+    expect(matches.every((match) => {
+      const fretted = match.frets.filter((f): f is number => typeof f === "number" && f > 0);
+      const span = fretted.length >= 2 ? Math.max(...fretted) - Math.min(...fretted) : 0;
+      return span === match.fretDistance && span <= 3;
+    })).toBe(true);
+    expect(matches.every((match, index) => index === 0 || (matches[index - 1].fretDistance ?? 0) <= (match.fretDistance ?? 0))).toBe(true);
+    expect(matches.every((match) => match.melody?.string && match.melody.fret >= 0)).toBe(true);
   });
 
   it("combines database voicings with unique algorithmic voicings", () => {

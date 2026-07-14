@@ -63,6 +63,10 @@ async function emitDiagnostic(onDiagnostic: ToolDiagnosticRecorder | undefined, 
   }
 }
 
+function serializeToolResultContent(result: unknown): string {
+  return typeof result === "string" ? result : JSON.stringify(result);
+}
+
 export async function readAiConfig(): Promise<AiConfig> {
   const envConfig = {
     url: process.env.AI_API_URL,
@@ -337,7 +341,7 @@ export async function requestOpenAiCompatibleToolLoop(input: {
           role: "tool",
           tool_call_id: toolCallId,
           name: toolName,
-          content: JSON.stringify(validation.toolResult ?? { valid: false, message: lastValidationMessage }),
+          content: serializeToolResultContent(validation.toolResult ?? { valid: false, message: lastValidationMessage }),
         });
         continue;
       }
@@ -362,7 +366,7 @@ export async function requestOpenAiCompatibleToolLoop(input: {
         role: "tool",
         tool_call_id: toolCallId,
         name: toolName,
-        content: JSON.stringify(result),
+        content: serializeToolResultContent(result),
       });
     }
 
