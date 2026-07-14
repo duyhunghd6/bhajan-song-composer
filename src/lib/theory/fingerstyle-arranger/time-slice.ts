@@ -656,7 +656,8 @@ function scientificPitchToAbc(scientificPitch: string, keyAccidentals?: AbcKeyAc
 export function convertTimeSliceMeasureToAbc(
   measure: TimeSliceMeasure,
   durationContext: AbcDurationContext,
-  keyAccidentals?: AbcKeyAccidentalMap
+  keyAccidentals?: AbcKeyAccidentalMap,
+  includeTabStringForcing: boolean = false
 ): string {
   const { unitsPerBeat } = durationContext;
   const stepsPerBeat = 4;
@@ -713,13 +714,23 @@ export function convertTimeSliceMeasureToAbc(
       }
       const suffix = formatAbcDuration(durationUnits);
 
-      // Convert tablature notes to ABC with !N! string-forcing decorations.
-      const soundingAbc = step.tablature!
+      // Convert tablature notes to ABC with optional !N! string-forcing decorations.
+      // Deduplicate by string so the generated ABC perfectly matches the ASCII tablature
+      // where the last assignment to a physical string overwrites previous ones.
+      const uniqueTabMap = new Map<
+        GuitarStringNumber,
+        NonNullable<TimeSliceGridStep["tablature"]>[number]
+      >();
+      for (const tab of step.tablature!) {
+        uniqueTabMap.set(tab.string, tab);
+      }
+
+      const soundingAbc = Array.from(uniqueTabMap.values())
         .sort((a, b) => a.string - b.string)
         .map(tab => {
           const pitch = scientificPitchForStringFret(tab.string, tab.fret);
           const abcToken = scientificPitchToAbc(pitch, keyAccidentals);
-          return `!${tab.string}!${abcToken}`;
+          return includeTabStringForcing ? `!${tab.string}!${abcToken}` : abcToken;
         });
 
       if (soundingAbc.length === 1) {

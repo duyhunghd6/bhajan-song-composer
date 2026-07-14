@@ -14,7 +14,7 @@ import {
   releasePlayback,
 } from "./playback-registry";
 import { postProcessBeats, postProcessChords, parseAbcTempo } from "./abcjs-playback/abc-rendering";
-import { ensureGuitarStringForcing } from "@/lib/theory/guitar-string-forcing";
+import { prepareAbcjsRenderInput, renderPreparedAbc } from "./abcjs-playback/render-input";
 import { AbcjsPlaybackControls } from "./abcjs-playback/AbcjsPlaybackControls";
 import { AbcjsPlaybackStyles } from "./abcjs-playback/AbcjsPlaybackStyles";
 import type {
@@ -43,6 +43,7 @@ export default function AbcjsPlaybackController({
   onPlaybackCursor,
   useContainerWidth = false,
   hideVoiceNames = false,
+  showExactRenderAbcCopy = false,
 }: AbcjsPlaybackControllerProps) {
   const generatedId = useId().replace(/:/g, "");
   const resolvedCanvasId = canvasId ?? `music-sheet-canvas-${generatedId}`;
@@ -71,6 +72,7 @@ export default function AbcjsPlaybackController({
   const pausedSecondsRef = useRef(0);
 
   const [containerWidth, setContainerWidth] = useState<number | null>(null);
+  const [exactRenderCopyStatus, setExactRenderCopyStatus] = useState<"idle" | "copied">("idle");
 
   useEffect(() => {
     if (!useContainerWidth || typeof window === "undefined" || !containerRef.current) return;
@@ -107,32 +109,25 @@ export default function AbcjsPlaybackController({
     renderOptions && typeof renderOptions === "object" && "tablature" in renderOptions && renderOptions.tablature
   );
 
-  const finalAbcString = useMemo(() => {
-    let result = abcString;
-    if (overrideKey) result = result.replace(/^\s*K:\s*(.+)$/m, `K: ${overrideKey}`);
-    if (overrideMeter) result = result.replace(/^\s*M:\s*(.+)$/m, `M: ${overrideMeter}`);
-    if (hideVoiceNames) {
-      result = result
-        .split("\n")
-        .map((line) => {
-          if (line.trim().startsWith("V:")) {
-            return line
-              .replace(/name="[^"]*"/g, "")
-              .replace(/name=[^\s]+/g, "")
-              .replace(/snm="[^"]*"/g, "")
-              .replace(/snm=[^\s]+/g, "");
-          }
-          return line;
-        })
-        .join("\n");
-    }
-    // When tablature is enabled, ensure Guitar voice notes have !N! string-forcing
-    // decorations so ABCJS computes correct fret numbers instead of showing X/? marks.
-    if (tablatureEnabled) {
-      result = ensureGuitarStringForcing(result);
-    }
-    return result;
-  }, [abcString, overrideKey, overrideMeter, hideVoiceNames, tablatureEnabled]);
+  const finalAbcString = useMemo(
+    () =>
+      prepareAbcjsRenderInput({
+        abcString,
+        overrideKey,
+        overrideMeter,
+        hideVoiceNames,
+        tablatureEnabled,
+      }),
+    [abcString, overrideKey, overrideMeter, hideVoiceNames, tablatureEnabled]
+  );
+  const handleCopyExactRenderAbc = useCallback(() => {
+    navigator.clipboard.writeText(finalAbcString).then(() => {
+      setExactRenderCopyStatus("copied");
+      window.setTimeout(() => setExactRenderCopyStatus("idle"), 2000);
+    }).catch((error) => {
+      console.error("Failed to copy exact render ABC", error);
+    });
+  }, [finalAbcString]);
   // Sync tempo from the ABC Q: field when the source ABC string changes
   useEffect(() => {
     const parsedBpm = parseAbcTempo(abcString);
@@ -435,7 +430,7 @@ export default function AbcjsPlaybackController({
         ...(useContainerWidth && containerWidth ? { staffwidth: containerWidth } : {}),
         clickListener: handleNoteClick,
       };
-      const visualObj = abcjsModule.renderAbc(canvas, finalAbcString, mergedRenderOptions);
+      const visualObj = renderPreparedAbc(abcjsModule, canvas, finalAbcString, mergedRenderOptions);
       // Post-process beat indicator circles below the lyric line
       postProcessBeats(canvas);
       // Reposition chord symbols above TAB staves to prevent overlap
@@ -516,7 +511,6 @@ export default function AbcjsPlaybackController({
       isPausedRef.current = false;
       pausedSecondsRef.current = 0;
       isPlayingRef.current = false;
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- Registry-initiated stop must sync React state immediately.
       setIsPlaying(false);
       setCurrentSeconds(0);
     });
@@ -569,6 +563,17 @@ export default function AbcjsPlaybackController({
           loopEndMeasure={loopEndMeasure}
           setLoopEndMeasure={setLoopEndMeasure}
         />
+      )}
+      {showExactRenderAbcCopy && (
+        <div className="flex justify-end border-b border-zinc-800 bg-zinc-900 px-4 py-2">
+          <button
+            type="button"
+            onClick={handleCopyExactRenderAbc}
+            className="rounded bg-zinc-800 px-2 py-1 text-[10px] font-semibold text-zinc-300 transition hover:text-white"
+          >
+            {exactRenderCopyStatus === "copied" ? "Copied exact render ABC" : "Copy exact render ABC"}
+          </button>
+        </div>
       )}
       {renderError && (
         <div

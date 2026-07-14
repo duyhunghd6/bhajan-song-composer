@@ -12,6 +12,10 @@ export function getComposerWorkspaceStorageKey(slug: string): string {
   return `${getComposerSongStoragePrefix(slug)}workspace`;
 }
 
+export function getComposerFingerstyleMeasuresStorageKey(slug: string): string {
+  return `${getComposerSongStoragePrefix(slug)}fingerstyle-measures`;
+}
+
 export function clearComposerSongStorage(storage: Storage, slug: string): string[] {
   const prefix = getComposerSongStoragePrefix(slug);
   const keysToRemove: string[] = [];

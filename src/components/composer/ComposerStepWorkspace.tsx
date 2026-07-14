@@ -23,7 +23,11 @@ import {
   COMPOSER_PREVIEW_RENDER_OPTIONS,
   ComposerNotationPreviewLayout,
 } from "./workspace/preview";
-import { clearComposerSongStorage, getComposerMelodyStorageKey } from "./workspace/storage";
+import {
+  clearComposerSongStorage,
+  getComposerFingerstyleMeasuresStorageKey,
+  getComposerMelodyStorageKey,
+} from "./workspace/storage";
 import { cleanAbcForExport } from "@/lib/theory/abc-layer-visibility";
 
 interface ComposerStepWorkspaceProps {
@@ -37,7 +41,12 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
   // localStorage restoration happens in useEffect below.
   const [melodyAbc, setMelodyAbc] = useState(initialMelodyAbc ?? DEFAULT_ABC);
   const [hasMounted, setHasMounted] = useState(false);
-  const { state: ws, updateState, resetState: resetWorkspaceState } = useWorkspaceState(slug);
+  const {
+    state: ws,
+    updateState,
+    resetState: resetWorkspaceState,
+    isHydrated: isWorkspaceHydrated,
+  } = useWorkspaceState(slug);
   const [layerVisibility, setLayerVisibility] = useState<Record<string, boolean>>(DEFAULT_HARMONY_LAYER_VISIBILITY);
   const [layerVolumes, setLayerVolumes] = useState<Record<string, number>>(DEFAULT_LAYER_VOLUMES);
   const [copyStatus, setCopyStatus] = useState("Copy Markdown");
@@ -117,11 +126,16 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
 
   const handleResetGuitarBranchWork = useCallback(() => {
     updateState(buildAccompanimentGuitarBranchResetState(ws));
+    try {
+      window.localStorage.removeItem(getComposerFingerstyleMeasuresStorageKey(slug));
+    } catch (e) {
+      console.error("Failed to clear saved fingerstyle measures", e);
+    }
     setAccompLayerVisibility((current) => ({
       ...current,
       TAB: false,
     }));
-  }, [ws, updateState]);
+  }, [setAccompLayerVisibility, slug, ws, updateState]);
   const accompanimentAbc = previewModel.accompaniment.abc;
   const accompanimentVoiceNames = previewModel.accompaniment.voiceNames;
   const getRenderOptionsFor = previewModel.getRenderOptionsFor;
@@ -186,6 +200,7 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
         slug={slug}
         activeAbc={activeAbc}
         hasMounted={hasMounted}
+        isWorkspaceHydrated={isWorkspaceHydrated}
         pipeline={pipeline}
         workflowAppliedMusicAbc={workflowAppliedMusicAbc}
         accompanimentPreview={previewModel.accompaniment}

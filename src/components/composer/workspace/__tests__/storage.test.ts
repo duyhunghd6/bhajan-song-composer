@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   clearComposerSongStorage,
+  getComposerFingerstyleMeasuresStorageKey,
   getComposerMelodyStorageKey,
   getComposerWorkspaceStorageKey,
 } from "../storage";
@@ -38,6 +39,7 @@ describe("composer song storage", () => {
     const storage = new MemoryStorage();
     storage.setItem(getComposerMelodyStorageKey("hari-bol"), "mutated abc");
     storage.setItem(getComposerWorkspaceStorageKey("hari-bol"), "{\"generatedPiano\":\"abc\"}");
+    storage.setItem(getComposerFingerstyleMeasuresStorageKey("hari-bol"), "[]");
     storage.setItem("bhajan-song-composer:compose:hari-bol:layers:active-layer", "harmony");
     storage.setItem(getComposerMelodyStorageKey("new-bhajan-arrangement"), "other abc");
     storage.setItem("unrelated", "keep me");
@@ -46,11 +48,13 @@ describe("composer song storage", () => {
 
     expect(removedKeys.sort()).toEqual([
       "bhajan-song-composer:compose:hari-bol:layers:active-layer",
+      getComposerFingerstyleMeasuresStorageKey("hari-bol"),
       getComposerMelodyStorageKey("hari-bol"),
       getComposerWorkspaceStorageKey("hari-bol"),
     ].sort());
     expect(storage.getItem(getComposerMelodyStorageKey("hari-bol"))).toBeNull();
     expect(storage.getItem(getComposerWorkspaceStorageKey("hari-bol"))).toBeNull();
+    expect(storage.getItem(getComposerFingerstyleMeasuresStorageKey("hari-bol"))).toBeNull();
     expect(storage.getItem(getComposerMelodyStorageKey("new-bhajan-arrangement"))).toBe("other abc");
     expect(storage.getItem("unrelated")).toBe("keep me");
   });

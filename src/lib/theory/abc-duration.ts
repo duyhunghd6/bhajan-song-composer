@@ -19,7 +19,7 @@ export interface AbcDurationToken {
   durationUnits: number;
 }
 
-const ABC_EVENT_REGEX = /(\[[^\]]+\]|[_^=]?[A-Ga-g][,']*|[zx])([0-9]*(?:\/[0-9]*)?|\/[0-9]*)/g;
+const ABC_EVENT_REGEX = /(\[[^\]]+\]|(?:![1-6]!)?[_^=]{0,2}[A-Ga-g][,']*|[zx])([0-9]*(?:\/[0-9]*)?|\/[0-9]*)/g;
 
 function parseFraction(value: string): number | null {
   const [rawNumerator, rawDenominator] = value.trim().split("/");

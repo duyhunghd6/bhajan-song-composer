@@ -7,8 +7,11 @@ import {
   midiToScientificPitch,
   abcNoteToMidi,
   extractChordsFromMeasure,
+  convertTimeSliceMeasureToAbc,
+  type TimeSliceMeasure,
 } from "../fingerstyle-arranger/time-slice";
 import { getKeySignatureAccidentals, abcNoteToMidiWithKey } from "../abc-key-signature";
+import { buildAbcDurationContext } from "../abc-duration";
 
 describe("Time-Slice conversion", () => {
   describe("abcNoteToMidi & midiToScientificPitch", () => {
@@ -187,6 +190,102 @@ w: ⬤ * ● *`;
         { chord: "Em", onsetUnits: 0 },
         { chord: "D", onsetUnits: 4 },
       ]);
+    });
+  });
+
+  describe("convertTimeSliceMeasureToAbc", () => {
+    const abc = `X:1\nT:Tab conversion\nM:4/4\nL:1/8\nK:Em\n| E8 |`;
+    const context = buildAbcDurationContext(abc);
+    const keyAccidentals = getKeySignatureAccidentals("Em");
+
+    function measureWithTablature(tablature: NonNullable<TimeSliceMeasure["grid"][number]["tablature"]>): TimeSliceMeasure {
+      return {
+        measure: 1,
+        lineIndex: 0,
+        style_profile: {
+          key: "Em",
+          comping_style: "PIMA",
+          voicing_plan: "Open",
+        },
+        grid: Array.from({ length: 16 }, (_, index) => ({
+          step: index + 1,
+          chord: "Em",
+          weight: index === 0 ? "⬤" as const : null,
+          melody: { pitch: index === 0 ? "E4" : null, state: index === 0 ? "attack" as const : "rest" as const },
+          lyric: null,
+          tablature: index === 0 ? tablature : undefined,
+        })),
+      };
+    }
+
+    it("keeps source ABC plain until string forcing is explicitly requested", () => {
+      const measure = measureWithTablature([{ string: 1, fret: 0, finger: "a", role: "melody" }]);
+
+      expect(convertTimeSliceMeasureToAbc(measure, context, keyAccidentals, false)).toBe("e8");
+      expect(convertTimeSliceMeasureToAbc(measure, context, keyAccidentals, true)).toBe("!1!e8");
+    });
+
+    it("preserves duplicate pitches assigned to different strings", () => {
+      const measure = measureWithTablature([
+        { string: 5, fret: 5, finger: "p", role: "bass" },
+        { string: 4, fret: 0, finger: "i", role: "melody" },
+      ]);
+
+      expect(convertTimeSliceMeasureToAbc(measure, context, keyAccidentals, true)).toBe("[!4!D!5!D]8");
+    });
+
+    it("emits an explicit natural when the key signature sharpens the note", () => {
+      const measure = measureWithTablature([{ string: 1, fret: 1, finger: "a", role: "melody" }]);
+
+      expect(convertTimeSliceMeasureToAbc(measure, context, keyAccidentals, true)).toBe("!1!=f8");
+    });
+
+    it("preserves the exact Ganesha final-measure string assignments", () => {
+      const attacks = new Map<number, NonNullable<TimeSliceMeasure["grid"][number]["tablature"]>>([
+        [0, [
+          { string: 6, fret: 0, finger: "p", role: "bass" },
+          { string: 3, fret: 0, finger: "i", role: "fill" },
+          { string: 2, fret: 0, finger: "m", role: "melody" },
+        ]],
+        [2, [{ string: 2, fret: 5, finger: "m", role: "melody" }]],
+        [4, [{ string: 3, fret: 0, finger: "i", role: "fill" }]],
+        [6, [{ string: 2, fret: 0, finger: "m", role: "melody" }]],
+        [14, [{ string: 3, fret: 4, finger: "i", role: "melody" }]],
+      ]);
+      const measure: TimeSliceMeasure = {
+        ...measureWithTablature(attacks.get(0)!),
+        measure: 5,
+        grid: Array.from({ length: 16 }, (_, index) => ({
+          step: index + 1,
+          chord: "Em",
+          weight: index === 0 ? "⬤" as const : null,
+          melody: {
+            pitch: index === 0 ? "E4" : null,
+            state: index === 0 ? "attack" as const : "rest" as const,
+          },
+          lyric: null,
+          tablature: attacks.get(index),
+        })),
+      };
+
+      expect(convertTimeSliceMeasureToAbc(measure, context, keyAccidentals, false)).toBe(
+        "[BGE,] e G B4 B",
+      );
+      expect(convertTimeSliceMeasureToAbc(measure, context, keyAccidentals, true)).toBe(
+        "[!2!B!3!G!6!E,] !2!e !3!G !2!B4 !3!B",
+      );
+    });
+
+    it("does not mutate the LLM tablature event order while rendering", () => {
+      const tablature = [
+        { string: 6 as const, fret: 0, finger: "p" as const, role: "bass" as const },
+        { string: 1 as const, fret: 0, finger: "a" as const, role: "melody" as const },
+      ];
+      const measure = measureWithTablature(tablature);
+
+      convertTimeSliceMeasureToAbc(measure, context, keyAccidentals, true);
+
+      expect(tablature.map((event) => event.string)).toEqual([6, 1]);
     });
   });
 });

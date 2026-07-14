@@ -377,3 +377,128 @@ function hasUnforcedNotes(line: string): boolean {
   const withoutChordSymbols = withoutForced.replace(/"[^"]*"/g, "");
   return /[_^=]{0,2}[A-Ga-g][,']*/.test(withoutChordSymbols);
 }
+
+function wrapForcedSingleNotesInLine(line: string): string {
+  let result = "";
+  let chordDepth = 0;
+
+  for (let index = 0; index < line.length;) {
+    const char = line[index];
+    if (char === "[") {
+      chordDepth += 1;
+      result += char;
+      index += 1;
+      continue;
+    }
+    if (char === "]") {
+      chordDepth = Math.max(0, chordDepth - 1);
+      result += char;
+      index += 1;
+      continue;
+    }
+
+    const decoration = chordDepth === 0 ? line.slice(index).match(/^![1-6]!/)?.[0] : undefined;
+    if (decoration) {
+      const note = line.slice(index + decoration.length).match(/^[_^=]{0,2}[A-Ga-g][,']*/)?.[0];
+      if (note) {
+        result += `[${decoration}${note}]`;
+        index += decoration.length + note.length;
+        continue;
+      }
+    }
+
+    result += char;
+    index += 1;
+  }
+
+  return result;
+}
+
+/**
+ * Work around abcjs attaching decorations on bare single notes to the note event
+ * instead of its pitch. The tablature adapter reads pitch decorations, so forced
+ * single notes must be represented as one-note chords at the render boundary.
+ */
+export function prepareGuitarStringForcingForAbcjs(abcString: string): string {
+  if (!/V:Guitar\b/i.test(abcString)) return abcString;
+
+  const lines = abcString.split(/\r?\n/);
+  const result: string[] = [];
+  let inGuitarVoice = false;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("V:")) {
+      const voiceId = trimmed.substring(2).split(/\s/)[0];
+      inGuitarVoice = /^Guitar\b/i.test(voiceId);
+      result.push(line);
+      continue;
+    }
+
+    const inlineGuitarMatch = trimmed.match(/^(\[V:Guitar[^\]]*\])\s*(.*)/i);
+    if (inlineGuitarMatch) {
+      inGuitarVoice = true;
+      result.push(`${inlineGuitarMatch[1]} ${wrapForcedSingleNotesInLine(inlineGuitarMatch[2])}`);
+      continue;
+    }
+
+    if (/^\[V:[^\]]+\]/.test(trimmed)) {
+      inGuitarVoice = false;
+      result.push(line);
+      continue;
+    }
+
+    if (inGuitarVoice && !/^[A-Za-z]:/.test(trimmed) && !trimmed.startsWith("%") && !trimmed.startsWith("w:") && trimmed) {
+      result.push(wrapForcedSingleNotesInLine(line));
+    } else {
+      result.push(line);
+    }
+  }
+
+  return result.join("\n");
+}
+
+/**
+ * Remove all `!N!` string-forcing decorations from Guitar voices.
+ * This ensures that standard staff rendering does not interpret them
+ * as left-hand fingering numbers.
+ */
+export function stripGuitarStringForcing(abcString: string): string {
+  if (!/V:Guitar\b/i.test(abcString)) return abcString;
+
+  const lines = abcString.split(/\r?\n/);
+  const result: string[] = [];
+  let inGuitarVoice = false;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    if (trimmed.startsWith("V:")) {
+      const voiceId = trimmed.substring(2).split(/\s/)[0];
+      inGuitarVoice = /^Guitar\b/i.test(voiceId);
+      result.push(line);
+      continue;
+    }
+
+    const inlineMatch = trimmed.match(/^(\[V:Guitar[^\]]*\])\s*(.*)/i);
+    if (inlineMatch) {
+      inGuitarVoice = true;
+      result.push(`${inlineMatch[1]} ${inlineMatch[2].replace(/![1-6]!/g, "")}`);
+      continue;
+    }
+
+    if (/^\[V:[^\]]+\]/.test(trimmed)) {
+      inGuitarVoice = false;
+      result.push(line);
+      continue;
+    }
+
+    if (inGuitarVoice && !/^[A-Za-z]:/.test(trimmed) && !trimmed.startsWith("%") && !trimmed.startsWith("w:") && trimmed) {
+      result.push(line.replace(/![1-6]!/g, ""));
+    } else {
+      result.push(line);
+    }
+  }
+
+  return result.join("\n");
+}

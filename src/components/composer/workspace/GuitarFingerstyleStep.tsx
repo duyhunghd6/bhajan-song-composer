@@ -4,25 +4,29 @@ import AbcjsPlaybackController from "@/components/music-sheet/AbcjsPlaybackContr
 import type { ArrangementPipelineResult } from "@/lib/theory/arrangement-pipeline";
 import type { WorkspaceState } from "../useWorkspaceState";
 import type { AccompanimentPreviewModel } from "./arrangement-preview-model";
-import { convertAbcToTimeSliceGrid, groupMeasuresByLine, type TimeSliceMeasure, joinMeasureAbcWithBarlines } from "@/lib/theory/fingerstyle-arranger/time-slice";
+import { convertAbcToTimeSliceGrid, groupMeasuresByLine, type TimeSliceMeasure } from "@/lib/theory/fingerstyle-arranger/time-slice";
 import { FingerstyleLineCard } from "./FingerstyleLineCard";
 import { COMPOSER_PREVIEW_RENDER_OPTIONS } from "./preview";
-import { buildAbcDurationContext } from "@/lib/theory/abc-duration";
-import { convertTimeSliceMeasureToAbc } from "@/lib/theory/fingerstyle-arranger/time-slice";
-import { getKeyAccidentalsFromAbc } from "@/lib/theory/abc-key-signature";
 import { LayerVisibilityControls } from "./LayerVisibilityControls";
 import { applyAbcLayerVisibility, applyAbcLayerVolumes, isAbcLayerVisible, ABC_LAYER_IDS, cleanAbcForExport } from "@/lib/theory/abc-layer-visibility";
 import { getArrangementRenderOptionsFor, buildArrangementSynthOptions } from "./arrangement-preview-model";
 import { buildAccompanimentAbc } from "@/lib/theory/accompaniment-abc";
-import { getSelectedWorkflowOption } from "@/lib/theory/accompaniment-workflow";
-import { getComposerSongStoragePrefix } from "./storage";
+import { fingerprintAccompanimentSource, getSelectedWorkflowOption } from "@/lib/theory/accompaniment-workflow";
+import { getComposerFingerstyleMeasuresStorageKey } from "./storage";
 import { formatLineAsToon } from "@/lib/theory/fingerstyle-arranger/toon-utils";
+import { extractRenderedTabFromSvg } from "@/components/music-sheet/abcjs-playback/abc-rendering";
 import type { PreviousLineContext } from "@/app/actions/fingerstyle-line-arranger";
+import {
+  buildGeneratedGuitarAbc,
+  restorePersistedTablature,
+  serializeFingerstyleMeasures,
+} from "./fingerstyle-measure-persistence";
 
 interface GuitarFingerstyleStepProps {
   slug: string;
   activeAbc: string;
   hasMounted: boolean;
+  isWorkspaceHydrated: boolean;
   pipeline: ArrangementPipelineResult | null;
   workflowAppliedMusicAbc: string;
   accompanimentPreview: AccompanimentPreviewModel;
@@ -39,6 +43,8 @@ interface GuitarFingerstyleStepProps {
 export function GuitarFingerstyleStep({
   slug,
   activeAbc,
+  hasMounted,
+  isWorkspaceHydrated,
   workflowAppliedMusicAbc,
   accompanimentPreview,
   accompLayerVisibility,
@@ -48,12 +54,17 @@ export function GuitarFingerstyleStep({
   ws,
   updateState,
 }: GuitarFingerstyleStepProps) {
-  const fingerstyleStorageKey = `${getComposerSongStoragePrefix(slug)}fingerstyle-measures`;
+  const fingerstyleStorageKey = getComposerFingerstyleMeasuresStorageKey(slug);
+  const sourceFingerprint = useMemo(
+    () => fingerprintAccompanimentSource(workflowAppliedMusicAbc),
+    [workflowAppliedMusicAbc],
+  );
   const [measures, setMeasures] = useState<TimeSliceMeasure[]>([]);
-  const [copiedMasterAbc, setCopiedMasterAbc] = useState(false);
-  const [generatingLineIndex, setGeneratingLineIndex] = useState<number | null>(null);
+  const [restoredSourceFingerprint, setRestoredSourceFingerprint] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!hasMounted || !isWorkspaceHydrated || !workflowAppliedMusicAbc.trim()) return;
+
     try {
       const workflow = ws.accompanimentWorkflow;
       let compingStyle: string | undefined;
@@ -70,71 +81,60 @@ export function GuitarFingerstyleStep({
       }
 
       const options = { comping_style: compingStyle, voicing_plan: voicingPlan, fill_density: fillDensity };
-
-      // Try loading from localStorage first
-      const saved = localStorage.getItem(fingerstyleStorageKey);
-      if (saved) {
-        const parsedMeasures = JSON.parse(saved);
-        const newParsed = convertAbcToTimeSliceGrid(workflowAppliedMusicAbc, [], options);
-        if (parsedMeasures.length === newParsed.length) {
-          const updatedMeasures = parsedMeasures.map((pm: TimeSliceMeasure, idx: number) => {
-            const fresh = newParsed[idx];
-            if (!fresh) return pm;
-            return {
-              ...pm,
-              lineIndex: fresh.lineIndex,
-              style_profile: fresh.style_profile,
-              pickupDurationUnits: fresh.pickupDurationUnits,
-              barline: fresh.barline,
-              grid: pm.grid.map((step: TimeSliceMeasure["grid"][number], stepIdx: number) => {
-                const freshStep = fresh.grid[stepIdx];
-                return {
-                  ...step,
-                  chord: freshStep ? freshStep.chord : step.chord,
-                  weight: freshStep ? freshStep.weight : step.weight,
-                  melody: freshStep ? freshStep.melody : step.melody,
-                  lyric: freshStep ? freshStep.lyric : step.lyric,
-                };
-              }),
-            };
-          });
-          // eslint-disable-next-line react-hooks/set-state-in-effect
-          setMeasures(updatedMeasures);
-          return;
-        }
-      }
-      
-      const parsed = convertAbcToTimeSliceGrid(workflowAppliedMusicAbc, [], options);
-      setMeasures(parsed);
+      const freshMeasures = convertAbcToTimeSliceGrid(workflowAppliedMusicAbc, [], options);
+      const restoredMeasures = restorePersistedTablature(
+        localStorage.getItem(fingerstyleStorageKey),
+        freshMeasures,
+        sourceFingerprint,
+      );
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- restore is intentionally gated on both local-storage hydration phases.
+      setMeasures(restoredMeasures);
+      setRestoredSourceFingerprint(sourceFingerprint);
     } catch (e) {
-      console.error("Failed to parse measures", e);
+      console.error("Failed to restore fingerstyle measures", e);
+      setMeasures([]);
+      setRestoredSourceFingerprint(sourceFingerprint);
     }
-  }, [workflowAppliedMusicAbc, ws.accompanimentWorkflow, fingerstyleStorageKey]);
+  }, [
+    fingerstyleStorageKey,
+    hasMounted,
+    isWorkspaceHydrated,
+    sourceFingerprint,
+    workflowAppliedMusicAbc,
+    ws.accompanimentWorkflow,
+  ]);
 
-  // Save to localStorage and sync to workspace state whenever measures change
+  // Save the authoritative structured measures and derive workspace Guitar ABC from them.
   useEffect(() => {
-    if (measures.length > 0) {
-      localStorage.setItem(fingerstyleStorageKey, JSON.stringify(measures));
-      try {
-        const baseInputAbc = accompanimentPreview.rawAbc || activeAbc;
-        const durationContext = buildAbcDurationContext(baseInputAbc);
-        const keyAccidentals = getKeyAccidentalsFromAbc(baseInputAbc);
-        const tablatureAbcList = measures.map(m => convertTimeSliceMeasureToAbc(m, durationContext, keyAccidentals));
-        const tablatureLines = joinMeasureAbcWithBarlines(tablatureAbcList, measures);
-        const generatedGuitar = [
-          'V:Guitar clef=treble-8 name="Fingerstyle Tablature"',
-          "%%MIDI program 24",
-          tablatureLines,
-        ].join("\n");
-        updateState({ generatedGuitar });
-      } catch (e) {
-        console.error("Failed to sync generated guitar to workspace state", e);
-      }
-    }
-  }, [measures, activeAbc, accompanimentPreview.rawAbc, updateState]);
+    if (restoredSourceFingerprint !== sourceFingerprint || measures.length === 0) return;
 
-  // Group measures by line
-  const lineGroups = useMemo(() => groupMeasuresByLine(measures), [measures]);
+    try {
+      localStorage.setItem(
+        fingerstyleStorageKey,
+        serializeFingerstyleMeasures(measures, sourceFingerprint),
+      );
+      const generatedGuitar = buildGeneratedGuitarAbc(measures, workflowAppliedMusicAbc);
+      if (ws.generatedGuitar !== generatedGuitar) updateState({ generatedGuitar });
+    } catch (e) {
+      console.error("Failed to sync generated guitar to workspace state", e);
+    }
+  }, [
+    fingerstyleStorageKey,
+    measures,
+    restoredSourceFingerprint,
+    sourceFingerprint,
+    updateState,
+    workflowAppliedMusicAbc,
+    ws.generatedGuitar,
+  ]);
+
+  const isFingerstyleReady = restoredSourceFingerprint === sourceFingerprint;
+
+  // Never expose measures from a previous source while the current source restores.
+  const lineGroups = useMemo(
+    () => isFingerstyleReady ? groupMeasuresByLine(measures) : [],
+    [isFingerstyleReady, measures],
+  );
 
   // Handle updates from a line card (replace all measures in that line)
   const handleUpdateLineMeasures = useCallback((lineGroupIndex: number, updated: TimeSliceMeasure[]) => {
@@ -166,19 +166,12 @@ export function GuitarFingerstyleStep({
     return context;
   }, [lineGroups]);
 
-  const masterAbc = useMemo(() => {
+  const masterAbcWithoutTab = useMemo(() => {
+    if (!isFingerstyleReady) return "";
     const baseInputAbc = accompanimentPreview.rawAbc || activeAbc;
     if (measures.length > 0) {
       try {
-        const durationContext = buildAbcDurationContext(baseInputAbc);
-        const keyAccidentals = getKeyAccidentalsFromAbc(baseInputAbc);
-        const tablatureAbcList = measures.map(m => convertTimeSliceMeasureToAbc(m, durationContext, keyAccidentals));
-        const tablatureLines = joinMeasureAbcWithBarlines(tablatureAbcList, measures);
-        const generatedGuitar = [
-          'V:Guitar clef=treble-8 name="Fingerstyle Tablature"',
-          "%%MIDI program 24",
-          tablatureLines,
-        ].join("\n");
+        const generatedGuitar = buildGeneratedGuitarAbc(measures, workflowAppliedMusicAbc);
         const strippedAbc = applyAbcLayerVisibility(baseInputAbc, {
           "Melody": true, "Piano": true, "Harmonium": true, "Flute": true,
           "Djembe": true, "Violin": true, "Guitar": false, "Lyrics": true,
@@ -200,17 +193,18 @@ export function GuitarFingerstyleStep({
       }
     }
     return applyAbcLayerVisibility(applyAbcLayerVolumes(baseInputAbc, accompLayerVolumes), accompLayerVisibility);
-  }, [measures, activeAbc, accompanimentPreview.rawAbc, accompLayerVisibility, accompLayerVolumes]);
-
-  const handleCopyMasterAbc = () => {
-    if (masterAbc) {
-      navigator.clipboard.writeText(cleanAbcForExport(masterAbc));
-      setCopiedMasterAbc(true);
-      setTimeout(() => setCopiedMasterAbc(false), 2000);
-    }
-  };
+  }, [
+    accompLayerVisibility,
+    accompLayerVolumes,
+    accompanimentPreview.rawAbc,
+    activeAbc,
+    isFingerstyleReady,
+    measures,
+    workflowAppliedMusicAbc,
+  ]);
 
   const masterTabEnabled = isAbcLayerVisible(ABC_LAYER_IDS.tab, accompLayerVisibility, false);
+  const masterAbc = masterAbcWithoutTab;
 
   return (
     <div className="space-y-6">
@@ -236,35 +230,34 @@ export function GuitarFingerstyleStep({
         <div className="mb-4">
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Master Playback</h3>
-            {masterAbc && (
-              <button
-                type="button"
-                onClick={handleCopyMasterAbc}
-                className="flex items-center gap-1 text-[10px] text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded cursor-pointer"
-              >
-                {copiedMasterAbc ? (
-                  <span className="text-emerald-600 dark:text-emerald-400 font-medium">Copied to Clipboard!</span>
-                ) : (
-                  <>
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                    <span>Copy</span>
-                  </>
-                )}
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {masterAbc && (
+                <CopyButton label="Copy portable ABC" text={cleanAbcForExport(masterAbc)} />
+              )}
+              {masterAbc && (
+                <CopyTabButton label="Copy rendered TAB" containerId="composer-master-guitar-preview" />
+              )}
+            </div>
           </div>
           <div className="border border-zinc-200 dark:border-zinc-800 rounded-xl bg-white dark:bg-zinc-900/50 p-2 overflow-hidden">
-            <AbcjsPlaybackController
-              abcString={masterAbc}
-              title="Master Fingerstyle Arrangement"
-              canvasId="composer-master-guitar-preview"
-              minWidthClassName="min-w-[520px]"
-              sheetViewportClassName="max-h-[800px] overflow-auto"
-              useContainerWidth={true}
-              hideVoiceNames={true}
-              renderOptions={getArrangementRenderOptionsFor(masterAbc, COMPOSER_PREVIEW_RENDER_OPTIONS, masterTabEnabled)}
-              synthOptions={buildArrangementSynthOptions(accompLayerVisibility, masterAbc)}
-            />
+            {isFingerstyleReady ? (
+              <AbcjsPlaybackController
+                abcString={masterAbc}
+                title="Master Fingerstyle Arrangement"
+                canvasId="composer-master-guitar-preview"
+                minWidthClassName="min-w-[520px]"
+                sheetViewportClassName="max-h-[800px] overflow-auto"
+                useContainerWidth={true}
+                hideVoiceNames={true}
+                showExactRenderAbcCopy={true}
+                renderOptions={getArrangementRenderOptionsFor(masterAbc, COMPOSER_PREVIEW_RENDER_OPTIONS, masterTabEnabled)}
+                synthOptions={buildArrangementSynthOptions(accompLayerVisibility, masterAbc)}
+              />
+            ) : (
+              <div className="flex min-h-32 items-center justify-center text-sm text-zinc-500">
+                Restoring the saved fingerstyle arrangement…
+              </div>
+            )}
           </div>
         </div>
       </section>
@@ -281,10 +274,67 @@ export function GuitarFingerstyleStep({
             accompLayerVisibility={accompLayerVisibility}
             buildPreviousContext={() => buildPreviousLineContext(lineGroupIdx)}
             workflowAppliedMusicAbc={workflowAppliedMusicAbc}
-            isAnotherLineGenerating={generatingLineIndex !== null && generatingLineIndex !== lineGroupIdx}
+            isAnotherLineGenerating={false}
           />
         ))}
       </div>
     </div>
+  );
+}
+
+function CopyButton({ label, text }: { label: string; text: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }, [text]);
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      className="flex items-center gap-1 text-[10px] text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded cursor-pointer whitespace-nowrap"
+    >
+      {copied ? (
+        <span className="text-emerald-600 dark:text-emerald-400 font-medium">Copied!</span>
+      ) : (
+        <>
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+          </svg>
+          <span>{label}</span>
+        </>
+      )}
+    </button>
+  );
+}
+
+export function CopyTabButton({ label, containerId }: { label: string; containerId: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = useCallback(() => {
+    const tabAscii = extractRenderedTabFromSvg(containerId);
+    navigator.clipboard.writeText(tabAscii);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }, [containerId]);
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      className="flex items-center gap-1 text-[10px] text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded cursor-pointer whitespace-nowrap"
+    >
+      {copied ? (
+        <span className="text-emerald-600 dark:text-emerald-400 font-medium">Copied!</span>
+      ) : (
+        <>
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+          </svg>
+          <span>{label}</span>
+        </>
+      )}
+    </button>
   );
 }

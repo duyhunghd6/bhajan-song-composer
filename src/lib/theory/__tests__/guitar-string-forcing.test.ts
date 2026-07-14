@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { ensureGuitarStringForcing } from "../guitar-string-forcing";
+import {
+  ensureGuitarStringForcing,
+  prepareGuitarStringForcingForAbcjs,
+} from "../guitar-string-forcing";
 
 describe("ensureGuitarStringForcing", () => {
   it("returns unchanged ABC when no Guitar voice is present", () => {
@@ -160,5 +163,24 @@ V:Guitar clef=treble-8 name="Guitar"
     const second = ensureGuitarStringForcing(first);
 
     expect(second).toBe(first);
+  });
+});
+
+describe("prepareGuitarStringForcingForAbcjs", () => {
+  it("wraps only forced single Guitar notes as one-note chords", () => {
+    const abc = `X:1
+M:4/4
+L:1/8
+K:G
+%%score (Melody) (Guitar)
+V:Melody
+V:Guitar clef=treble-8
+[V:Melody] !2!e G |
+[V:Guitar] | [!2!B!3!G!6!E,] !2!e !3!G !2!B4 !3!B |`;
+
+    expect(prepareGuitarStringForcingForAbcjs(abc)).toContain(
+      "[V:Guitar] | [!2!B!3!G!6!E,] [!2!e] [!3!G] [!2!B]4 [!3!B] |",
+    );
+    expect(prepareGuitarStringForcingForAbcjs(abc)).toContain("[V:Melody] !2!e G |");
   });
 });

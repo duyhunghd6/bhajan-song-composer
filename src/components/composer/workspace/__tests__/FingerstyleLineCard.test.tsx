@@ -1,0 +1,78 @@
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it, vi } from "vitest";
+
+import type { TimeSliceMeasure } from "@/lib/theory/fingerstyle-arranger/time-slice";
+import { FingerstyleLineCard } from "../FingerstyleLineCard";
+
+vi.mock("@/components/music-sheet/AbcjsPlaybackController", () => ({
+  default: ({
+    abcString,
+    showExactRenderAbcCopy,
+  }: {
+    abcString: string;
+    showExactRenderAbcCopy?: boolean;
+  }) => (
+    <pre data-testid="abc-input" data-exact-copy={String(showExactRenderAbcCopy)}>{abcString}</pre>
+  ),
+}));
+
+function makeFinalMeasure(): TimeSliceMeasure {
+  const attacks = new Map<number, NonNullable<TimeSliceMeasure["grid"][number]["tablature"]>>([
+    [0, [
+      { string: 6, fret: 0, finger: "p", role: "bass" },
+      { string: 3, fret: 0, finger: "i", role: "fill" },
+      { string: 2, fret: 0, finger: "m", role: "melody" },
+    ]],
+    [2, [{ string: 2, fret: 5, finger: "m", role: "melody" }]],
+    [4, [{ string: 3, fret: 0, finger: "i", role: "fill" }]],
+    [6, [{ string: 2, fret: 0, finger: "m", role: "melody" }]],
+    [14, [{ string: 3, fret: 4, finger: "i", role: "melody" }]],
+  ]);
+
+  return {
+    measure: 5,
+    lineIndex: 0,
+    style_profile: {
+      key: "Em",
+      comping_style: "PIMA",
+      voicing_plan: "Open Em",
+    },
+    grid: Array.from({ length: 16 }, (_, index) => ({
+      step: index + 1,
+      chord: "Em",
+      weight: index === 0 ? "⬤" as const : null,
+      melody: { pitch: index === 0 ? "E4" : null, state: index === 0 ? "attack" as const : "rest" as const },
+      lyric: null,
+      tablature: attacks.get(index),
+    })),
+    source_abc: {
+      melody: "[eBGE,] e G B4 B",
+      lyric: "",
+      beatWeight: "",
+    },
+  };
+}
+
+describe("FingerstyleLineCard", () => {
+  it("passes the exact Resulting ASCII Tablature strings to abcjs", () => {
+    const activeAbc = `X:1\nT:Ganesha\nM:4/4\nL:1/8\nK:Em\n| [eBGE,] e G B4 B |`;
+    const markup = renderToStaticMarkup(
+      <FingerstyleLineCard
+        lineIndex={0}
+        lineMeasures={[makeFinalMeasure()]}
+        activeAbc={activeAbc}
+        onUpdateMeasures={() => {}}
+        accompLayerVisibility={{ Melody: true, Guitar: true, TAB: true }}
+        buildPreviousContext={() => []}
+        workflowAppliedMusicAbc={activeAbc}
+        isAnotherLineGenerating={false}
+      />
+    );
+
+    expect(markup).toContain(
+      "[V:Guitar] | [!2!B!3!G!6!E,] !2!e !3!G !2!B4 !3!B |"
+    );
+    expect(markup).toContain('data-exact-copy="true"');
+    expect(markup).toContain("Copy portable ABC");
+  });
+});

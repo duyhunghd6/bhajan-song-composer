@@ -102,4 +102,6 @@ export interface AbcjsPlaybackControllerProps {
   onPlaybackCursor?: (event: MusicSheetPlaybackCursorEvent | null) => void;
   useContainerWidth?: boolean;
   hideVoiceNames?: boolean;
+  /** Show a copy action for the exact ABC string passed to abcjs.renderAbc(). */
+  showExactRenderAbcCopy?: boolean;
 }
