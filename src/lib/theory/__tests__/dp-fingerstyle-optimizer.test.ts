@@ -5,10 +5,8 @@ import {
   stringToIndex,
   indexToString,
   midiAt,
-  STANDARD_TUNING_MIDI,
   type DPNoteEvent,
   type DPCandidate,
-  type DPHandState,
 } from "../fingerstyle-arranger/dp-types";
 import { generateCandidates } from "../fingerstyle-arranger/dp-candidates";
 import {
@@ -21,6 +19,7 @@ import {
   detectHammerOn,
   detectPullOff,
   applyCandidate,
+  placementCost,
 } from "../fingerstyle-arranger/dp-cost";
 import { optimizeFingerstylePath } from "../fingerstyle-arranger/dp-optimizer";
 import { optimizeWithCapo } from "../fingerstyle-arranger/dp-capo";
@@ -175,6 +174,19 @@ describe("DP Candidates", () => {
       }
     }
   });
+
+  it("reserves strings occupied by fixed simultaneous notes", () => {
+    const event = makeEvent({
+      melodyMidi: 64,
+      bassMidi: 40,
+      fixedFrets: [null, null, null, null, null, 0],
+    });
+    const candidates = generateCandidates(event, "advanced");
+
+    expect(candidates.length).toBeGreaterThan(0);
+    expect(candidates.every(candidate => candidate.melodyString !== 1)).toBe(true);
+    expect(candidates.every(candidate => candidate.shapeFrets[5] === 0)).toBe(true);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -185,6 +197,23 @@ describe("DP Cost Function", () => {
   it("same position → zero position cost", () => {
     const cost = positionMovementCost(5, 5, 4, 120, "advanced");
     expect(cost).toBe(0);
+  });
+
+  it("open strings cost less than equivalent fretted positions", () => {
+    const candidates = generateCandidates(
+      makeEvent({ melodyMidi: 59, bassMidi: null }),
+      "advanced"
+    );
+    const open = candidates.find(candidate =>
+      candidate.melodyString === 2 && candidate.melodyFret === 0
+    );
+    const fretted = candidates.find(candidate =>
+      candidate.melodyString === 3 && candidate.melodyFret === 4
+    );
+
+    expect(open).toBeDefined();
+    expect(fretted).toBeDefined();
+    expect(placementCost(open!)).toBeLessThan(placementCost(fretted!));
   });
 
   it("small position change → finite cost", () => {
@@ -331,10 +360,48 @@ describe("DP Cost Function", () => {
     const event = makeEvent({ index: 5, durationSteps: 4 });
     const newState = applyCandidate(state, candidate, event);
 
-    // String 1 (index 5) should ring until step 5 + 4 = 9
+    // Legacy events without absolute onset still use their ordinal index.
     expect(newState.ringingUntil[5]).toBe(9);
-    // String 6 (index 0) should ring until step 5 + 4 = 9
     expect(newState.ringingUntil[0]).toBe(9);
+  });
+
+  it("uses absolute grid onset for ringing duration", () => {
+    const candidate = generateCandidates(makeEvent(), "advanced")[0];
+    const state = applyCandidate(
+      initialHandState(),
+      candidate,
+      makeEvent({ index: 2, absoluteOnsetStep: 20, durationSteps: 4 })
+    );
+
+    expect(state.ringingUntil[stringToIndex(candidate.melodyString!)]).toBe(24);
+    expect(state.ringingUntil[stringToIndex(candidate.bassString!)]).toBe(24);
+  });
+
+  it("uses incoming onset interval rather than note duration for movement time", () => {
+    const candidate: DPCandidate = {
+      melodyString: 1,
+      melodyFret: 12,
+      bassString: null,
+      bassFret: 0,
+      melodyTechnique: "free-stroke",
+      shapeFrets: [null, null, null, null, null, 12],
+      handPosition: 12,
+      usesBarre: false,
+    };
+    const rushed = transitionCost(
+      initialHandState(),
+      candidate,
+      makeEvent({ melodyMidi: 76, bassMidi: null, durationSteps: 16, movementSteps: 1 }),
+      "advanced"
+    );
+    const prepared = transitionCost(
+      initialHandState(),
+      candidate,
+      makeEvent({ melodyMidi: 76, bassMidi: null, durationSteps: 16, movementSteps: 16 }),
+      "advanced"
+    );
+
+    expect(rushed).toBeGreaterThan(prepared);
   });
 });
 
@@ -361,6 +428,31 @@ describe("DP Optimizer (Viterbi)", () => {
 
     expect(result.path).toHaveLength(2);
     expect(result.path[0].handPosition).toBe(result.path[1].handPosition);
+  });
+
+  it("reuses the established exact shape when a chord recurs", () => {
+    const events = [
+      makeEvent({ index: 0, chord: "Em", melodyMidi: 59, bassMidi: 40, durationSteps: 1, bpm: 180 }),
+      makeEvent({ index: 1, chord: "Am", melodyMidi: 62, bassMidi: 45, durationSteps: 1, bpm: 180 }),
+      makeEvent({ index: 2, chord: "Em", melodyMidi: 59, bassMidi: 40, durationSteps: 1, bpm: 180 }),
+    ];
+    const result = optimizeFingerstylePath(events, "advanced");
+
+    expect(result.path).toHaveLength(3);
+    expect(result.path[2].shapeFrets).toEqual(result.path[0].shapeFrets);
+  });
+
+  it("allows a different recurring-chord shape when the established shape is infeasible", () => {
+    const events = [
+      makeEvent({ index: 0, chord: "Em", melodyMidi: 59, bassMidi: 40 }),
+      makeEvent({ index: 1, chord: "Am", melodyMidi: 60, bassMidi: 45 }),
+      makeEvent({ index: 2, chord: "Em", melodyMidi: 67, bassMidi: 40 }),
+    ];
+    const result = optimizeFingerstylePath(events, "advanced");
+
+    expect(result.path).toHaveLength(3);
+    expect(result.path[2].shapeFrets).not.toEqual(result.path[0].shapeFrets);
+    expect(midiAt(stringToIndex(result.path[2].melodyString!), result.path[2].melodyFret)).toBe(67);
   });
 
   it("path never contains Infinity cost", () => {

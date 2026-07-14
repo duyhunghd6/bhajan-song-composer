@@ -6,7 +6,6 @@ import {
   SKILL_LEVEL_CONSTRAINTS,
   STANDARD_TUNING_MIDI,
   stringToIndex,
-  indexToString,
   midiAt,
 } from "./dp-types";
 
@@ -114,17 +113,36 @@ export function generateCandidates(
 
   for (const melPos of melodyPositions) {
     for (const bassPos of bassPositions) {
-      // Skip if melody and bass collide on the same string
+      if (
+        melPos
+        && event.melodyMidi !== null
+        && midiAt(stringToIndex(melPos.string), melPos.fret, capo) !== event.melodyMidi
+      ) continue;
+      if (
+        bassPos
+        && event.bassMidi !== null
+        && midiAt(stringToIndex(bassPos.string), bassPos.fret, capo) !== event.bassMidi
+      ) continue;
+
+      // Skip if melody and bass collide on the same string.
       if (melPos && bassPos && melPos.string === bassPos.string) continue;
 
-      // Build the shape frets array (index 0 = string 6)
-      const shapeFrets: (number | null)[] = [null, null, null, null, null, null];
+      // Start from simultaneous notes that are not owned by this DP decision.
+      // They remain fixed and reserve their physical strings.
+      const shapeFrets: (number | null)[] = event.fixedFrets
+        ? [...event.fixedFrets]
+        : [null, null, null, null, null, null];
 
-      if (melPos) {
-        shapeFrets[stringToIndex(melPos.string)] = melPos.fret;
+      const melodyIndex = melPos ? stringToIndex(melPos.string) : null;
+      const bassIndex = bassPos ? stringToIndex(bassPos.string) : null;
+      if (melodyIndex !== null && shapeFrets[melodyIndex] !== null) continue;
+      if (bassIndex !== null && shapeFrets[bassIndex] !== null) continue;
+
+      if (melPos && melodyIndex !== null) {
+        shapeFrets[melodyIndex] = melPos.fret;
       }
-      if (bassPos) {
-        shapeFrets[stringToIndex(bassPos.string)] = bassPos.fret;
+      if (bassPos && bassIndex !== null) {
+        shapeFrets[bassIndex] = bassPos.fret;
       }
 
       // Check fret span of all fretted notes (excluding open strings)
@@ -154,8 +172,16 @@ export function generateCandidates(
     }
   }
 
-  // Sort by ascending hand position (prefer open/low positions)
-  candidates.sort((a, b) => a.handPosition - b.handPosition);
+  // Keep open-string alternatives ahead of equivalent fretted placements before
+  // pruning, then prefer lower hand positions and deterministic string order.
+  candidates.sort((a, b) => {
+    const aPressed = Number(a.melodyFret > 0) + Number(a.bassFret > 0);
+    const bPressed = Number(b.melodyFret > 0) + Number(b.bassFret > 0);
+    return aPressed - bPressed
+      || a.handPosition - b.handPosition
+      || (a.melodyString ?? 7) - (b.melodyString ?? 7)
+      || (a.bassString ?? 7) - (b.bassString ?? 7);
+  });
 
   // Cap the number of candidates to keep the DP tractable
   return candidates.slice(0, MAX_CANDIDATES);

@@ -1,417 +1,620 @@
-# Optimize Fingerstyle DP Algorithm
+# Optimized Fingerstyle Dynamic Programming Algorithm
 
-> Technical Specification · Implementation Plan · Test Plan
+> Implemented architecture, invariants, cost model, integration contract, and regression coverage
 
-## 1. Problem Statement
+## 1. Status
 
-The current fingerstyle arranger selects guitar hand shapes **greedily** — one chord at a time, with no awareness of:
+The fingerstyle optimizer is implemented as a Viterbi/shortest-path dynamic program over playable guitar hand-shape candidates.
 
-1. **Transition cost** between consecutive hand shapes (fret-12 → fret-1 in a 16th note).
-2. **Sustain integrity** — changing the hand shape kills notes that are still supposed to ring.
-3. **Legato techniques** — hammer-on, pull-off, slide can connect notes without right-hand plucks or can bridge position shifts silently.
-4. **Global optimality** — the best shape for measure 3 depends on what shapes were chosen for measures 2 and 4.
-5. **Skill-level gating** — beginner arrangements should avoid barres, high frets, and advanced techniques.
-6. **Capo optimization** — a global capo position can turn barre-heavy songs into open-chord songs.
+The current implementation additionally hardens the production time-slice path against the Ganesha regression where this authoritative melody:
 
-## 2. Architectural Approach
-
-### 2.1 Algorithm Choice: Viterbi / Shortest-Path DP
-
-The problem maps to a **Hidden Markov Model** (HMM):
-
-- **Observations** = the sequence of melody notes + chords + durations across the song.
-- **Hidden states** = candidate hand shapes (fret positions) at each time step.
-- **Transition probability** = inverse of transition cost between consecutive shapes.
-- **Emission probability** = how well a shape covers the required melody + bass notes.
-
-We use the **Viterbi algorithm** to find the minimum-cost path through the shape graph.
-
-### 2.2 Scope and Boundaries
-
-**In scope (Phase 1):**
-- DP state: hand position, shape, finger locks, ringing strings.
-- Cost function: position movement, shape change, sustain violation, guide-finger detection.
-- Technique vocabulary: hammer-on, pull-off, slide, vibrato, natural-harmonic.
-- Skill-level gating: beginner, intermediate, advanced.
-- Capo sweep: evaluate capo 0–7, select minimum-cost.
-
-**Out of scope (future phases):**
-- Right-hand advanced techniques (tremolo, rasgueado, tapping).
-- Alternate tunings (Drop D, DADGAD).
-- AI-generated fills that use DP-selected technique vocabulary.
-
-### 2.3 Integration Point
-
-The DP optimizer plugs into the existing pipeline at **two points**:
-
-1. **`event-matrix.ts` → `routeMidiToStrings()`**: Currently picks the lowest-fret candidate per note independently. The DP replaces this with a globally optimal string/fret assignment.
-2. **`ai-sim.ts` → `generateSimulatedFingerstyle()`**: Currently picks voicings greedily. The DP replaces this with a Viterbi-optimal voicing sequence.
-
-The existing `fingerstyle-arranger.ts` public API (`generateFingerstyleArrangement()`) remains unchanged — callers are not affected.
-
-## 3. Data Model
-
-### 3.1 Extended Technique Type
-
-```typescript
-// fingerstyle-arranger/dp-types.ts
-
-export type FingerstyleTechnique =
-  // Existing
-  | "thumb-clock" | "pinch" | "guide-tone" | "syncopation" | "string-slap"
-  // Left-hand legato (new)
-  | "hammer-on" | "pull-off"
-  | "slide-shift" | "slide-guide"
-  | "vibrato" | "natural-harmonic"
-  // Left-hand fretting (new)
-  | "barre" | "partial-barre" | "guide-finger-pivot" | "left-hand-mute"
-  // Right-hand articulation (new)
-  | "rest-stroke" | "free-stroke" | "palm-mute"
-  // Expressive (new)
-  | "grace-note" | "bend";
+```abc
+"Em" E E3- E2 z B,
 ```
 
-### 3.2 DP State
+was rendered with unrelated G/B pitches because the optimizer trusted an incorrect submitted tablature position:
 
-```typescript
-export type SkillLevel = "beginner" | "intermediate" | "advanced";
+```abc
+[!2!B!3!G!6!E,] [!2!e] [!3!G] [!2!B]4 [!3!B]
+```
 
-export interface DPHandState {
-  /** Center fret of the left-hand position (0–19). */
-  handPosition: number;
-  /** Frets held on each string (null = not fretted, "X" = muted). */
-  frets: (number | null)[];
-  /** Which strings are currently ringing and until what time step. */
-  ringingUntil: (number | null)[];  // index 0 = string 6, index 5 = string 1
-  /** Barre fret if active, null otherwise. */
-  barreFret: number | null;
-  /** Consecutive measures of barre for stamina tracking. */
-  consecutiveBarreMeasures: number;
-}
+The corrected final measure is:
 
+```abc
+[!2!e!3!G!6!E,] !2!e !3!G !2!B4 !3!B
+```
+
+The optimizer now treats melody pitch and physical playability as invariants. Cost optimization may choose among valid positions, but it may not change the requested concert pitch or collapse independent simultaneous notes.
+
+## 2. Optimization Goals
+
+The DP minimizes physical difficulty across the complete event sequence while preserving musical correctness.
+
+It accounts for:
+
+1. Exact source melody pitch.
+2. Simultaneous melody, bass, root, fifth, and fill occupancy.
+3. Movement time between consecutive onsets.
+4. Sustain continuity on ringing strings.
+5. Shape-change effort and guide fingers.
+6. Hammer-on, pull-off, and slide opportunities.
+7. Open-string preference.
+8. Exact grip reuse when a chord recurs.
+9. Skill-level fret, span, barre, and technique restrictions.
+10. Optional capo-position optimization.
+11. Safe rollback when optimization introduces a physical validation failure.
+
+## 3. Architecture
+
+### 3.1 Public and Internal Modules
+
+| Module | Responsibility |
+|---|---|
+| `fingerstyle-arranger/dp-types.ts` | DP events, candidates, hand state, skill constraints, options, and diagnostics |
+| `fingerstyle-arranger/dp-candidates.ts` | Enumerate pitch-correct, collision-free string/fret candidates |
+| `fingerstyle-arranger/dp-cost.ts` | Movement, shape, sustain, technique, barre, open-string, and skill costs |
+| `fingerstyle-arranger/dp-optimizer.ts` | Two-pass Viterbi optimization and exact recurring-chord grip preference |
+| `fingerstyle-arranger/dp-capo.ts` | Capo sweep and minimum-cost selection |
+| `fingerstyle-arranger/dp-integration.ts` | Event extraction, exact writeback binding, diagnostics, validation, and rollback |
+| `fingerstyle-arranger/physics-validation.ts` | Post-optimization physical validation |
+| `fingerstyle-arranger/time-slice.ts` | ABC/time-slice conversion and forced-string ABC rendering |
+| `fingerstyle-arranger/toon-utils.ts` | ASCII tablature rendering used by golden regressions |
+
+The existing public fingerstyle entrypoints remain stable. DP behavior is contained in nearby `fingerstyle-arranger/` modules.
+
+### 3.2 Primary Production Seam
+
+The hardened LLM/time-slice integration is:
+
+```ts
+applyDPToTimeSliceMeasures(
+  measures: TimeSliceMeasure[],
+  bpm?: number,
+  options?: DPOptions
+): { measures: TimeSliceMeasure[]; logs: string[] }
+```
+
+Its pipeline is:
+
+```text
+TimeSliceMeasure[]
+  → extract authoritative decision events and exact bindings
+  → generate pitch-safe candidates
+  → Viterbi pass 1
+  → establish first selected shape for each chord
+  → Viterbi pass 2 with recurring-shape preferences
+  → write back only to bound tablature entries
+  → validate physical output
+  → accept or roll back atomically
+```
+
+`applyDPOptimization()` remains available for canonical event-matrix input. The authoritative source-pitch and exact tablature-index hardening described below is specifically implemented at the time-slice seam, where imported or LLM-generated tablature can disagree with the source melody.
+
+## 4. Hard Correctness Invariants
+
+These constraints are enforced before cost comparison. A lower-cost candidate cannot override them.
+
+### 4.1 Authoritative Melody Pitch
+
+For a melody attack, the target MIDI pitch comes from:
+
+```ts
+parseScientificPitch(step.melody.pitch)?.midi
+```
+
+The current tablature string/fret is only a fallback when no authoritative source pitch exists. This prevents an already-invalid tab assignment from redefining the melody that DP is asked to optimize.
+
+Before writeback, the selected physical position is checked again:
+
+```text
+midiForStringFret(candidate.melodyString, candidate.melodyFret)
+  == event.melodyMidi
+```
+
+The same invariant is applied to the selected bass event.
+
+### 4.2 Exact Source-Event Binding
+
+Every DP event stores an integration binding:
+
+```ts
+type Binding = {
+  measureIndex: number;
+  stepIndex: number;
+  melodyTabIndex: number | null;
+  bassTabIndex: number | null;
+  absoluteOnsetStep: number;
+};
+```
+
+Writeback updates only those exact tablature indexes.
+
+It must not rewrite every event whose role is `bass`, `root`, or `fifth`. Independent root, fifth, drone, and fill events remain separate musical and physical notes.
+
+### 4.3 Unique Physical String Occupancy
+
+`DPNoteEvent.fixedFrets` represents simultaneous notes that the current DP decision does not own:
+
+```ts
+fixedFrets?: (number | null)[];
+```
+
+Candidate construction starts from this occupied six-string layout. A melody or bass candidate is rejected when its selected string is already occupied.
+
+This provides two collision checks:
+
+1. Melody and selected bass cannot share a string.
+2. Neither selected note can use a string reserved by an independent simultaneous note.
+
+Duplicate concert pitches are still valid when they intentionally occur on different strings.
+
+### 4.4 Candidate Pitch Verification
+
+Every enumerated `(string, fret)` is rechecked with capo awareness:
+
+```text
+midiAt(stringIndex, fret, capo) == requestedMidi
+```
+
+This check protects candidate generation even if position enumeration changes later.
+
+### 4.5 Safe Writeback and Rollback
+
+Optimization is applied to a deep copy. The original measures remain available for atomic rollback.
+
+Writeback is rejected when:
+
+- the path length does not match the binding count;
+- a selected melody position changes the requested MIDI pitch;
+- a selected bass position changes the requested MIDI pitch; or
+- a measure that was physically valid before DP becomes invalid after DP.
+
+If imported historical input already has an unrelated validation issue, a pitch-safe correction may still be retained. The diagnostic log explicitly reports that the pre-existing issue remains. This avoids discarding a melody correction because of an unrelated legacy fill-density or sustain problem.
+
+## 5. DP Data Model
+
+### 5.1 Event
+
+```ts
 export interface DPNoteEvent {
-  /** Index in the flattened event sequence. */
   index: number;
-  /** Melody pitch as MIDI number, or null for bass-only / rest. */
+  /** Absolute onset across all measures in quantized grid steps. */
+  absoluteOnsetStep?: number;
+  /** Simultaneous assignments that this event may not move or collide with. */
+  fixedFrets?: (number | null)[];
   melodyMidi: number | null;
-  /** Bass pitch as MIDI number, or null for melody-only / rest. */
   bassMidi: number | null;
-  /** Chord symbol at this point. */
   chord: string;
-  /** Duration in time-slice steps (1 step = 1/16th note in 4/4). */
+  /** Sounding duration from this event to the next decision point. */
   durationSteps: number;
-  /** BPM for computing real-time constraints. */
+  /** Time available to move from the preceding event into this event. */
+  movementSteps?: number;
   bpm: number;
-  /** Whether this is a rest (no sound required). */
   isRest: boolean;
 }
+```
 
+`durationSteps` and `movementSteps` are intentionally separate:
+
+- `durationSteps` controls how long selected strings ring.
+- `movementSteps` controls how much time the player has to reach the new shape.
+
+Using the destination note's duration as movement time is incorrect: a long note may still begin immediately after a very short preceding event.
+
+### 5.2 Hand State
+
+```ts
+export interface DPHandState {
+  handPosition: number;
+  frets: (number | null)[];
+  ringingUntil: (number | null)[];
+  barreFret: number | null;
+  consecutiveBarreMeasures: number;
+}
+```
+
+Array indexes follow physical low-to-high string order:
+
+```text
+index:   0  1  2  3  4  5
+string:  6  5  4  3  2  1
+```
+
+### 5.3 Candidate
+
+```ts
 export interface DPCandidate {
-  /** String assignment for melody (1–6), null if rest. */
   melodyString: GuitarStringNumber | null;
   melodyFret: number;
-  /** String assignment for bass (1–6), null if rest. */
   bassString: GuitarStringNumber | null;
   bassFret: number;
-  /** The technique used to produce the melody note. */
   melodyTechnique: FingerstyleTechnique;
-  /** Full fret layout across all 6 strings. */
   shapeFrets: (number | null)[];
-  /** Hand center position. */
   handPosition: number;
-  /** Whether this candidate uses a barre. */
   usesBarre: boolean;
-  /** Cost from the cost function. */
-  cost: number;
-}
-
-export interface DPResult {
-  /** Optimal path of candidates, one per event. */
-  path: DPCandidate[];
-  /** Total cost of the optimal path. */
-  totalCost: number;
-  /** Recommended capo position (0 = no capo). */
-  capo: number;
-  /** Skill level used for gating. */
-  skillLevel: SkillLevel;
 }
 ```
 
-## 4. Cost Function Specification
+The complete effective six-string shape includes fixed simultaneous notes. It is therefore suitable for physical span checks, sustain comparison, collision prevention, and recurring-grip identity.
 
-### 4.1 Position Movement Cost
+## 6. Candidate Generation
 
-```
-C_position(from, to, availableTime) =
-  let distance = |to.handPosition - from.handPosition|
-  if distance == 0: return 0
-  
-  let canSlide = any string has a note that connects from → to
-  if canSlide:
-    return 0.3 * distance / max(availableTime, 0.1)
-  else:
-    let jumpTime = 0.05 + distance * 0.02  // seconds
-    if jumpTime > availableTime: return Infinity
-    return 1.5 + distance * 0.4
-```
+For each event, `generateCandidates()` performs the following steps:
 
-### 4.2 Shape Change Cost
+1. Enumerate all playable positions for the requested melody MIDI.
+2. Enumerate all playable positions for the requested bass MIDI.
+3. Reject positions outside the skill level's maximum fret.
+4. Verify each position reproduces the requested MIDI with the active capo.
+5. Reject melody/bass same-string collisions.
+6. Seed the shape from `fixedFrets`.
+7. Reject collisions with fixed simultaneous notes.
+8. Add the selected melody and bass positions.
+9. Reject shapes exceeding the skill-level fret span.
+10. Detect barre usage and apply skill gating.
+11. Sort deterministically, retaining open-string alternatives first.
+12. Keep at most 20 candidates per event.
 
-```
-C_shape(from, to) =
-  if from.shapeFrets == to.shapeFrets: return 0
-  
-  let guideFinger = find common (string, fret) pair between shapes
-  if guideFinger exists: return 0.3
-  
-  let slideGuideFinger = find common string with different fret
-  if slideGuideFinger exists: return 0.5
-  
-  return 1.5  // full shape change
+Candidate-pruning order is:
+
+```text
+fewest pressed selected notes
+  → lowest hand position
+  → deterministic melody string number
+  → deterministic bass string number
 ```
 
-### 4.3 Sustain Violation Cost
+This ordering prevents open-string choices from being accidentally removed before Viterbi evaluates them.
 
-```
-C_sustain(from, to, currentStep) =
-  let cost = 0
-  for each string s where from.ringingUntil[s] > currentStep:
-    if to.shapeFrets[s] != from.shapeFrets[s]:
-      cost += 3.0  // releasing a still-ringing note
-  return cost
-```
+## 7. Cost Model
 
-### 4.4 Technique Cost
+The transition objective is:
 
-```
-C_technique(technique, candidate) =
-  match technique:
-    "hammer-on":     0.1   // almost free
-    "pull-off":      0.15
-    "slide-shift":   0.3 * fretDistance / availableTime
-    "slide-guide":   0.2
-    "vibrato":       0.0   // modifier, no transition
-    "natural-harmonic": 0.2
-    "barre":         2.0 + 0.3 * consecutiveBarreMeasures
-    "guide-finger-pivot": 0.0  // already counted in shape change
-    "free-stroke":   0.0   // baseline
-    "rest-stroke":   0.0 + (adjacentStringRinging ? 2.0 : 0)
-    "bend":          0.5
-    "grace-note":    0.1
-    default:         0.0
+```text
+C_transition = (
+    C_position
+  + C_shape
+  + C_sustain
+  + C_technique
+  + C_barre
+  + C_placement
+) × M_skill
 ```
 
-### 4.5 Skill-Level Multiplier
+During the second Viterbi pass, recurring-chord preference is added separately:
 
-```
-C_skill(candidate, level) =
-  match level:
-    "beginner":
-      if candidate.handPosition > 5:  cost *= 3
-      if candidate.usesBarre:          cost *= 5
-      if technique in ["bend","hammer-on","pull-off"]: cost = Infinity
-    "intermediate":
-      if candidate.handPosition > 9:  cost *= 2
-      if technique in ["bend"]:        cost = Infinity
-    "advanced":
-      // no restrictions
+```text
+C_total = C_transition + C_recurring_shape
 ```
 
-### 4.6 Total Transition Cost
+### 7.1 Position Movement
 
+Movement uses the incoming onset interval:
+
+```text
+availableTime = movementSteps × (60 / bpm / 4)
+distance      = |to.handPosition - from.handPosition|
+jumpTime      = 0.05 + distance × 0.02
 ```
-C_total(from, to, event, skillLevel) =
-  C_position(from, to, event.availableTime)
-  + C_shape(from, to)
-  + C_sustain(from, to, event.index)
-  + C_technique(to.melodyTechnique, to)
-  + C_skill(to, skillLevel)
+
+The cost is:
+
+```text
+if distance == 0:
+  0
+else if jumpTime > availableTime:
+  50 + distance × 10 + (jumpTime - availableTime) × 200
+else if distance / beatsAvailable > maxHandJumpPerBeat:
+  10 + distance × 2 + excess² × 3
+else:
+  1.5 + distance × 0.4
 ```
 
-## 5. Implementation Plan
+Movement difficulty uses steep finite penalties rather than `Infinity`. A hard infinite transition can poison every downstream Viterbi cell and make backtracking arbitrary. Truly forbidden candidates are filtered by candidate generation or skill constraints instead.
 
-### Phase 1: Foundation Types (dp-types.ts)
-**File:** `src/lib/theory/fingerstyle-arranger/dp-types.ts` [NEW]
+### 7.2 Shape Change
 
-- Define `FingerstyleTechnique` extended union type.
-- Define `SkillLevel`, `DPHandState`, `DPNoteEvent`, `DPCandidate`, `DPResult`.
-- Export `STANDARD_TUNING_MIDI` constant (re-export from guitar-playability).
-- Define `SKILL_LEVEL_CONSTRAINTS` configuration object.
+```text
+identical six-string shape:       0.0
+guide finger at same string/fret: 0.3
+same-string slide guide:          0.5
+full shape change:                1.5
+```
 
-### Phase 2: Candidate Generator (dp-candidates.ts)
-**File:** `src/lib/theory/fingerstyle-arranger/dp-candidates.ts` [NEW]
+### 7.3 Sustain
 
-- `generateCandidates(event: DPNoteEvent, skillLevel: SkillLevel): DPCandidate[]`
-  - For a given note event, enumerate all feasible (string, fret) assignments for melody and bass.
-  - Filter by skill-level max fret, barre allowance.
-  - For each assignment, compute the full shape layout.
-  - Prune candidates that violate `MAX_FRET_SPAN` within a single shape.
-  - Return the pruned candidate list (typically 5–20 candidates per event).
+For each string that should still be ringing:
 
-### Phase 3: Cost Function (dp-cost.ts)
-**File:** `src/lib/theory/fingerstyle-arranger/dp-cost.ts` [NEW]
+```text
+if previousFret[string] != nextFret[string]:
+  cost += 3.0
+```
 
-- `transitionCost(from: DPHandState, to: DPCandidate, event: DPNoteEvent, skillLevel: SkillLevel): number`
-  - Implements the full cost function from Section 4.
-- `detectGuideFinger(fromShape: (number|null)[], toShape: (number|null)[]): boolean`
-- `detectSlideOpportunity(fromState: DPHandState, toCandidate: DPCandidate, event: DPNoteEvent): FingerstyleTechnique | null`
-- `detectHammerPullOpportunity(fromState: DPHandState, toCandidate: DPCandidate): FingerstyleTechnique | null`
+The comparison uses `absoluteOnsetStep`, while ringing end time is stored as:
 
-### Phase 4: Viterbi Optimizer (dp-optimizer.ts)
-**File:** `src/lib/theory/fingerstyle-arranger/dp-optimizer.ts` [NEW]
+```text
+ringingUntil = absoluteOnsetStep + durationSteps
+```
 
-- `optimizeFingerstylePath(events: DPNoteEvent[], skillLevel: SkillLevel, capo?: number): DPResult`
-  - Build the trellis: for each event, generate candidates.
-  - Forward pass: compute cumulative minimum cost for each candidate.
-  - Backtrack: extract the minimum-cost path.
-  - Return `DPResult` with path, totalCost, capo, skillLevel.
+This keeps onset, duration, and sustain in the same coordinate system across measure boundaries.
 
-### Phase 5: Capo Optimizer (dp-capo.ts)
-**File:** `src/lib/theory/fingerstyle-arranger/dp-capo.ts` [NEW]
+### 7.4 Technique
 
-- `optimizeWithCapo(events: DPNoteEvent[], skillLevel: SkillLevel, maxCapo?: number): DPResult`
-  - For each capo position 0..maxCapo (default 7):
-    - Transpose all MIDI pitches down by capo semitones.
-    - Run `optimizeFingerstylePath()`.
-    - Record total cost.
-  - Return the result with minimum total cost.
+The transition detector can select:
 
-### Phase 6: Integration (dp-integration.ts)
-**File:** `src/lib/theory/fingerstyle-arranger/dp-integration.ts` [NEW]
+- `hammer-on` for an upward move on the same melody string;
+- `pull-off` for a downward move on the same melody string;
+- `slide-shift` when a fretted string provides a slide guide;
+- `free-stroke` otherwise.
 
-- `applyDPOptimization(matrix: FingerstyleEventMatrix, options: DPOptions): FingerstyleEventMatrix`
-  - Extract `DPNoteEvent[]` from the event matrix.
-  - Run `optimizeWithCapo()`.
-  - Apply the optimal path back onto the event matrix (update string/fret assignments, techniques).
-  - Return the updated matrix.
-- Wire into `buildFingerstyleEventMatrix()` in `event-matrix.ts` as an optional post-processing step.
+Representative costs are:
 
-### Phase 7: Update picking-profiles.ts
-**File:** `src/lib/theory/picking-profiles.ts` [MODIFY]
+```text
+hammer-on:       0.10
+pull-off:        0.15
+slide-guide:     0.20
+slide-shift:     0.30 × distance / availableTime
+free-stroke:     0.00
+natural-harmonic 0.20
+palm-mute:       0.50
+bend:            0.50
+grace-note:      0.10
+```
 
-- Expand `FingerstylePhysicalTechnique` union to include new techniques.
-- Keep backward compatibility — old technique values remain valid.
+The detected technique is written into the resolved candidate stored in the trellis, so the backtracked result carries the selected technique.
 
-## 6. File Summary
+### 7.5 Open-String Placement
 
-| File | Status | LoC (est.) | Purpose |
-|------|--------|------------|---------|
-| `fingerstyle-arranger/dp-types.ts` | NEW | ~100 | All DP type definitions |
-| `fingerstyle-arranger/dp-candidates.ts` | NEW | ~120 | Candidate generation per event |
-| `fingerstyle-arranger/dp-cost.ts` | NEW | ~150 | Full transition cost function |
-| `fingerstyle-arranger/dp-optimizer.ts` | NEW | ~130 | Viterbi forward pass + backtrack |
-| `fingerstyle-arranger/dp-capo.ts` | NEW | ~50 | Capo sweep wrapper |
-| `fingerstyle-arranger/dp-integration.ts` | NEW | ~80 | Wire DP into existing pipeline |
-| `picking-profiles.ts` | MODIFY | ~5 lines | Expand technique union |
-| `event-matrix.ts` | MODIFY | ~10 lines | Optional DP post-processing call |
+Open strings are explicitly easier than equivalent fretted positions:
 
-## 7. Test Plan
+```text
+fretted selected melody: +0.4
+fretted selected bass:   +0.4
+open selected note:       0.0
+```
 
-### 7.1 Unit Tests: dp-types
+This is a preference, not an absolute rule. Movement, sustain, recurring shape, and playability costs may select a fretted equivalent when it produces a better global path.
 
-**File:** `__tests__/dp-types.test.ts` [NEW]
+### 7.6 Skill Constraints
 
-| Test | Assertion |
-|------|-----------|
-| `SKILL_LEVEL_CONSTRAINTS` has all 3 levels | Keys = beginner, intermediate, advanced |
-| Beginner constraints cap maxFret to 5 | `constraints.beginner.maxFret === 5` |
-| Advanced allows all techniques | `constraints.advanced.forbiddenTechniques.length === 0` |
+| Level | Max fret | Max span | Barre | Max jump/beat | Forbidden techniques |
+|---|---:|---:|---|---:|---|
+| Beginner | 5 | 3 | No | 2 | hammer-on, pull-off, bend, vibrato, barre, partial-barre, palm-mute, rest-stroke, natural-harmonic |
+| Intermediate | 9 | 4 | Yes | 5 | bend |
+| Advanced | 19 | 5 | Yes | 12 | none |
 
-### 7.2 Unit Tests: dp-candidates
+## 8. Exact Recurring-Chord Shape Preference
 
-**File:** `__tests__/dp-candidates.test.ts` [NEW]
+### 8.1 Requirement
 
-| Test | Assertion |
-|------|-----------|
-| Generates candidates for E4 melody + E2 bass | At least 1 candidate with string 1 fret 0 (melody) and string 6 fret 0 (bass) |
-| All candidates have fret span ≤ 3 | Every candidate passes `maxFret - minFret <= 3` |
-| Beginner candidates never exceed fret 5 | All candidate frets ≤ 5 |
-| Intermediate candidates never exceed fret 9 | All candidate frets ≤ 9 |
-| Returns empty array for impossible note | E.g., MIDI 120 has no guitar candidate |
+When the same normalized chord returns in a song, the optimizer should prefer the exact established grip—not merely the same hand-position number.
 
-### 7.3 Unit Tests: dp-cost
+A grip key encodes all six physical strings:
 
-**File:** `__tests__/dp-cost.test.ts` [NEW]
+```ts
+shapeFrets.map(fret => fret ?? "x").join(":")
+```
 
-| Test | Assertion |
-|------|-----------|
-| Same position → zero position cost | `positionCost(pos5, pos5) === 0` |
-| Guide finger detected → low shape cost | Cost ≤ 0.5 |
-| No guide finger → high shape cost | Cost ≥ 1.0 |
-| Sustain violation → penalty | Cost includes +3.0 for each violated string |
-| Slide opportunity detected for same-string move | Returns `"slide-shift"` |
-| Hammer-on detected for upward same-string | Returns `"hammer-on"` |
-| Pull-off detected for downward same-string | Returns `"pull-off"` |
-| Beginner + barre → very high cost | Cost ≥ 10.0 (5× multiplier) |
-| Impossible jump (12 frets in 16th note at 120bpm) → Infinity | `cost === Infinity` |
+Example:
 
-### 7.4 Unit Tests: dp-optimizer
+```text
+0:x:x:4:x:0
+```
 
-**File:** `__tests__/dp-optimizer.test.ts` [NEW]
+Chord symbols are normalized by trimming, removing internal whitespace, and lowercasing.
 
-| Test | Assertion |
-|------|-----------|
-| Single event → returns the lowest-cost candidate | Path length = 1, cost = candidate cost |
-| Two events same chord → prefers staying in position | `path[0].handPosition === path[1].handPosition` |
-| Em → D transition prefers guide finger | Total cost < cost of full shape change |
-| 4-measure Em song at beginner → all open position | All frets ≤ 5, no barres |
-| Path never contains Infinity cost | Every transition is physically feasible |
-| Backtrack produces exactly N candidates for N events | `result.path.length === events.length` |
+### 8.2 Why Chord History Is Not Stored in Each Trellis Cell
 
-### 7.5 Unit Tests: dp-capo
+Putting a mutable chord-to-shape history map inside every DP state would make state identity path-dependent. Two cells with the same current hand shape could have different future costs because their hidden histories differ, breaking the normal Viterbi optimal-substructure assumption and greatly expanding the state space.
 
-**File:** `__tests__/dp-capo.test.ts` [NEW]
+The implementation instead uses two deterministic passes.
 
-| Test | Assertion |
-|------|-----------|
-| Song in Bb → capo 1 produces lower cost than capo 0 | `result.capo === 1` and `result.totalCost < noCapoResult.totalCost` |
-| Song in Em → capo 0 is optimal | `result.capo === 0` |
-| Capo transposes MIDI correctly | Capo 2 → all MIDI values shifted down by 2 |
+### 8.3 Two-Pass Viterbi
 
-### 7.6 Integration Tests: dp-integration
+**Pass 1 — establish grips**
 
-**File:** `__tests__/dp-integration.test.ts` [NEW]
+1. Run normal Viterbi optimization.
+2. Walk the selected path in song order.
+3. Record the first selected exact shape for each normalized chord.
 
-| Test | Assertion |
-|------|-----------|
-| `applyDPOptimization` preserves melody pitches | Output MIDI matches input MIDI |
-| `applyDPOptimization` produces valid guitar tab | `validateGuitarTab()` returns valid |
-| Existing `generateFingerstyleArrangement` still passes | All existing tests in `fingerstyle-arranger.test.ts` green |
-| DP-optimized output has lower or equal total movement than greedy | Sum of fret distances ≤ greedy sum |
+**Pass 2 — optimize with fixed preferences**
 
-### 7.7 Regression Safety
+1. Rerun Viterbi with the fixed chord-to-shape map.
+2. If the preferred exact shape is feasible at the current event, add a finite mismatch cost to every other shape.
+3. If the preferred shape is not feasible for the current melody, bass, or fixed notes, add no mismatch cost.
 
-All existing tests in `fingerstyle-arranger.test.ts` (14 tests) must continue passing. The DP optimizer is additive — it is called as an optional post-processing step. When disabled (default for now), the output is identical to the current greedy algorithm.
+Current mismatch cost:
 
-## 8. Verification Commands
+```text
+C_recurring_shape = 200
+```
+
+The cost is deliberately strong but finite. It stabilizes recurring grips while still allowing another shape when pitch or physical constraints require it.
+
+## 9. Absolute Timing Extraction
+
+For time-slice measures:
+
+```text
+measureOffset[m]     = sum(grid.length for all preceding measures)
+absoluteOnsetStep    = measureOffset[m] + stepIndex
+durationSteps        = nextAbsoluteOnset - absoluteOnsetStep
+movementSteps        = absoluteOnsetStep - previousAbsoluteOnset
+```
+
+All values are clamped to at least one grid step where necessary.
+
+Fill-only steps are not independent DP decision events. They remain present as fixed simultaneous occupancy when they share a selected onset, but they do not shorten the preceding melody event by creating phantom rest decisions.
+
+## 10. Capo Optimization
+
+When `autoCapo` is enabled, `optimizeWithCapo()` evaluates capo positions from 0 through `maxCapo` (default 7):
+
+1. Transpose target MIDI values down by the capo amount relative to open-string tuning.
+2. Run the complete two-pass DP optimizer.
+3. Record total path cost.
+4. Select the minimum-cost capo.
+5. Rerun the winning capo with the main diagnostic logger.
+
+The result preserves the selected physical capo number in `DPResult.capo`.
+
+## 11. Ganesha Regression
+
+The regression fixture contains the complete supplied ABC and ASCII tablature.
+
+The original final-measure B-string line was:
+
+```text
+B|-------------------------------------------------|-0-----5-----------0-----------------------------|
+```
+
+At the first Em attack, string 2 fret 0 is B3, but the authoritative source melody is E4. The corrected line is:
+
+```text
+B|-------------------------------------------------|-5-----5-----------0-----------------------------|
+```
+
+String 2 fret 5 is E4. The repeated E uses the same physical position, while the independent Em root and fifth remain intact on their own strings.
+
+The integration golden asserts the exact corrected ABC:
+
+```abc
+[!2!e!3!G!6!E,] !2!e !3!G !2!B4 !3!B
+```
+
+The `!N!` decorations are required at render time to force ABCJS to use the selected physical strings.
+
+## 12. Regression Coverage
+
+### 12.1 DP Unit and Behavioral Tests
+
+`src/lib/theory/__tests__/dp-fingerstyle-optimizer.test.ts` covers:
+
+- standard-tuning and string-index conversion;
+- skill constraints;
+- pitch-range filtering;
+- melody/bass collision rejection;
+- fixed simultaneous-string occupancy;
+- fret-span and barre constraints;
+- open-string placement preference;
+- finite penalties for rushed movement;
+- guide-finger and slide detection;
+- hammer-on and pull-off detection;
+- absolute-onset sustain timing;
+- incoming movement interval versus destination duration;
+- exact `Em → Am → Em` shape reuse;
+- fallback when the established recurring shape is infeasible;
+- finite complete paths, rest events, and backtracking length;
+- capo optimization; and
+- diagnostic logging.
+
+### 12.2 Production-Seam Golden Tests
+
+`src/lib/theory/fingerstyle-arranger/__tests__/dp-integration.test.ts` covers:
+
+1. A minimal wrong-tab regression where source E4 was submitted as string 3 fret 0 (G3).
+2. Preservation of independent root and fifth events.
+3. Unique simultaneous physical strings.
+4. The complete supplied Ganesha ABC fixture.
+5. The complete reported ASCII fixture.
+6. Melody MIDI equality for every source attack after DP.
+7. Exact forced-string ABC for the corrected final measure.
+8. Exact complete corrected ASCII tablature.
+
+## 13. Complexity and Determinism
+
+Let:
+
+- `N` = number of DP decision events;
+- `K` = candidates retained per event, capped at 20;
+- `C` = number of capo positions when capo sweep is enabled.
+
+One Viterbi pass is:
+
+```text
+Time:   O(N × K²)
+Memory: O(N × K)
+```
+
+Recurring-shape optimization uses two passes:
+
+```text
+Time: O(2 × N × K²) = O(N × K²)
+```
+
+Capo sweep is:
+
+```text
+Time: O(C × N × K²)
+```
+
+Candidate sorting and tie-breaking are deterministic, and recurring-shape preferences are fixed before the second pass. Identical input and options therefore produce identical output.
+
+## 14. Diagnostics
+
+The optimizer logs:
+
+- extracted events and source pitches;
+- skill level, BPM, and capo;
+- candidate counts;
+- representative candidates and transition costs;
+- established recurring chord shapes;
+- selected techniques;
+- backtracked optimal path;
+- total hand movement;
+- technique distribution;
+- pitch-invariant failures;
+- retained pre-existing validation issues; and
+- accepted versus rolled-back writeback.
+
+These logs are intended to explain optimization decisions without changing the stable public return types.
+
+## 15. Verification
+
+Primary commands:
 
 ```bash
-# Run only the new DP tests
-npx vitest run src/lib/theory/__tests__/dp-
+# DP unit and production-seam regressions
+npx vitest run \
+  src/lib/theory/__tests__/dp-fingerstyle-optimizer.test.ts \
+  src/lib/theory/fingerstyle-arranger/__tests__/dp-integration.test.ts
 
-# Run all fingerstyle tests (existing + new)
-npx vitest run src/lib/theory/__tests__/fingerstyle-arranger.test.ts src/lib/theory/__tests__/dp-
+# Related fingerstyle regressions
+npx vitest run \
+  src/lib/theory/__tests__/dp-fingerstyle-optimizer.test.ts \
+  src/lib/theory/fingerstyle-arranger/__tests__/dp-integration.test.ts \
+  src/lib/theory/fingerstyle-arranger/__tests__/dp-m3-m4-transition.test.ts \
+  src/lib/theory/fingerstyle-arranger/__tests__/time-slice.test.ts \
+  src/lib/theory/__tests__/fingerstyle-arranger.test.ts
 
-# Full regression check
+# Project validation
 npm test
 npx tsc --noEmit
+npm run lint
+npm run build
 ```
 
-## 9. Post-Implementation Discoveries & Bug Fixes
+Verification performed for this implementation:
 
-During integration testing with real song data (e.g., Ganesha song M1-M5), several critical issues were identified and resolved in the DP algorithm:
+- Focused DP tests: 55 passed.
+- Related fingerstyle regression selection: 72 passed.
+- TypeScript: passed.
+- ESLint on changed DP files: passed with no issues.
+- Production build: passed.
 
-### 9.1 Infinity Trellis Poisoning
-**Issue:** The position movement cost function originally used hard `Infinity` walls for jumps that exceeded the physical time limit or skill-gated per-beat limit. A single impossible transition (like a 6-fret jump in 1 beat) would poison the entire Viterbi trellis downstream, resulting in arbitrary path selection.
-**Fix:** Replaced `return Infinity` with steep but finite graduated penalties (e.g., `10 + distance*2 + excess^2*3`). This ensures the Viterbi trellis always has finite costs, allowing the optimizer to find the "least painful" path through challenging position jumps.
+At the time of verification, the full test suite had one unrelated failure from an untracked melody fixture with no parseable note token, and full-project lint still reported the known vendored `public/abcjs-basic-min.js` issues. Those unrelated files were not changed as part of the DP optimization.
 
-### 9.2 Fill-Only Step Duration Corruption
-**Issue:** Fill-only steps (without melody or bass) were being extracted as phantom "rest" DP events. This halved the duration perceived by the preceding melody event, breaking the cost calculations.
-**Fix:** Added a `hasMelodyOrBass` guard during extraction. Only steps containing melody, bass, root, or fifth roles are treated as DP events. Fills are invisible to the DP optimizer.
+## 16. Future Optimization Opportunities
 
-### 9.3 Technique Detection Writeback
-**Issue:** `detectBestTechnique()` correctly identified legato moves (hammer-on, pull-off), but every candidate in the output path remained "free-stroke".
-**Fix:** The optimizer now clones the candidate as a `resolvedCandidate` and writes the correct technique before inserting it into the trellis.
+The current candidate cap keeps the trellis small, but candidate pruning is local. If future arrangements require denser six-string voicings, consider a diversity-preserving beam that retains candidates across open position, low position, high position, and exact recurring shapes.
 
-### 9.4 Independent LLM Optimization Convergence
-**Discovery:** The LLM independently chose to pre-position the hand to string 2 / fret 5 (instead of open string 1) right before a large position jump, which is the exact optimal move computed by the DP Viterbi algorithm. This confirms that the DP cost model perfectly aligns with expert guitar instincts.
+Other future improvements:
+
+1. Represent more than one independently movable support note in a DP event instead of fixing all non-selected notes.
+2. Include right-hand finger transitions and repeated-finger speed limits in the state.
+3. Track sustain per musical note, not only per physical string.
+4. Add chord-equivalence normalization for aliases such as `Em`, `Emin`, and `E-` when musically appropriate.
+5. Learn configurable cost weights from accepted user arrangements while preserving hard pitch and collision invariants.
+6. Extend optimization to alternate tunings such as Drop D and DADGAD.
+7. Use an admissible lower bound or beam search if candidate density grows beyond the current `K ≤ 20` design.
+
+Any future cost-model change must retain the golden Ganesha ABC/ASCII regression and the hard source-pitch, exact-binding, and unique-string invariants.

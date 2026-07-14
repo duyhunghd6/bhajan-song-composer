@@ -1,5 +1,5 @@
 import type { DPCandidate, DPHandState, DPNoteEvent, DPResult, SkillLevel } from "./dp-types";
-import { DPDiagnosticLogger, initialHandState, midiToNoteName, indexToString } from "./dp-types";
+import { DPDiagnosticLogger, initialHandState, midiToNoteName } from "./dp-types";
 import { generateCandidates } from "./dp-candidates";
 import { transitionCost, applyCandidate, detectBestTechnique } from "./dp-cost";
 
@@ -18,6 +18,30 @@ interface TrellisCell {
   state: DPHandState;
 }
 
+const RECURRING_SHAPE_MISMATCH_COST = 200;
+
+function normalizeChord(chord: string): string {
+  return chord.trim().replace(/\s+/g, "").toLowerCase();
+}
+
+function shapeKey(candidate: DPCandidate): string {
+  return candidate.shapeFrets.map(fret => fret ?? "x").join(":");
+}
+
+function recurringShapeCost(
+  event: DPNoteEvent,
+  candidate: DPCandidate,
+  candidates: DPCandidate[],
+  preferredShapes?: ReadonlyMap<string, string>
+): number {
+  const preferred = preferredShapes?.get(normalizeChord(event.chord));
+  if (!preferred) return 0;
+
+  const preferredIsFeasible = candidates.some(option => shapeKey(option) === preferred);
+  if (!preferredIsFeasible || shapeKey(candidate) === preferred) return 0;
+  return RECURRING_SHAPE_MISMATCH_COST;
+}
+
 /** Format a candidate for logging. */
 function formatCandidate(c: DPCandidate): string {
   const mel = c.melodyString !== null
@@ -30,14 +54,6 @@ function formatCandidate(c: DPCandidate): string {
   return `${mel} ${bass} pos=${c.handPosition}${barre}`;
 }
 
-/** Format a shape frets array for logging. */
-function formatShape(frets: (number | null)[]): string {
-  return frets.map((f, i) => {
-    const s = indexToString(i);
-    return f !== null ? `s${s}:${f}` : `s${s}:x`;
-  }).join(" ");
-}
-
 /**
  * Run the Viterbi algorithm to find the minimum-cost path through the
  * space of hand-shape candidates across all events.
@@ -45,13 +61,14 @@ function formatShape(frets: (number | null)[]): string {
  * Complexity: O(N × K²) where N = number of events, K = candidates per event.
  * With K capped at 20 and N typically < 200, this runs in ~80K iterations.
  */
-export function optimizeFingerstylePath(
+function runViterbiPass(
   events: DPNoteEvent[],
   skillLevel: SkillLevel,
-  capo: number = 0,
-  logger?: DPDiagnosticLogger
+  capo: number,
+  logger: DPDiagnosticLogger,
+  preferredShapes?: ReadonlyMap<string, string>
 ): DPResult {
-  const log = logger ?? new DPDiagnosticLogger();
+  const log = logger;
 
   if (events.length === 0) {
     log.section("VITERBI OPTIMIZER");
@@ -80,7 +97,8 @@ export function optimizeFingerstylePath(
 
   const init = initialHandState();
   const firstColumn: TrellisCell[] = firstCandidates.map((candidate, ci) => {
-    const cost = transitionCost(init, candidate, events[0], skillLevel);
+    const cost = transitionCost(init, candidate, events[0], skillLevel)
+      + recurringShapeCost(events[0], candidate, firstCandidates, preferredShapes);
     const cell = {
       candidate,
       cumulativeCost: cost,
@@ -147,10 +165,17 @@ export function optimizeFingerstylePath(
       let bestState: DPHandState = initialHandState();
       let bestTransCost = Infinity;
       let bestTechnique: string = "free-stroke";
+      const preferenceCost = recurringShapeCost(
+        event,
+        candidate,
+        candidates,
+        preferredShapes
+      );
 
       for (let p = 0; p < prevColumn.length; p++) {
         const prevCell = prevColumn[p];
-        const tCost = transitionCost(prevCell.state, candidate, event, skillLevel);
+        const tCost = transitionCost(prevCell.state, candidate, event, skillLevel)
+          + preferenceCost;
         const total = prevCell.cumulativeCost + tCost;
 
         if (total < bestTotal) {
@@ -252,4 +277,43 @@ export function optimizeFingerstylePath(
     skillLevel,
     logs: log.getLines(),
   };
+}
+
+/**
+ * Optimize once to establish a preferred grip for each chord, then rerun with
+ * those fixed preferences. The second pass keeps chord history outside the
+ * trellis, preserving Viterbi's optimal-substructure assumption.
+ */
+export function optimizeFingerstylePath(
+  events: DPNoteEvent[],
+  skillLevel: SkillLevel,
+  capo: number = 0,
+  logger?: DPDiagnosticLogger
+): DPResult {
+  const firstPass = runViterbiPass(
+    events,
+    skillLevel,
+    capo,
+    new DPDiagnosticLogger()
+  );
+  if (firstPass.path.length !== events.length) {
+    return firstPass;
+  }
+
+  const preferredShapes = new Map<string, string>();
+  for (let index = 0; index < events.length; index++) {
+    const chord = normalizeChord(events[index].chord);
+    if (chord && chord !== "n.c." && !preferredShapes.has(chord)) {
+      preferredShapes.set(chord, shapeKey(firstPass.path[index]));
+    }
+  }
+
+  const log = logger ?? new DPDiagnosticLogger();
+  log.section("CHORD SHAPE MEMORY");
+  log.entry("Established chord shapes", preferredShapes.size);
+  for (const [chord, shape] of preferredShapes) {
+    log.log(`  ${chord}: ${shape}`);
+  }
+
+  return runViterbiPass(events, skillLevel, capo, log, preferredShapes);
 }

@@ -116,6 +116,10 @@ export interface DPHandState {
 export interface DPNoteEvent {
   /** Index in the flattened event sequence. */
   index: number;
+  /** Absolute onset in quantized grid steps across the optimized input. */
+  absoluteOnsetStep?: number;
+  /** Simultaneous string/fret assignments that this DP event must not move. */
+  fixedFrets?: (number | null)[];
   /** Melody pitch as MIDI number, or null for bass-only / rest. */
   melodyMidi: number | null;
   /** Bass pitch as MIDI number, or null for melody-only / rest. */
@@ -124,6 +128,8 @@ export interface DPNoteEvent {
   chord: string;
   /** Duration in time-slice steps (1 step = 1/16th note in 4/4). */
   durationSteps: number;
+  /** Grid steps available to move from the preceding event into this event. */
+  movementSteps?: number;
   /** BPM for computing real-time constraints. */
   bpm: number;
   /** Whether this is a rest (no sound required). */

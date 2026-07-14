@@ -1,5 +1,4 @@
-import type { GuitarStringNumber } from "../fingerstyle-compressor";
-import { midiForStringFret } from "../guitar-playability";
+import { midiForStringFret, parseScientificPitch } from "../guitar-playability";
 import type {
   FingerstyleCanonicalEvent,
   FingerstyleCanonicalMeasure,
@@ -10,6 +9,7 @@ import { DPDiagnosticLogger, STANDARD_TUNING_MIDI, stringToIndex, midiToNoteName
 import { optimizeFingerstylePath } from "./dp-optimizer";
 import { optimizeWithCapo } from "./dp-capo";
 import type { TimeSliceMeasure, TimeSliceGridStep } from "./time-slice";
+import { validateFingerstylePhysics } from "./physics-validation";
 
 // ---------------------------------------------------------------------------
 // Extract DPNoteEvents from the Event Matrix
@@ -30,6 +30,7 @@ export function extractDPEvents(
   const log = logger;
   const events: DPNoteEvent[] = [];
   let eventIndex = 0;
+  let previousAbsoluteOnsetStep: number | null = null;
 
   log?.section("EXTRACT DP EVENTS FROM MATRIX");
   log?.entry("Total measures", matrix.measures.length);
@@ -67,6 +68,17 @@ export function extractDPEvents(
       const durationSteps = Math.max(1, Math.round(
         (durationUnits / matrix.durationContext.unitsPerBeat) * stepsPerBeat
       ));
+      const stepsPerMeasure = matrix.durationContext.meter.numerator * stepsPerBeat;
+      const onsetSteps = Math.round(
+        (onset / matrix.durationContext.unitsPerBeat) * stepsPerBeat
+      );
+      const absoluteOnsetStep = measure.measureIndex * stepsPerMeasure + onsetSteps;
+      const movementSteps = Math.max(
+        1,
+        previousAbsoluteOnsetStep === null
+          ? absoluteOnsetStep
+          : absoluteOnsetStep - previousAbsoluteOnsetStep
+      );
 
       const melodyMidi = melodyEvent
         ? midiForStringFret(melodyEvent.string as 1 | 2 | 3 | 4 | 5 | 6, melodyEvent.fret)
@@ -77,6 +89,8 @@ export function extractDPEvents(
 
       events.push({
         index: eventIndex++,
+        absoluteOnsetStep,
+        movementSteps,
         melodyMidi,
         bassMidi,
         chord: measure.chord,
@@ -84,14 +98,24 @@ export function extractDPEvents(
         bpm,
         isRest: !melodyEvent && !bassEvent,
       });
+      previousAbsoluteOnsetStep = absoluteOnsetStep;
     }
 
     // If measure has only rests (no events), emit a single rest event
     if (measure.events.length === 0) {
       const stepsPerBeat = 4;
       const stepsPerMeasure = matrix.durationContext.meter.numerator * stepsPerBeat;
+      const absoluteOnsetStep = measure.measureIndex * stepsPerMeasure;
+      const movementSteps = Math.max(
+        1,
+        previousAbsoluteOnsetStep === null
+          ? absoluteOnsetStep
+          : absoluteOnsetStep - previousAbsoluteOnsetStep
+      );
       events.push({
         index: eventIndex++,
+        absoluteOnsetStep,
+        movementSteps,
         melodyMidi: null,
         bassMidi: null,
         chord: measure.chord,
@@ -99,6 +123,7 @@ export function extractDPEvents(
         bpm,
         isRest: true,
       });
+      previousAbsoluteOnsetStep = absoluteOnsetStep;
       log?.log(`  M${measure.measureIndex + 1}: REST measure`);
     }
   }
@@ -305,86 +330,98 @@ export function applyDPToTimeSliceMeasures(
   log.entry("Fixed capo", options.capo ?? 0);
   log.entry("Measures", measures.length);
 
-  // ── Phase 1: Extract DP events ──────────────────────────────────────
-  // Only steps with melody or bass tablature become DP events.
-  // Fill-only steps are skipped to prevent duration corruption.
+  type Binding = {
+    measureIndex: number;
+    stepIndex: number;
+    melodyTabIndex: number | null;
+    bassTabIndex: number | null;
+    absoluteOnsetStep: number;
+  };
 
   const dpEvents: DPNoteEvent[] = [];
-  let eventIndex = 0;
+  const bindings: Binding[] = [];
+  const measureOffsets: number[] = [];
+  let totalGridSteps = 0;
+  for (const measure of measures) {
+    measureOffsets.push(totalGridSteps);
+    totalGridSteps += measure.grid.length;
+  }
 
   log.section("EXTRACT DP EVENTS FROM TIME-SLICE");
 
-  // Collect coordinates of steps that have melody/bass tablature
-  const noteSteps: { measureIndex: number; stepIndex: number; chord: string }[] = [];
+  for (let measureIndex = 0; measureIndex < measures.length; measureIndex++) {
+    const measure = measures[measureIndex];
+    for (let stepIndex = 0; stepIndex < measure.grid.length; stepIndex++) {
+      const step = measure.grid[stepIndex];
+      if (!hasMelodyOrBass(step)) continue;
 
-  for (let m = 0; m < measures.length; m++) {
-    const measure = measures[m];
-    for (let s = 0; s < measure.grid.length; s++) {
-      const step = measure.grid[s];
-      if (hasMelodyOrBass(step)) {
-        noteSteps.push({ measureIndex: m, stepIndex: s, chord: step.chord });
+      const tablature = step.tablature ?? [];
+      const melodyTabIndex = tablature.findIndex(tab => tab.role === "melody");
+      const bassTabIndex = tablature.findIndex(
+        tab => tab.role === "bass" || tab.role === "root" || tab.role === "fifth"
+      );
+      const absoluteOnsetStep = measureOffsets[measureIndex] + stepIndex;
+
+      const fixedFrets: (number | null)[] = [null, null, null, null, null, null];
+      for (let tabIndex = 0; tabIndex < tablature.length; tabIndex++) {
+        if (tabIndex === melodyTabIndex || tabIndex === bassTabIndex) continue;
+        const tab = tablature[tabIndex];
+        fixedFrets[stringToIndex(tab.string)] = tab.fret;
       }
+
+      const melodyTab = melodyTabIndex >= 0 ? tablature[melodyTabIndex] : null;
+      const bassTab = bassTabIndex >= 0 ? tablature[bassTabIndex] : null;
+      const authoritativeMelody = step.melody.pitch
+        ? parseScientificPitch(step.melody.pitch)?.midi ?? null
+        : null;
+      const melodyMidi = melodyTab
+        ? authoritativeMelody ?? midiForStringFret(melodyTab.string, melodyTab.fret)
+        : null;
+      const bassMidi = bassTab
+        ? midiForStringFret(bassTab.string, bassTab.fret)
+        : null;
+
+      bindings.push({
+        measureIndex,
+        stepIndex,
+        melodyTabIndex: melodyTabIndex >= 0 ? melodyTabIndex : null,
+        bassTabIndex: bassTabIndex >= 0 ? bassTabIndex : null,
+        absoluteOnsetStep,
+      });
+      dpEvents.push({
+        index: dpEvents.length,
+        absoluteOnsetStep,
+        fixedFrets,
+        melodyMidi,
+        bassMidi,
+        chord: step.chord || "N.C.",
+        durationSteps: 1,
+        bpm,
+        isRest: false,
+      });
     }
   }
 
-  log.entry("Steps with melody/bass", noteSteps.length);
-
-  for (let i = 0; i < noteSteps.length; i++) {
-    const { measureIndex, stepIndex, chord } = noteSteps[i];
-    const step = measures[measureIndex].grid[stepIndex];
-
-    // Duration: distance (in grid steps) to the NEXT melody/bass step
-    let durationSteps: number;
-    if (i + 1 < noteSteps.length) {
-      const next = noteSteps[i + 1];
-      if (next.measureIndex === measureIndex) {
-        durationSteps = next.stepIndex - stepIndex;
-      } else {
-        // Sum remaining steps in current measure + steps before next event in subsequent measures
-        let totalSteps = measures[measureIndex].grid.length - stepIndex;
-        for (let mBetween = measureIndex + 1; mBetween < next.measureIndex; mBetween++) {
-          totalSteps += measures[mBetween].grid.length;
-        }
-        totalSteps += next.stepIndex;
-        durationSteps = totalSteps;
-      }
-    } else {
-      // Last event: duration = remaining steps in the measure
-      durationSteps = measures[measureIndex].grid.length - stepIndex;
-    }
-    durationSteps = Math.max(1, durationSteps);
-
-    const melodyEvent = step.tablature?.find(t => t.role === "melody");
-    const bassEvent = step.tablature?.find(t => t.role === "bass" || t.role === "root" || t.role === "fifth");
-
-    const melodyMidi = melodyEvent ? midiForStringFret(melodyEvent.string as GuitarStringNumber, melodyEvent.fret) : null;
-    const bassMidi = bassEvent ? midiForStringFret(bassEvent.string as GuitarStringNumber, bassEvent.fret) : null;
-
-    dpEvents.push({
-      index: eventIndex,
-      melodyMidi,
-      bassMidi,
-      chord: chord || "N.C.",
-      durationSteps,
-      bpm,
-      isRest: false, // We only extracted steps with melody/bass, so never rest
-    });
-
-    // Per-event diagnostic log
-    log.item(eventIndex, [
-      `M${measureIndex + 1}/s${stepIndex + 1}`,
-      `chord=${chord}`,
-      `mel=${midiToNoteName(melodyMidi)}${melodyEvent ? ` s${melodyEvent.string}/f${melodyEvent.fret}` : ""}`,
-      `bass=${midiToNoteName(bassMidi)}${bassEvent ? ` s${bassEvent.string}/f${bassEvent.fret}` : ""}`,
-      `dur=${durationSteps}steps`,
+  for (let index = 0; index < dpEvents.length; index++) {
+    const nextOnset = dpEvents[index + 1]?.absoluteOnsetStep ?? totalGridSteps;
+    const onset = dpEvents[index].absoluteOnsetStep ?? 0;
+    const previousOnset = dpEvents[index - 1]?.absoluteOnsetStep;
+    dpEvents[index].durationSteps = Math.max(1, nextOnset - onset);
+    dpEvents[index].movementSteps = Math.max(
+      1,
+      previousOnset === undefined ? onset : onset - previousOnset
+    );
+    const binding = bindings[index];
+    log.item(index, [
+      `M${binding.measureIndex + 1}/s${binding.stepIndex + 1}`,
+      `chord=${dpEvents[index].chord}`,
+      `mel=${midiToNoteName(dpEvents[index].melodyMidi)}`,
+      `bass=${midiToNoteName(dpEvents[index].bassMidi)}`,
+      `dur=${dpEvents[index].durationSteps}steps`,
     ].join(" | "));
-
-    eventIndex++;
   }
 
   log.entry("Total DP events extracted", dpEvents.length);
-
-  // ── Phase 2: Run Viterbi optimizer ──────────────────────────────────
 
   let result: DPResult;
   if (options.autoCapo) {
@@ -393,54 +430,83 @@ export function applyDPToTimeSliceMeasures(
     result = optimizeFingerstylePath(dpEvents, skillLevel, options.capo ?? 0, log);
   }
 
-  // ── Phase 3: Apply DP result back onto the grid ─────────────────────
-  // Walk the same melody/bass steps in the same order to maintain alignment.
-
   log.section("APPLY DP RESULT TO TIME-SLICE");
-
-  let dpIndex = 0;
   let changedCount = 0;
-
+  let writebackValid = result.path.length === bindings.length;
   const updatedMeasures: TimeSliceMeasure[] = JSON.parse(JSON.stringify(measures));
 
-  for (let m = 0; m < updatedMeasures.length; m++) {
-    const measure = updatedMeasures[m];
-    for (let s = 0; s < measure.grid.length; s++) {
-      const step = measure.grid[s];
-      if (!hasMelodyOrBass(step)) continue;
+  for (let index = 0; index < bindings.length && index < result.path.length; index++) {
+    const binding = bindings[index];
+    const candidate = result.path[index];
+    const event = dpEvents[index];
+    const step = updatedMeasures[binding.measureIndex].grid[binding.stepIndex];
+    const tablature = step.tablature ?? [];
 
-      const dpCandidate = dpIndex < result.path.length ? result.path[dpIndex] : null;
-      dpIndex++;
+    if (binding.melodyTabIndex !== null && candidate.melodyString !== null) {
+      const actualMidi = midiForStringFret(candidate.melodyString, candidate.melodyFret);
+      if (actualMidi !== event.melodyMidi) {
+        writebackValid = false;
+        log.log(`  ⚠ M${binding.measureIndex + 1}/s${binding.stepIndex + 1} melody pitch invariant failed`);
+        break;
+      }
+      const tab = tablature[binding.melodyTabIndex];
+      if (tab.string !== candidate.melodyString || tab.fret !== candidate.melodyFret) {
+        changedCount++;
+        log.log(`  M${binding.measureIndex + 1}/s${binding.stepIndex + 1} melody: s${tab.string}/f${tab.fret} → s${candidate.melodyString}/f${candidate.melodyFret}`);
+      }
+      tab.string = candidate.melodyString;
+      tab.fret = candidate.melodyFret;
+    }
 
-      if (dpCandidate && step.tablature) {
-        for (const tab of step.tablature) {
-          if (tab.role === "melody" && dpCandidate.melodyString !== null) {
-            if (tab.string !== dpCandidate.melodyString || tab.fret !== dpCandidate.melodyFret) {
-              log.log(`  M${m + 1}/s${s + 1} melody: s${tab.string}/f${tab.fret} → s${dpCandidate.melodyString}/f${dpCandidate.melodyFret} tech=${dpCandidate.melodyTechnique}`);
-              changedCount++;
-            }
-            tab.string = dpCandidate.melodyString;
-            tab.fret = dpCandidate.melodyFret;
-          } else if ((tab.role === "bass" || tab.role === "root" || tab.role === "fifth") && dpCandidate.bassString !== null) {
-            if (tab.string !== dpCandidate.bassString || tab.fret !== dpCandidate.bassFret) {
-              log.log(`  M${m + 1}/s${s + 1} ${tab.role}: s${tab.string}/f${tab.fret} → s${dpCandidate.bassString}/f${dpCandidate.bassFret}`);
-              changedCount++;
-            }
-            tab.string = dpCandidate.bassString;
-            tab.fret = dpCandidate.bassFret;
-          }
-        }
+    if (binding.bassTabIndex !== null && candidate.bassString !== null) {
+      const actualMidi = midiForStringFret(candidate.bassString, candidate.bassFret);
+      if (actualMidi !== event.bassMidi) {
+        writebackValid = false;
+        log.log(`  ⚠ M${binding.measureIndex + 1}/s${binding.stepIndex + 1} bass pitch invariant failed`);
+        break;
+      }
+      const tab = tablature[binding.bassTabIndex];
+      if (tab.string !== candidate.bassString || tab.fret !== candidate.bassFret) {
+        changedCount++;
+        log.log(`  M${binding.measureIndex + 1}/s${binding.stepIndex + 1} ${tab.role}: s${tab.string}/f${tab.fret} → s${candidate.bassString}/f${candidate.bassFret}`);
+      }
+      tab.string = candidate.bassString;
+      tab.fret = candidate.bassFret;
+    }
+  }
+
+  if (writebackValid) {
+    for (let index = 0; index < updatedMeasures.length; index++) {
+      const measure = updatedMeasures[index];
+      const validationOptions = {
+        fillDensity: measure.style_profile.fill_density,
+      };
+      const before = validateFingerstylePhysics(
+        measures[index].grid,
+        validationOptions
+      );
+      const after = validateFingerstylePhysics(measure.grid, validationOptions);
+      if (!after.valid && before.valid) {
+        writebackValid = false;
+        log.log(`  ⚠ POST-DP PHYSICS VALIDATION M${measure.measure}: ${after.message}`);
+        break;
+      }
+      if (!after.valid) {
+        log.log(`  ⚠ M${measure.measure} retains pre-existing validation issues after pitch-safe DP writeback.`);
       }
     }
   }
 
   log.entry("Events updated", changedCount);
-  log.entry("Events unchanged", dpIndex - changedCount);
   log.section("DP FINGERSTYLE OPTIMIZATION COMPLETE");
   log.entry("Final total cost", result.totalCost.toFixed(2));
   log.entry("Selected capo", result.capo);
+  log.entry("Writeback", writebackValid ? "accepted" : "rolled back");
 
   const allLogs = log.getLines();
-  return { measures: updatedMeasures, logs: allLogs };
+  return {
+    measures: writebackValid ? updatedMeasures : measures,
+    logs: allLogs,
+  };
 }
 

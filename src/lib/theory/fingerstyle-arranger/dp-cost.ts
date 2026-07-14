@@ -1,4 +1,3 @@
-import type { GuitarStringNumber } from "../fingerstyle-compressor";
 import {
   type DPCandidate,
   type DPHandState,
@@ -304,6 +303,17 @@ export function skillMultiplier(
 // ---------------------------------------------------------------------------
 
 /**
+ * Intrinsic cost of the selected note positions. Open strings require no
+ * left-hand press, so equivalent fretted assignments receive a small penalty.
+ */
+export function placementCost(candidate: DPCandidate): number {
+  let cost = 0;
+  if (candidate.melodyString !== null && candidate.melodyFret > 0) cost += 0.4;
+  if (candidate.bassString !== null && candidate.bassFret > 0) cost += 0.4;
+  return cost;
+}
+
+/**
  * Compute the total cost of transitioning from `fromState` to `toCandidate`
  * for the given event and skill level.
  */
@@ -321,10 +331,11 @@ export function transitionCost(
   if (!isFinite(sMul)) return Infinity;
 
   // 3. Position movement
+  const movementSteps = event.movementSteps ?? event.durationSteps;
   const posCost = positionMovementCost(
     fromState.handPosition,
     toCandidate.handPosition,
-    event.durationSteps,
+    movementSteps,
     event.bpm,
     skillLevel
   );
@@ -334,7 +345,11 @@ export function transitionCost(
   const shapeCost = shapeChangeCost(fromState.frets, toCandidate.shapeFrets);
 
   // 5. Sustain violation
-  const sustainCost = sustainViolationCost(fromState, toCandidate.shapeFrets, event.index);
+  const sustainCost = sustainViolationCost(
+    fromState,
+    toCandidate.shapeFrets,
+    event.absoluteOnsetStep ?? event.index
+  );
 
   // 6. Technique cost
   const techCost = techniqueCost(
@@ -343,14 +358,15 @@ export function transitionCost(
     fromState.consecutiveBarreMeasures,
     fromState,
     toCandidate,
-    event.durationSteps,
+    movementSteps,
     event.bpm
   );
 
   // Barre penalty for lower skill levels
   const barrePenalty = toCandidate.usesBarre ? (2.0 + 0.3 * fromState.consecutiveBarreMeasures) : 0;
 
-  const baseCost = posCost + shapeCost + sustainCost + techCost + barrePenalty;
+  const baseCost = posCost + shapeCost + sustainCost + techCost
+    + barrePenalty + placementCost(toCandidate);
   return baseCost * sMul;
 }
 
@@ -363,17 +379,18 @@ export function applyCandidate(
   event: DPNoteEvent
 ): DPHandState {
   const ringingUntil: (number | null)[] = [null, null, null, null, null, null];
+  const onsetStep = event.absoluteOnsetStep ?? event.index;
 
   // Melody note rings for its duration
   if (candidate.melodyString !== null) {
     const idx = stringToIndex(candidate.melodyString);
-    ringingUntil[idx] = event.index + event.durationSteps;
+    ringingUntil[idx] = onsetStep + event.durationSteps;
   }
 
   // Bass note rings for its duration
   if (candidate.bassString !== null) {
     const idx = stringToIndex(candidate.bassString);
-    ringingUntil[idx] = event.index + event.durationSteps;
+    ringingUntil[idx] = onsetStep + event.durationSteps;
   }
 
   return {
