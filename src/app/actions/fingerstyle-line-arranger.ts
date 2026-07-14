@@ -6,7 +6,10 @@ import type { TimeSliceMeasure, TimeSliceGridStep } from "@/lib/theory/fingersty
 import { validateFingerstylePhysics } from "@/lib/theory/fingerstyle-arranger/physics-validation";
 import { formatLineAsToon, formatMeasureAsToon, renderAsciiTab } from "@/lib/theory/fingerstyle-arranger/toon-utils";
 import { applyDPToTimeSliceMeasures } from "@/lib/theory/fingerstyle-arranger/dp-integration";
+import fs from "fs/promises";
+import path from "path";
 
+const FINGERSTYLE_DIAGNOSTICS_DIR = ".fingerstyle-diagnostics";
 // ── Types ──────────────────────────────────────────────────────────────
 
 export interface PreviousLineContext {
@@ -137,6 +140,21 @@ export async function generateAIFingerstyleLine(
   
   let finalOutput: GenerateFingerstyleLineOutput | null = null;
   const logs: string[] = [];
+
+  const writeLogToDisk = async () => {
+    try {
+      const lineIndex = input.lineMeasures[0]?.lineIndex ?? input.previousLines.length;
+      const absoluteDir = path.join(process.cwd(), FINGERSTYLE_DIAGNOSTICS_DIR);
+      await fs.mkdir(absoluteDir, { recursive: true });
+      await fs.writeFile(
+        path.join(absoluteDir, `line-${lineIndex + 1}-last-run.log`),
+        logs.join("\n"),
+        "utf-8"
+      );
+    } catch (fsError) {
+      console.error("Failed to write diagnostic log:", fsError);
+    }
+  };
 
   logs.push(`=== SYSTEM PROMPT ===\n${systemPrompt}\n`);
   logs.push(`=== USER PROMPT ===\n${userPrompt}\n`);
@@ -338,6 +356,7 @@ export async function generateAIFingerstyleLine(
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error during AI generation.";
+    await writeLogToDisk();
     return {
       success: false,
       logs,
@@ -346,6 +365,7 @@ export async function generateAIFingerstyleLine(
   }
 
   if (!finalOutput) {
+    await writeLogToDisk();
     return {
       success: false,
       logs,
@@ -353,5 +373,6 @@ export async function generateAIFingerstyleLine(
     };
   }
 
+  await writeLogToDisk();
   return finalOutput;
 }
