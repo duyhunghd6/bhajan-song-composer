@@ -126,27 +126,43 @@ async function requestChatCompletion(input: {
     toolNames: input.tools.map((tool) => (tool as { function?: { name?: string } }).function?.name).filter((name): name is string => Boolean(name)),
   });
 
-  let res: Response;
-  try {
-    res = await fetch(`${config.url}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${config.apiKey}`,
-      },
-      body: JSON.stringify({
-        model: config.model,
-        messages: input.messages,
-        tools: input.tools,
-        tool_choice: input.toolChoice,
-        ...(typeof input.temperature === "number" ? { temperature: input.temperature } : {}),
-      }),
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "LLM request failed before receiving a response";
-    console.error("LLM API request failed:", error);
+  let res: Response | undefined;
+  let lastError: Error | undefined;
+  const maxRetries = 3;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      res = await fetch(`${config.url}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${config.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: config.model,
+          messages: input.messages,
+          tools: input.tools,
+          tool_choice: input.toolChoice,
+          ...(typeof input.temperature === "number" ? { temperature: input.temperature } : {}),
+        }),
+      });
+      break; // Success
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      const cause = (lastError as any).cause;
+      console.warn(`LLM API fetch attempt ${attempt} failed:`, lastError.message, cause ? `(Cause: ${cause})` : "");
+      if (attempt < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+      }
+    }
+  }
+
+  if (!res) {
+    const causeMsg = (lastError as any)?.cause ? ` (Cause: ${(lastError as any).cause.message || (lastError as any).cause})` : "";
+    const message = lastError ? `${lastError.message}${causeMsg}` : "LLM request failed after retries";
+    console.error("LLM API request failed permanently:", lastError);
     await emitDiagnostic(input.onDiagnostic, { type: "chat-error", iteration: input.iteration, message });
-    throw error;
+    throw lastError || new Error(message);
   }
 
   if (!res.ok) {
