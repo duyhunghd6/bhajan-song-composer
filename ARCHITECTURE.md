@@ -14,6 +14,9 @@ Composer screens live under `src/components/composer/`.
   - `AccompanimentStep.tsx` handles accompaniment workflow review, setup persistence, layer visibility, and instrument previews.
   - `arrangement-preview-model.ts` derives harmony and accompaniment preview models from workspace state, workflow state, ABC builders, and layer visibility.
   - `fingerstyle-measure-persistence.ts` versions source-bound time-slice persistence, restores only compatible tablature events, and rebuilds canonical forced Guitar ABC after hydration.
+  - `fingerstyle-diagnostic-persistence.ts` retains bounded, source-fingerprint-compatible LLM/DP diagnostic summaries; it removes LLM payload previews and enforces per-line, per-song, plaintext, event, and storage limits.
+  - `GuitarFingerstyleStep.tsx` persists independent player-skill/fill-density settings, passes previous/next-line measure context, and owns the route-level single-line generation lock.
+  - `FingerstyleLineCard.tsx` invokes staged line generation, restores compact fill-run summaries, and presents the dependency-free plaintext LLM/workflow/DP decision visualization through the existing copyable diagnostic terminal.
   - `preview.tsx` contains shared preview layout, render options, and harmonization display helpers.
 - `LayerManager.tsx` remains the public layer-stack entrypoint.
 - `layers/layer-manager-parts.tsx` contains layer stack defaults, layer parsing/combining utilities, and the extracted pipeline/fingerstyle panels.
@@ -51,8 +54,14 @@ Music-theory logic lives under `src/lib/theory/`.
 - `piano-accompaniment/pedal-automation.ts` contains sustain pedal automation and UI metadata generation.
 - `piano-accompaniment/output-contract.ts` contains piano key highlights, fingering metadata, and physical hand events.
 - `fingerstyle-arranger.ts` remains the public fingerstyle arrangement interface. It generates solo Guitar Fingerstyle parts that carry melody, add chord-derived bass, and emit intro/interlude/outro section markers for staff-system assembly.
-- `fingerstyle-arranger/llm-codec.ts` owns the compact model-bound voicing and tablature tables. It reconstructs canonical grids from server-owned source metadata before the existing physics validator runs.
-- `fingerstyle-arranger/types.ts` contains the exported fingerstyle source-layer, playability, section metadata, validation-compatible guitar tab events, artifact, and output contract types.
+- `fingerstyle-arranger/llm-codec.ts` owns the compact model-bound voicing and non-fill foundation tables. It reconstructs canonical grids from server-owned source metadata before physics validation.
+- `fingerstyle-arranger/fill-opportunities.ts` is the stable local entrypoint for skill/density policy, exhaustive safe-window analysis, scored legal atomic candidates, paginated compact contracts, selection/composition validation, and deterministic fill merge; implementation stays in `fingerstyle-arranger/fill-opportunities/`.
+- `fingerstyle-arranger/time-slice-abc-renderer.ts` renders sounding intervals, explicit fill durations, and tied melody segments while preserving forced guitar strings; `convertTimeSliceMeasureToAbc` remains at its historical import path.
+- `fingerstyle-arranger/dp-diagnostics.ts` owns the versioned DP event taxonomy, collector, rejection codes, cost breakdown contracts, fallback semantics, and terminal outcomes.
+- `fingerstyle-arranger/dp-time-slice-extraction.ts` and `dp-time-slice-integration.ts` keep authoritative source binding, writeback, validation, and rollback details behind the stable `dp-integration.ts` entrypoint.
+- `fingerstyle-arranger/generation-diagnostics.ts` combines bounded LLM tool-loop, staged foundation/fill workflow, and DP events into one browser-safe run, while `diagnostic-plaintext.ts` renders their timelines, candidate funnels, ASCII Viterbi trellis, selected costs, and validation outcome without an external chart dependency.
+- `src/app/actions/fingerstyle-line-arranger.ts` remains the public Server Action; its local `fingerstyle-line-arranger/` directory enforces foundation → DP freeze → paginated opportunity inspection → selection → composition → server merge → exact final-reference order.
+- `fingerstyle-arranger/types.ts` contains the exported fingerstyle source-layer, playability, section metadata, validation-compatible guitar tab events, artifact, and output contract types. Diagnostic data remains outside these stable musical artifact contracts.
 - `accompaniment-workflow.ts` remains the public accompaniment workflow interface. It owns setup normalization, legacy setup fallback, ordered-instrument role hints, and enabled-step planning. Solo/Fingerstyle and combined Accompaniment planning both enable branch steps only for checked instrument scopes in stack order; active sessions can be re-planned from setup checkbox changes so disabled instruments do not appear or block completion.
 - `accompaniment-workflow/definition.ts` contains workflow ids, setup types, instrument branch scopes, constants, and step definitions for shared, Guitar, Piano, Harmonium, Djembe, Flute, and Violin branches.
 - `accompaniment-workflow/session-transitions.ts` contains pure workflow session transitions for merging generated runs, selecting options, skipping branch steps, extracting profile hints, and detecting existing step results.
@@ -114,7 +123,7 @@ npm run lint
 npm run build
 ```
 
-Current project note: unit tests and TypeScript checks pass after the restructure. `npm run lint` currently fails on the vendored `public/abcjs-basic-min.js` file, and `npm run build` currently fails because the app uses Server Actions with static export.
+Current project note: focused fingerstyle suites and TypeScript checks pass. The repository-wide song-library test currently fails because `jago-kundalini-ma.melody.abc` is header-only. `npm run lint` may report the vendored `public/abcjs-basic-min.js` file, and `npm run build` can fail because the app uses Server Actions with static export.
 
 ## File-size and locality guidelines
 

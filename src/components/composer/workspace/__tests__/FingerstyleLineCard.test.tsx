@@ -58,6 +58,8 @@ describe("FingerstyleLineCard", () => {
     const activeAbc = `X:1\nT:Ganesha\nM:4/4\nL:1/8\nK:Em\n| [eBGE,] e G B4 B |`;
     const markup = renderToStaticMarkup(
       <FingerstyleLineCard
+        songSlug="ganesha"
+        sourceFingerprint="test-source"
         lineIndex={0}
         lineMeasures={[makeFinalMeasure()]}
         activeAbc={activeAbc}
@@ -65,14 +67,38 @@ describe("FingerstyleLineCard", () => {
         accompLayerVisibility={{ Melody: true, Guitar: true, TAB: true }}
         buildPreviousContext={() => []}
         workflowAppliedMusicAbc={activeAbc}
+        generationSettings={{ skillLevel: "beginner", densityMode: "auto" }}
         isAnotherLineGenerating={false}
+        onGenerationStateChange={() => {}}
       />
     );
 
     expect(markup).toContain(
-      "[V:Guitar] | [!2!B!3!G!6!E,] !2!e !3!G !2!B4 !3!B |"
+      "[V:Guitar] | [!2!B!3!G-!6!E,-]/2 [!3!G!6!E,]/2 !2!e !3!G !2!B4 !3!B |"
     );
     expect(markup).toContain('data-exact-copy="true"');
     expect(markup).toContain("Copy portable ABC");
+  });
+
+  it("disables generation while another line owns the route-level generation lock", () => {
+    const activeAbc = `X:1\nM:4/4\nL:1/8\nK:Em\n| E8 |`;
+    const markup = renderToStaticMarkup(
+      <FingerstyleLineCard
+        songSlug="ganesha"
+        sourceFingerprint="test-source"
+        lineIndex={0}
+        lineMeasures={[makeFinalMeasure()]}
+        activeAbc={activeAbc}
+        onUpdateMeasures={() => {}}
+        accompLayerVisibility={{ Melody: true, Guitar: true, TAB: true }}
+        buildPreviousContext={() => []}
+        workflowAppliedMusicAbc={activeAbc}
+        generationSettings={{ skillLevel: "beginner", densityMode: "auto" }}
+        isAnotherLineGenerating={true}
+        onGenerationStateChange={() => {}}
+      />
+    );
+
+    expect(markup).toContain("disabled=\"\"");
   });
 });

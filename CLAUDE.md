@@ -75,6 +75,8 @@ Music theory and arrangement logic lives in `src/lib/theory/`.
 - `piano-accompaniment/output-contract.ts` handles key highlights, fingering metadata, and physical hand events.
 - `fingerstyle-arranger.ts` is the public fingerstyle arrangement entrypoint.
 - `fingerstyle-arranger/types.ts` contains source-layer, playability, artifact, and output-contract types.
+- `fingerstyle-arranger/fill-opportunities.ts` is the local stable entrypoint for fill policy, scored windows, legal atomic candidates, compact codecs, and deterministic validation/merge.
+- `fingerstyle-arranger/time-slice-abc-renderer.ts` renders explicit fill durations and tied melody intervals behind the stable `convertTimeSliceMeasureToAbc` export.
 - `accompaniment-workflow.ts` is the public accompaniment workflow entrypoint.
 - `accompaniment-workflow/definition.ts` contains accompaniment workflow ids, constants, types, and step definitions.
 - `accompaniment-workflow/tool-schema.ts` contains structured LLM tool schemas for accompaniment workflow generation.
@@ -112,11 +114,11 @@ When you are asked to work on specific Composer URLs, refer to these short lists
   - `src/components/composer/accompaniment-workflow/wizard-parts.tsx` (Wizard UI Parts)
 
 - `/compose/:slug/guitar-fingerstyle`:
-  - `src/components/composer/workspace/GuitarFingerstyleStep.tsx` (UI)
-  - `src/components/composer/workspace/FingerstyleMeasureCard.tsx` (Measure-level UI)
-  - `src/lib/theory/fingerstyle-arranger.ts` (Arrangement Logic)
-  - `src/components/composer/fingerstyle-integration.ts` (State Integration)
-  - `src/app/actions/fingerstyle-arranger.ts` (Server Actions)
+  - `src/components/composer/workspace/GuitarFingerstyleStep.tsx` (Settings, line grouping, generation lock)
+  - `src/components/composer/workspace/FingerstyleLineCard.tsx` (Line-level generation, summary, diagnostics)
+  - `src/lib/theory/fingerstyle-arranger/fill-opportunities.ts` (Fill analysis/validation)
+  - `src/lib/theory/fingerstyle-arranger/time-slice.ts` (Stable time-slice/ABC entrypoints)
+  - `src/app/actions/fingerstyle-line-arranger.ts` (Public staged Server Action)
 
 - `/compose/:slug/review`:
   - `src/components/composer/ComposerStepWorkspace.tsx` (Review/Export layout fallback)
@@ -197,6 +199,8 @@ Important accompaniment rules:
 - For chord ingestion from lyric `w:` lines, treat embedded `[Chord]` symbols as user-supplied progression context.
 - Guitar tab validation steps must provide concrete tab events with measure, beat, note, string, fret, and role.
 - Guitar Fingerstyle must be a solo guitar plan: the Guitar voice carries the melody itself, adds bass from chord progression roots/fifths/approaches, exposes intro/interlude/outro section metadata, and renders GUITAR TAB.
+- Line-level Guitar Fingerstyle generation is staged: non-fill foundation → skill-aware DP freeze → exhaustive paginated fill opportunities → LLM use/skip selection → LLM candidate/duration composition → deterministic server merge/final validation. Do not let the LLM replace the source grid or run mutating DP after opportunity scoring.
+- Fingerstyle skill defaults to beginner; density defaults to auto (beginner→few, intermediate→normal, advanced→many). Preserve their independence.
 - Piano output should expose pedal automation, key highlights, fingering metadata, and physical validation where available.
 - Djembe, Flute, and Violin accompaniment branches may render support ABC layers directly on the accompaniment page once their validation/polish branch step is selected.
 - Keep generated ABC previewable with `AbcjsPlaybackController`.

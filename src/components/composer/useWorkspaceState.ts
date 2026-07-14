@@ -8,6 +8,8 @@ import type { AccompanimentWorkflowSession, AccompanimentWorkflowSetup } from "@
 import type { EnsembleWorkflowSession } from "@/lib/theory/ensemble-workflow";
 import type { EnsembleExpansionValidation } from "@/lib/theory/ensemble-output-contract";
 import type { EnsembleConflictReportEntry } from "@/lib/theory/ensemble-conflicts";
+import type { FillDensityMode } from "@/lib/theory/fingerstyle-arranger/fill-opportunities";
+import type { SkillLevel } from "@/lib/theory/fingerstyle-arranger/dp-types";
 import { getComposerWorkspaceStorageKey } from "./workspace/storage";
 
 export const DEFAULT_HARMONY_LAYER_VISIBILITY: Record<string, boolean> = {
@@ -42,6 +44,16 @@ export interface EnsembleLayerAbcBundle {
   conflictReport?: EnsembleConflictReportEntry[];
 }
 
+export interface FingerstyleGenerationSettings {
+  skillLevel: SkillLevel;
+  densityMode: FillDensityMode;
+}
+
+export const DEFAULT_FINGERSTYLE_GENERATION_SETTINGS: FingerstyleGenerationSettings = {
+  skillLevel: "beginner",
+  densityMode: "auto",
+};
+
 export interface WorkspaceState {
   aiSuggestions: HarmonizationOption[];
   selectedCandidateId: string | null;
@@ -65,6 +77,7 @@ export interface WorkspaceState {
   appliedEnsembleLayers: EnsembleLayerAbcBundle | null;
   accompanimentLayerVisibility: Record<string, boolean>;
   accompanimentLayerVolumes: Record<string, number>;
+  fingerstyleGenerationSettings: FingerstyleGenerationSettings;
 }
 
 export const DEFAULT_WORKSPACE_STATE: WorkspaceState = {
@@ -90,6 +103,7 @@ export const DEFAULT_WORKSPACE_STATE: WorkspaceState = {
   appliedEnsembleLayers: null,
   accompanimentLayerVisibility: DEFAULT_ACCOMPANIMENT_LAYER_VISIBILITY,
   accompanimentLayerVolumes: DEFAULT_LAYER_VOLUMES,
+  fingerstyleGenerationSettings: DEFAULT_FINGERSTYLE_GENERATION_SETTINGS,
 };
 
 export function useWorkspaceState(slug: string) {
@@ -108,6 +122,10 @@ export function useWorkspaceState(slug: string) {
         setState({
           ...DEFAULT_WORKSPACE_STATE,
           ...parsed,
+          fingerstyleGenerationSettings: {
+            ...DEFAULT_FINGERSTYLE_GENERATION_SETTINGS,
+            ...(parsed.fingerstyleGenerationSettings ?? {}),
+          },
         });
       }
     } catch (e) {

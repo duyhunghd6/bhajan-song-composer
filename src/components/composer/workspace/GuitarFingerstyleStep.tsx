@@ -62,6 +62,8 @@ export function GuitarFingerstyleStep({
   );
   const [measures, setMeasures] = useState<TimeSliceMeasure[]>([]);
   const [restoredSourceFingerprint, setRestoredSourceFingerprint] = useState<string | null>(null);
+  const [generatingLineIndex, setGeneratingLineIndex] = useState<number | null>(null);
+  const [autoGenerateQueue, setAutoGenerateQueue] = useState<number[]>([]);
 
   useEffect(() => {
     if (!hasMounted || !isWorkspaceHydrated || !workflowAppliedMusicAbc.trim()) return;
@@ -149,6 +151,17 @@ export function GuitarFingerstyleStep({
     });
   }, []);
 
+  const handleGenerateAllLines = useCallback(() => {
+    setAutoGenerateQueue(lineGroups.map((_, i) => i));
+  }, [lineGroups]);
+
+  const handleAutoGenerateComplete = useCallback((success: boolean) => {
+    setAutoGenerateQueue(prev => {
+      if (!success) return [];
+      return prev.slice(1);
+    });
+  }, []);
+
   // Build previous-line context for a given lineGroupIndex
   const buildPreviousLineContext = useCallback((lineGroupIndex: number): PreviousLineContext[] => {
     const context: PreviousLineContext[] = [];
@@ -203,16 +216,80 @@ export function GuitarFingerstyleStep({
 
   const masterTabEnabled = isAbcLayerVisible(ABC_LAYER_IDS.tab, accompLayerVisibility, false);
   const masterAbc = masterAbcWithoutTab;
+  const generationSettings = ws.fingerstyleGenerationSettings;
 
   return (
     <div className="space-y-6">
       <section className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950/60">
-        <div className="flex items-center justify-between gap-2 mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
           <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">AI Guitar Fingerstyle — Line by Line</h2>
+          {autoGenerateQueue.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => setAutoGenerateQueue([])}
+              className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-rose-700 cursor-pointer flex items-center gap-2"
+            >
+              <span>⏹</span>
+              Stop Generating (Line {autoGenerateQueue[0] + 1})
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleGenerateAllLines}
+              disabled={generatingLineIndex !== null}
+              className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-indigo-700 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed flex items-center gap-2 whitespace-nowrap"
+            >
+              <span>✨</span>
+              Generate All Lines with AI
+            </button>
+          )}
         </div>
-        <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-6">
-          Generate the arrangement line by line. Each line sees the context of all previous lines for musical consistency.
+        <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-4">
+          Generate the arrangement line by line. Each line sees previous context and the next melody entrance while deterministic scoring exposes every legal fill choice.
         </p>
+
+        <div className="mb-6 grid gap-3 rounded-xl border border-zinc-200 bg-white p-3 sm:grid-cols-2 dark:border-zinc-800 dark:bg-zinc-900/60">
+          <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+            Player skill
+            <select
+              value={generationSettings.skillLevel}
+              onChange={(event) => updateState({
+                fingerstyleGenerationSettings: {
+                  ...generationSettings,
+                  skillLevel: event.target.value as typeof generationSettings.skillLevel,
+                },
+              })}
+              disabled={generatingLineIndex !== null}
+              className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-xs dark:border-zinc-700 dark:bg-zinc-950"
+            >
+              <option value="beginner">Beginner</option>
+              <option value="intermediate">Intermediate</option>
+              <option value="advanced">Advanced</option>
+            </select>
+          </label>
+          <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+            Fill density
+            <select
+              value={generationSettings.densityMode}
+              onChange={(event) => updateState({
+                fingerstyleGenerationSettings: {
+                  ...generationSettings,
+                  densityMode: event.target.value as typeof generationSettings.densityMode,
+                },
+              })}
+              disabled={generatingLineIndex !== null}
+              className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-xs dark:border-zinc-700 dark:bg-zinc-950"
+            >
+              <option value="auto">Auto (from skill)</option>
+              <option value="few">Few</option>
+              <option value="normal">Normal</option>
+              <option value="many">Many</option>
+            </select>
+          </label>
+          <p className="text-[11px] text-zinc-500 sm:col-span-2">
+            Skill limits frets, hand span, and notes per figure. Density independently controls how many scored windows may be selected. Existing lines are not regenerated when these settings change.
+          </p>
+        </div>
 
         <section className="mb-4">
           <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 mb-2 font-sans">Layer Visibility</h2>
@@ -265,6 +342,8 @@ export function GuitarFingerstyleStep({
         {lineGroups.map((lineMeasures, lineGroupIdx) => (
           <FingerstyleLineCard
             key={`line-${lineMeasures[0]?.lineIndex ?? lineGroupIdx}`}
+            songSlug={slug}
+            sourceFingerprint={sourceFingerprint}
             lineIndex={lineMeasures[0]?.lineIndex ?? lineGroupIdx}
             lineMeasures={lineMeasures}
             activeAbc={workflowAppliedMusicAbc}
@@ -272,7 +351,15 @@ export function GuitarFingerstyleStep({
             accompLayerVisibility={accompLayerVisibility}
             buildPreviousContext={() => buildPreviousLineContext(lineGroupIdx)}
             workflowAppliedMusicAbc={workflowAppliedMusicAbc}
-            isAnotherLineGenerating={false}
+            generationSettings={generationSettings}
+            previousLineMeasures={lineGroups[lineGroupIdx - 1]}
+            nextLineMeasures={lineGroups[lineGroupIdx + 1]}
+            isAnotherLineGenerating={generatingLineIndex !== null && generatingLineIndex !== lineGroupIdx}
+            onGenerationStateChange={(isGenerating) => {
+              setGeneratingLineIndex(current => isGenerating ? lineGroupIdx : current === lineGroupIdx ? null : current);
+            }}
+            autoTriggerGenerate={autoGenerateQueue.length > 0 && autoGenerateQueue[0] === lineGroupIdx}
+            onAutoGenerateComplete={handleAutoGenerateComplete}
           />
         ))}
       </div>

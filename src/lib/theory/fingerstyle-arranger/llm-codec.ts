@@ -9,7 +9,7 @@ const TABLATURE_HEADER = "{measure,step,string,fret,finger,role}";
 const MAX_TABLATURE_PAYLOAD_CHARS = 64_000;
 
 const FINGERS = new Set(["p", "i", "m", "a", "-"]);
-const ROLES = new Set(["bass", "melody", "fill", "root", "fifth"]);
+const ROLES = new Set(["bass", "melody", "fill", "harmony", "root", "fifth"]);
 
 export interface FingerstyleTablatureRow {
   measure: number;
@@ -17,7 +17,7 @@ export interface FingerstyleTablatureRow {
   string: GuitarStringNumber;
   fret: number;
   finger: "p" | "i" | "m" | "a" | null;
-  role: "bass" | "melody" | "fill" | "root" | "fifth";
+  role: "bass" | "melody" | "fill" | "harmony" | "root" | "fifth";
 }
 
 export interface FingerstyleCodecError {

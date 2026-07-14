@@ -209,7 +209,7 @@ describe("fingerstyle DP integration", () => {
       true
     );
     expect(correctedFinalMeasure).toBe(
-      "[!2!e!3!G!6!E,] !2!e !3!G !2!B4 !3!B"
+      "[!2!e!3!G!6!E,] !2!e- [!2!e-!3!G] !2!B3- !2!B !3!B"
     );
 
     const correctedAscii = renderCombinedAsciiTab(measures);

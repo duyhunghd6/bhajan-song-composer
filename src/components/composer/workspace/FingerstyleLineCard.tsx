@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import AbcjsPlaybackController from "@/components/music-sheet/AbcjsPlaybackController";
 import { convertTimeSliceMeasureToAbc, convertAbcToTimeSliceGrid, type TimeSliceMeasure } from "@/lib/theory/fingerstyle-arranger/time-slice";
 import { formatLineAsToon, parseToonToLine, renderCombinedAsciiTab } from "@/lib/theory/fingerstyle-arranger/toon-utils";
@@ -9,9 +9,21 @@ import { COMPOSER_PREVIEW_RENDER_OPTIONS } from "./preview";
 import { buildAccompanimentAbc } from "@/lib/theory/accompaniment-abc";
 import { applyAbcLayerVisibility, isAbcLayerVisible, ABC_LAYER_IDS, cleanAbcForExport } from "@/lib/theory/abc-layer-visibility";
 import { getArrangementRenderOptionsFor } from "./arrangement-preview-model";
-import type { PreviousLineContext } from "@/app/actions/fingerstyle-line-arranger";
+import type {
+  FingerstyleFillGenerationSummary,
+  PreviousLineContext,
+} from "@/app/actions/fingerstyle-line-arranger";
+import type { FingerstyleGenerationSettings } from "../useWorkspaceState";
+import type { FingerstyleGenerationDiagnosticRun } from "@/lib/theory/fingerstyle-arranger/generation-diagnostics";
+import {
+  persistFingerstyleDiagnosticRun,
+  restoreFingerstyleDiagnosticRuns,
+} from "./fingerstyle-diagnostic-persistence";
+import { getComposerFingerstyleDiagnosticsStorageKey } from "./storage";
 
 interface FingerstyleLineCardProps {
+  songSlug: string;
+  sourceFingerprint: string;
   lineIndex: number;
   lineMeasures: TimeSliceMeasure[];
   activeAbc: string;
@@ -20,8 +32,14 @@ interface FingerstyleLineCardProps {
   /** Build cumulative context from all previous lines */
   buildPreviousContext: () => PreviousLineContext[];
   workflowAppliedMusicAbc: string;
+  generationSettings: FingerstyleGenerationSettings;
+  previousLineMeasures?: TimeSliceMeasure[];
+  nextLineMeasures?: TimeSliceMeasure[];
   /** Whether any other line is currently generating */
   isAnotherLineGenerating: boolean;
+  onGenerationStateChange: (isGenerating: boolean) => void;
+  autoTriggerGenerate?: boolean;
+  onAutoGenerateComplete?: (success: boolean) => void;
 }
 
 // ── Inline copy button ─────────────────────────────────────────────────
@@ -54,6 +72,8 @@ function CopyButton({ label, text }: { label: string; text: string }) {
 // ── Main line card ─────────────────────────────────────────────────────
 
 export function FingerstyleLineCard({
+  songSlug,
+  sourceFingerprint,
   lineIndex,
   lineMeasures,
   activeAbc,
@@ -61,13 +81,51 @@ export function FingerstyleLineCard({
   accompLayerVisibility,
   buildPreviousContext,
   workflowAppliedMusicAbc,
+  generationSettings,
+  previousLineMeasures,
+  nextLineMeasures,
   isAnotherLineGenerating,
+  onGenerationStateChange,
+  autoTriggerGenerate,
+  onAutoGenerateComplete,
 }: FingerstyleLineCardProps) {
   const measureNums = lineMeasures.map(m => m.measure);
   const [toonText, setToonText] = useState(() => formatLineAsToon(lineMeasures));
   const [error, setError] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
+  const [fillSummary, setFillSummary] = useState<FingerstyleFillGenerationSummary | null>(null);
+  const [diagnosticRun, setDiagnosticRun] = useState<FingerstyleGenerationDiagnosticRun | null>(null);
+  const diagnosticStorageKey = useMemo(
+    () => getComposerFingerstyleDiagnosticsStorageKey(songSlug),
+    [songSlug],
+  );
+
+  useEffect(() => {
+    let restored: FingerstyleGenerationDiagnosticRun[] = [];
+    try {
+      restored = restoreFingerstyleDiagnosticRuns(
+        window.localStorage.getItem(diagnosticStorageKey),
+        sourceFingerprint,
+      );
+    } catch {
+      // Browser storage is best-effort; generation diagnostics remain available in memory.
+    }
+    const latestForLine = restored
+      .filter(run => run.scope.lineIndex === lineIndex)
+      .sort((left, right) => right.completedAt.localeCompare(left.completedAt))[0] ?? null;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setDiagnosticRun(latestForLine);
+    setLogs(latestForLine?.plaintext ? [latestForLine.plaintext] : []);
+    const summaryEvent = latestForLine?.events.findLast(event => (
+      event.source === "workflow" && event.kind === "final-merge-validated"
+    ));
+    setFillSummary(
+      summaryEvent?.source === "workflow" && summaryEvent.payloadPreview
+        ? summaryEvent.payloadPreview as FingerstyleFillGenerationSummary
+        : null,
+    );
+  }, [diagnosticStorageKey, lineIndex, sourceFingerprint]);
 
   // Sync toonText when lineMeasures change externally (localStorage restore, etc.)
   useEffect(() => {
@@ -153,29 +211,78 @@ export function FingerstyleLineCard({
     }
   }, [toonText, lineMeasures, onUpdateMeasures]);
 
-  const handleGenerate = useCallback(async () => {
+  const handleGenerate = useCallback(async (): Promise<boolean> => {
     try {
       setIsGenerating(true);
+      onGenerationStateChange(true);
       setError(null);
       setLogs([]);
+      setFillSummary(null);
       const { generateAIFingerstyleLine } = await import("@/app/actions/fingerstyle-line-arranger");
       const result = await generateAIFingerstyleLine({
+        songSlug,
+        sourceFingerprint,
         lineMeasures,
         previousLines: buildPreviousContext(),
         activeAbc: workflowAppliedMusicAbc,
+        skillLevel: generationSettings.skillLevel,
+        densityMode: generationSettings.densityMode,
+        previousLineMeasures,
+        nextLineMeasures,
       });
       setLogs(result.logs || []);
+      setFillSummary(result.fillSummary ?? null);
+      if (result.diagnostics) {
+        setDiagnosticRun(result.diagnostics);
+        persistFingerstyleDiagnosticRun({
+          storage: window.localStorage,
+          storageKey: diagnosticStorageKey,
+          sourceFingerprint,
+          run: result.diagnostics,
+        });
+      }
       if (result.success && result.measures) {
         onUpdateMeasures(result.measures);
+        return true;
       } else {
         setError(result.error || "AI Generation Failed");
+        return false;
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "AI Generation Failed");
+      return false;
     } finally {
       setIsGenerating(false);
+      onGenerationStateChange(false);
     }
-  }, [lineMeasures, buildPreviousContext, workflowAppliedMusicAbc, onUpdateMeasures]);
+  }, [
+    songSlug,
+    sourceFingerprint,
+    lineMeasures,
+    buildPreviousContext,
+    workflowAppliedMusicAbc,
+    generationSettings,
+    previousLineMeasures,
+    nextLineMeasures,
+    onUpdateMeasures,
+    diagnosticStorageKey,
+    onGenerationStateChange,
+  ]);
+
+  const hasTriggeredRef = useRef(false);
+
+  useEffect(() => {
+    if (autoTriggerGenerate && !isGenerating) {
+      if (!hasTriggeredRef.current) {
+        hasTriggeredRef.current = true;
+        handleGenerate().then((success) => {
+          onAutoGenerateComplete?.(success);
+        });
+      }
+    } else if (!autoTriggerGenerate) {
+      hasTriggeredRef.current = false;
+    }
+  }, [autoTriggerGenerate, isGenerating, handleGenerate, onAutoGenerateComplete]);
 
   const tabEnabled = isAbcLayerVisible(ABC_LAYER_IDS.tab, accompLayerVisibility, false);
 
@@ -216,14 +323,34 @@ export function FingerstyleLineCard({
               {error}
             </div>
           )}
+          {fillSummary && (
+            <div className="mt-3 rounded-xl border border-indigo-200 bg-white/80 p-3 text-[11px] text-zinc-700 dark:border-indigo-900 dark:bg-zinc-900/70 dark:text-zinc-300">
+              <div className="font-semibold text-indigo-700 dark:text-indigo-300">Scored fill run</div>
+              <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1">
+                <span>{fillSummary.policy.skillLevel} · {fillSummary.policy.resolvedDensity}</span>
+                <span>{fillSummary.bpm} BPM</span>
+                <span>{fillSummary.eligibleWindowCount} legal windows</span>
+                <span>{fillSummary.selectedWindowCount} selected</span>
+                <span>{fillSummary.evaluatedPlacementCount} placements</span>
+                <span>{fillSummary.composedFillCount} fill notes</span>
+              </div>
+            </div>
+          )}
 
           {/* Diagnostic Logs */}
           {logs.length > 0 && (
             <div className="mt-4 flex flex-col flex-none">
               <div className="flex items-center justify-between mb-1">
-                <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                  LLM Diagnostic Logs
-                </label>
+                <div>
+                  <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                    LLM + Workflow + DP Diagnostic Logs
+                  </label>
+                  {diagnosticRun && (
+                    <div className="text-[10px] text-zinc-500">
+                      {diagnosticRun.summary.outcome} · run {diagnosticRun.runId.slice(0, 8)}
+                    </div>
+                  )}
+                </div>
                 <CopyButton label="Copy" text={logs.join("\n")} />
               </div>
               <div

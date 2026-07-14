@@ -1,8 +1,8 @@
-import { buildAbcDurationContext, stripAbcChordSymbols, cleanAbcMeasureSegment, formatAbcDuration, AbcDurationContext, measureDurationUnits, AbcBarlineInfo, EMPTY_BARLINE_INFO, extractBarlineInfo, joinAbcMeasuresWithBarlines } from "../abc-duration";
+import { buildAbcDurationContext, stripAbcChordSymbols, cleanAbcMeasureSegment, type AbcDurationContext, measureDurationUnits, type AbcBarlineInfo, EMPTY_BARLINE_INFO, extractBarlineInfo, joinAbcMeasuresWithBarlines } from "../abc-duration";
 import { parseNoteDuration } from "../melody-analyzer";
-import { scientificPitchForStringFret } from "../guitar-playability";
 import type { GuitarStringNumber } from "../fingerstyle-compressor";
 import { getKeyAccidentalsFromAbc, abcNoteToMidiWithKey, type AbcKeyAccidentalMap } from "../abc-key-signature";
+import { renderTimeSliceMeasureToAbc } from "./time-slice-abc-renderer";
 
 export interface TimeSliceMelodyEvent {
   kind: "note" | "rest";
@@ -42,7 +42,12 @@ export interface TimeSliceGridStep {
     string: GuitarStringNumber;
     fret: number;
     finger: "p" | "i" | "m" | "a" | null;
-    role: "bass" | "melody" | "fill" | "root" | "fifth";
+    role: "bass" | "melody" | "fill" | "harmony" | "root" | "fifth";
+    /** Number of quantized grid steps sounded; omitted events retain legacy attack-to-next-attack rendering. */
+    durationSteps?: number;
+    /** Deterministic fill provenance populated only for accepted composed fills. */
+    fillWindowId?: string;
+    fillCandidateId?: string;
   }[];
 }
 
@@ -589,176 +594,18 @@ export function convertAbcToTimeSliceGrid(
   return measuresList;
 }
 
-/**
- * Convert scientific pitch (e.g. "F4", "F#4") to ABC notation token.
- *
- * When keyAccidentals is provided, the function emits explicit accidentals
- * to prevent ABCJS from misinterpreting the note due to the key signature.
- * For example, F4 in K:Em would be output as =f (explicit natural) because
- * K:Em makes bare f mean F#.
- */
-function scientificPitchToAbc(scientificPitch: string, keyAccidentals?: AbcKeyAccidentalMap): string {
-  const match = scientificPitch.match(/^([A-G])([#b]?)(-?\d+)$/);
-  if (!match) return scientificPitch;
-  const [, letter, accidental, octaveStr] = match;
-  const octave = parseInt(octaveStr, 10);
-  
-  // ABCJS noteToMidi convention (matches standard ABC 2.1):
-  //   C,, = octave 1  |  C, = octave 2  |  C = octave 3
-  //   c   = octave 4  |  c' = octave 5  |  c'' = octave 6
-  //
-  // For guitar with clef=treble-8, ABCJS applies clefTranspose = -12 to the
-  // note pitch BEFORE comparing against the tuning stringPitches (which are
-  // NOT transposed). This means concert-pitch ABC tokens produce the correct
-  // frets without any additional octave adjustment.
-  let abcAccidental: string;
-  if (accidental === "#") {
-    // Check if key signature already implies this sharp — if so, bare note is fine
-    const keyAcc = keyAccidentals?.get(letter);
-    if (keyAcc === "^") {
-      abcAccidental = ""; // Key already makes this letter sharp, no need for explicit ^
-    } else {
-      abcAccidental = "^";
-    }
-  } else if (accidental === "b") {
-    const keyAcc = keyAccidentals?.get(letter);
-    if (keyAcc === "_") {
-      abcAccidental = ""; // Key already makes this letter flat
-    } else {
-      abcAccidental = "_";
-    }
-  } else {
-    // No accidental in the scientific pitch — but key signature might imply one.
-    // If the key says this letter is sharp/flat, we must use = (natural) to override.
-    const keyAcc = keyAccidentals?.get(letter);
-    if (keyAcc) {
-      abcAccidental = "="; // Explicit natural to override key signature
-    } else {
-      abcAccidental = "";
-    }
-  }
-
-  let abcLetter = letter;
-  
-  if (octave >= 4) {
-    abcLetter = abcLetter.toLowerCase();
-    const ticks = octave - 4;
-    abcLetter += "'".repeat(ticks);
-  } else if (octave === 3) {
-    // Standard uppercase
-  } else {
-    const commas = 3 - octave;
-    abcLetter += ",".repeat(commas);
-  }
-  return abcAccidental + abcLetter;
-}
-
 export function convertTimeSliceMeasureToAbc(
   measure: TimeSliceMeasure,
   durationContext: AbcDurationContext,
   keyAccidentals?: AbcKeyAccidentalMap,
   includeTabStringForcing: boolean = false
 ): string {
-  const { unitsPerBeat } = durationContext;
-  const stepsPerBeat = 4;
-  const stepDurationUnits = unitsPerBeat / stepsPerBeat;
-
-  // For pickup measures, cap the total output duration to the actual melody duration.
-  // The grid is always 16 steps, but a pickup only occupies the first N steps.
-  const maxOutputUnits = measure.pickupDurationUnits && measure.pickupDurationUnits > 0
-    ? measure.pickupDurationUnits
-    : undefined;
-
-  const rendered: string[] = [];
-  
-  let currentRestSteps = 0;
-  let totalEmittedUnits = 0;
-
-  for (let i = 0; i < measure.grid.length; i++) {
-    // Stop if we've emitted enough for a pickup measure
-    if (maxOutputUnits !== undefined && totalEmittedUnits >= maxOutputUnits) break;
-
-    const step = measure.grid[i];
-    const isAttack = step.tablature && step.tablature.length > 0;
-
-    if (isAttack) {
-      // If we accumulated rests before this attack, output them
-      if (currentRestSteps > 0) {
-        let restUnits = currentRestSteps * stepDurationUnits;
-        if (maxOutputUnits !== undefined) {
-          restUnits = Math.min(restUnits, maxOutputUnits - totalEmittedUnits);
-        }
-        if (restUnits > 0) {
-          rendered.push(`z${formatAbcDuration(restUnits)}`);
-          totalEmittedUnits += restUnits;
-        }
-        currentRestSteps = 0;
-      }
-
-      // Stop if emitting the rest already filled the pickup
-      if (maxOutputUnits !== undefined && totalEmittedUnits >= maxOutputUnits) break;
-
-      // Calculate how long this attack holds
-      let durationSteps = 1;
-      for (let j = i + 1; j < measure.grid.length; j++) {
-        if (measure.grid[j].tablature && measure.grid[j].tablature!.length > 0) {
-          break; // Next attack interrupts
-        }
-        durationSteps++;
-      }
-
-      let durationUnits = durationSteps * stepDurationUnits;
-      // Cap to remaining pickup budget
-      if (maxOutputUnits !== undefined) {
-        durationUnits = Math.min(durationUnits, maxOutputUnits - totalEmittedUnits);
-      }
-      const suffix = formatAbcDuration(durationUnits);
-
-      // Convert tablature notes to ABC with optional !N! string-forcing decorations.
-      // Deduplicate by string so the generated ABC perfectly matches the ASCII tablature
-      // where the last assignment to a physical string overwrites previous ones.
-      const uniqueTabMap = new Map<
-        GuitarStringNumber,
-        NonNullable<TimeSliceGridStep["tablature"]>[number]
-      >();
-      for (const tab of step.tablature!) {
-        uniqueTabMap.set(tab.string, tab);
-      }
-
-      const soundingAbc = Array.from(uniqueTabMap.values())
-        .sort((a, b) => a.string - b.string)
-        .map(tab => {
-          const pitch = scientificPitchForStringFret(tab.string, tab.fret);
-          const abcToken = scientificPitchToAbc(pitch, keyAccidentals);
-          return includeTabStringForcing ? `!${tab.string}!${abcToken}` : abcToken;
-        });
-
-      if (soundingAbc.length === 1) {
-        rendered.push(`${soundingAbc[0]}${suffix}`);
-      } else if (soundingAbc.length > 1) {
-        rendered.push(`[${soundingAbc.join("")}]${suffix}`);
-      }
-      
-      totalEmittedUnits += durationUnits;
-      // Skip the sustained steps
-      i += (durationSteps - 1);
-    } else {
-      currentRestSteps++;
-    }
-  }
-
-  // If there are leftover rests at the end of the measure
-  if (currentRestSteps > 0) {
-    let restUnits = currentRestSteps * stepDurationUnits;
-    if (maxOutputUnits !== undefined) {
-      restUnits = Math.min(restUnits, Math.max(0, maxOutputUnits - totalEmittedUnits));
-    }
-    if (restUnits > 0) {
-      rendered.push(`z${formatAbcDuration(restUnits)}`);
-    }
-  }
-
-  return rendered.join(" ");
+  return renderTimeSliceMeasureToAbc(
+    measure,
+    durationContext,
+    keyAccidentals,
+    includeTabStringForcing,
+  );
 }
 
 /**

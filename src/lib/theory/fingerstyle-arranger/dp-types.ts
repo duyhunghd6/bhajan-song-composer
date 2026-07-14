@@ -1,4 +1,11 @@
 import type { GuitarStringNumber } from "../fingerstyle-compressor";
+import {
+  FingerstyleDiagnosticCollector,
+  type FingerstyleDiagnosticEventInput,
+  type FingerstyleDiagnosticRun,
+  type FingerstyleDiagnosticScope,
+  type DPCandidateOrigin,
+} from "./dp-diagnostics";
 
 // ---------------------------------------------------------------------------
 // Extended Technique Vocabulary
@@ -141,6 +148,8 @@ export interface DPNoteEvent {
  * The DP optimizer picks the best candidate at each step.
  */
 export interface DPCandidate {
+  /** Diagnostic origin; omitted remains compatible with legacy generated candidates. */
+  origin?: DPCandidateOrigin;
   /** String assignment for melody (1–6), null if rest. */
   melodyString: GuitarStringNumber | null;
   /** Fret for melody on the assigned string. */
@@ -176,6 +185,8 @@ export interface DPResult {
   skillLevel: SkillLevel;
   /** Diagnostic log lines produced during optimization. */
   logs: string[];
+  /** Typed, versioned diagnostics collected during optimization. */
+  diagnostics?: FingerstyleDiagnosticRun;
 }
 
 /**
@@ -201,9 +212,21 @@ export interface DPOptions {
  */
 export class DPDiagnosticLogger {
   private lines: string[] = [];
+  readonly collector: FingerstyleDiagnosticCollector;
+
+  constructor(input: FingerstyleDiagnosticCollector | { runId?: string; scope?: FingerstyleDiagnosticScope } = {}) {
+    this.collector = input instanceof FingerstyleDiagnosticCollector
+      ? input
+      : new FingerstyleDiagnosticCollector(input);
+  }
 
   log(message: string): void {
     this.lines.push(message);
+  }
+
+  /** Collect a typed event without altering the compatibility text view. */
+  event(event: FingerstyleDiagnosticEventInput): void {
+    this.collector.emit(event);
   }
 
   /** Log a section header. */
@@ -224,6 +247,11 @@ export class DPDiagnosticLogger {
   /** Return all collected log lines. */
   getLines(): string[] {
     return [...this.lines];
+  }
+
+  /** Return the typed diagnostic run collected so far. */
+  getDiagnostics(): FingerstyleDiagnosticRun {
+    return this.collector.getRun();
   }
 
   /** Return a single string with all logs joined. */

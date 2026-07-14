@@ -1,25 +1,17 @@
 import type { DPCandidate, DPHandState, DPNoteEvent, DPResult, SkillLevel } from "./dp-types";
 import { DPDiagnosticLogger, initialHandState, midiToNoteName } from "./dp-types";
-import { generateCandidates } from "./dp-candidates";
-import { transitionCost, applyCandidate, detectBestTechnique } from "./dp-cost";
-
-// ---------------------------------------------------------------------------
-// Viterbi Trellis
-// ---------------------------------------------------------------------------
-
+import { snapshotCandidate, type TransitionCostBreakdown } from "./dp-diagnostics";
+import { generateCandidatesDetailed } from "./dp-candidates";
+import { transitionCostDetailed, applyCandidate } from "./dp-cost";
 interface TrellisCell {
-  /** The candidate at this cell. */
   candidate: DPCandidate;
-  /** Cumulative minimum cost to reach this cell. */
   cumulativeCost: number;
-  /** Index of the predecessor cell in the previous time step's candidate array. */
   predecessorIndex: number;
-  /** Hand state after applying this candidate. */
   state: DPHandState;
+  candidateIndex: number;
 }
-
-const RECURRING_SHAPE_MISMATCH_COST = 200;
-
+type ViterbiPass = "establish-grips" | "apply-grip-preferences";
+export const RECURRING_SHAPE_MISMATCH_COST = 200;
 function normalizeChord(chord: string): string {
   return chord.trim().replace(/\s+/g, "").toLowerCase();
 }
@@ -28,292 +20,480 @@ function shapeKey(candidate: DPCandidate): string {
   return candidate.shapeFrets.map(fret => fret ?? "x").join(":");
 }
 
-function recurringShapeCost(
+interface RecurringShapeEvaluation {
+  preferredShape: string | null;
+  preferredShapeFeasible: boolean;
+  matchesPreferredShape: boolean;
+  penalty: number;
+}
+
+function recurringShapeEvaluation(
   event: DPNoteEvent,
   candidate: DPCandidate,
   candidates: DPCandidate[],
   preferredShapes?: ReadonlyMap<string, string>
-): number {
-  const preferred = preferredShapes?.get(normalizeChord(event.chord));
-  if (!preferred) return 0;
-
-  const preferredIsFeasible = candidates.some(option => shapeKey(option) === preferred);
-  if (!preferredIsFeasible || shapeKey(candidate) === preferred) return 0;
-  return RECURRING_SHAPE_MISMATCH_COST;
+): RecurringShapeEvaluation {
+  const preferredShape = preferredShapes?.get(normalizeChord(event.chord)) ?? null;
+  if (!preferredShape) {
+    return { preferredShape, preferredShapeFeasible: false, matchesPreferredShape: false, penalty: 0 };
+  }
+  const preferredShapeFeasible = candidates.some(option => shapeKey(option) === preferredShape);
+  const matchesPreferredShape = shapeKey(candidate) === preferredShape;
+  return {
+    preferredShape,
+    preferredShapeFeasible,
+    matchesPreferredShape,
+    penalty: preferredShapeFeasible && !matchesPreferredShape ? RECURRING_SHAPE_MISMATCH_COST : 0,
+  };
 }
 
-/** Format a candidate for logging. */
-function formatCandidate(c: DPCandidate): string {
-  const mel = c.melodyString !== null
-    ? `mel:s${c.melodyString}/f${c.melodyFret}`
+function formatCandidate(candidate: DPCandidate): string {
+  const melody = candidate.melodyString !== null
+    ? `mel:s${candidate.melodyString}/f${candidate.melodyFret}`
     : "mel:—";
-  const bass = c.bassString !== null
-    ? `bass:s${c.bassString}/f${c.bassFret}`
+  const bass = candidate.bassString !== null
+    ? `bass:s${candidate.bassString}/f${candidate.bassFret}`
     : "bass:—";
-  const barre = c.usesBarre ? " [BARRE]" : "";
-  return `${mel} ${bass} pos=${c.handPosition}${barre}`;
+  return `${melody} ${bass} pos=${candidate.handPosition}${candidate.usesBarre ? " [BARRE]" : ""}`;
 }
 
-/**
- * Run the Viterbi algorithm to find the minimum-cost path through the
- * space of hand-shape candidates across all events.
- *
- * Complexity: O(N × K²) where N = number of events, K = candidates per event.
- * With K capped at 20 and N typically < 200, this runs in ~80K iterations.
- */
+function fallbackCandidate(state: DPHandState): DPCandidate {
+  return {
+    origin: "fallback-noop",
+    melodyString: null,
+    melodyFret: 0,
+    bassString: null,
+    bassFret: 0,
+    melodyTechnique: "free-stroke",
+    shapeFrets: [...state.frets],
+    handPosition: state.handPosition,
+    usesBarre: state.barreFret !== null,
+  };
+}
+
+function emitCandidateGeneration(
+  logger: DPDiagnosticLogger,
+  pass: ViterbiPass,
+  details: ReturnType<typeof generateCandidatesDetailed>
+): void {
+  logger.event({
+    type: "candidate-generation",
+    phase: "candidate-generation",
+    pass,
+    eventIndex: details.eventIndex,
+    capo: details.capo,
+    melodyPositionsTested: details.melodyPositionsTested,
+    melodyPositionsAccepted: details.melodyPositions.length,
+    bassPositionsTested: details.bassPositionsTested,
+    bassPositionsAccepted: details.bassPositions.length,
+    cartesianCombinationCount: details.cartesianCombinationCount,
+    rejectionCounts: { ...details.rejectionCounts },
+    acceptedBeforeCap: details.acceptedBeforeCap,
+    candidateCap: details.candidateCap,
+    retainedCount: details.retainedCount,
+    prunedByCapCount: details.prunedByCapCount,
+    sortKeys: [...details.sortKeys],
+    retainedCandidates: details.retainedCandidates.map(snapshotCandidate),
+  });
+}
+
+function bestPredecessorIndex(column: TrellisCell[]): number {
+  let bestIndex = 0;
+  let bestCost = Infinity;
+  for (let index = 0; index < column.length; index++) {
+    if (column[index].cumulativeCost < bestCost) {
+      bestCost = column[index].cumulativeCost;
+      bestIndex = index;
+    }
+  }
+  return bestIndex;
+}
+
+function appendFallbackColumn(input: {
+  trellis: TrellisCell[][];
+  pass: ViterbiPass;
+  eventIndex: number;
+  predecessorColumn: TrellisCell[] | null;
+  logger: DPDiagnosticLogger;
+}): void {
+  const predecessorIndex = input.predecessorColumn ? bestPredecessorIndex(input.predecessorColumn) : -1;
+  const predecessor = input.predecessorColumn?.[predecessorIndex];
+  const state = predecessor?.state ?? initialHandState();
+  const cumulativeCost = predecessor?.cumulativeCost ?? 0;
+  const candidate = fallbackCandidate(state);
+  input.logger.log("  ⚠ No feasible candidates — preserving predecessor hand state as fallback no-op");
+  input.logger.event({
+    type: "fallback-noop",
+    phase: input.pass,
+    severity: "warning",
+    pass: input.pass,
+    eventIndex: input.eventIndex,
+    predecessorIndex,
+    preservedState: {
+      ...state,
+      frets: [...state.frets],
+      ringingUntil: [...state.ringingUntil],
+    },
+    reason: "no-feasible-candidates",
+  });
+  input.trellis.push([{
+    candidate,
+    cumulativeCost,
+    predecessorIndex,
+    state,
+    candidateIndex: 0,
+  }]);
+  input.logger.event({
+    type: "trellis-column",
+    phase: input.pass,
+    pass: input.pass,
+    eventIndex: input.eventIndex,
+    predecessorCount: input.predecessorColumn?.length ?? 1,
+    candidateCount: 1,
+    transitionCount: input.predecessorColumn?.length ?? 1,
+    selectedPredecessors: [predecessorIndex],
+  });
+}
+
 function runViterbiPass(
   events: DPNoteEvent[],
   skillLevel: SkillLevel,
   capo: number,
   logger: DPDiagnosticLogger,
+  pass: ViterbiPass,
   preferredShapes?: ReadonlyMap<string, string>
 ): DPResult {
-  const log = logger;
+  const startedAt = Date.now();
+  logger.section("VITERBI OPTIMIZER");
+  logger.entry("Pass", pass);
+  logger.entry("Total events", events.length);
+  logger.entry("Skill level", skillLevel);
+  logger.entry("Capo", capo);
+  logger.event({
+    type: "viterbi-pass-started",
+    phase: pass,
+    pass,
+    eventCount: events.length,
+    skillLevel,
+    capo,
+  });
 
   if (events.length === 0) {
-    log.section("VITERBI OPTIMIZER");
-    log.entry("Status", "No events to optimize");
-    return { path: [], totalCost: 0, capo, skillLevel, logs: log.getLines() };
+    logger.entry("Status", "No events to optimize");
+    logger.event({
+      type: "pass-summary",
+      phase: pass,
+      pass,
+      totalCost: 0,
+      pathLength: 0,
+      unresolvedEventCount: 0,
+      totalMovement: 0,
+      techniqueDistribution: {},
+      elapsedMs: Date.now() - startedAt,
+    });
+    return { path: [], totalCost: 0, capo, skillLevel, logs: logger.getLines(), diagnostics: logger.getDiagnostics() };
   }
 
-  log.section("VITERBI OPTIMIZER");
-  log.entry("Total events", events.length);
-  log.entry("Skill level", skillLevel);
-  log.entry("Capo", capo);
-
-  // === Build the trellis ===
   const trellis: TrellisCell[][] = [];
+  const firstDetails = generateCandidatesDetailed(events[0], skillLevel, capo);
+  emitCandidateGeneration(logger, pass, firstDetails);
+  logger.section("STEP 0 — INITIALIZE");
+  logger.entry("Event", `chord=${events[0].chord} mel=${midiToNoteName(events[0].melodyMidi)} bass=${midiToNoteName(events[0].bassMidi)} dur=${events[0].durationSteps}steps`);
+  logger.entry("Candidates generated", firstDetails.retainedCount);
 
-  // --- Step 0: Initialize the first column ---
-  const firstCandidates = generateCandidates(events[0], skillLevel, capo);
-  if (firstCandidates.length === 0) {
-    log.log("  ⚠ No feasible candidates for first event — ABORT");
-    return { path: [], totalCost: Infinity, capo, skillLevel, logs: log.getLines() };
+  if (firstDetails.retainedCount === 0) {
+    appendFallbackColumn({ trellis, pass, eventIndex: 0, predecessorColumn: null, logger });
+  } else {
+    const initialState = initialHandState();
+    const firstColumn = firstDetails.retainedCandidates.map((candidate, candidateIndex) => {
+      const recurring = recurringShapeEvaluation(events[0], candidate, firstDetails.retainedCandidates, preferredShapes);
+      const transition = transitionCostDetailed(initialState, candidate, events[0], skillLevel, {
+        recurringShapePenalty: recurring.penalty,
+        preferredShape: recurring.preferredShape,
+        preferredShapeFeasible: recurring.preferredShapeFeasible,
+        candidateShape: shapeKey(candidate),
+      });
+      const resolvedCandidate = { ...candidate, melodyTechnique: transition.technique };
+      logger.event({
+        type: "transition-evaluated",
+        phase: pass,
+        pass,
+        eventIndex: 0,
+        predecessorIndex: -1,
+        candidateIndex,
+        predecessorCost: 0,
+        transition,
+        cumulativeCost: transition.totalCost,
+        selectedForCandidate: true,
+        tieWithCurrentBest: false,
+      });
+      if (recurring.preferredShape) {
+        logger.event({
+          type: "recurring-shape",
+          phase: pass,
+          pass,
+          action: "evaluated",
+          eventIndex: 0,
+          chord: normalizeChord(events[0].chord),
+          preferredShape: recurring.preferredShape,
+          candidateShape: shapeKey(candidate),
+          feasible: recurring.preferredShapeFeasible,
+          matches: recurring.matchesPreferredShape,
+          penalty: recurring.penalty,
+        });
+      }
+      if (candidateIndex < 5) logger.item(candidateIndex, `${formatCandidate(candidate)} → cost=${transition.totalCost.toFixed(2)}`);
+      return {
+        candidate: resolvedCandidate,
+        cumulativeCost: transition.totalCost,
+        predecessorIndex: -1,
+        state: applyCandidate(initialState, resolvedCandidate, events[0]),
+        candidateIndex,
+      };
+    });
+    if (firstColumn.length > 5) logger.log(`  ... and ${firstColumn.length - 5} more candidates`);
+    trellis.push(firstColumn);
+    logger.event({
+      type: "trellis-column",
+      phase: pass,
+      pass,
+      eventIndex: 0,
+      predecessorCount: 1,
+      candidateCount: firstColumn.length,
+      transitionCount: firstColumn.length,
+      selectedPredecessors: firstColumn.map(() => -1),
+    });
   }
 
-  log.section("STEP 0 — INITIALIZE");
-  log.entry("Event", `chord=${events[0].chord} mel=${midiToNoteName(events[0].melodyMidi)} bass=${midiToNoteName(events[0].bassMidi)} dur=${events[0].durationSteps}steps`);
-  log.entry("Candidates generated", firstCandidates.length);
-
-  const init = initialHandState();
-  const firstColumn: TrellisCell[] = firstCandidates.map((candidate, ci) => {
-    const cost = transitionCost(init, candidate, events[0], skillLevel)
-      + recurringShapeCost(events[0], candidate, firstCandidates, preferredShapes);
-    const cell = {
-      candidate,
-      cumulativeCost: cost,
-      predecessorIndex: -1,
-      state: applyCandidate(init, candidate, events[0]),
-    };
-    if (ci < 5) { // Log top 5 candidates for readability
-      log.item(ci, `${formatCandidate(candidate)} → cost=${cost.toFixed(2)}`);
-    }
-    return cell;
-  });
-  if (firstCandidates.length > 5) {
-    log.log(`  ... and ${firstCandidates.length - 5} more candidates`);
-  }
-  trellis.push(firstColumn);
-
-  // --- Forward pass ---
-  for (let t = 1; t < events.length; t++) {
-    const event = events[t];
-    const candidates = generateCandidates(event, skillLevel, capo);
-    const prevColumn = trellis[t - 1];
-
-    log.section(`STEP ${t} — FORWARD PASS`);
-    log.entry("Event", `chord=${event.chord} mel=${midiToNoteName(event.melodyMidi)} bass=${midiToNoteName(event.bassMidi)} dur=${event.durationSteps}steps`);
-    log.entry("Candidates", candidates.length);
+  for (let time = 1; time < events.length; time++) {
+    const event = events[time];
+    const details = generateCandidatesDetailed(event, skillLevel, capo);
+    const candidates = details.retainedCandidates;
+    const previousColumn = trellis[time - 1];
+    emitCandidateGeneration(logger, pass, details);
+    logger.section(`STEP ${time} — FORWARD PASS`);
+    logger.entry("Event", `chord=${event.chord} mel=${midiToNoteName(event.melodyMidi)} bass=${midiToNoteName(event.bassMidi)} dur=${event.durationSteps}steps`);
+    logger.entry("Candidates", candidates.length);
 
     if (candidates.length === 0) {
-      const noOp: DPCandidate = {
-        melodyString: null,
-        melodyFret: 0,
-        bassString: null,
-        bassFret: 0,
-        melodyTechnique: "free-stroke",
-        shapeFrets: [null, null, null, null, null, null],
-        handPosition: 0,
-        usesBarre: false,
-      };
-
-      let bestPrev = 0;
-      let bestCost = Infinity;
-      for (let p = 0; p < prevColumn.length; p++) {
-        const cost = prevColumn[p].cumulativeCost;
-        if (cost < bestCost) {
-          bestCost = cost;
-          bestPrev = p;
-        }
-      }
-
-      log.log("  ⚠ No feasible candidates — inserting no-op rest");
-      log.entry("Best predecessor", `cell[${bestPrev}] cumCost=${bestCost.toFixed(2)}`);
-
-      trellis.push([{
-        candidate: noOp,
-        cumulativeCost: bestCost,
-        predecessorIndex: bestPrev,
-        state: prevColumn[bestPrev].state,
-      }]);
+      appendFallbackColumn({ trellis, pass, eventIndex: time, predecessorColumn: previousColumn, logger });
       continue;
     }
 
-    const column: TrellisCell[] = candidates.map((candidate, ci) => {
-      let bestPrevIndex = 0;
+    const selectedPredecessors: number[] = [];
+    const column = candidates.map((candidate, candidateIndex) => {
+      const recurring = recurringShapeEvaluation(event, candidate, candidates, preferredShapes);
+      const attempts: { predecessorIndex: number; predecessorCost: number; transition: TransitionCostBreakdown; total: number; tiedWhenEvaluated: boolean }[] = [];
+      let bestPredecessorIndex = 0;
       let bestTotal = Infinity;
-      let bestState: DPHandState = initialHandState();
-      let bestTransCost = Infinity;
-      let bestTechnique: string = "free-stroke";
-      const preferenceCost = recurringShapeCost(
-        event,
-        candidate,
-        candidates,
-        preferredShapes
-      );
 
-      for (let p = 0; p < prevColumn.length; p++) {
-        const prevCell = prevColumn[p];
-        const tCost = transitionCost(prevCell.state, candidate, event, skillLevel)
-          + preferenceCost;
-        const total = prevCell.cumulativeCost + tCost;
-
+      for (let predecessorIndex = 0; predecessorIndex < previousColumn.length; predecessorIndex++) {
+        const predecessor = previousColumn[predecessorIndex];
+        const transition = transitionCostDetailed(predecessor.state, candidate, event, skillLevel, {
+          recurringShapePenalty: recurring.penalty,
+          preferredShape: recurring.preferredShape,
+          preferredShapeFeasible: recurring.preferredShapeFeasible,
+          candidateShape: shapeKey(candidate),
+        });
+        const total = predecessor.cumulativeCost + transition.totalCost;
+        const tiedWhenEvaluated = total === bestTotal;
+        attempts.push({ predecessorIndex, predecessorCost: predecessor.cumulativeCost, transition, total, tiedWhenEvaluated });
         if (total < bestTotal) {
           bestTotal = total;
-          bestPrevIndex = p;
-          bestState = prevCell.state;
-          bestTransCost = tCost;
-          bestTechnique = detectBestTechnique(prevCell.state, candidate, event, skillLevel);
+          bestPredecessorIndex = predecessorIndex;
         }
       }
 
-      if (ci < 3) { // Log top 3 for each step
-        log.item(ci, `${formatCandidate(candidate)} ← prev[${bestPrevIndex}] trans=${bestTransCost.toFixed(2)} tech=${bestTechnique} cumCost=${bestTotal.toFixed(2)}`);
+      for (const attempt of attempts) {
+        logger.event({
+          type: "transition-evaluated",
+          phase: pass,
+          pass,
+          eventIndex: time,
+          predecessorIndex: attempt.predecessorIndex,
+          candidateIndex,
+          predecessorCost: attempt.predecessorCost,
+          transition: attempt.transition,
+          cumulativeCost: attempt.total,
+          selectedForCandidate: attempt.predecessorIndex === bestPredecessorIndex,
+          tieWithCurrentBest: attempt.tiedWhenEvaluated,
+        });
+      }
+      if (recurring.preferredShape) {
+        logger.event({
+          type: "recurring-shape",
+          phase: pass,
+          pass,
+          action: "evaluated",
+          eventIndex: time,
+          chord: normalizeChord(event.chord),
+          preferredShape: recurring.preferredShape,
+          candidateShape: shapeKey(candidate),
+          feasible: recurring.preferredShapeFeasible,
+          matches: recurring.matchesPreferredShape,
+          penalty: recurring.penalty,
+        });
       }
 
-      // Write the detected technique back onto the candidate so
-      // the backtracked path carries the correct technique (not just "free-stroke")
+      const selectedAttempt = attempts[bestPredecessorIndex] ?? attempts[0];
+      const predecessorState = previousColumn[bestPredecessorIndex]?.state ?? initialHandState();
       const resolvedCandidate: DPCandidate = {
         ...candidate,
-        melodyTechnique: bestTechnique as DPCandidate["melodyTechnique"],
+        melodyTechnique: selectedAttempt?.transition.technique ?? "free-stroke",
       };
-
+      selectedPredecessors.push(bestPredecessorIndex);
+      if (candidateIndex < 3) {
+        logger.item(candidateIndex, `${formatCandidate(candidate)} ← prev[${bestPredecessorIndex}] trans=${selectedAttempt?.transition.totalCost.toFixed(2) ?? "Infinity"} tech=${resolvedCandidate.melodyTechnique} cumCost=${bestTotal.toFixed(2)}`);
+      }
       return {
         candidate: resolvedCandidate,
         cumulativeCost: bestTotal,
-        predecessorIndex: bestPrevIndex,
-        state: applyCandidate(bestState, resolvedCandidate, event),
+        predecessorIndex: bestPredecessorIndex,
+        state: applyCandidate(predecessorState, resolvedCandidate, event),
+        candidateIndex,
       };
     });
 
-    if (candidates.length > 3) {
-      log.log(`  ... and ${candidates.length - 3} more candidates evaluated`);
-    }
-
+    if (candidates.length > 3) logger.log(`  ... and ${candidates.length - 3} more candidates evaluated`);
     trellis.push(column);
+    logger.event({
+      type: "trellis-column",
+      phase: pass,
+      pass,
+      eventIndex: time,
+      predecessorCount: previousColumn.length,
+      candidateCount: candidates.length,
+      transitionCount: previousColumn.length * candidates.length,
+      selectedPredecessors,
+    });
   }
 
-  // --- Backtrack: extract the optimal path ---
   const lastColumn = trellis[trellis.length - 1];
-  let bestEndIndex = 0;
-  let bestEndCost = Infinity;
-  for (let i = 0; i < lastColumn.length; i++) {
-    if (lastColumn[i].cumulativeCost < bestEndCost) {
-      bestEndCost = lastColumn[i].cumulativeCost;
-      bestEndIndex = i;
-    }
-  }
-
+  const bestEndIndex = bestPredecessorIndex(lastColumn);
+  const bestEndCost = lastColumn[bestEndIndex].cumulativeCost;
   const path: DPCandidate[] = new Array(events.length);
   let currentIndex = bestEndIndex;
-  for (let t = events.length - 1; t >= 0; t--) {
-    const cell = trellis[t][currentIndex];
-    path[t] = cell.candidate;
+  for (let time = events.length - 1; time >= 0; time--) {
+    const cell = trellis[time][currentIndex];
+    path[time] = cell.candidate;
+    logger.event({
+      type: "backtrack-step",
+      phase: "backtrack",
+      pass,
+      eventIndex: time,
+      candidateIndex: currentIndex,
+      predecessorIndex: cell.predecessorIndex,
+      candidate: snapshotCandidate(cell.candidate),
+      cumulativeCost: cell.cumulativeCost,
+    });
     currentIndex = cell.predecessorIndex;
   }
 
-  // --- Log the optimal path ---
-  log.section("BACKTRACK — OPTIMAL PATH");
-  log.entry("Total cost", bestEndCost.toFixed(2));
-  log.entry("Path length", path.length);
-
-  for (let t = 0; t < path.length; t++) {
-    const c = path[t];
-    const ev = events[t];
-    const tech = c.melodyTechnique;
-    const posJump = t > 0 ? Math.abs(c.handPosition - path[t - 1].handPosition) : 0;
-
-    log.item(t, [
-      `chord=${ev.chord}`,
-      `mel=${midiToNoteName(ev.melodyMidi)}→s${c.melodyString ?? "—"}/f${c.melodyFret}`,
-      `bass=${midiToNoteName(ev.bassMidi)}→s${c.bassString ?? "—"}/f${c.bassFret}`,
-      `pos=${c.handPosition}`,
-      posJump > 0 ? `Δpos=${posJump}` : "",
-      `tech=${tech}`,
-      c.usesBarre ? "BARRE" : "",
+  logger.section("BACKTRACK — OPTIMAL PATH");
+  logger.entry("Total cost", bestEndCost.toFixed(2));
+  logger.entry("Path length", path.length);
+  for (let time = 0; time < path.length; time++) {
+    const candidate = path[time];
+    const event = events[time];
+    const positionJump = time > 0 ? Math.abs(candidate.handPosition - path[time - 1].handPosition) : 0;
+    logger.item(time, [
+      `chord=${event.chord}`,
+      `mel=${midiToNoteName(event.melodyMidi)}→s${candidate.melodyString ?? "—"}/f${candidate.melodyFret}`,
+      `bass=${midiToNoteName(event.bassMidi)}→s${candidate.bassString ?? "—"}/f${candidate.bassFret}`,
+      `pos=${candidate.handPosition}`,
+      positionJump > 0 ? `Δpos=${positionJump}` : "",
+      `tech=${candidate.melodyTechnique}`,
+      candidate.usesBarre ? "BARRE" : "",
+      candidate.origin === "fallback-noop" ? "UNRESOLVED" : "",
     ].filter(Boolean).join(" | "));
   }
 
-  // --- Summary statistics ---
-  log.section("OPTIMIZATION SUMMARY");
-  const totalMovement = path.reduce((sum, c, i) =>
-    i > 0 ? sum + Math.abs(c.handPosition - path[i - 1].handPosition) : sum, 0
-  );
-  const barreCount = path.filter(c => c.usesBarre).length;
-  const techniques = new Map<string, number>();
-  for (const c of path) {
-    techniques.set(c.melodyTechnique, (techniques.get(c.melodyTechnique) ?? 0) + 1);
+  const totalMovement = path.reduce((sum, candidate, index) =>
+    index > 0 ? sum + Math.abs(candidate.handPosition - path[index - 1].handPosition) : sum, 0);
+  const techniqueDistribution: Record<string, number> = {};
+  for (const candidate of path) {
+    techniqueDistribution[candidate.melodyTechnique] = (techniqueDistribution[candidate.melodyTechnique] ?? 0) + 1;
   }
-
-  log.entry("Total hand movement", `${totalMovement} frets across ${path.length} events`);
-  log.entry("Average movement/event", (totalMovement / Math.max(path.length, 1)).toFixed(2));
-  log.entry("Barre shapes used", barreCount);
-  log.entry("Technique distribution", [...techniques.entries()].map(([t, n]) => `${t}:${n}`).join(", "));
-
-  return {
-    path,
+  const unresolvedEventCount = path.filter(candidate => candidate.origin === "fallback-noop").length;
+  logger.section("OPTIMIZATION SUMMARY");
+  logger.entry("Total hand movement", `${totalMovement} frets across ${path.length} events`);
+  logger.entry("Average movement/event", (totalMovement / Math.max(path.length, 1)).toFixed(2));
+  logger.entry("Barre shapes used", path.filter(candidate => candidate.usesBarre).length);
+  logger.entry("Technique distribution", Object.entries(techniqueDistribution).map(([technique, count]) => `${technique}:${count}`).join(", "));
+  logger.entry("Unresolved events", unresolvedEventCount);
+  logger.event({
+    type: "pass-summary",
+    phase: pass,
+    pass,
     totalCost: bestEndCost,
-    capo,
-    skillLevel,
-    logs: log.getLines(),
-  };
+    pathLength: path.length,
+    unresolvedEventCount,
+    totalMovement,
+    techniqueDistribution,
+    elapsedMs: Date.now() - startedAt,
+  });
+
+  return { path, totalCost: bestEndCost, capo, skillLevel, logs: logger.getLines(), diagnostics: logger.getDiagnostics() };
 }
 
-/**
- * Optimize once to establish a preferred grip for each chord, then rerun with
- * those fixed preferences. The second pass keeps chord history outside the
- * trellis, preserving Viterbi's optimal-substructure assumption.
- */
 export function optimizeFingerstylePath(
   events: DPNoteEvent[],
   skillLevel: SkillLevel,
   capo: number = 0,
   logger?: DPDiagnosticLogger
 ): DPResult {
-  const firstPass = runViterbiPass(
-    events,
-    skillLevel,
-    capo,
-    new DPDiagnosticLogger()
-  );
-  if (firstPass.path.length !== events.length) {
-    return firstPass;
-  }
-
+  const ownsLogger = logger === undefined;
+  const log = logger ?? new DPDiagnosticLogger();
+  const startedAt = Date.now();
+  const firstPass = runViterbiPass(events, skillLevel, capo, log, "establish-grips");
   const preferredShapes = new Map<string, string>();
-  for (let index = 0; index < events.length; index++) {
+
+  for (let index = 0; index < events.length && index < firstPass.path.length; index++) {
     const chord = normalizeChord(events[index].chord);
-    if (chord && chord !== "n.c." && !preferredShapes.has(chord)) {
-      preferredShapes.set(chord, shapeKey(firstPass.path[index]));
+    const candidate = firstPass.path[index];
+    if (chord && chord !== "n.c." && candidate.origin !== "fallback-noop" && !preferredShapes.has(chord)) {
+      const shape = shapeKey(candidate);
+      preferredShapes.set(chord, shape);
+      log.event({
+        type: "recurring-shape",
+        phase: "grip-memory",
+        pass: "establish-grips",
+        action: "established",
+        eventIndex: index,
+        chord,
+        preferredShape: shape,
+      });
     }
   }
 
-  const log = logger ?? new DPDiagnosticLogger();
   log.section("CHORD SHAPE MEMORY");
   log.entry("Established chord shapes", preferredShapes.size);
-  for (const [chord, shape] of preferredShapes) {
-    log.log(`  ${chord}: ${shape}`);
+  for (const [chord, shape] of preferredShapes) log.log(`  ${chord}: ${shape}`);
+  const result = runViterbiPass(events, skillLevel, capo, log, "apply-grip-preferences", preferredShapes);
+
+  if (ownsLogger) {
+    const unresolvedEventCount = result.path.filter(candidate => candidate.origin === "fallback-noop").length;
+    const outcome = !Number.isFinite(result.totalCost)
+      ? "failed"
+      : unresolvedEventCount > 0
+        ? "accepted-with-unresolved-events"
+        : result.path.length === 0
+          ? "no-effective-dp-change"
+          : "accepted";
+    log.event({
+      type: "run-summary",
+      phase: "summary",
+      outcome,
+      inputEventCount: events.length,
+      resolvedEventCount: events.length - unresolvedEventCount,
+      unresolvedEventCount,
+      changedEventCount: 0,
+      unchangedEventCount: events.length,
+      totalCost: result.totalCost,
+      elapsedMs: Date.now() - startedAt,
+    });
+    log.collector.complete(outcome);
   }
 
-  return runViterbiPass(events, skillLevel, capo, log, preferredShapes);
+  return { ...result, logs: log.getLines(), diagnostics: log.getDiagnostics() };
 }

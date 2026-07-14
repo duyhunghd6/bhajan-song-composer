@@ -1,3 +1,4 @@
+import type { TransitionCostBreakdown } from "./dp-diagnostics";
 import {
   type DPCandidate,
   type DPHandState,
@@ -8,51 +9,52 @@ import {
   stringToIndex,
 } from "./dp-types";
 
-// ---------------------------------------------------------------------------
-// Guide Finger & Legato Detection
-// ---------------------------------------------------------------------------
+export const DP_COST_CONSTANTS = {
+  jumpBaseSeconds: 0.05,
+  jumpSecondsPerFret: 0.02,
+  insufficientTimeBase: 50,
+  insufficientTimePerFret: 10,
+  insufficientTimePerExcessSecond: 200,
+  overJumpLimitBase: 10,
+  overJumpLimitPerFret: 2,
+  overJumpLimitExcessSquared: 3,
+  normalMovementBase: 1.5,
+  normalMovementPerFret: 0.4,
+  identicalShape: 0,
+  guideFingerShape: 0.3,
+  slideGuideShape: 0.5,
+  fullShapeChange: 1.5,
+  sustainInterruptionPerString: 3,
+  barreBase: 2,
+  barrePerConsecutiveMeasure: 0.3,
+  frettedPlacement: 0.4,
+  beginnerBarreMultiplier: 5,
+  lowerSkillHighFretMultiplier: 1.5,
+} as const;
 
-/**
- * Detect whether two shapes share a "guide finger" — a string where the
- * same fret is held in both shapes, providing a physical pivot for the
- * left hand during the transition.
- */
-export function detectGuideFinger(
-  fromFrets: (number | null)[],
-  toFrets: (number | null)[]
-): boolean {
-  for (let i = 0; i < 6; i++) {
-    const f = fromFrets[i];
-    const t = toFrets[i];
-    if (f !== null && t !== null && f > 0 && f === t) {
-      return true;
-    }
+export function detectGuideFinger(fromFrets: (number | null)[], toFrets: (number | null)[]): boolean {
+  for (let index = 0; index < 6; index++) {
+    const from = fromFrets[index];
+    const to = toFrets[index];
+    if (from !== null && to !== null && from > 0 && from === to) return true;
   }
   return false;
 }
 
-/**
- * Detect whether two shapes share a "slide guide" — the same string
- * is fretted in both shapes but at different frets, allowing a slide
- * to reposition the hand.
- */
 export function detectSlideGuide(
   fromFrets: (number | null)[],
   toFrets: (number | null)[]
 ): { stringIndex: number; fromFret: number; toFret: number } | null {
-  for (let i = 0; i < 6; i++) {
-    const f = fromFrets[i];
-    const t = toFrets[i];
-    if (f !== null && t !== null && f > 0 && t > 0 && f !== t) {
-      return { stringIndex: i, fromFret: f, toFret: t };
+  for (let index = 0; index < 6; index++) {
+    const from = fromFrets[index];
+    const to = toFrets[index];
+    if (from !== null && to !== null && from > 0 && to > 0 && from !== to) {
+      return { stringIndex: index, fromFret: from, toFret: to };
     }
   }
   return null;
 }
 
-/**
- * Detect a hammer-on opportunity: the melody moves upward on the same string.
- */
 export function detectHammerOn(
   fromState: DPHandState,
   toCandidate: DPCandidate,
@@ -61,14 +63,9 @@ export function detectHammerOn(
   if (melodyStringIndex === null) return false;
   const fromFret = fromState.frets[melodyStringIndex];
   const toFret = toCandidate.shapeFrets[melodyStringIndex];
-  if (fromFret === null || toFret === null) return false;
-  return toFret > fromFret && toFret - fromFret <= 4;
+  return fromFret !== null && toFret !== null && toFret > fromFret && toFret - fromFret <= 4;
 }
 
-/**
- * Detect a pull-off opportunity: the melody moves downward on the same string
- * and the lower fret is already fretted or open.
- */
 export function detectPullOff(
   fromState: DPHandState,
   toCandidate: DPCandidate,
@@ -77,68 +74,88 @@ export function detectPullOff(
   if (melodyStringIndex === null) return false;
   const fromFret = fromState.frets[melodyStringIndex];
   const toFret = toCandidate.shapeFrets[melodyStringIndex];
-  if (fromFret === null || toFret === null) return false;
-  return toFret < fromFret;
+  return fromFret !== null && toFret !== null && toFret < fromFret;
 }
 
-/**
- * Determine the best technique for a transition, upgrading from free-stroke
- * to a legato technique when physically possible.
- */
 export function detectBestTechnique(
   fromState: DPHandState,
   toCandidate: DPCandidate,
-  event: DPNoteEvent,
+  _event: DPNoteEvent,
   skillLevel: SkillLevel
 ): FingerstyleTechnique {
   const constraints = SKILL_LEVEL_CONSTRAINTS[skillLevel];
   const melodyStringIndex = toCandidate.melodyString !== null
     ? stringToIndex(toCandidate.melodyString)
     : null;
-
-  // Check hammer-on
-  if (
-    !constraints.forbiddenTechniques.includes("hammer-on") &&
-    detectHammerOn(fromState, toCandidate, melodyStringIndex)
-  ) {
+  if (!constraints.forbiddenTechniques.includes("hammer-on") && detectHammerOn(fromState, toCandidate, melodyStringIndex)) {
     return "hammer-on";
   }
-
-  // Check pull-off
-  if (
-    !constraints.forbiddenTechniques.includes("pull-off") &&
-    detectPullOff(fromState, toCandidate, melodyStringIndex)
-  ) {
+  if (!constraints.forbiddenTechniques.includes("pull-off") && detectPullOff(fromState, toCandidate, melodyStringIndex)) {
     return "pull-off";
   }
-
-  // Check slide opportunity
-  const slide = detectSlideGuide(fromState.frets, toCandidate.shapeFrets);
-  if (slide && !constraints.forbiddenTechniques.includes("slide-shift")) {
+  if (detectSlideGuide(fromState.frets, toCandidate.shapeFrets)
+    && !constraints.forbiddenTechniques.includes("slide-shift")) {
     return "slide-shift";
   }
-
   return "free-stroke";
 }
 
-// ---------------------------------------------------------------------------
-// Cost Components
-// ---------------------------------------------------------------------------
-
-/** Seconds per time-slice step at the given BPM (assumes 16 steps/measure in 4/4). */
-function stepDurationSeconds(bpm: number): number {
-  return 60 / bpm / 4; // 4 steps per beat, each beat = 60/bpm seconds
+export function dpStepDurationSeconds(bpm: number): number {
+  return 60 / bpm / 4;
 }
 
-/**
- * Cost of physically moving the hand from one position to another.
- *
- * IMPORTANT: This function must NEVER return Infinity. A hard Infinity wall
- * poisons the entire Viterbi trellis downstream — once any transition costs
- * Infinity, all subsequent events inherit Infinity and the optimizer's path
- * becomes meaningless. Instead, we return steep but finite penalties so the
- * optimizer can always find the "least painful" path.
- */
+function movementDetails(
+  fromPosition: number,
+  toPosition: number,
+  movementSteps: number,
+  bpm: number,
+  skillLevel: SkillLevel
+): TransitionCostBreakdown["movement"] {
+  const distance = Math.abs(toPosition - fromPosition);
+  const availableSeconds = movementSteps * dpStepDurationSeconds(bpm);
+  const estimatedJumpSeconds = DP_COST_CONSTANTS.jumpBaseSeconds
+    + distance * DP_COST_CONSTANTS.jumpSecondsPerFret;
+  const beatsAvailable = movementSteps / 4;
+  const jumpPerBeat = distance / Math.max(beatsAvailable, 0.25);
+  const jumpPerBeatLimit = SKILL_LEVEL_CONSTRAINTS[skillLevel].maxHandJumpPerBeat;
+  let classification: TransitionCostBreakdown["movement"]["classification"];
+  let cost: number;
+
+  if (distance === 0) {
+    classification = "stationary";
+    cost = 0;
+  } else if (estimatedJumpSeconds > availableSeconds) {
+    classification = "insufficient-time";
+    const excess = estimatedJumpSeconds - availableSeconds;
+    cost = DP_COST_CONSTANTS.insufficientTimeBase
+      + distance * DP_COST_CONSTANTS.insufficientTimePerFret
+      + excess * DP_COST_CONSTANTS.insufficientTimePerExcessSecond;
+  } else if (jumpPerBeat > jumpPerBeatLimit) {
+    classification = "over-skill-limit";
+    const excess = jumpPerBeat - jumpPerBeatLimit;
+    cost = DP_COST_CONSTANTS.overJumpLimitBase
+      + distance * DP_COST_CONSTANTS.overJumpLimitPerFret
+      + excess * excess * DP_COST_CONSTANTS.overJumpLimitExcessSquared;
+  } else {
+    classification = "normal";
+    cost = DP_COST_CONSTANTS.normalMovementBase + distance * DP_COST_CONSTANTS.normalMovementPerFret;
+  }
+
+  return {
+    fromPosition,
+    toPosition,
+    distance,
+    movementSteps,
+    availableSeconds,
+    estimatedJumpSeconds,
+    beatsAvailable,
+    jumpPerBeat,
+    jumpPerBeatLimit,
+    classification,
+    cost,
+  };
+}
+
 export function positionMovementCost(
   fromPosition: number,
   toPosition: number,
@@ -146,81 +163,68 @@ export function positionMovementCost(
   bpm: number,
   skillLevel: SkillLevel
 ): number {
-  const distance = Math.abs(toPosition - fromPosition);
-  if (distance === 0) return 0;
-
-  const constraints = SKILL_LEVEL_CONSTRAINTS[skillLevel];
-  const availableTime = durationSteps * stepDurationSeconds(bpm);
-
-  // Jump time: minimum time to lift hand, move, and settle
-  const jumpTime = 0.05 + distance * 0.02;
-  if (jumpTime > availableTime) {
-    // Physically impossible to move in time — very steep penalty
-    // but NOT Infinity, so the trellis can still find a least-bad path
-    const excess = jumpTime - availableTime;
-    return 50 + distance * 10 + excess * 200;
-  }
-
-  // Penalize exceeding per-beat jump limits (skill-gated)
-  const beatsAvailable = durationSteps / 4;
-  const jumpPerBeat = distance / Math.max(beatsAvailable, 0.25);
-  if (jumpPerBeat > constraints.maxHandJumpPerBeat) {
-    // Difficult but not physically impossible — steep graduated penalty
-    const excess = jumpPerBeat - constraints.maxHandJumpPerBeat;
-    return 10 + distance * 2 + excess * excess * 3;
-  }
-
-  return 1.5 + distance * 0.4;
+  return movementDetails(fromPosition, toPosition, durationSteps, bpm, skillLevel).cost;
 }
 
-/**
- * Cost of changing the chord shape. Detects guide fingers and slides.
- */
-export function shapeChangeCost(
+function shapeDetails(
   fromFrets: (number | null)[],
   toFrets: (number | null)[]
-): number {
-  // Identical shapes → free
-  const same = fromFrets.every((f, i) => f === toFrets[i]);
-  if (same) return 0;
-
-  // Guide finger (same string, same fret stays planted) → cheap
-  if (detectGuideFinger(fromFrets, toFrets)) return 0.3;
-
-  // Slide guide (same string, different fret) → moderate
-  if (detectSlideGuide(fromFrets, toFrets)) return 0.5;
-
-  // Full shape change → expensive
-  return 1.5;
+): TransitionCostBreakdown["shape"] {
+  const identical = fromFrets.every((fret, index) => fret === toFrets[index]);
+  const guideFinger = !identical && detectGuideFinger(fromFrets, toFrets);
+  const slideGuide = !identical && !guideFinger ? detectSlideGuide(fromFrets, toFrets) : null;
+  const classification = identical
+    ? "identical"
+    : guideFinger
+      ? "guide-finger"
+      : slideGuide
+        ? "slide-guide"
+        : "full-change";
+  const cost = classification === "identical"
+    ? DP_COST_CONSTANTS.identicalShape
+    : classification === "guide-finger"
+      ? DP_COST_CONSTANTS.guideFingerShape
+      : classification === "slide-guide"
+        ? DP_COST_CONSTANTS.slideGuideShape
+        : DP_COST_CONSTANTS.fullShapeChange;
+  return { classification, guideFinger, slideGuide, cost };
 }
 
-/**
- * Penalty for releasing strings that are supposed to still be ringing.
- */
+export function shapeChangeCost(fromFrets: (number | null)[], toFrets: (number | null)[]): number {
+  return shapeDetails(fromFrets, toFrets).cost;
+}
+
+function sustainDetails(
+  fromState: DPHandState,
+  toFrets: (number | null)[],
+  currentStep: number
+): TransitionCostBreakdown["sustain"] {
+  const interruptedStringIndexes: number[] = [];
+  for (let index = 0; index < 6; index++) {
+    const ringUntil = fromState.ringingUntil[index];
+    if (ringUntil !== null && ringUntil > currentStep && fromState.frets[index] !== toFrets[index]) {
+      interruptedStringIndexes.push(index);
+    }
+  }
+  return {
+    currentStep,
+    interruptedStringIndexes,
+    costPerString: DP_COST_CONSTANTS.sustainInterruptionPerString,
+    cost: interruptedStringIndexes.length * DP_COST_CONSTANTS.sustainInterruptionPerString,
+  };
+}
+
 export function sustainViolationCost(
   fromState: DPHandState,
   toFrets: (number | null)[],
   currentStep: number
 ): number {
-  let cost = 0;
-  for (let i = 0; i < 6; i++) {
-    const ringUntil = fromState.ringingUntil[i];
-    if (ringUntil !== null && ringUntil > currentStep) {
-      // This string should still be ringing
-      if (fromState.frets[i] !== toFrets[i]) {
-        cost += 3.0; // Heavy penalty for audible sustain interruption
-      }
-    }
-  }
-  return cost;
+  return sustainDetails(fromState, toFrets, currentStep).cost;
 }
 
-/**
- * Cost associated with the technique used to produce the note.
- */
 export function techniqueCost(
   technique: FingerstyleTechnique,
-  usesBarre: boolean,
+  _usesBarre: boolean,
   consecutiveBarreMeasures: number,
   fromState: DPHandState,
   toCandidate: DPCandidate,
@@ -228,131 +232,81 @@ export function techniqueCost(
   bpm: number
 ): number {
   switch (technique) {
-    case "hammer-on":
-      return 0.1;
-    case "pull-off":
-      return 0.15;
+    case "hammer-on": return 0.1;
+    case "pull-off": return 0.15;
     case "slide-shift": {
       const slide = detectSlideGuide(fromState.frets, toCandidate.shapeFrets);
       if (!slide) return 0.3;
       const distance = Math.abs(slide.toFret - slide.fromFret);
-      const availableTime = durationSteps * stepDurationSeconds(bpm);
-      return 0.3 * distance / Math.max(availableTime, 0.1);
+      return 0.3 * distance / Math.max(durationSteps * dpStepDurationSeconds(bpm), 0.1);
     }
-    case "slide-guide":
-      return 0.2;
-    case "vibrato":
-      return 0.0;
-    case "natural-harmonic":
-      return 0.2;
+    case "slide-guide": return 0.2;
+    case "natural-harmonic": return 0.2;
     case "barre":
     case "partial-barre":
-      return 2.0 + 0.3 * consecutiveBarreMeasures;
-    case "guide-finger-pivot":
-      return 0.0;
-    case "rest-stroke":
-      return 0.0; // Adjacent-string muting handled by sustainViolationCost
-    case "free-stroke":
-      return 0.0;
-    case "palm-mute":
-      return 0.5;
-    case "bend":
-      return 0.5;
-    case "grace-note":
-      return 0.1;
-    default:
-      return 0.0;
+      return DP_COST_CONSTANTS.barreBase
+        + DP_COST_CONSTANTS.barrePerConsecutiveMeasure * consecutiveBarreMeasures;
+    case "palm-mute": return 0.5;
+    case "bend": return 0.5;
+    case "grace-note": return 0.1;
+    default: return 0;
   }
 }
 
-/**
- * Skill-level cost multiplier. Makes forbidden/difficult techniques
- * prohibitively expensive at lower skill levels.
- */
+function maxFretUsed(candidate: DPCandidate): number {
+  return Math.max(0, ...candidate.shapeFrets.filter((fret): fret is number => fret !== null));
+}
+
 export function skillMultiplier(
   candidate: DPCandidate,
   technique: FingerstyleTechnique,
   skillLevel: SkillLevel
 ): number {
   const constraints = SKILL_LEVEL_CONSTRAINTS[skillLevel];
-
-  // Forbidden technique → impossible
   if (constraints.forbiddenTechniques.includes(technique)) return Infinity;
-
-  let multiplier = 1.0;
-
-  // High fret penalty for lower skill levels
-  const maxFretUsed = Math.max(
-    0,
-    ...candidate.shapeFrets.filter((f): f is number => f !== null)
-  );
-  if (maxFretUsed > constraints.maxFret) return Infinity;
-
+  const maxFret = maxFretUsed(candidate);
+  if (maxFret > constraints.maxFret) return Infinity;
+  let multiplier = 1;
   if (skillLevel === "beginner") {
-    if (candidate.usesBarre) multiplier *= 5.0;
-    if (maxFretUsed > 3) multiplier *= 1.5;
-  } else if (skillLevel === "intermediate") {
-    if (maxFretUsed > 7) multiplier *= 1.5;
+    if (candidate.usesBarre) multiplier *= DP_COST_CONSTANTS.beginnerBarreMultiplier;
+    if (maxFret > 3) multiplier *= DP_COST_CONSTANTS.lowerSkillHighFretMultiplier;
+  } else if (skillLevel === "intermediate" && maxFret > 7) {
+    multiplier *= DP_COST_CONSTANTS.lowerSkillHighFretMultiplier;
   }
-
   return multiplier;
 }
 
-// ---------------------------------------------------------------------------
-// Total Transition Cost
-// ---------------------------------------------------------------------------
-
-/**
- * Intrinsic cost of the selected note positions. Open strings require no
- * left-hand press, so equivalent fretted assignments receive a small penalty.
- */
 export function placementCost(candidate: DPCandidate): number {
-  let cost = 0;
-  if (candidate.melodyString !== null && candidate.melodyFret > 0) cost += 0.4;
-  if (candidate.bassString !== null && candidate.bassFret > 0) cost += 0.4;
-  return cost;
+  return (candidate.melodyString !== null && candidate.melodyFret > 0 ? DP_COST_CONSTANTS.frettedPlacement : 0)
+    + (candidate.bassString !== null && candidate.bassFret > 0 ? DP_COST_CONSTANTS.frettedPlacement : 0);
 }
 
-/**
- * Compute the total cost of transitioning from `fromState` to `toCandidate`
- * for the given event and skill level.
- */
-export function transitionCost(
+export interface TransitionCostDetailedOptions {
+  recurringShapePenalty?: number;
+  preferredShape?: string | null;
+  preferredShapeFeasible?: boolean;
+  candidateShape?: string;
+}
+
+export function transitionCostDetailed(
   fromState: DPHandState,
   toCandidate: DPCandidate,
   event: DPNoteEvent,
-  skillLevel: SkillLevel
-): number {
-  // 1. Detect the best legato technique
+  skillLevel: SkillLevel,
+  options: TransitionCostDetailedOptions = {}
+): TransitionCostBreakdown {
   const technique = detectBestTechnique(fromState, toCandidate, event, skillLevel);
-
-  // 2. Skill filter — if impossible, return Infinity early
-  const sMul = skillMultiplier(toCandidate, technique, skillLevel);
-  if (!isFinite(sMul)) return Infinity;
-
-  // 3. Position movement
   const movementSteps = event.movementSteps ?? event.durationSteps;
-  const posCost = positionMovementCost(
+  const movement = movementDetails(
     fromState.handPosition,
     toCandidate.handPosition,
     movementSteps,
     event.bpm,
     skillLevel
   );
-  if (!isFinite(posCost)) return Infinity;
-
-  // 4. Shape change
-  const shapeCost = shapeChangeCost(fromState.frets, toCandidate.shapeFrets);
-
-  // 5. Sustain violation
-  const sustainCost = sustainViolationCost(
-    fromState,
-    toCandidate.shapeFrets,
-    event.absoluteOnsetStep ?? event.index
-  );
-
-  // 6. Technique cost
-  const techCost = techniqueCost(
+  const shape = shapeDetails(fromState.frets, toCandidate.shapeFrets);
+  const sustain = sustainDetails(fromState, toCandidate.shapeFrets, event.absoluteOnsetStep ?? event.index);
+  const techniqueValue = techniqueCost(
     technique,
     toCandidate.usesBarre,
     fromState.consecutiveBarreMeasures,
@@ -361,54 +315,89 @@ export function transitionCost(
     movementSteps,
     event.bpm
   );
+  const barreCost = toCandidate.usesBarre
+    ? DP_COST_CONSTANTS.barreBase
+      + DP_COST_CONSTANTS.barrePerConsecutiveMeasure * fromState.consecutiveBarreMeasures
+    : 0;
+  const placementValue = placementCost(toCandidate);
+  const multiplier = skillMultiplier(toCandidate, technique, skillLevel);
+  const maximumFret = maxFretUsed(toCandidate);
+  const constraints = SKILL_LEVEL_CONSTRAINTS[skillLevel];
+  const candidateShape = options.candidateShape ?? toCandidate.shapeFrets.map(fret => fret ?? "x").join(":");
+  const recurringPenalty = options.recurringShapePenalty ?? 0;
+  const baseCost = movement.cost + shape.cost + sustain.cost + techniqueValue + barreCost + placementValue;
 
-  // Barre penalty for lower skill levels
-  const barrePenalty = toCandidate.usesBarre ? (2.0 + 0.3 * fromState.consecutiveBarreMeasures) : 0;
-
-  const baseCost = posCost + shapeCost + sustainCost + techCost
-    + barrePenalty + placementCost(toCandidate);
-  return baseCost * sMul;
+  return {
+    technique,
+    movement,
+    shape,
+    sustain,
+    techniqueCost: techniqueValue,
+    barre: {
+      usesBarre: toCandidate.usesBarre,
+      consecutiveMeasures: fromState.consecutiveBarreMeasures,
+      cost: barreCost,
+    },
+    placement: {
+      melodyFretted: toCandidate.melodyString !== null && toCandidate.melodyFret > 0,
+      bassFretted: toCandidate.bassString !== null && toCandidate.bassFret > 0,
+      costPerFrettedNote: DP_COST_CONSTANTS.frettedPlacement,
+      cost: placementValue,
+    },
+    skill: {
+      level: skillLevel,
+      allowed: Number.isFinite(multiplier),
+      maxFretUsed: maximumFret,
+      maxFretAllowed: constraints.maxFret,
+      forbiddenTechnique: constraints.forbiddenTechniques.includes(technique),
+      multiplier,
+    },
+    recurringShape: {
+      preferredShape: options.preferredShape ?? null,
+      candidateShape,
+      preferredShapeFeasible: options.preferredShapeFeasible ?? false,
+      matchesPreferredShape: options.preferredShape === candidateShape,
+      penalty: recurringPenalty,
+    },
+    baseCost,
+    totalCost: Number.isFinite(multiplier) ? baseCost * multiplier + recurringPenalty : Infinity,
+  };
 }
 
-/**
- * Build a new DPHandState after applying a candidate at a given event.
- */
+export function transitionCost(
+  fromState: DPHandState,
+  toCandidate: DPCandidate,
+  event: DPNoteEvent,
+  skillLevel: SkillLevel
+): number {
+  return transitionCostDetailed(fromState, toCandidate, event, skillLevel).totalCost;
+}
+
 export function applyCandidate(
-  _fromState: DPHandState,
+  fromState: DPHandState,
   candidate: DPCandidate,
   event: DPNoteEvent
 ): DPHandState {
   const ringingUntil: (number | null)[] = [null, null, null, null, null, null];
   const onsetStep = event.absoluteOnsetStep ?? event.index;
-
-  // Melody note rings for its duration
   if (candidate.melodyString !== null) {
-    const idx = stringToIndex(candidate.melodyString);
-    ringingUntil[idx] = onsetStep + event.durationSteps;
+    ringingUntil[stringToIndex(candidate.melodyString)] = onsetStep + event.durationSteps;
   }
-
-  // Bass note rings for its duration
   if (candidate.bassString !== null) {
-    const idx = stringToIndex(candidate.bassString);
-    ringingUntil[idx] = onsetStep + event.durationSteps;
+    ringingUntil[stringToIndex(candidate.bassString)] = onsetStep + event.durationSteps;
   }
-
   return {
     handPosition: candidate.handPosition,
     frets: [...candidate.shapeFrets],
     ringingUntil,
-    barreFret: candidate.usesBarre ? (detectBarreFret(candidate.shapeFrets) ?? null) : null,
-    consecutiveBarreMeasures: candidate.usesBarre
-      ? _fromState.consecutiveBarreMeasures + 1
-      : 0,
+    barreFret: candidate.usesBarre ? detectBarreFret(candidate.shapeFrets) : null,
+    consecutiveBarreMeasures: candidate.usesBarre ? fromState.consecutiveBarreMeasures + 1 : 0,
   };
 }
 
-/** Extract the barre fret from a shape layout. */
 function detectBarreFret(shapeFrets: (number | null)[]): number | null {
-  const fretted = shapeFrets.filter((f): f is number => f !== null && f > 0);
+  const fretted = shapeFrets.filter((fret): fret is number => fret !== null && fret > 0);
   if (fretted.length < 2) return null;
   const minFret = Math.min(...fretted);
-  const atMin = fretted.filter(f => f === minFret);
-  return atMin.length >= 2 ? minFret : null;
+  return fretted.filter(fret => fret === minFret).length >= 2 ? minFret : null;
 }

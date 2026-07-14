@@ -219,7 +219,7 @@ w: ⬤ * ● *`;
     }
 
     it("keeps source ABC plain until string forcing is explicitly requested", () => {
-      const measure = measureWithTablature([{ string: 1, fret: 0, finger: "a", role: "melody" }]);
+      const measure = measureWithTablature([{ string: 1, fret: 0, finger: "a", role: "harmony" }]);
 
       expect(convertTimeSliceMeasureToAbc(measure, context, keyAccidentals, false)).toBe("e8");
       expect(convertTimeSliceMeasureToAbc(measure, context, keyAccidentals, true)).toBe("!1!e8");
@@ -228,14 +228,14 @@ w: ⬤ * ● *`;
     it("preserves duplicate pitches assigned to different strings", () => {
       const measure = measureWithTablature([
         { string: 5, fret: 5, finger: "p", role: "bass" },
-        { string: 4, fret: 0, finger: "i", role: "melody" },
+        { string: 4, fret: 0, finger: "i", role: "harmony" },
       ]);
 
       expect(convertTimeSliceMeasureToAbc(measure, context, keyAccidentals, true)).toBe("[!4!D!5!D]8");
     });
 
     it("emits an explicit natural when the key signature sharpens the note", () => {
-      const measure = measureWithTablature([{ string: 1, fret: 1, finger: "a", role: "melody" }]);
+      const measure = measureWithTablature([{ string: 1, fret: 1, finger: "a", role: "harmony" }]);
 
       expect(convertTimeSliceMeasureToAbc(measure, context, keyAccidentals, true)).toBe("!1!=f8");
     });
@@ -269,10 +269,10 @@ w: ⬤ * ● *`;
       };
 
       expect(convertTimeSliceMeasureToAbc(measure, context, keyAccidentals, false)).toBe(
-        "[BGE,] e G B4 B",
+        "[BG-E,-]/2 [GE,]/2 e G B4 B",
       );
       expect(convertTimeSliceMeasureToAbc(measure, context, keyAccidentals, true)).toBe(
-        "[!2!B!3!G!6!E,] !2!e !3!G !2!B4 !3!B",
+        "[!2!B!3!G-!6!E,-]/2 [!3!G!6!E,]/2 !2!e !3!G !2!B4 !3!B",
       );
     });
 

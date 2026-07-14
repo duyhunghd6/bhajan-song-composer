@@ -1,140 +1,260 @@
-import type { TimeSliceGridStep } from "./time-slice";
-import { type GuitarStringNumber } from "../fingerstyle-compressor";
-import { validateGuitarTab, type GuitarTabEvent } from "../guitar-tab-validation";
+import type { GuitarStringNumber } from "../fingerstyle-compressor";
+import {
+  validateGuitarTab,
+  type GuitarTabEvent,
+  type GuitarTabValidationIssue,
+} from "../guitar-tab-validation";
 import { scientificPitchForStringFret } from "../guitar-playability";
+import { SKILL_LEVEL_CONSTRAINTS, type SkillLevel } from "./dp-types";
+import type { TimeSliceGridStep } from "./time-slice";
 
 export interface FingerstylePhysicsOptions {
-  /** Fill density from the style profile: "none", "few", or "all". Defaults to "few". */
+  /** Fill density from the style profile or normalized generation policy. */
   fillDensity?: string;
+  /** Physical left-hand limits. Legacy callers default to intermediate; new generation passes its explicit policy. */
+  skillLevel?: SkillLevel;
 }
 
+export type FingerstylePhysicsIssueCode =
+  | "string-count-exceeded"
+  | "picking-finger-budget-exceeded"
+  | "fret-limit-exceeded"
+  | "fret-span-exceeded"
+  | "duplicate-string"
+  | "sounding-string-collision"
+  | "duration-out-of-range"
+  | "melody-pitch-mismatch"
+  | `guitar-tab-${GuitarTabValidationIssue["code"]}`
+  | "fill-interrupts-melody-sustain"
+  | "bass-on-unweighted-step"
+  | "fill-density-none-exceeded"
+  | "fill-density-few-exceeded";
+
+export interface FingerstylePhysicsIssue {
+  code: FingerstylePhysicsIssueCode;
+  message: string;
+  stepIndex?: number;
+  step?: number;
+  severity: "error";
+  details: Record<string, unknown>;
+}
+
+export interface FingerstylePhysicsValidationResult {
+  valid: boolean;
+  message: string;
+  issues: FingerstylePhysicsIssue[];
+}
+
+function issue(
+  issues: FingerstylePhysicsIssue[],
+  code: FingerstylePhysicsIssueCode,
+  message: string,
+  input: { stepIndex?: number; step?: number; details?: Record<string, unknown> } = {}
+): void {
+  issues.push({
+    code,
+    message,
+    stepIndex: input.stepIndex,
+    step: input.step,
+    severity: "error",
+    details: input.details ?? {},
+  });
+}
+
+export function validateFingerstylePhysicsDetailed(
+  grid: TimeSliceGridStep[],
+  options?: FingerstylePhysicsOptions
+): FingerstylePhysicsValidationResult {
+  const issues: FingerstylePhysicsIssue[] = [];
+  const tabEvents: GuitarTabEvent[] = [];
+  const skillLevel = options?.skillLevel ?? "intermediate";
+  const skillConstraints = SKILL_LEVEL_CONSTRAINTS[skillLevel];
+  const protectedMelodyStrings: Array<GuitarStringNumber | null> = [];
+  let protectedMelodyString: GuitarStringNumber | null = null;
+  for (const step of grid) {
+    if (step.melody.state === "attack") {
+      protectedMelodyString = step.tablature?.find(tab => tab.role === "melody")?.string ?? protectedMelodyString;
+    } else if (step.melody.state === "rest") {
+      protectedMelodyString = null;
+    }
+    protectedMelodyStrings.push(step.melody.state === "sustain" ? protectedMelodyString : null);
+  }
+
+  for (let stepIndex = 0; stepIndex < grid.length; stepIndex++) {
+    const step = grid[stepIndex];
+    const tablature = step.tablature ?? [];
+    if (tablature.length === 0) continue;
+
+    if (tablature.length > 6) {
+      issue(issues, "string-count-exceeded", `Step ${step.step}: Exceeds physical guitar limit of 6 strings. Got ${tablature.length} notes.`, {
+        stepIndex,
+        step: step.step,
+        details: { noteCount: tablature.length, limit: 6 },
+      });
+    } else if (tablature.length > 4) {
+      const thumbCount = tablature.filter(tab => tab.finger === "p").length;
+      if (thumbCount < 2) {
+        issue(issues, "picking-finger-budget-exceeded", `Step ${step.step}: Exceeds picking finger budget. A guitarist can pinch up to 4 strings simultaneously (P, I, M, A) unless it is a strum/roll. Got ${tablature.length} notes.`, {
+          stepIndex,
+          step: step.step,
+          details: { noteCount: tablature.length, thumbCount, pinchLimit: 4 },
+        });
+      }
+    }
+
+    const frettedNotes = tablature.filter(tab => typeof tab.fret === "number" && tab.fret > 0);
+    if (frettedNotes.length >= 2) {
+      const frets = frettedNotes.map(tab => tab.fret);
+      const minFret = Math.min(...frets);
+      const maxFret = Math.max(...frets);
+      const fretSpan = maxFret - minFret;
+      const maxAllowedFretSpan = options?.skillLevel ? skillConstraints.maxFretSpan : 3;
+      if (fretSpan > maxAllowedFretSpan) {
+        issue(issues, "fret-span-exceeded", `Step ${step.step}: Left-hand fret span ${fretSpan} (frets ${minFret}–${maxFret}) exceeds playable limit of ${maxAllowedFretSpan} frets. Notes: ${frettedNotes.map(tab => `Str${tab.string}/Fr${tab.fret}`).join(", ")}.`, {
+          stepIndex,
+          step: step.step,
+          details: { fretSpan, minFret, maxFret, maxAllowedFretSpan, notes: frettedNotes },
+        });
+      }
+    }
+
+    const stringsInUse = new Set<number>();
+    for (const tab of tablature) {
+      if (options?.skillLevel && tab.fret > skillConstraints.maxFret) {
+        issue(issues, "fret-limit-exceeded", `Step ${step.step}: Fret ${tab.fret} exceeds the ${skillLevel} limit of ${skillConstraints.maxFret}.`, {
+          stepIndex,
+          step: step.step,
+          details: { fret: tab.fret, skillLevel, maxFret: skillConstraints.maxFret },
+        });
+      }
+      if (stringsInUse.has(tab.string)) {
+        issue(issues, "duplicate-string", `Step ${step.step}: Multiple notes assigned to string ${tab.string}.`, {
+          stepIndex,
+          step: step.step,
+          details: { string: tab.string },
+        });
+      }
+      stringsInUse.add(tab.string);
+      const notePitch = scientificPitchForStringFret(tab.string, tab.fret);
+      if (tab.role === "melody" && step.melody.pitch && notePitch !== step.melody.pitch) {
+        issue(issues, "melody-pitch-mismatch", `Step ${step.step}: Melody pitch mismatch. Expected ${step.melody.pitch}, got ${notePitch} on string ${tab.string} fret ${tab.fret}.`, {
+          stepIndex,
+          step: step.step,
+          details: { expected: step.melody.pitch, actual: notePitch, string: tab.string, fret: tab.fret },
+        });
+      }
+      tabEvents.push({
+        measureIndex: 0,
+        beat: step.step,
+        note: notePitch,
+        string: tab.string,
+        fret: tab.fret,
+        role: tab.role,
+      });
+    }
+  }
+
+  for (let stepIndex = 0; stepIndex < grid.length; stepIndex++) {
+    const step = grid[stepIndex];
+    for (const tab of step.tablature ?? []) {
+      const durationSteps = tab.durationSteps ?? 1;
+      if (!Number.isSafeInteger(durationSteps) || durationSteps < 1 || stepIndex + durationSteps > grid.length) {
+        issue(issues, "duration-out-of-range", `Step ${step.step}: durationSteps ${durationSteps} sounds outside the measure grid.`, {
+          stepIndex,
+          step: step.step,
+          details: { durationSteps, remainingSteps: grid.length - stepIndex },
+        });
+        continue;
+      }
+      for (let offset = 1; offset < durationSteps; offset++) {
+        const soundingStep = grid[stepIndex + offset];
+        const conflictingAttack = soundingStep.tablature?.find(event => event.string === tab.string);
+        if (conflictingAttack) {
+          issue(issues, "sounding-string-collision", `Step ${step.step}: String ${tab.string} sustains into the attack at step ${soundingStep.step}.`, {
+            stepIndex,
+            step: step.step,
+            details: { string: tab.string, durationSteps, conflictingStep: soundingStep.step },
+          });
+          break;
+        }
+        if (tab.role === "fill" && protectedMelodyStrings[stepIndex + offset] === tab.string) {
+          issue(issues, "fill-interrupts-melody-sustain", `Step ${step.step}: Fill sustain occupies melody string ${tab.string} at step ${soundingStep.step}.`, {
+            stepIndex,
+            step: step.step,
+            details: { string: tab.string, durationSteps, protectedStep: soundingStep.step },
+          });
+          break;
+        }
+      }
+    }
+  }
+
+  const playability = validateGuitarTab(tabEvents, {
+    guitarProfile: "guitar-classic",
+    requireScientificPitch: true,
+  });
+  for (const playabilityIssue of playability.issues) {
+    issue(issues, `guitar-tab-${playabilityIssue.code}`, `Step ${playabilityIssue.beat}: ${playabilityIssue.message}`, {
+      step: playabilityIssue.beat,
+      details: { ...playabilityIssue },
+    });
+  }
+
+  let melodyString: GuitarStringNumber | null = null;
+  for (let stepIndex = 0; stepIndex < grid.length; stepIndex++) {
+    const step = grid[stepIndex];
+    if (step.melody.state === "attack") {
+      melodyString = step.tablature?.find(tab => tab.role === "melody")?.string ?? melodyString;
+    }
+    if (step.melody.state === "sustain" && melodyString !== null) {
+      const fill = step.tablature?.find(tab => tab.string === melodyString && tab.role !== "melody");
+      if (fill) {
+        issue(issues, "fill-interrupts-melody-sustain", `Step ${step.step}: Fill played on string ${melodyString} which is currently sustaining the melody note.`, {
+          stepIndex,
+          step: step.step,
+          details: { melodyString, fill },
+        });
+      }
+    }
+    if (step.melody.state === "rest") melodyString = null;
+  }
+
+  for (let stepIndex = 0; stepIndex < grid.length; stepIndex++) {
+    const step = grid[stepIndex];
+    if (step.tablature?.some(tab => tab.role === "bass") && !step.weight) {
+      issue(issues, "bass-on-unweighted-step", `Step ${step.step}: Bass note on unweighted step. Bass should only play on strong (⬤), medium (●), or weak (*) beat positions.`, {
+        stepIndex,
+        step: step.step,
+        details: { weight: step.weight },
+      });
+    }
+  }
+
+  const fillDensity = options?.fillDensity ?? "few";
+  const totalFills = grid.reduce((count, step) =>
+    count + (step.tablature?.filter(tab => tab.role === "fill").length ?? 0), 0);
+  if (fillDensity === "none" && totalFills > 0) {
+    issue(issues, "fill-density-none-exceeded", `Fill density violation: ${totalFills} fill attack(s) found but fill_density "none" allows 0.`, {
+      details: { fillDensity, totalFills, limit: 0 },
+    });
+  } else if (fillDensity === "few" && totalFills > 4) {
+    issue(issues, "fill-density-few-exceeded", `Fill density violation: ${totalFills} fill attacks found but fill_density "few" allows at most 4.`, {
+      details: { fillDensity, totalFills, limit: 4 },
+    });
+  }
+
+  return {
+    valid: issues.length === 0,
+    message: issues.length === 0 ? "Valid." : issues.map(value => value.message).join(" "),
+    issues,
+  };
+}
+
+/** Compatibility wrapper retaining the historical `{ valid, message }` contract. */
 export function validateFingerstylePhysics(
   grid: TimeSliceGridStep[],
   options?: FingerstylePhysicsOptions
 ): { valid: boolean; message: string } {
-  const messages: string[] = [];
-  const tabEvents: GuitarTabEvent[] = [];
-
-  for (let i = 0; i < grid.length; i++) {
-    const step = grid[i];
-    
-    // Build tab events and do basic checks
-    if (step.tablature && step.tablature.length > 0) {
-      if (step.tablature.length > 6) {
-        messages.push(`Step ${step.step}: Exceeds physical guitar limit of 6 strings. Got ${step.tablature.length} notes.`);
-      } else if (step.tablature.length > 4) {
-        // A strum is allowed for 5 or 6 strings if played as a sweep (multiple notes on thumb 'p' or has a strum role)
-        const pCount = step.tablature.filter(t => t.finger === "p").length;
-        const isStrum = pCount >= 2;
-        if (!isStrum) {
-          messages.push(`Step ${step.step}: Exceeds picking finger budget. A guitarist can pinch up to 4 strings simultaneously (P, I, M, A) unless it is a strum/roll. Got ${step.tablature.length} notes.`);
-        }
-      }
-
-      // Check fret span playability across all fretted notes in this step:
-      const frettedNotes = step.tablature.filter(t => typeof t.fret === "number" && t.fret > 0);
-      if (frettedNotes.length >= 2) {
-        const allFrets = frettedNotes.map(t => t.fret);
-        const minFret = Math.min(...allFrets);
-        const maxFret = Math.max(...allFrets);
-        const fretSpan = maxFret - minFret;
-        // Position-aware: max 3 frets of left-hand stretch for fingerstyle
-        const maxAllowedFretSpan = 3;
-        if (fretSpan > maxAllowedFretSpan) {
-          messages.push(`Step ${step.step}: Left-hand fret span ${fretSpan} (frets ${minFret}–${maxFret}) exceeds playable limit of ${maxAllowedFretSpan} frets. Notes: ${frettedNotes.map(t => `Str${t.string}/Fr${t.fret}`).join(", ")}.`);
-        }
-      }
-
-      const stringsInUse = new Set<number>();
-      for (const tab of step.tablature) {
-        if (stringsInUse.has(tab.string)) {
-          messages.push(`Step ${step.step}: Multiple notes assigned to string ${tab.string}.`);
-        }
-        stringsInUse.add(tab.string);
-
-        const notePitch = scientificPitchForStringFret(tab.string as any, tab.fret);
-
-        if (tab.role === "melody" && step.melody.pitch) {
-          if (notePitch !== step.melody.pitch) {
-            messages.push(`Step ${step.step}: Melody pitch mismatch. Expected ${step.melody.pitch}, got ${notePitch} on string ${tab.string} fret ${tab.fret}.`);
-          }
-        }
-
-        tabEvents.push({
-          measureIndex: 0,
-          beat: step.step,
-          note: notePitch,
-          string: tab.string as 1 | 2 | 3 | 4 | 5 | 6,
-          fret: tab.fret,
-          role: tab.role
-        });
-      }
-    }
-  }
-
-  const playabilityResult = validateGuitarTab(tabEvents, {
-    guitarProfile: "guitar-classic",
-    requireScientificPitch: true,
-  });
-
-  if (!playabilityResult.valid) {
-    for (const issue of playabilityResult.issues) {
-      messages.push(`Step ${issue.beat}: ${issue.message}`);
-    }
-  }
-
-  // Check if any fill interrupts the melody
-  // The melody pitch is mapped to a string. If step.melody.state === "sustain", 
-  // no fill should be played on the string where the melody attack happened.
-  let melodyString: GuitarStringNumber | null = null;
-  for (let i = 0; i < grid.length; i++) {
-    const step = grid[i];
-    if (step.melody.state === "attack") {
-      const melodyTab = step.tablature?.find(t => t.role === "melody");
-      if (melodyTab) melodyString = melodyTab.string as GuitarStringNumber;
-    }
-    
-    if (step.melody.state === "sustain" && melodyString !== null) {
-      const fillOnMelodyString = step.tablature?.find(t => t.string === melodyString && t.role !== "melody");
-      if (fillOnMelodyString) {
-        messages.push(`Step ${step.step}: Fill played on string ${melodyString} which is currently sustaining the melody note.`);
-      }
-    }
-
-    if (step.melody.state === "rest") {
-      melodyString = null;
-    }
-  }
-
-  // --- Density enforcement: Bass placement rule ---
-  // Bass notes must only appear on steps with a metric weight marker (⬤, ●, or *).
-  // Placing bass on unweighted steps clutters the arrangement.
-  for (const step of grid) {
-    if (step.tablature && step.tablature.length > 0) {
-      const hasBass = step.tablature.some(t => t.role === "bass");
-      if (hasBass && !step.weight) {
-        messages.push(`Step ${step.step}: Bass note on unweighted step. Bass should only play on strong (⬤), medium (●), or weak (*) beat positions.`);
-      }
-    }
-  }
-
-  // --- Density enforcement: Fill count rule ---
-  // Enforce the fill_density budget across the entire grid (one measure).
-  const fillDensity = options?.fillDensity ?? "few";
-  const totalFills = grid.reduce((count, step) => {
-    if (!step.tablature) return count;
-    return count + step.tablature.filter(t => t.role === "fill").length;
-  }, 0);
-
-  if (fillDensity === "none" && totalFills > 0) {
-    messages.push(`Fill density violation: ${totalFills} fill attack(s) found but fill_density "none" allows 0.`);
-  } else if (fillDensity === "few" && totalFills > 4) {
-    messages.push(`Fill density violation: ${totalFills} fill attacks found but fill_density "few" allows at most 4.`);
-  }
-  // "all" density has no limit — skip check.
-
-  return {
-    valid: messages.length === 0,
-    message: messages.length === 0 ? "Valid." : messages.join(" "),
-  };
+  const result = validateFingerstylePhysicsDetailed(grid, options);
+  return { valid: result.valid, message: result.message };
 }

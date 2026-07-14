@@ -1,15 +1,16 @@
-import { midiForStringFret, parseScientificPitch } from "../guitar-playability";
+import { midiForStringFret } from "../guitar-playability";
 import type {
   FingerstyleCanonicalEvent,
   FingerstyleCanonicalMeasure,
   FingerstyleEventMatrix,
 } from "./event-matrix";
 import type { DPNoteEvent, DPOptions, DPResult } from "./dp-types";
-import { DPDiagnosticLogger, STANDARD_TUNING_MIDI, stringToIndex, midiToNoteName } from "./dp-types";
-import { optimizeFingerstylePath } from "./dp-optimizer";
+import { DPDiagnosticLogger, SKILL_LEVEL_CONSTRAINTS, STANDARD_TUNING_MIDI, stringToIndex, midiToNoteName } from "./dp-types";
+import { optimizeFingerstylePath, RECURRING_SHAPE_MISMATCH_COST } from "./dp-optimizer";
 import { optimizeWithCapo } from "./dp-capo";
-import type { TimeSliceMeasure, TimeSliceGridStep } from "./time-slice";
-import { validateFingerstylePhysics } from "./physics-validation";
+import { DP_CANDIDATE_LIMIT } from "./dp-candidates";
+import { DP_COST_CONSTANTS } from "./dp-cost";
+import type { FingerstyleDiagnosticRun } from "./dp-diagnostics";
 
 // ---------------------------------------------------------------------------
 // Extract DPNoteEvents from the Event Matrix
@@ -87,8 +88,9 @@ export function extractDPEvents(
         ? midiForStringFret(bassEvent.string as 1 | 2 | 3 | 4 | 5 | 6, bassEvent.fret)
         : null;
 
+      const currentEventIndex = eventIndex++;
       events.push({
-        index: eventIndex++,
+        index: currentEventIndex,
         absoluteOnsetStep,
         movementSteps,
         melodyMidi,
@@ -97,6 +99,27 @@ export function extractDPEvents(
         durationSteps,
         bpm,
         isRest: !melodyEvent && !bassEvent,
+      });
+      log?.event({
+        type: "input-binding",
+        phase: "extraction",
+        eventIndex: currentEventIndex,
+        measureIndex: measure.measureIndex,
+        stepIndex: onset,
+        absoluteOnsetStep,
+        durationSteps,
+        movementSteps,
+        movementSeconds: movementSteps * (60 / bpm / 4),
+        chord: measure.chord,
+        normalizedChord: measure.chord.trim().replace(/\s+/g, "").toLowerCase(),
+        melodyTabIndex: null,
+        bassTabIndex: null,
+        authoritativeMelodyMidi: melodyMidi,
+        submittedMelodyMidi: melodyMidi,
+        effectiveMelodyMidi: melodyMidi,
+        bassMidi,
+        bassPitchSource: bassMidi === null ? "none" : "submitted-tab",
+        fixedFrets: [null, null, null, null, null, null],
       });
       previousAbsoluteOnsetStep = absoluteOnsetStep;
     }
@@ -112,8 +135,9 @@ export function extractDPEvents(
           ? absoluteOnsetStep
           : absoluteOnsetStep - previousAbsoluteOnsetStep
       );
+      const currentEventIndex = eventIndex++;
       events.push({
-        index: eventIndex++,
+        index: currentEventIndex,
         absoluteOnsetStep,
         movementSteps,
         melodyMidi: null,
@@ -123,12 +147,41 @@ export function extractDPEvents(
         bpm,
         isRest: true,
       });
+      log?.event({
+        type: "input-binding",
+        phase: "extraction",
+        eventIndex: currentEventIndex,
+        measureIndex: measure.measureIndex,
+        stepIndex: 0,
+        absoluteOnsetStep,
+        durationSteps: stepsPerMeasure,
+        movementSteps,
+        movementSeconds: movementSteps * (60 / bpm / 4),
+        chord: measure.chord,
+        normalizedChord: measure.chord.trim().replace(/\s+/g, "").toLowerCase(),
+        melodyTabIndex: null,
+        bassTabIndex: null,
+        authoritativeMelodyMidi: null,
+        submittedMelodyMidi: null,
+        effectiveMelodyMidi: null,
+        bassMidi: null,
+        bassPitchSource: "none",
+        fixedFrets: [null, null, null, null, null, null],
+      });
       previousAbsoluteOnsetStep = absoluteOnsetStep;
       log?.log(`  M${measure.measureIndex + 1}: REST measure`);
     }
   }
 
   log?.entry("Total DP events extracted", events.length);
+  log?.event({
+    type: "input-extraction",
+    phase: "extraction",
+    source: "event-matrix",
+    measureCount: matrix.measures.length,
+    inputEventCount: matrix.measures.reduce((sum, measure) => sum + measure.events.length, 0),
+    extractedEventCount: events.length,
+  });
 
   // Log the extracted event sequence
   log?.section("EVENT SEQUENCE");
@@ -178,6 +231,7 @@ function applyDPResultToMatrix(
 
     for (const onset of sortedOnsets) {
       const group = byOnset.get(onset)!;
+      const eventIndex = dpIndex;
       const dpCandidate = dpIndex < result.path.length ? result.path[dpIndex] : null;
       dpIndex++;
 
@@ -200,6 +254,26 @@ function applyDPResultToMatrix(
             changedCount++;
             log?.log(`  M${measure.measureIndex + 1} melody: s${event.string}/f${event.fret} → s${newString}/f${newFret} (${event.note} → ${note}) tech=${dpCandidate.melodyTechnique}`);
           }
+          const requestedMidi = midiForStringFret(event.string, event.fret);
+          log?.event({
+            type: "writeback",
+            phase: "writeback",
+            eventIndex,
+            measureIndex: measure.measureIndex,
+            stepIndex: sortedOnsets.indexOf(onset),
+            role: "melody",
+            tabIndex: group.indexOf(event),
+            submitted: { string: event.string, fret: event.fret, midi: requestedMidi },
+            selected: {
+              string: newString,
+              fret: newFret,
+              midi: newMidi,
+              origin: dpCandidate.origin ?? "generated",
+            },
+            requestedMidi,
+            pitchInvariant: newMidi === requestedMidi,
+            result: wasChanged ? "changed" : "unchanged",
+          });
 
           updatedEvents.push({
             ...event,
@@ -224,6 +298,26 @@ function applyDPResultToMatrix(
             changedCount++;
             log?.log(`  M${measure.measureIndex + 1} ${event.role}: s${event.string}/f${event.fret} → s${newString}/f${newFret} (${event.note} → ${note})`);
           }
+          const requestedMidi = midiForStringFret(event.string, event.fret);
+          log?.event({
+            type: "writeback",
+            phase: "writeback",
+            eventIndex,
+            measureIndex: measure.measureIndex,
+            stepIndex: sortedOnsets.indexOf(onset),
+            role: "bass",
+            tabIndex: group.indexOf(event),
+            submitted: { string: event.string, fret: event.fret, midi: requestedMidi },
+            selected: {
+              string: newString,
+              fret: newFret,
+              midi: newMidi,
+              origin: dpCandidate.origin ?? "generated",
+            },
+            requestedMidi,
+            pitchInvariant: newMidi === requestedMidi,
+            result: wasChanged ? "changed" : "unchanged",
+          });
 
           updatedEvents.push({
             ...event,
@@ -232,6 +326,32 @@ function applyDPResultToMatrix(
             note,
           });
         } else {
+          if (
+            dpCandidate.origin === "fallback-noop"
+            && (event.role === "melody" || event.role === "bass" || event.role === "root" || event.role === "fifth")
+          ) {
+            const requestedMidi = midiForStringFret(event.string, event.fret);
+            log?.event({
+              type: "writeback",
+              phase: "writeback",
+              severity: "warning",
+              eventIndex,
+              measureIndex: measure.measureIndex,
+              stepIndex: sortedOnsets.indexOf(onset),
+              role: event.role === "melody" ? "melody" : "bass",
+              tabIndex: group.indexOf(event),
+              submitted: { string: event.string, fret: event.fret, midi: requestedMidi },
+              selected: {
+                string: null,
+                fret: 0,
+                midi: null,
+                origin: "fallback-noop",
+              },
+              requestedMidi,
+              pitchInvariant: false,
+              result: "unresolved",
+            });
+          }
           updatedEvents.push(event);
         }
       }
@@ -269,7 +389,8 @@ function applyDPResultToMatrix(
 export function applyDPOptimization(
   matrix: FingerstyleEventMatrix,
   options: DPOptions = {}
-): { matrix: FingerstyleEventMatrix; result: DPResult; logs: string[] } {
+): { matrix: FingerstyleEventMatrix; result: DPResult; logs: string[]; diagnostics: FingerstyleDiagnosticRun } {
+  const startedAt = Date.now();
   const log = new DPDiagnosticLogger();
   const skillLevel = options.skillLevel ?? "intermediate";
   const bpm = options.bpm ?? 120;
@@ -281,6 +402,34 @@ export function applyDPOptimization(
   log.entry("Fixed capo", options.capo ?? 0);
   log.entry("Measures in matrix", matrix.measures.length);
   log.entry("Total events in matrix", matrix.measures.reduce((sum, m) => sum + m.events.length, 0));
+  log.event({
+    type: "configuration",
+    phase: "configuration",
+    values: {
+      bpm,
+      skillLevel,
+      capo: options.capo ?? 0,
+      autoCapo: options.autoCapo ?? false,
+      maxCapo: options.maxCapo ?? 7,
+      candidateCap: DP_CANDIDATE_LIMIT,
+      tuningMidi: [...STANDARD_TUNING_MIDI],
+      skillConstraints: { ...SKILL_LEVEL_CONSTRAINTS[skillLevel] },
+      recurringShapeMismatchCost: RECURRING_SHAPE_MISMATCH_COST,
+      costConstants: { ...DP_COST_CONSTANTS },
+    },
+    provenance: {
+      bpm: options.bpm === undefined ? "defaulted" : "supplied",
+      skillLevel: options.skillLevel === undefined ? "defaulted" : "supplied",
+      capo: options.capo === undefined ? "defaulted" : "supplied",
+      autoCapo: options.autoCapo === undefined ? "defaulted" : "supplied",
+      maxCapo: options.maxCapo === undefined ? "defaulted" : "supplied",
+      candidateCap: "constant",
+      tuningMidi: "constant",
+      skillConstraints: "derived",
+      recurringShapeMismatchCost: "constant",
+      costConstants: "constant",
+    },
+  });
 
   const dpEvents = extractDPEvents(matrix, bpm, log);
 
@@ -299,214 +448,42 @@ export function applyDPOptimization(
   log.entry("Selected capo", result.capo);
   log.entry("Path events", result.path.length);
 
-  const allLogs = log.getLines();
-  return { matrix: updatedMatrix, result: { ...result, logs: allLogs }, logs: allLogs };
-}
-
-// ---------------------------------------------------------------------------
-// Apply DP Result back onto TimeSliceMeasure array (LLM Integration)
-// ---------------------------------------------------------------------------
-
-/** Check whether a step has melody or bass tablature (not just fills). */
-function hasMelodyOrBass(step: TimeSliceGridStep): boolean {
-  if (!step.tablature || step.tablature.length === 0) return false;
-  return step.tablature.some(
-    t => t.role === "melody" || t.role === "bass" || t.role === "root" || t.role === "fifth"
-  );
-}
-
-export function applyDPToTimeSliceMeasures(
-  measures: TimeSliceMeasure[],
-  bpm: number = 120,
-  options: DPOptions = {}
-): { measures: TimeSliceMeasure[]; logs: string[] } {
-  const log = new DPDiagnosticLogger();
-  const skillLevel = options.skillLevel ?? "intermediate";
-
-  log.section("DP FINGERSTYLE OPTIMIZATION (TIME-SLICE)");
-  log.entry("Skill level", skillLevel);
-  log.entry("BPM", bpm);
-  log.entry("Auto capo", options.autoCapo ?? false);
-  log.entry("Fixed capo", options.capo ?? 0);
-  log.entry("Measures", measures.length);
-
-  type Binding = {
-    measureIndex: number;
-    stepIndex: number;
-    melodyTabIndex: number | null;
-    bassTabIndex: number | null;
-    absoluteOnsetStep: number;
-  };
-
-  const dpEvents: DPNoteEvent[] = [];
-  const bindings: Binding[] = [];
-  const measureOffsets: number[] = [];
-  let totalGridSteps = 0;
-  for (const measure of measures) {
-    measureOffsets.push(totalGridSteps);
-    totalGridSteps += measure.grid.length;
-  }
-
-  log.section("EXTRACT DP EVENTS FROM TIME-SLICE");
-
-  for (let measureIndex = 0; measureIndex < measures.length; measureIndex++) {
-    const measure = measures[measureIndex];
-    for (let stepIndex = 0; stepIndex < measure.grid.length; stepIndex++) {
-      const step = measure.grid[stepIndex];
-      if (!hasMelodyOrBass(step)) continue;
-
-      const tablature = step.tablature ?? [];
-      const melodyTabIndex = tablature.findIndex(tab => tab.role === "melody");
-      const bassTabIndex = tablature.findIndex(
-        tab => tab.role === "bass" || tab.role === "root" || tab.role === "fifth"
-      );
-      const absoluteOnsetStep = measureOffsets[measureIndex] + stepIndex;
-
-      const fixedFrets: (number | null)[] = [null, null, null, null, null, null];
-      for (let tabIndex = 0; tabIndex < tablature.length; tabIndex++) {
-        if (tabIndex === melodyTabIndex || tabIndex === bassTabIndex) continue;
-        const tab = tablature[tabIndex];
-        fixedFrets[stringToIndex(tab.string)] = tab.fret;
-      }
-
-      const melodyTab = melodyTabIndex >= 0 ? tablature[melodyTabIndex] : null;
-      const bassTab = bassTabIndex >= 0 ? tablature[bassTabIndex] : null;
-      const authoritativeMelody = step.melody.pitch
-        ? parseScientificPitch(step.melody.pitch)?.midi ?? null
-        : null;
-      const melodyMidi = melodyTab
-        ? authoritativeMelody ?? midiForStringFret(melodyTab.string, melodyTab.fret)
-        : null;
-      const bassMidi = bassTab
-        ? midiForStringFret(bassTab.string, bassTab.fret)
-        : null;
-
-      bindings.push({
-        measureIndex,
-        stepIndex,
-        melodyTabIndex: melodyTabIndex >= 0 ? melodyTabIndex : null,
-        bassTabIndex: bassTabIndex >= 0 ? bassTabIndex : null,
-        absoluteOnsetStep,
-      });
-      dpEvents.push({
-        index: dpEvents.length,
-        absoluteOnsetStep,
-        fixedFrets,
-        melodyMidi,
-        bassMidi,
-        chord: step.chord || "N.C.",
-        durationSteps: 1,
-        bpm,
-        isRest: false,
-      });
-    }
-  }
-
-  for (let index = 0; index < dpEvents.length; index++) {
-    const nextOnset = dpEvents[index + 1]?.absoluteOnsetStep ?? totalGridSteps;
-    const onset = dpEvents[index].absoluteOnsetStep ?? 0;
-    const previousOnset = dpEvents[index - 1]?.absoluteOnsetStep;
-    dpEvents[index].durationSteps = Math.max(1, nextOnset - onset);
-    dpEvents[index].movementSteps = Math.max(
-      1,
-      previousOnset === undefined ? onset : onset - previousOnset
-    );
-    const binding = bindings[index];
-    log.item(index, [
-      `M${binding.measureIndex + 1}/s${binding.stepIndex + 1}`,
-      `chord=${dpEvents[index].chord}`,
-      `mel=${midiToNoteName(dpEvents[index].melodyMidi)}`,
-      `bass=${midiToNoteName(dpEvents[index].bassMidi)}`,
-      `dur=${dpEvents[index].durationSteps}steps`,
-    ].join(" | "));
-  }
-
-  log.entry("Total DP events extracted", dpEvents.length);
-
-  let result: DPResult;
-  if (options.autoCapo) {
-    result = optimizeWithCapo(dpEvents, skillLevel, options.maxCapo, log);
-  } else {
-    result = optimizeFingerstylePath(dpEvents, skillLevel, options.capo ?? 0, log);
-  }
-
-  log.section("APPLY DP RESULT TO TIME-SLICE");
-  let changedCount = 0;
-  let writebackValid = result.path.length === bindings.length;
-  const updatedMeasures: TimeSliceMeasure[] = JSON.parse(JSON.stringify(measures));
-
-  for (let index = 0; index < bindings.length && index < result.path.length; index++) {
-    const binding = bindings[index];
-    const candidate = result.path[index];
-    const event = dpEvents[index];
-    const step = updatedMeasures[binding.measureIndex].grid[binding.stepIndex];
-    const tablature = step.tablature ?? [];
-
-    if (binding.melodyTabIndex !== null && candidate.melodyString !== null) {
-      const actualMidi = midiForStringFret(candidate.melodyString, candidate.melodyFret);
-      if (actualMidi !== event.melodyMidi) {
-        writebackValid = false;
-        log.log(`  ⚠ M${binding.measureIndex + 1}/s${binding.stepIndex + 1} melody pitch invariant failed`);
-        break;
-      }
-      const tab = tablature[binding.melodyTabIndex];
-      if (tab.string !== candidate.melodyString || tab.fret !== candidate.melodyFret) {
-        changedCount++;
-        log.log(`  M${binding.measureIndex + 1}/s${binding.stepIndex + 1} melody: s${tab.string}/f${tab.fret} → s${candidate.melodyString}/f${candidate.melodyFret}`);
-      }
-      tab.string = candidate.melodyString;
-      tab.fret = candidate.melodyFret;
-    }
-
-    if (binding.bassTabIndex !== null && candidate.bassString !== null) {
-      const actualMidi = midiForStringFret(candidate.bassString, candidate.bassFret);
-      if (actualMidi !== event.bassMidi) {
-        writebackValid = false;
-        log.log(`  ⚠ M${binding.measureIndex + 1}/s${binding.stepIndex + 1} bass pitch invariant failed`);
-        break;
-      }
-      const tab = tablature[binding.bassTabIndex];
-      if (tab.string !== candidate.bassString || tab.fret !== candidate.bassFret) {
-        changedCount++;
-        log.log(`  M${binding.measureIndex + 1}/s${binding.stepIndex + 1} ${tab.role}: s${tab.string}/f${tab.fret} → s${candidate.bassString}/f${candidate.bassFret}`);
-      }
-      tab.string = candidate.bassString;
-      tab.fret = candidate.bassFret;
-    }
-  }
-
-  if (writebackValid) {
-    for (let index = 0; index < updatedMeasures.length; index++) {
-      const measure = updatedMeasures[index];
-      const validationOptions = {
-        fillDensity: measure.style_profile.fill_density,
-      };
-      const before = validateFingerstylePhysics(
-        measures[index].grid,
-        validationOptions
-      );
-      const after = validateFingerstylePhysics(measure.grid, validationOptions);
-      if (!after.valid && before.valid) {
-        writebackValid = false;
-        log.log(`  ⚠ POST-DP PHYSICS VALIDATION M${measure.measure}: ${after.message}`);
-        break;
-      }
-      if (!after.valid) {
-        log.log(`  ⚠ M${measure.measure} retains pre-existing validation issues after pitch-safe DP writeback.`);
-      }
-    }
-  }
-
-  log.entry("Events updated", changedCount);
-  log.section("DP FINGERSTYLE OPTIMIZATION COMPLETE");
-  log.entry("Final total cost", result.totalCost.toFixed(2));
-  log.entry("Selected capo", result.capo);
-  log.entry("Writeback", writebackValid ? "accepted" : "rolled back");
+  const changedEventCount = updatedMatrix.measures.reduce((count, measure, measureIndex) =>
+    count + measure.events.filter((event, eventIndex) => {
+      const original = matrix.measures[measureIndex]?.events[eventIndex];
+      return original && (original.string !== event.string || original.fret !== event.fret);
+    }).length, 0);
+  const unresolvedEventCount = result.path.filter(candidate => candidate.origin === "fallback-noop").length;
+  const outcome = !Number.isFinite(result.totalCost)
+    ? "failed"
+    : unresolvedEventCount > 0
+      ? "accepted-with-unresolved-events"
+      : changedEventCount === 0
+        ? "no-effective-dp-change"
+        : "accepted";
+  log.event({
+    type: "run-summary",
+    phase: "summary",
+    outcome,
+    inputEventCount: dpEvents.length,
+    resolvedEventCount: dpEvents.length - unresolvedEventCount,
+    unresolvedEventCount,
+    changedEventCount,
+    unchangedEventCount: Math.max(0, dpEvents.length - unresolvedEventCount - changedEventCount),
+    totalCost: result.totalCost,
+    elapsedMs: Date.now() - startedAt,
+  });
+  log.collector.complete(outcome);
 
   const allLogs = log.getLines();
+  const diagnostics = log.getDiagnostics();
   return {
-    measures: writebackValid ? updatedMeasures : measures,
+    matrix: updatedMatrix,
+    result: { ...result, logs: allLogs, diagnostics },
     logs: allLogs,
+    diagnostics,
   };
 }
 
+export { applyDPToTimeSliceMeasures } from "./dp-time-slice-integration";
+export type { ApplyDPToTimeSliceMeasuresResult } from "./dp-time-slice-integration";

@@ -10,6 +10,7 @@ import {
 } from "@/lib/theory/accompaniment-workflow";
 import {
   DEFAULT_ACCOMPANIMENT_LAYER_VISIBILITY,
+  DEFAULT_FINGERSTYLE_GENERATION_SETTINGS,
   DEFAULT_LAYER_VOLUMES,
   type WorkspaceState,
 } from "../useWorkspaceState";
@@ -49,6 +50,13 @@ function makeRun(
 }
 
 describe("accompaniment workflow wizard state", () => {
+  it("defaults new fingerstyle generation to beginner skill with automatic density", () => {
+    expect(DEFAULT_FINGERSTYLE_GENERATION_SETTINGS).toEqual({
+      skillLevel: "beginner",
+      densityMode: "auto",
+    });
+  });
+
   it("stores accompaniment layer visibility and volumes in the persisted workspace state", () => {
     const state = {
       aiSuggestions: [],
@@ -77,6 +85,10 @@ describe("accompaniment workflow wizard state", () => {
       accompanimentLayerVolumes: {
         ...DEFAULT_LAYER_VOLUMES,
         Guitar: 65,
+      },
+      fingerstyleGenerationSettings: {
+        skillLevel: "beginner",
+        densityMode: "auto",
       },
     } satisfies WorkspaceState;
 

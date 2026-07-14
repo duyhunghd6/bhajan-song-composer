@@ -1,5 +1,9 @@
 import type { GuitarStringNumber } from "../fingerstyle-compressor";
 import {
+  DP_CANDIDATE_REJECTION_REASONS,
+  type DPCandidateRejectionReason,
+} from "./dp-diagnostics";
+import {
   type DPCandidate,
   type DPNoteEvent,
   type SkillLevel,
@@ -9,187 +13,255 @@ import {
   midiAt,
 } from "./dp-types";
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
 const TREBLE_STRINGS: GuitarStringNumber[] = [1, 2, 3];
 const BASS_STRINGS: GuitarStringNumber[] = [6, 5, 4];
-const MAX_CANDIDATES = 20;
+export const DP_CANDIDATE_LIMIT = 20;
+export const DP_CANDIDATE_SORT_KEYS = [
+  "pressed-note-count",
+  "hand-position",
+  "melody-string",
+  "bass-string",
+] as const;
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+export interface DPPitchPosition {
+  string: GuitarStringNumber;
+  fret: number;
+}
 
-/**
- * Find all (string, fret) positions where the given MIDI pitch can be played,
- * respecting skill-level max fret and capo.
- */
-function findPositions(
+export interface DPCandidateGenerationDetails {
+  eventIndex: number;
+  capo: number;
+  skillLevel: SkillLevel;
+  melodyPositionsTested: number;
+  melodyPositions: DPPitchPosition[];
+  bassPositionsTested: number;
+  bassPositions: DPPitchPosition[];
+  cartesianCombinationCount: number;
+  rejectionCounts: Record<DPCandidateRejectionReason, number>;
+  acceptedBeforeCap: number;
+  candidateCap: number;
+  retainedCount: number;
+  prunedByCapCount: number;
+  sortKeys: readonly string[];
+  retainedCandidates: DPCandidate[];
+  prunedCandidates: DPCandidate[];
+}
+
+function emptyRejectionCounts(): Record<DPCandidateRejectionReason, number> {
+  return Object.fromEntries(
+    DP_CANDIDATE_REJECTION_REASONS.map(reason => [reason, 0])
+  ) as Record<DPCandidateRejectionReason, number>;
+}
+
+function increment(
+  counts: Record<DPCandidateRejectionReason, number>,
+  reason: DPCandidateRejectionReason
+): void {
+  counts[reason] += 1;
+}
+
+function findPositionsDetailed(
   midi: number,
   strings: GuitarStringNumber[],
   maxFret: number,
-  capo: number
-): { string: GuitarStringNumber; fret: number }[] {
-  const results: { string: GuitarStringNumber; fret: number }[] = [];
-  for (const s of strings) {
-    const idx = stringToIndex(s);
-    const openMidi = STANDARD_TUNING_MIDI[idx] + capo;
+  capo: number,
+  pitch: "melody" | "bass",
+  rejectionCounts: Record<DPCandidateRejectionReason, number>
+): { tested: number; positions: DPPitchPosition[] } {
+  const positions: DPPitchPosition[] = [];
+  for (const string of strings) {
+    const stringIndex = stringToIndex(string);
+    const openMidi = STANDARD_TUNING_MIDI[stringIndex] + capo;
     const fret = midi - openMidi;
-    if (fret >= 0 && fret <= maxFret) {
-      results.push({ string: s, fret });
+    if (fret < 0) {
+      increment(rejectionCounts, `${pitch}-below-open-string`);
+    } else if (fret > maxFret) {
+      increment(rejectionCounts, `${pitch}-above-max-fret`);
+    } else {
+      positions.push({ string, fret });
     }
   }
-  return results;
+  return { tested: strings.length, positions };
 }
 
-/**
- * Compute the hand position (center fret) from a fret layout.
- */
 function computeHandPosition(shapeFrets: (number | null)[]): number {
   const fretted = shapeFrets.filter((f): f is number => f !== null && f > 0);
   if (fretted.length === 0) return 0;
   return Math.round((Math.min(...fretted) + Math.max(...fretted)) / 2);
 }
 
-/**
- * Check whether a shape requires a barre (same fret on 2+ strings, at the lowest fretted position).
- */
 function detectBarre(shapeFrets: (number | null)[]): number | null {
   const fretted = shapeFrets
-    .map((f, i) => f !== null && f > 0 ? { fret: f, idx: i } : null)
-    .filter((x): x is { fret: number; idx: number } => x !== null);
-
+    .map((fret, index) => fret !== null && fret > 0 ? { fret, index } : null)
+    .filter((value): value is { fret: number; index: number } => value !== null);
   if (fretted.length < 2) return null;
-
-  const minFret = Math.min(...fretted.map(f => f.fret));
-  const atMin = fretted.filter(f => f.fret === minFret);
-  return atMin.length >= 2 ? minFret : null;
+  const minFret = Math.min(...fretted.map(value => value.fret));
+  return fretted.filter(value => value.fret === minFret).length >= 2 ? minFret : null;
 }
 
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
+function compareCandidates(a: DPCandidate, b: DPCandidate): number {
+  const aPressed = Number(a.melodyFret > 0) + Number(a.bassFret > 0);
+  const bPressed = Number(b.melodyFret > 0) + Number(b.bassFret > 0);
+  return aPressed - bPressed
+    || a.handPosition - b.handPosition
+    || (a.melodyString ?? 7) - (b.melodyString ?? 7)
+    || (a.bassString ?? 7) - (b.bassString ?? 7);
+}
 
-/**
- * Generate all feasible hand-shape candidates for a single DP note event.
- *
- * For each (melodyString, melodyFret) × (bassString, bassFret) combination,
- * builds a full 6-string shape layout, checks the fret span constraint,
- * filters by skill level, and returns up to MAX_CANDIDATES sorted by
- * ascending hand position (open-position preference).
- */
-export function generateCandidates(
+function restCandidate(): DPCandidate {
+  return {
+    origin: "rest",
+    melodyString: null,
+    melodyFret: 0,
+    bassString: null,
+    bassFret: 0,
+    melodyTechnique: "free-stroke",
+    shapeFrets: [null, null, null, null, null, null],
+    handPosition: 0,
+    usesBarre: false,
+  };
+}
+
+/** Generate candidates plus a complete, deterministic account of enumeration and pruning. */
+export function generateCandidatesDetailed(
   event: DPNoteEvent,
   skillLevel: SkillLevel,
   capo: number = 0
-): DPCandidate[] {
+): DPCandidateGenerationDetails {
   const constraints = SKILL_LEVEL_CONSTRAINTS[skillLevel];
+  const rejectionCounts = emptyRejectionCounts();
 
-  // Rest events produce a single "no-op" candidate
   if (event.isRest) {
-    return [{
-      melodyString: null,
-      melodyFret: 0,
-      bassString: null,
-      bassFret: 0,
-      melodyTechnique: "free-stroke",
-      shapeFrets: [null, null, null, null, null, null],
-      handPosition: 0,
-      usesBarre: false,
-    }];
+    const retainedCandidates = [restCandidate()];
+    return {
+      eventIndex: event.index,
+      capo,
+      skillLevel,
+      melodyPositionsTested: 0,
+      melodyPositions: [],
+      bassPositionsTested: 0,
+      bassPositions: [],
+      cartesianCombinationCount: 1,
+      rejectionCounts,
+      acceptedBeforeCap: 1,
+      candidateCap: DP_CANDIDATE_LIMIT,
+      retainedCount: 1,
+      prunedByCapCount: 0,
+      sortKeys: DP_CANDIDATE_SORT_KEYS,
+      retainedCandidates,
+      prunedCandidates: [],
+    };
   }
 
-  // Find all positions for melody and bass
-  const melodyPositions = event.melodyMidi !== null
-    ? findPositions(event.melodyMidi, [...TREBLE_STRINGS, ...BASS_STRINGS], constraints.maxFret, capo)
-    : [null];
-
-  const bassPositions = event.bassMidi !== null
-    ? findPositions(event.bassMidi, [...BASS_STRINGS, ...TREBLE_STRINGS], constraints.maxFret, capo)
-    : [null];
-
+  const allStrings = [...TREBLE_STRINGS, ...BASS_STRINGS];
+  const bassFirstStrings = [...BASS_STRINGS, ...TREBLE_STRINGS];
+  const melodySearch = event.melodyMidi === null
+    ? { tested: 0, positions: [] }
+    : findPositionsDetailed(event.melodyMidi, allStrings, constraints.maxFret, capo, "melody", rejectionCounts);
+  const bassSearch = event.bassMidi === null
+    ? { tested: 0, positions: [] }
+    : findPositionsDetailed(event.bassMidi, bassFirstStrings, constraints.maxFret, capo, "bass", rejectionCounts);
+  const melodyOptions: (DPPitchPosition | null)[] = event.melodyMidi === null ? [null] : melodySearch.positions;
+  const bassOptions: (DPPitchPosition | null)[] = event.bassMidi === null ? [null] : bassSearch.positions;
   const candidates: DPCandidate[] = [];
 
-  for (const melPos of melodyPositions) {
-    for (const bassPos of bassPositions) {
+  for (const melodyPosition of melodyOptions) {
+    for (const bassPosition of bassOptions) {
       if (
-        melPos
+        melodyPosition
         && event.melodyMidi !== null
-        && midiAt(stringToIndex(melPos.string), melPos.fret, capo) !== event.melodyMidi
-      ) continue;
+        && midiAt(stringToIndex(melodyPosition.string), melodyPosition.fret, capo) !== event.melodyMidi
+      ) {
+        increment(rejectionCounts, "melody-pitch-verification");
+        continue;
+      }
       if (
-        bassPos
+        bassPosition
         && event.bassMidi !== null
-        && midiAt(stringToIndex(bassPos.string), bassPos.fret, capo) !== event.bassMidi
-      ) continue;
+        && midiAt(stringToIndex(bassPosition.string), bassPosition.fret, capo) !== event.bassMidi
+      ) {
+        increment(rejectionCounts, "bass-pitch-verification");
+        continue;
+      }
+      if (melodyPosition && bassPosition && melodyPosition.string === bassPosition.string) {
+        increment(rejectionCounts, "melody-bass-string-collision");
+        continue;
+      }
 
-      // Skip if melody and bass collide on the same string.
-      if (melPos && bassPos && melPos.string === bassPos.string) continue;
-
-      // Start from simultaneous notes that are not owned by this DP decision.
-      // They remain fixed and reserve their physical strings.
       const shapeFrets: (number | null)[] = event.fixedFrets
         ? [...event.fixedFrets]
         : [null, null, null, null, null, null];
-
-      const melodyIndex = melPos ? stringToIndex(melPos.string) : null;
-      const bassIndex = bassPos ? stringToIndex(bassPos.string) : null;
-      if (melodyIndex !== null && shapeFrets[melodyIndex] !== null) continue;
-      if (bassIndex !== null && shapeFrets[bassIndex] !== null) continue;
-
-      if (melPos && melodyIndex !== null) {
-        shapeFrets[melodyIndex] = melPos.fret;
-      }
-      if (bassPos && bassIndex !== null) {
-        shapeFrets[bassIndex] = bassPos.fret;
+      const melodyIndex = melodyPosition ? stringToIndex(melodyPosition.string) : null;
+      const bassIndex = bassPosition ? stringToIndex(bassPosition.string) : null;
+      if (
+        (melodyIndex !== null && shapeFrets[melodyIndex] !== null)
+        || (bassIndex !== null && shapeFrets[bassIndex] !== null)
+      ) {
+        increment(rejectionCounts, "fixed-string-collision");
+        continue;
       }
 
-      // Check fret span of all fretted notes (excluding open strings)
-      const frettedNonZero = shapeFrets.filter((f): f is number => f !== null && f > 0);
-      if (frettedNonZero.length >= 2) {
-        const span = Math.max(...frettedNonZero) - Math.min(...frettedNonZero);
-        if (span > constraints.maxFretSpan) continue;
+      if (melodyPosition && melodyIndex !== null) shapeFrets[melodyIndex] = melodyPosition.fret;
+      if (bassPosition && bassIndex !== null) shapeFrets[bassIndex] = bassPosition.fret;
+
+      const fretted = shapeFrets.filter((fret): fret is number => fret !== null && fret > 0);
+      if (fretted.length >= 2 && Math.max(...fretted) - Math.min(...fretted) > constraints.maxFretSpan) {
+        increment(rejectionCounts, "fret-span-exceeded");
+        continue;
       }
 
-      const handPosition = computeHandPosition(shapeFrets);
-      const barreFret = detectBarre(shapeFrets);
-      const usesBarre = barreFret !== null;
-
-      // Skip barres for beginner
-      if (usesBarre && !constraints.allowBarre) continue;
+      const usesBarre = detectBarre(shapeFrets) !== null;
+      if (usesBarre && !constraints.allowBarre) {
+        increment(rejectionCounts, "barre-not-allowed");
+        continue;
+      }
 
       candidates.push({
-        melodyString: melPos?.string ?? null,
-        melodyFret: melPos?.fret ?? 0,
-        bassString: bassPos?.string ?? null,
-        bassFret: bassPos?.fret ?? 0,
-        melodyTechnique: "free-stroke",  // default; DP cost function upgrades to legato when beneficial
+        origin: "generated",
+        melodyString: melodyPosition?.string ?? null,
+        melodyFret: melodyPosition?.fret ?? 0,
+        bassString: bassPosition?.string ?? null,
+        bassFret: bassPosition?.fret ?? 0,
+        melodyTechnique: "free-stroke",
         shapeFrets,
-        handPosition,
+        handPosition: computeHandPosition(shapeFrets),
         usesBarre,
       });
     }
   }
 
-  // Keep open-string alternatives ahead of equivalent fretted placements before
-  // pruning, then prefer lower hand positions and deterministic string order.
-  candidates.sort((a, b) => {
-    const aPressed = Number(a.melodyFret > 0) + Number(a.bassFret > 0);
-    const bPressed = Number(b.melodyFret > 0) + Number(b.bassFret > 0);
-    return aPressed - bPressed
-      || a.handPosition - b.handPosition
-      || (a.melodyString ?? 7) - (b.melodyString ?? 7)
-      || (a.bassString ?? 7) - (b.bassString ?? 7);
-  });
-
-  // Cap the number of candidates to keep the DP tractable
-  return candidates.slice(0, MAX_CANDIDATES);
+  candidates.sort(compareCandidates);
+  const retainedCandidates = candidates.slice(0, DP_CANDIDATE_LIMIT);
+  const prunedCandidates = candidates.slice(DP_CANDIDATE_LIMIT);
+  return {
+    eventIndex: event.index,
+    capo,
+    skillLevel,
+    melodyPositionsTested: melodySearch.tested,
+    melodyPositions: melodySearch.positions,
+    bassPositionsTested: bassSearch.tested,
+    bassPositions: bassSearch.positions,
+    cartesianCombinationCount: melodyOptions.length * bassOptions.length,
+    rejectionCounts,
+    acceptedBeforeCap: candidates.length,
+    candidateCap: DP_CANDIDATE_LIMIT,
+    retainedCount: retainedCandidates.length,
+    prunedByCapCount: prunedCandidates.length,
+    sortKeys: DP_CANDIDATE_SORT_KEYS,
+    retainedCandidates,
+    prunedCandidates,
+  };
 }
 
-/**
- * Convenience: generate candidates for all events in a sequence.
- */
+/** Compatibility wrapper retaining the existing candidate-array API. */
+export function generateCandidates(
+  event: DPNoteEvent,
+  skillLevel: SkillLevel,
+  capo: number = 0
+): DPCandidate[] {
+  return generateCandidatesDetailed(event, skillLevel, capo).retainedCandidates;
+}
+
 export function generateAllCandidates(
   events: DPNoteEvent[],
   skillLevel: SkillLevel,

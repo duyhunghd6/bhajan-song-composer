@@ -16,6 +16,10 @@ export function getComposerFingerstyleMeasuresStorageKey(slug: string): string {
   return `${getComposerSongStoragePrefix(slug)}fingerstyle-measures`;
 }
 
+export function getComposerFingerstyleDiagnosticsStorageKey(slug: string): string {
+  return `${getComposerSongStoragePrefix(slug)}fingerstyle-diagnostics`;
+}
+
 export function clearComposerSongStorage(storage: Storage, slug: string): string[] {
   const prefix = getComposerSongStoragePrefix(slug);
   const keysToRemove: string[] = [];

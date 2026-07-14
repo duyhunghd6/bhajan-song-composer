@@ -50,13 +50,18 @@ It accounts for:
 
 | Module | Responsibility |
 |---|---|
-| `fingerstyle-arranger/dp-types.ts` | DP events, candidates, hand state, skill constraints, options, and diagnostics |
-| `fingerstyle-arranger/dp-candidates.ts` | Enumerate pitch-correct, collision-free string/fret candidates |
-| `fingerstyle-arranger/dp-cost.ts` | Movement, shape, sustain, technique, barre, open-string, and skill costs |
+| `fingerstyle-arranger/dp-types.ts` | DP events, candidates, hand state, skill constraints, options, and compatibility logger |
+| `fingerstyle-arranger/dp-diagnostics.ts` | Versioned typed event taxonomy, run collector, candidate snapshots, and outcome semantics |
+| `fingerstyle-arranger/dp-candidates.ts` | Enumerate pitch-correct, collision-free string/fret candidates and grouped rejection details |
+| `fingerstyle-arranger/dp-cost.ts` | Movement, shape, sustain, technique, barre, placement, skill, and recurring-grip cost breakdowns |
 | `fingerstyle-arranger/dp-optimizer.ts` | Two-pass Viterbi optimization and exact recurring-chord grip preference |
 | `fingerstyle-arranger/dp-capo.ts` | Capo sweep and minimum-cost selection |
-| `fingerstyle-arranger/dp-integration.ts` | Event extraction, exact writeback binding, diagnostics, validation, and rollback |
-| `fingerstyle-arranger/physics-validation.ts` | Post-optimization physical validation |
+| `fingerstyle-arranger/dp-time-slice-extraction.ts` | Authoritative input extraction, exact bindings, fixed occupancy, and input anomaly records |
+| `fingerstyle-arranger/dp-time-slice-integration.ts` | Exact writeback, before/after validation, outcome selection, and rollback |
+| `fingerstyle-arranger/dp-integration.ts` | Stable re-export and canonical event-matrix integration entrypoint |
+| `fingerstyle-arranger/generation-diagnostics.ts` | Combined LLM/DP browser-safe run model and bounded projection |
+| `fingerstyle-arranger/diagnostic-plaintext.ts` | Dependency-free ASCII report for human and AI inspection |
+| `fingerstyle-arranger/physics-validation.ts` | Detailed and compatibility post-optimization physical validation |
 | `fingerstyle-arranger/time-slice.ts` | ABC/time-slice conversion and forced-string ABC rendering |
 | `fingerstyle-arranger/toon-utils.ts` | ASCII tablature rendering used by golden regressions |
 
@@ -71,7 +76,11 @@ applyDPToTimeSliceMeasures(
   measures: TimeSliceMeasure[],
   bpm?: number,
   options?: DPOptions
-): { measures: TimeSliceMeasure[]; logs: string[] }
+): {
+  measures: TimeSliceMeasure[];
+  logs: string[];
+  diagnostics: FingerstyleDiagnosticRun;
+}
 ```
 
 Its pipeline is:
@@ -520,6 +529,8 @@ The `!N!` decorations are required at render time to force ABCJS to use the sele
 7. Exact forced-string ABC for the corrected final measure.
 8. Exact complete corrected ASCII tablature.
 
+`diagnostic-plaintext.test.ts` exercises the dependency-free report against a real DP run and asserts the LLM timeline, complete input/configuration sections, candidate funnels, both Viterbi passes, ASCII trellis, selected cost components, and writeback/validation sections. `fingerstyle-diagnostic-persistence.test.ts` covers source mismatch rejection, per-line eviction, safe plaintext retention, removal of LLM payload previews, and quota-failure isolation. `fingerstyle-line-arranger.test.ts` verifies the shared LLM/DP run, plaintext compatibility log, and append-only `run-input → events → run-complete` persistence order.
+
 ## 13. Complexity and Determinism
 
 Let:
@@ -551,22 +562,63 @@ Candidate sorting and tie-breaking are deterministic, and recurring-shape prefer
 
 ## 14. Diagnostics
 
-The optimizer logs:
+### 14.1 Typed decision records
 
-- extracted events and source pitches;
-- skill level, BPM, and capo;
-- candidate counts;
-- representative candidates and transition costs;
-- established recurring chord shapes;
-- selected techniques;
-- backtracked optimal path;
-- total hand movement;
-- technique distribution;
-- pitch-invariant failures;
-- retained pre-existing validation issues; and
-- accepted versus rolled-back writeback.
+Every DP run emits a versioned `FingerstyleDiagnosticRun`. Its discriminated event union records:
 
-These logs are intended to explain optimization decisions without changing the stable public return types.
+- effective configuration and whether each value was supplied, defaulted, derived, constant, or unused;
+- exact measure/step/tablature-index bindings, authoritative and submitted pitches, fixed-string occupancy, onset, duration, and movement time;
+- input anomalies such as unparseable melody pitches, missing movable tabs, invalid physical positions, and duplicate fixed-string occupancy;
+- candidate position counts, Cartesian combinations, every grouped hard-filter rejection reason, pre-cap feasible count, deterministic sort keys, retained candidates, and cap pruning;
+- both `establish-grips` and `apply-grip-preferences` Viterbi passes;
+- every predecessor/candidate transition in the server record, including movement, shape, sustain, technique, barre, placement, skill, and recurring-grip cost components;
+- trellis dimensions, selected predecessor ties, established recurring shapes, backtracking, and pass totals;
+- explicit `fallback-noop` events when a non-rest musical event has no feasible candidate;
+- capo trials and the selected capo;
+- exact writeback assignments and pitch-invariant results;
+- before/after validation issue classes, fixed-entry preservation, rollback conditions, and terminal run summary.
+
+The terminal outcome distinguishes:
+
+- `accepted`;
+- `accepted-with-unresolved-events`;
+- `no-effective-dp-change`;
+- `rolled-back`; and
+- `failed`.
+
+A fallback no-op preserves the predecessor hand state and leaves the original tablature unresolved. It is never presented as an inserted rest.
+
+### 14.2 Combined LLM and DP run
+
+`generateAIFingerstyleLine()` creates one run ID before the LLM tool loop. LLM request, response, tool-call, tool-result, final-validation, and failure records are placed in the same chronological run as the projected DP records. Complete redacted records are written as append-only JSONL under:
+
+```text
+.fingerstyle-diagnostics/<song-slug>/line-<N>/<date>-<run-id>.jsonl
+```
+
+This directory is Git-ignored and is never exposed under `public/`. Credential-like keys are recursively redacted. The browser receives a bounded projection rather than full prompts, full ABC, previous-line TOON, exhaustive rejected-candidate matrices, or full LLM tool payloads.
+
+Recent browser summaries are source-fingerprint bound and retained in local storage at no more than five runs per line and twenty runs per song. LLM payload previews are removed before persistence, plaintext is bounded, and stale runs are rejected after the source changes.
+
+### 14.3 Plaintext visualization
+
+`diagnostic-plaintext.ts` renders the combined run without a chart or visualization dependency. The report is appended directly to **LLM + DP Diagnostic Logs**, making the same representation copyable and readable by both a person and an AI. It contains:
+
+```text
+FINGERSTYLE LLM + DP DIAGNOSTIC VISUALIZATION (PLAINTEXT)
+LLM TOOL-LOOP TIMELINE
+DP INPUTS AND EFFECTIVE CONDITIONS
+PROCESSING PHASES
+DP DECISION INPUTS
+CANDIDATE FUNNELS
+VITERBI TRELLIS (* = selected path, ! = unresolved fallback)
+SELECTED PATH AND COST BREAKDOWN
+WRITEBACK AND VALIDATION
+```
+
+The trellis is an ASCII cost table. Each row is a musical decision event, each column is a retained candidate, cumulative costs are shown per cell, `*` marks the final backtracked path, and `!` marks unresolved fallback events. The selected-path section expands every cost component so that the final number is reproducible from the log.
+
+The existing `logs: string[]` remains available as a compatibility/copy view. Typed diagnostics are additive and do not enter stable musical artifact contracts such as `FingerstyleArrangement` or `FingerstyleOutputContract`.
 
 ## 15. Verification
 
@@ -593,15 +645,15 @@ npm run lint
 npm run build
 ```
 
-Verification performed for this implementation:
+Verification performed for the diagnostic visualization:
 
-- Focused DP tests: 55 passed.
-- Related fingerstyle regression selection: 72 passed.
+- Focused server-action, DP, integration, plaintext-renderer, persistence, and line-card tests: 61 passed.
 - TypeScript: passed.
-- ESLint on changed DP files: passed with no issues.
+- ESLint on the changed diagnostic/action/UI/test files: passed with no issues.
 - Production build: passed.
+- `git diff --check`: passed.
 
-At the time of verification, the full test suite had one unrelated failure from an untracked melody fixture with no parseable note token, and full-project lint still reported the known vendored `public/abcjs-basic-min.js` issues. Those unrelated files were not changed as part of the DP optimization.
+The full test suite currently has one unrelated checked-in song-library validation failure (`src/lib/songs/__tests__/validation.test.ts`). Full-project lint still reports the known vendored `public/abcjs-basic-min.js` issues.
 
 ## 16. Future Optimization Opportunities
 

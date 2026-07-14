@@ -27,6 +27,29 @@ export const GUITAR_VOICING_TOOL_DEFINITION = {
   },
 };
 
+function buildStringPayloadToolDefinition(
+  name: string,
+  description: string,
+  propertyName: string,
+  propertyDescription: string,
+) {
+  return {
+    type: "function",
+    function: {
+      name,
+      description,
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          [propertyName]: { type: "string", description: propertyDescription },
+        },
+        required: [propertyName],
+      },
+    },
+  };
+}
+
 export function buildFingerstyleTablatureToolDefinition(name: string, description: string) {
   return {
     type: "function",
@@ -47,6 +70,43 @@ export function buildFingerstyleTablatureToolDefinition(name: string, descriptio
     },
   };
 }
+
+export const INSPECT_FILL_OPPORTUNITIES_TOOL_DEFINITION = {
+  type: "function",
+  function: {
+    name: "inspect_fill_opportunities",
+    description: "Inspect the next compact page of deterministically scored legal fill windows and atomic candidates. Start at cursor 0 and follow nextCursor until end.",
+    parameters: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        cursor: { type: "integer", minimum: 0 },
+      },
+      required: ["cursor"],
+    },
+  },
+};
+
+export const SELECT_FILL_WINDOWS_TOOL_DEFINITION = buildStringPayloadToolDefinition(
+  "select_fill_windows",
+  "Submit one use/skip decision for every inspected fill window.",
+  "selection_toon",
+  "Strict fill-selection:v1 payload without Markdown fences.",
+);
+
+export const VALIDATE_COMPOSED_FILLS_TOOL_DEFINITION = buildStringPayloadToolDefinition(
+  "validate_composed_fills",
+  "Validate creative fill candidate sequence, durations, and right-hand fingers against the accepted window selection.",
+  "fills_toon",
+  "Strict fills:v1 payload without Markdown fences.",
+);
+
+export const SUBMIT_ARRANGED_LINE_TOOL_DEFINITION = buildStringPayloadToolDefinition(
+  "submit_arranged_line",
+  "Finalize the arrangement by referencing the exact fills:v1 payload accepted by validate_composed_fills.",
+  "fills_toon",
+  "The exact previously accepted fills:v1 payload.",
+);
 
 export function executeGuitarVoicingQuery(args: unknown): string {
   const { chord, melody_pitch, target_position } = args as {

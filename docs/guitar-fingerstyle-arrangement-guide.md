@@ -1,149 +1,315 @@
-# Guitar Fingerstyle Arrangement Guide: Time-Slice Grid & Tablature Generation
+# Guitar Fingerstyle Arrangement Guide
 
-This guide provides a comprehensive overview of the theory, data schema, and algorithmic implementation used to generate playable, counterpoint-driven solo guitar fingerstyle arrangements from ABC Notation.
+This document describes the line-level solo-guitar pipeline used by `/compose/:slug/guitar-fingerstyle`. The design keeps the melody and physical constraints server-owned while leaving two genuinely musical decisions to the LLM:
 
-By utilizing custom lyric-line metadata in the source ABC files, the system compiles a mathematical **"Groove Map"** that defines melody, lyrics, and beat weights in a quantized time-slice grid. This completely eliminates the need for the LLM to guess rhythmic syncopation or cadence points.
+1. which scored fill windows should be used or skipped;
+2. which legal atomic notes, sequence, durations, and right-hand fingers should form each fill.
 
----
+The LLM does **not** invent timing coordinates, strings, frets, or replacement source grids.
 
-## 1. Mapped Source ABC Input (The Groove Map)
+## 1. Authoritative source model
 
-To arrange a bhajan (such as `Hari Bol`), we define the vocal melody in the `[V:Melody]` voice along with two structured lyrics (`w:`) lines:
-1. **Line 1 (Lyrics):** Mapped vocal syllables, including legatos/melismas (indicated by `_` or `*`).
-2. **Line 2 (Beat Weights):** Mapped metric weights where `⬤` indicates downbeats (Strong), `●` indicates secondary accents (Medium), and `*` indicates weak syncopation (Soft).
+The input is ABC notation with melody, inline chord symbols, lyrics, and optional beat-weight metadata. The time-slice compiler preserves these as server-owned fields:
 
-### Measure 1 Source ABC (from [hari-bol.accompaniment.abc](file:///Users/steve/duyhunghd6/bhajan-song-composer/data/songs/hindi/hari-bol.accompaniment.abc#L58-L60)):
-```abc
-[V:Melody] | "Em"E E (EB,) "D"E E (EB,) |
-w: Ha-ri Bol _ Ha-ri Bol _
-w: ⬤ * * * ● * * *
-```
+- `measure` and source `lineIndex`;
+- active `chord` at every quantized step;
+- metric `weight`: `⬤`, `●`, `*`, or `null`;
+- melody `pitch` and `state`: `attack`, `sustain`, or `rest`;
+- lyric syllable, melisma marker, or skip marker;
+- pickup and repeat/barline metadata;
+- key, comping profile, voicing plan, and legacy fill-density context.
 
----
+A source line is useful structural evidence, but it is not assumed to be a perfect phrase annotation. Phrase-transfer scoring also considers rest length, lyric termination, repeat boundaries, current chord/key, cadence character, and the next line's melody entrance.
 
-## 2. Time-Slice Grid Compilation
+### Meter-aware resolution
 
-The backend pre-processes the ABC source block using a **Time-Slice Architecture** (analogous to step-sequencers in Ableton or FL Studio) to compile a quantized 16-step grid per measure (representing 16th notes in 4/4 meter):
+The grid uses four quantized steps per notated beat. Its length follows the meter numerator:
 
-* **Resolution:** 1 Beat = 4 Steps; 1 Measure = 16 Steps.
-* **Conversion Math:** For `L:1/8` (default eighth notes), a normal eighth note occupies **2 steps** (1 `attack` step + 1 `sustain` step).
-* **Melismas & Slurs:** Parenthesized notes (slurs like `(EB,)`) are parsed into sequential attacks. Melismas (`_`) are preserved in the `lyric` field rather than being nullified, ensuring they bind to the correct note onset step.
-* **Metric Default Fallbacks:** If a custom beat weight annotation line is missing, the parser automatically assigns fallback weights based on the meter (in 4/4: step 1 is `⬤`, step 9 is `●`, steps 5/13 are `*`, and off-beats/sustains are `null`).
-* **Mid-Measure Chord Transitions:** The system scans the melody ABC for inline chord symbols (like `"Em"` and `"D"`), determines their exact duration onset units, and maps the active chord dynamically to the corresponding step indexes.
+- 4/4 → 16 steps;
+- 3/4 → 12 steps;
+- other supported meters use `numerator × 4` steps.
 
----
+Therefore, the production format is not an always-16-step schema. Pickup padding is excluded from generation and fill analysis.
 
-## 3. Mapped JSON Output Schema
+## 2. Generation policy
 
-The compiled time-slice structure for Measure 1 is output as a `TimeSliceMeasure` array:
+Guitar complexity and fill quantity are separate controls.
 
-```json
-[
-  {
-    "measure": 1,
-    "style_profile": {
-      "key": "Em",
-      "comping_style": "PIMA devotional fingerstyle. Sparse fills.",
-      "voicing_plan": "Open-position Em and D shapes. Thumbed E/B and D/A anchors."
-    },
-    "grid": [
-      {"step": 1, "chord": "Em", "weight": "⬤", "melody": {"pitch": "E4", "state": "attack"}, "lyric": "Ha-"},
-      {"step": 2, "chord": "Em", "weight": null, "melody": {"pitch": "E4", "state": "sustain"}, "lyric": null},
-      {"step": 3, "chord": "Em", "weight": "*", "melody": {"pitch": "E4", "state": "attack"}, "lyric": "ri"},
-      {"step": 4, "chord": "Em", "weight": null, "melody": {"pitch": "E4", "state": "sustain"}, "lyric": null},
-      {"step": 5, "chord": "Em", "weight": "*", "melody": {"pitch": "E4", "state": "attack"}, "lyric": "Bol"},
-      {"step": 6, "chord": "Em", "weight": null, "melody": {"pitch": "E4", "state": "sustain"}, "lyric": null},
-      {"step": 7, "chord": "Em", "weight": "*", "melody": {"pitch": "B3", "state": "attack"}, "lyric": "_"},
-      {"step": 8, "chord": "Em", "weight": null, "melody": {"pitch": "B3", "state": "sustain"}, "lyric": null},
-      {"step": 9, "chord": "D", "weight": "●", "melody": {"pitch": "E4", "state": "attack"}, "lyric": "Ha-"},
-      {"step": 10, "chord": "D", "weight": null, "melody": {"pitch": "E4", "state": "sustain"}, "lyric": null},
-      {"step": 11, "chord": "D", "weight": "*", "melody": {"pitch": "E4", "state": "attack"}, "lyric": "ri"},
-      {"step": 12, "chord": "D", "weight": null, "melody": {"pitch": "E4", "state": "sustain"}, "lyric": null},
-      {"step": 13, "chord": "D", "weight": "*", "melody": {"pitch": "E4", "state": "attack"}, "lyric": "Bol"},
-      {"step": 14, "chord": "D", "weight": null, "melody": {"pitch": "E4", "state": "sustain"}, "lyric": null},
-      {"step": 15, "chord": "D", "weight": "*", "melody": {"pitch": "B3", "state": "attack"}, "lyric": "_"},
-      {"step": 16, "chord": "D", "weight": null, "melody": {"pitch": "B3", "state": "sustain"}, "lyric": null}
-    ]
-  }
-]
-```
+### Player skill
 
----
+| Skill | Main effect |
+|---|---|
+| Beginner (default) | fret ≤ 5, span ≤ 3, no barre, small hand jumps, at most 1 note per fill window |
+| Intermediate | fret ≤ 9, span ≤ 4, broader jumps, at most 2 notes per window |
+| Advanced | fret ≤ 19, span ≤ 5, at most 3 notes per window |
 
-## 4. Exposed LLM Tools
+The canonical limits come from `SKILL_LEVEL_CONSTRAINTS` in `fingerstyle-arranger/dp-types.ts`. The selected skill is passed to foundation validation, DP positioning, fill enumeration, and final physical validation.
 
-To ensure physical playability and voice-leading safety, the LLM is equipped with three backend tools during arrangement:
+### Fill density
 
-1. **`query_guitar_voicings(chord, melody_pitch, target_position)`**
-   * *Purpose:* Returns safe left-hand open fret positions (e.g. `{"bass": {"string": 6, "fret": 0}, "melody": {"string": 1, "fret": 0}, "available_inner_strings": [3, 4]}`) to ground the arrangement in standard playable chord shapes.
-2. **`validate_fingerstyle_physics(proposed_grid)`**
-   * *Purpose:* Rejects the proposed step grid if the LLM places an inner fill note on a string currently sustaining a melody note.
-3. **`submit_arranged_measure(final_grid)`**
-   * *Purpose:* Submits the mathematically verified array back to the step-workspace UI.
+The UI exposes `auto`, `few`, `normal`, and `many`.
 
----
+- `auto`: beginner → few, intermediate → normal, advanced → many;
+- `few`: restrained use of the best windows;
+- `normal`: moderate phrase support;
+- `many`: more windows, still bounded by physical and musical constraints.
 
-## 5. The LLM System Prompt & Internal Workflow
+Legacy values normalize at the boundary: `none` becomes zero-fill compatibility mode and `all` becomes `many`. Density controls window budgets; it does not relax fret or hand constraints.
 
-We inject our "Workflow Decisions" into the System Prompt to guide the LLM's logical tool-calling loop:
+Settings are persisted in the per-song Composer workspace. Changing settings does not regenerate existing lines.
 
-**System Prompt:**
-> You are an expert devotional fingerstyle guitar arranger. You will receive a 16-step JSON grid. Follow this exact tool-calling workflow sequentially:
-> 
-> **1. Lock the Grip & Voicings (Tool Call First):**
-> * Scan the grid. On Step 1, Step 9, AND on any step where the `chord` symbol changes, you MUST call `query_guitar_voicings(chord, melody_pitch)`.
-> * **Constraint Check:** You are strictly forbidden from inventing fretted notes. You must exclusively use the strings and frets provided by the tool's returned grip. The tool already automatically accounts for the 4-finger fretting limit and 5-fret stretch limit.
-> 
-> **2. Right-Hand Foundation (Strums vs Pinches):**
-> * **Strumming on Downbeats:** Scan the grid for the strong downbeat weight marker `⬤` (Beat 1). You MUST establish a rich harmonic foundation using a full 5-string or 6-string **Strum** across all active strings from the grip.
->   * *Strum Notation Rule:* To notate a strum, assign the Thumb (`p`) to ALL the bass and inner strings being strummed, leaving the fingers for the melody.
->   * *Example of a full 6-string Em strum:* Str 6 (`p`), Str 5 (`p`), Str 4 (`p`), Str 3 (`p`), Str 2 (`p`), Str 1 (`a` - Melody).
-> * **Standard PIMA Pinches (Max 4 strings):** On secondary strong beats `●` (Beat 3) or non-downbeat chord changes, play a lighter 4-note **Pinch**. The Thumb (`p`) plays exactly 1 Bass String. The fingers (`i, m, a`) play up to 3 Treble/Inner Strings.
->   * *Example of a 4-note C pinch (X32010):* Play Str 5 (`p`), Str 3 (`i`), Str 2 (`m`), Str 1 (`a`).
->   * *Example of a 4-note D pinch (XX0232):* Play Str 4 (`p`), Str 3 (`i`), Str 2 (`m`), Str 1 (`a`).
-> 
-> **3. Protect the Melody & Double-Stops:**
-> * The sung melody is absolute priority. Map the exact melody pitches to the exact `attack` steps on the highest available strings.
-> * On secondary strong beats `●` (Beat 3), do not play a heavy 4-note pinch. Play a simpler **double-stop** (1 Bass note + the Melody note, or Bass + 1 inner tone) to keep the rhythm balanced and flowing.
-> * **Simultaneous String Collision:** If a chord voicing requires fretting an inner string, but the melody note is also mapped to that exact same string, the melody note wins. Drop the chord tone from your pinch.
-> 
-> **4. PIMA Fills & The Sustain Rule (Inner Arpeggios):**
-> * Look at the `null` steps (the empty 16th-note spaces). You may add light, arpeggiated inner chord tones to keep the rhythm flowing. Keep fills sparse and subservient to the vocal melody.
-> * **Sustain Protection Rule (CRITICAL):** If the vocal melody is marked as `"state": "sustain"` on a specific string across multiple steps, you are **physically forbidden** from plucking a fill note on that exact same string. Doing so will prematurely cut off the singer's note.
-> 
-> **5. Validate & Submit:**
-> * Call `validate_fingerstyle_physics()` to verify your right-hand finger budget, string alignments, and sustain rules.
-> * Once validated, submit your final work using `submit_arranged_measure()`.
+## 3. Enforced staged tool workflow
 
----
+`generateAIFingerstyleLine` remains the public server action. Its implementation is local to `src/app/actions/fingerstyle-line-arranger/` and uses one OpenAI-compatible tool loop with server-owned phase state.
 
-## 6. Real-Time Execution (How the LLM handles Measure 1)
+### Stage 1 — Non-fill foundation
 
-Here is how the LLM executes the prompt against your JSON data:
+The LLM may query compact guitar voicings, then calls `submit_fingerstyle_foundation` with `tablature:v1`.
 
-* **Step 1 (`⬤` / Ha-):** The LLM queries `"Em"` + `"E4"` + `"open"`. The backend gives it an open Em shape. The LLM drops the Bass on String 6 (Open E), adds inner chord tones on String 4 (fret 2 - E) and String 3 (fret 0 - G), and places the Melody on String 1 (Open E4). This forms a rich, simultaneous 4-note block chord (pinch).
-* **Step 2 (`null`):** The LLM sees empty space. It knows the vocal is sustaining on String 1. It adds a gentle "i-m" filler note on String 3 (Open G) to keep the arpeggio flowing.
-* **Step 3 (`*` / ri):** The LLM sees a soft melody attack. It plays String 1 (E4) but drops no bass/chord notes.
-* **Step 5 (`*` / Bol):** The LLM plays String 1 (E4) again. No bass/chord notes.
-* **Step 7 (`*` / _):** The LLM maps the melisma (the slur) to String 2 (Open B3).
-* **Step 9 (`●` / Ha-):** The LLM hits the second half of the loop (medium weight). It queries `"D"` + `"E4"` + `"open"`. The backend hands it an Open Dadd9 shape. It drops the Thumb on String 4 (Open D) and the Melody on String 1 (Open E4) as a double-stop.
+The foundation must:
 
----
+- cover every authoritative melody attack exactly once;
+- preserve the exact melody pitch;
+- contain no `fill` roles;
+- use `bass`, `root`, `fifth`, or `harmony` for structural support;
+- leave unweighted sustain/rest steps empty for later fill analysis;
+- obey sparse PIMA/right-hand and selected-skill constraints.
 
-## 7. The Final Visual Output
+### Stage 2 — DP positioning and freeze
 
-Because the data was gridded perfectly based on your `⬤` and `●` map, the Human-in-the-Loop UI instantly renders the LLM's JSON submission into this perfect, hallucination-free tablature:
+The server validates the foundation, parses the actual ABC `Q:` tempo, and runs the fingerstyle dynamic-programming optimizer with the selected skill level. The resulting grip path is frozen.
+
+No mutating DP pass runs after opportunity scoring. Otherwise the hand costs shown to the LLM would become stale.
+
+### Stage 3 — Exhaustive fill analysis
+
+The LLM calls `inspect_fill_opportunities` beginning at cursor `0` and follows every `nextCursor` until `end`. The server rejects skipped, repeated, or out-of-order pages.
+
+Analysis visits every active grid step and records a typed eligibility rejection when appropriate, including:
+
+- pickup padding;
+- melody attack;
+- occupied foundation attack;
+- protected melody string;
+- occupied string;
+- no harmonic pitch;
+- fret/span violation;
+- excessive incoming or outgoing hand jump;
+- register collision;
+- unresolved approach-note condition.
+
+Safe windows are formed from contiguous melody rests or protected sustains. Windows split at melody attacks, foundation attacks, chord changes, measure boundaries, pickup padding, and line boundaries.
+
+### Stage 4 — LLM window selection
+
+After every page is inspected, the LLM calls `select_fill_windows` with a use/skip decision and short reason for every scored window. The server validates:
+
+- source and opportunity-set fingerprints;
+- unknown, duplicate, or omitted window IDs;
+- total density budget;
+- per-measure budget;
+- zero-fill compatibility mode.
+
+### Stage 5 — LLM fill composition
+
+The LLM calls `validate_composed_fills` with selected atomic candidate IDs plus its chosen duration and right-hand finger.
+
+A candidate is one legal note placement—not a lick. It fixes:
+
+- window, measure, and start step;
+- scientific pitch and harmonic role;
+- string and fret;
+- maximum duration;
+- incoming, outgoing, and total hand cost;
+- candidate score and conditional requirements.
+
+The LLM still decides the note sequence, rhythmic duration inside each legal capacity, and `i`/`m`/`a` assignment.
+
+The server rejects unknown or duplicate candidates, candidates from skipped windows, duration overflow, per-window note-budget overflow, same-string interval overlap, and scale approaches that do not resolve by step to a nearby chord tone.
+
+### Stage 6 — Server merge and final reference
+
+The server reconstructs the final measures from the frozen foundation and accepted candidate IDs. It adds `durationSteps`, `fillWindowId`, and `fillCandidateId` provenance to accepted fill events.
+
+The final `submit_arranged_line` call must reference the same accepted `fills:v1` payload. The LLM cannot replace the server-owned grid at final submission.
+
+## 4. Opportunity and candidate generation
+
+### Harmonic pool
+
+For each legal start step, the engine derives candidates from:
+
+- active-chord root, third, fifth, seventh, and useful extensions;
+- common tones into the next chord;
+- key-scale approach tones only on weak/unweighted placements, with an explicit resolution requirement.
+
+Fill-role candidates use inner/treble strings 1–4 with `i`, `m`, or `a`. Bass anchors remain part of the frozen foundation. Duplicate concert pitches on different strings remain distinct because string choice affects fingering and sustain behavior.
+
+### Physical filtering
+
+Hard constraints run before scoring:
+
+- selected-skill fret and span limits;
+- protected melody strings during sustain;
+- occupied foundation strings;
+- melody-register ceiling;
+- incoming and outgoing movement allowance;
+- duration capacity inside the same safe window.
+
+Each candidate receives a deterministic readable ID such as:
 
 ```text
-Measure 1:
-      Ha-   ri    Bol   _       Ha-   ri    Bol   _ 
-      ⬤                 *       ●                 *
-e |---0-----------0-------------0-----------0-----------|
-B |---------------------0-------------------------0-----|
-G |---0-----0-------------------------2-----------------|
-D |---2-----------------------------0-----------0-------|
-A |-----------------------------------------------------|
-E |---0-------------------------------------------------|
+c-m3-s7-B3-str2f0
 ```
 
-**Why this works flawlessly:** The LLM did not compose the rhythm, and it didn't invent the chord voicings. It simply acted as a logic router—connecting the requested "Open Em/D PIMA Profile" (with a downbeat block chord/pinch) to the strict mathematical grid of the ABC notation.
+The opportunity-set ID includes the source fingerprint, policy, and frozen foundation signature. A selection from a different DP result is therefore rejected as stale.
+
+## 5. Stable 0–100 opportunity score
+
+Each window exposes the complete breakdown.
+
+| Component | Range | Intent |
+|---|---:|---|
+| Silence/capacity | 0–25 | favor longer held-note or rest space |
+| Phrase/line transfer | 0–20 | favor useful sentence-to-sentence connections |
+| Hand continuity | 0–20 | reward low-cost departure and landing |
+| Harmonic fit | 0–15 | reward chord tones and common tones |
+| Voice leading | 0–10 | reward small motion toward the next melody target |
+| Metric fit | 0–10 | prefer offbeats/weak placements over structural arrivals |
+| Cadence restraint | penalty | preserve closed tonic endings and some repeat boundaries |
+| Crowding | penalty | avoid fills immediately before melody re-entry |
+| Repetition | penalty | reserved for repeated-gesture control |
+
+The positive components total 100 before penalties. Hard physical failures never enter scoring.
+
+A line ending can receive a transfer bonus and a tonic-cadence restraint penalty simultaneously. This is intentional: line transitions are valuable, but the system should not automatically decorate every devotional cadence.
+
+## 6. Compact versioned contracts
+
+The model-facing payloads use compact row tables rather than verbose replacement JSON.
+
+### Foundation: `tablature:v1`
+
+```text
+tablature:v1
+{measure,step,string,fret,finger,role}
+3,1,6,0,p,root
+3,1,1,0,a,melody
+3,9,4,0,p,fifth
+```
+
+Omitted steps have no attack. `harmony` is available for structural inner pinch tones; `fill` is forbidden in the foundation.
+
+### Opportunity page: `fill-opportunities:v1`
+
+```text
+fill-opportunities:v1
+set,fos-abc123
+source,source-fingerprint
+policy,beginner,auto,few,skill-level
+budget,1,2,1,1
+counts,16,144,2,18
+page,0,end,18,0
+rows: [kind,...]
+W,w-m3-s6-8,3,1,6,8,3,Em,Em,rest,78,...
+C,c-m3-s6-B3-str2f0,w-m3-s6-8,3,6,B3,59,fifth,2,0,m,3,0,0,0,92,
+```
+
+Pages carry explicit cursor metadata. Legal rows are never silently truncated.
+
+### Selection: `fill-selection:v1`
+
+```text
+fill-selection:v1
+set,fos-abc123
+source,source-fingerprint
+decisions: [D,window,use|skip,reason]
+D,w-m3-s2-4,skip,held melody should remain exposed
+D,w-m3-s6-8,use,long phrase transfer with stable open grip
+```
+
+### Composition: `fills:v1`
+
+```text
+fills:v1
+set,fos-abc123
+source,source-fingerprint
+notes: [N,candidate,durationSteps,finger]
+N,c-m3-s6-B3-str2f0,1,m
+N,c-m3-s7-D4-str2f3,2,m
+```
+
+All codecs validate exact versions and headers, byte/row limits, bindings, row shape, enum values, and integer durations.
+
+## 7. Duration, ties, and ABC tablature
+
+`TimeSliceGridStep.tablature` supports:
+
+- `durationSteps`;
+- `fillWindowId`;
+- `fillCandidateId`;
+- structural `harmony` role.
+
+`time-slice-abc-renderer.ts` renders sounding intervals rather than treating every row as an isolated simultaneous attack.
+
+- Melody duration comes from authoritative melody `attack`/`sustain` states.
+- Fill duration comes from the accepted `durationSteps`.
+- Existing persisted non-melody events without `durationSteps` retain the historical attack-to-next-attack rendering; the new staged foundation writes explicit one-step structural durations so scoring and playback agree.
+- When a fill enters during a held melody, the renderer splits the interval and ties the continuing melody rather than shortening or retriggering it.
+- Every tied segment preserves the `!N!` guitar string decoration.
+- Identical pitches on different strings are not deduplicated.
+- Concert-pitch ABC and key-signature-aware natural signs are preserved for `clef=treble-8`.
+
+Final physical validation also checks sounding same-string collisions and durations that extend outside a measure.
+
+## 8. Diagnostics and UI
+
+One run ID covers:
+
+- LLM requests and tool calls;
+- foundation acceptance/rejection;
+- DP extraction, candidates, costs, path, writeback, and rollback;
+- fill placement evaluation and rejection counts;
+- opportunity pagination;
+- LLM selection;
+- composition validation/repair;
+- final server merge and physical validation.
+
+Diagnostics are bounded for UI/prompt safety and persisted as append-only, redacted JSONL:
+
+```text
+.fingerstyle-diagnostics/<song>/line-<N>/<date>-<runId>.jsonl
+```
+
+Sensitive keys such as API keys, authorization, cookies, passwords, secrets, and tokens are redacted.
+
+Each line card shows a compact run summary with:
+
+- effective skill and density;
+- source BPM;
+- evaluated placement count;
+- eligible and selected window counts;
+- composed fill-note count;
+- final validation status.
+
+Only one line can generate at a time on the route. Other line buttons and settings controls are disabled until the active run finishes.
+
+## 9. Source fixtures and validation
+
+Use:
+
+- `Hari Bol` for ordinary 4/4 and cross-line phrase-transfer checks;
+- `Ganesha` for pickup, tie, rest, repeat, DP, ABC, and ASCII regressions.
+
+`data/songs/marathi/jago-kundalini-ma.melody.abc` is currently header-only. The route remains stable, but there are no melody notes, lyrics, or chord events to arrange end to end until song content is authored.
+
+Primary regression commands:
+
+```bash
+npm test
+npx tsc --noEmit
+npm run lint
+npm run build
+```
+
+Known repository-wide caveats remain documented in `CLAUDE.md`: song-library validation fails for the header-only Jago Kundalini Ma fixture, lint may report vendored `public/abcjs-basic-min.js`, and static export can conflict with Server Actions during build.
