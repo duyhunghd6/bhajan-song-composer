@@ -245,7 +245,7 @@ export async function requestOpenAiCompatibleToolLoop(input: {
     const message = await requestChatCompletion({
       messages,
       tools: input.tools,
-      toolChoice: "auto",
+      toolChoice: "required",
       temperature: input.temperature,
       iteration,
       onDiagnostic: input.onDiagnostic,
