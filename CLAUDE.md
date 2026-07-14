@@ -2,8 +2,8 @@
 
 ## Model selection
 
-- Force Claude Code model selection to `gpt-5.5` for this project.
-- If the model is changed or reset, switch it back with `/model gpt-5.5` before doing substantial project work.
+- Force Claude Code model selection to `gpt-5.6-sol` for this project.
+- If the model is changed or reset, switch it back with `/model gpt-5.6-sol` before doing substantial project work.
 - Do not intentionally downgrade to a smaller model for architecture, music-arrangement, validation, or refactoring tasks.
 
 ## Development constraints
