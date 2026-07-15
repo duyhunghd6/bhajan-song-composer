@@ -17,6 +17,7 @@ import type { FingerstyleCompressionOptions, FingerstylePhysicalHandEvent, Guita
 import { strictPimaFingerForString, type FingerstylePickingProfileId, type PickingFinger } from "../picking-profiles";
 import { validateGuitarTab, type GuitarTabEvent, type GuitarTabValidationResult } from "../guitar-tab-validation";
 import { getKeyAccidentalsFromAbc, abcNoteToMidiWithKey, type AbcKeyAccidentalMap } from "../abc-key-signature";
+import { scientificPitchToAbc } from "./time-slice-abc-renderer";
 
 export type FingerstyleCanonicalSection = "intro" | "body" | "interlude" | "outro";
 export type FingerstyleCanonicalRole = "melody" | "bass" | "root" | "third" | "fifth" | "seventh" | "fill";
@@ -268,13 +269,13 @@ function buildBodyMeasure(input: {
  *    ABCJS internally applies a clefTranspose = -12 to the note before computing the fret
  *    against its un-transposed tuning stringPitches.
  */
-function tokenForEvent(event: FingerstyleCanonicalEvent): string {
-  let baseToken = "";
-  if (event.role === "melody") {
-    baseToken = event.abcToken;
-  } else {
-    baseToken = noteNameToAbc(event.note.replace(/-?\d+$/, ""), event.role === "bass" || event.role === "fifth" ? "," : "");
-  }
+function tokenForEvent(event: FingerstyleCanonicalEvent, keyAccidentals?: AbcKeyAccidentalMap): string {
+  const baseToken = event.string !== undefined && event.fret !== undefined
+    ? scientificPitchToAbc(scientificPitchForStringFret(event.string, event.fret), keyAccidentals)
+    : event.role === "melody"
+      ? event.abcToken
+      : noteNameToAbc(event.note.replace(/-?\d+$/, ""), event.role === "bass" || event.role === "fifth" ? "," : "");
+
   if (event.string !== undefined && event.string !== null) {
     return `!${event.string}!${baseToken}`;
   }
@@ -289,7 +290,11 @@ function startingEventsAt(measure: FingerstyleCanonicalMeasure, at: number): Fin
   return measure.events.filter((event) => Math.abs(event.onsetUnits - at) < 1e-6);
 }
 
-export function renderCanonicalMeasureAbc(measure: FingerstyleCanonicalMeasure, context: AbcDurationContext): string {
+export function renderCanonicalMeasureAbc(
+  measure: FingerstyleCanonicalMeasure,
+  context: AbcDurationContext,
+  keyAccidentals?: AbcKeyAccidentalMap,
+): string {
   const boundaries = new Set<number>([0, context.fullMeasureUnits]);
   for (const event of measure.events) {
     boundaries.add(event.onsetUnits);
@@ -317,8 +322,8 @@ export function renderCanonicalMeasureAbc(measure: FingerstyleCanonicalMeasure, 
     const suffix = formatAbcDuration(duration);
 
     if (sounding.length === 0) rendered.push(`z${suffix}`);
-    else if (sounding.length === 1) rendered.push(`${tokenForEvent(sounding[0])}${suffix}`);
-    else rendered.push(`[${sounding.map(tokenForEvent).join("")}]${suffix}`);
+    else if (sounding.length === 1) rendered.push(`${tokenForEvent(sounding[0], keyAccidentals)}${suffix}`);
+    else rendered.push(`[${sounding.map((event) => tokenForEvent(event, keyAccidentals)).join("")}]${suffix}`);
   }
 
   return rendered.join(" ");

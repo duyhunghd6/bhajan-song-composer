@@ -272,6 +272,9 @@ export function GuitarFingerstyleStep({
             <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Master Playback</h3>
             <div className="flex items-center gap-2">
               {masterAbc && (
+                <CopyButton label="Copy ABCJS ABC" text={masterAbc} />
+              )}
+              {masterAbc && (
                 <CopyButton label="Copy portable ABC" text={cleanAbcForExport(masterAbc)} />
               )}
               {masterAbc && (

@@ -11,7 +11,7 @@ interface SoundingEvent {
   tab: NonNullable<TimeSliceGridStep["tablature"]>[number];
 }
 
-function scientificPitchToAbc(
+export function scientificPitchToAbc(
   scientificPitch: string,
   keyAccidentals?: AbcKeyAccidentalMap,
 ): string {

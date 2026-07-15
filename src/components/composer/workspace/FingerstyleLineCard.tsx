@@ -373,6 +373,9 @@ export function FingerstyleLineCard({
             </label>
             <div className="flex items-center gap-2">
               {lineAbcResult && (
+                <CopyButton label="Copy ABCJS ABC" text={lineAbcResult} />
+              )}
+              {lineAbcResult && (
                 <CopyButton label="Copy portable ABC" text={cleanAbcForExport(lineAbcResult)} />
               )}
               {lineAbcResult && (

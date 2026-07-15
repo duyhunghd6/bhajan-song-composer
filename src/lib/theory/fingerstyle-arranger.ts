@@ -40,6 +40,7 @@ import type {
   FingerstyleUpwardConstructionContext,
 } from "./fingerstyle-arranger/types";
 import { scientificPitchForStringFret } from "./guitar-playability";
+import { getKeyAccidentalsFromAbc } from "./abc-key-signature";
 import type { GuitarTabEvent, GuitarTabValidationResult } from "./guitar-tab-validation";
 import {
   buildFingerstyleEventMatrix,
@@ -597,13 +598,14 @@ export function generateFingerstyleArrangement(
   const melodyMeasures = extractMelodyMeasures(abcString);
   const resolvedProgression = resolved.chords.map((chord) => chord.chordName);
   const matrix = buildFingerstyleEventMatrix({ abcString, timelines: melodyTimelines, chords: resolved.chords, options });
+  const keyAccidentals = getKeyAccidentalsFromAbc(abcString);
 
   const measures = matrix.measures.map((measure): FingerstyleMeasure => ({
     measureIndex: measure.measureIndex,
     chord: measure.chord,
     bassNotes: measure.events.filter((event) => event.role === "bass" || event.role === "fifth").map((event) => event.abcToken),
     melodyNotes: measure.events.filter((event) => event.role === "melody").map((event) => event.abcToken),
-    abc: renderCanonicalMeasureAbc(measure, matrix.durationContext),
+    abc: renderCanonicalMeasureAbc(measure, matrix.durationContext, keyAccidentals),
   }));
 
   const upwardConstruction = buildUpwardConstructionContext(abcString, resolvedProgression, melodyMeasures);

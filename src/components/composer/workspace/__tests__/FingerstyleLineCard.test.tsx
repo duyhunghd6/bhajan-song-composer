@@ -75,6 +75,7 @@ describe("FingerstyleLineCard", () => {
       "[V:Guitar] | [!2!B!3!G-!6!E,-]/2 [!3!G!6!E,]/2 !2!e !3!G !2!B4 !3!B |"
     );
     expect(markup).toContain('data-exact-copy="true"');
+    expect(markup).toContain("Copy ABCJS ABC");
     expect(markup).toContain("Copy portable ABC");
   });
 });

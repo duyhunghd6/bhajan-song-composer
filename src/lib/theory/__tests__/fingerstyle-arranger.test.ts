@@ -14,7 +14,7 @@ describe("Guitar fingerstyle arranger", () => {
       chord: "Em",
       bassNotes: ["E,", "B,"],
       melodyNotes: ["E", "E", "G", "A"],
-      abc: "[!6!E,!1!E]2 !1!E2 [!5!B,!1!G]2 !1!A2",
+      abc: "[!6!E,!1!e]2 !1!e2 [!5!B,!1!g]2 !1!a2",
     });
     expect(arrangement.abc).toContain('V:Guitar clef=treble-8 name="Layer 2 Guitar Fingerstyle"\n%%MIDI program 24');
     expect(arrangement.abc).toContain("% @fingerstyle-section intro");
@@ -39,7 +39,7 @@ K:Em
       expect.objectContaining({ measureIndex: 2, chord: "C", bassNotes: ["C,", "G,"], melodyNotes: ["G", "A", "B", "G"] }),
       expect.objectContaining({ measureIndex: 3, chord: "B7", bassNotes: ["B,", "^F,"], melodyNotes: ["E"] }),
     ]));
-    expect(arrangement.measures[3].abc).toBe("[!5!B,!1!E]2 !1!E2 [!6!^F,!1!E]2 !1!E2");
+    expect(arrangement.measures[3].abc).toBe("[!5!B,!1!e]2 !1!e2 [!6!F,!1!e]2 !1!e2");
 
     expect(arrangement.downwardCompression.outerVoiceMap).toEqual(expect.arrayContaining([
       expect.objectContaining({
@@ -362,8 +362,22 @@ K:C
     const line = generateFingerstyleLine(sampleAbc, ["Em", "Bm", "G", "Em"]);
 
     expect(line.startsWith('V:Guitar clef=treble-8 name="Layer 2 Guitar Fingerstyle"')).toBe(true);
-    expect(line).toContain("[!6!E,!1!E]2 !1!E2 [!5!B,!1!G]2 !1!A2");
+    expect(line).toContain("[!6!E,!1!e]2 !1!e2 [!5!B,!1!g]2 !1!a2");
     expect(line).toContain("% @fingerstyle-section body");
+  });
+
+  it("serializes physical melody pitches in concert pitch with key-aware naturals", () => {
+    const abc = `X:1
+T:Physical Pitch Serialization
+M:4/4
+L:1/8
+K:Em
+| B,2 =F2 |`;
+    const arrangement = generateFingerstyleArrangement(abc, ["Em"]);
+
+    expect(arrangement.measures[0].abc).toContain("!2!B");
+    expect(arrangement.measures[0].abc).toContain("!1!=f");
+    expect(arrangement.measures[0].abc).not.toContain("!2!B,");
   });
 
   it("preserves rests and rest-only measures in the guitar body timeline", () => {
@@ -378,7 +392,7 @@ K:Em
     expect(arrangement.measures).toHaveLength(2);
     expect(arrangement.measures[0].melodyNotes).toEqual([]);
     expect(arrangement.measures[1].abc).toContain("E,2 z2");
-    expect(arrangement.measures[1].abc).toContain("[!5!B,!1!E]2 !1!E2");
+    expect(arrangement.measures[1].abc).toContain("[!5!B,!1!e]2 !1!e2");
   });
 
   it("extracts only the Melody inline voice for solo fingerstyle input", () => {

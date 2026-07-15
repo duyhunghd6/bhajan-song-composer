@@ -28,8 +28,8 @@ describe("fingerstyle Composer integration", () => {
     expect(integration.composerLayer.abc).toContain("T:Fingerstyle Guitar (Folk / Travis Override)");
     expect(integration.composerLayer.abc).toContain('V:Guitar clef=treble-8 name="Layer 2 Guitar Fingerstyle"');
     expect(integration.composerLayer.abc).toContain("%%MIDI program 24");
-    expect(integration.composerLayer.abc).toContain("[!6!E,!1!E]2 !1!E2 [!5!B,!1!G]2 !1!A2");
-    expect(integration.composerLayer.abc).toContain("[!5!B,!1!B]2 !1!B2 [!6!^F,!1!B]2 !1!A2");
+    expect(integration.composerLayer.abc).toContain("[!6!E,!1!e]2 !1!e2 [!5!B,!1!g]2 !1!a2");
+    expect(integration.composerLayer.abc).toContain("[!5!B,!1!b]2 !1!b2 [!6!F,!1!b]2 !1!a2");
     expect(integration.arrangement.outputContract.artifacts.formPlan.sections.map((section) => section.kind)).toEqual([
       "intro",
       "body",
