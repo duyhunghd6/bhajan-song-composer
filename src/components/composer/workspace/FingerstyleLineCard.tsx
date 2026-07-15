@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import AbcjsPlaybackController from "@/components/music-sheet/AbcjsPlaybackController";
+import { prepareAbcjsRenderInput } from "@/components/music-sheet/abcjs-playback/render-input";
 import { convertTimeSliceMeasureToAbc, convertAbcToTimeSliceGrid, type TimeSliceMeasure } from "@/lib/theory/fingerstyle-arranger/time-slice";
 import { formatLineAsToon, parseToonToLine, renderCombinedAsciiTab } from "@/lib/theory/fingerstyle-arranger/toon-utils";
 import { extractRenderedTabFromSvg } from "@/components/music-sheet/abcjs-playback/abc-rendering";
@@ -260,6 +261,12 @@ export function FingerstyleLineCard({
   ]);
 
   const tabEnabled = isAbcLayerVisible(ABC_LAYER_IDS.tab, accompLayerVisibility, false);
+  const abcjsRenderInput = useMemo(
+    () => lineAbcResult
+      ? prepareAbcjsRenderInput({ abcString: lineAbcResult, tablatureEnabled: tabEnabled })
+      : "",
+    [lineAbcResult, tabEnabled],
+  );
 
   // ── Render ───────────────────────────────────────────────────────────
 
@@ -357,7 +364,7 @@ export function FingerstyleLineCard({
                 )}
                 {lineAbcResult && (
                   <div className="mb-2 border-b border-zinc-800 pb-1 last:border-0 whitespace-pre-wrap">
-                    {`\n## ABC Notation\n\n\`\`\`abc\n${lineAbcResult}\n\`\`\``}
+                    {`\n## ABCJS Render Input\n\n\`\`\`abc\n${abcjsRenderInput}\n\`\`\``}
                   </div>
                 )}
               </div>
@@ -373,7 +380,7 @@ export function FingerstyleLineCard({
             </label>
             <div className="flex items-center gap-2">
               {lineAbcResult && (
-                <CopyButton label="Copy ABCJS ABC" text={lineAbcResult} />
+                <CopyButton label="Copy ABCJS ABC" text={abcjsRenderInput} />
               )}
               {lineAbcResult && (
                 <CopyButton label="Copy portable ABC" text={cleanAbcForExport(lineAbcResult)} />

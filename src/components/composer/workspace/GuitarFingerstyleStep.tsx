@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import AbcjsPlaybackController from "@/components/music-sheet/AbcjsPlaybackController";
+import { prepareAbcjsRenderInput } from "@/components/music-sheet/abcjs-playback/render-input";
 import type { ArrangementPipelineResult } from "@/lib/theory/arrangement-pipeline";
 import type { WorkspaceState } from "../useWorkspaceState";
 import type { AccompanimentPreviewModel } from "./arrangement-preview-model";
@@ -203,6 +204,10 @@ export function GuitarFingerstyleStep({
 
   const masterTabEnabled = isAbcLayerVisible(ABC_LAYER_IDS.tab, accompLayerVisibility, false);
   const masterAbc = masterAbcWithoutTab;
+  const masterAbcjsRenderInput = useMemo(
+    () => prepareAbcjsRenderInput({ abcString: masterAbc, tablatureEnabled: masterTabEnabled }),
+    [masterAbc, masterTabEnabled],
+  );
   const generationSettings = ws.fingerstyleGenerationSettings;
 
   return (
@@ -272,7 +277,7 @@ export function GuitarFingerstyleStep({
             <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Master Playback</h3>
             <div className="flex items-center gap-2">
               {masterAbc && (
-                <CopyButton label="Copy ABCJS ABC" text={masterAbc} />
+                <CopyButton label="Copy ABCJS ABC" text={masterAbcjsRenderInput} />
               )}
               {masterAbc && (
                 <CopyButton label="Copy portable ABC" text={cleanAbcForExport(masterAbc)} />

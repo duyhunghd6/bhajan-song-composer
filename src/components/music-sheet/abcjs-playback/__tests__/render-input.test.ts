@@ -18,6 +18,26 @@ K:Em
 V:Guitar clef=treble-8 name="Fingerstyle Tablature"
 [V:Guitar] | [!2!B!3!G!6!E,] [!2!e] [!3!G] [!2!B]4 [!3!B] |`;
 
+const GANESHA_PHRASE_ABC = `X:1
+T:Ganesha, Ganesha — Voice-leading Option 1 Sparse Bass
+L:1/8
+M:4/4
+Q:1/2=120
+K:G
+%%score (Melody) (Guitar)
+V:Melody name="Melody" stem=up
+V:Guitar clef=treble-8 name="Guitar" stem=down
+%%MIDI program 24
+[V:Melody] | E3 "D" E3 D D | "Em" E3 B,3 B,2 | E3 "D" E3 D D | "Em" E3 B,3- B,2 |
+[V:Guitar] | [!1!e-!5!C]/2 !1!e5/2 !1!e3 [!2!d-!4!D]/2 [!2!d!4!D]/2 !2!d | [!1!e-!6!E,]/2 !1!e5/2 !2!B3/2 [!2!B!3!G]3/2 [!2!B-!6!E,]/2 !2!B3/2 | [!1!e-!5!C]/2 !1!e5/2 !1!e3 [!2!d-!4!D]/2 [!2!d!4!D]/2 !2!d | [!1!e-!6!E,]/2 !1!e5/2 !2!B3 [!2!B!4!E]2 |`;
+
+const GANESHA_PHRASE_RENDER_INPUT = GANESHA_PHRASE_ABC
+  .replaceAll(" !1!e5/2", " [!1!e]5/2")
+  .replaceAll(" !1!e3", " [!1!e]3")
+  .replaceAll(" !2!d |", " [!2!d] |")
+  .replaceAll(" !2!B3/2", " [!2!B]3/2")
+  .replaceAll(" !2!B3 ", " [!2!B]3 ");
+
 describe("prepareAbcjsRenderInput", () => {
   it("adapts forced Ganesha single notes for abcjs TAB pitch decorations", () => {
     expect(
@@ -26,6 +46,17 @@ describe("prepareAbcjsRenderInput", () => {
         tablatureEnabled: true,
       })
     ).toBe(GANESHA_ABCJS_RENDER_INPUT);
+  });
+
+  it("preserves the full Ganesha phrase and wraps every forced single note for abcjs", () => {
+    const result = prepareAbcjsRenderInput({
+      abcString: GANESHA_PHRASE_ABC,
+      tablatureEnabled: true,
+    });
+
+    expect(result).toBe(GANESHA_PHRASE_RENDER_INPUT);
+    expect(result).toContain("[!1!e]5/2 [!1!e]3");
+    expect(result).toContain("[!2!d!4!D]/2 [!2!d]");
   });
 
   it("applies render overrides and hides voice names before forcing TAB strings", () => {
