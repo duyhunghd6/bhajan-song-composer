@@ -42,7 +42,58 @@ function heldMelodyMeasure(): TimeSliceMeasure {
   };
 }
 
+function sparseOpeningMeasure(): TimeSliceMeasure {
+  return {
+    measure: 1,
+    lineIndex: 0,
+    style_profile: { key: "Em", comping_style: "Sparse PIMA", voicing_plan: "Open Em" },
+    grid: Array.from({ length: 8 }, (_, index) => ({
+      step: index + 1,
+      chord: "Em",
+      weight: index === 0 ? "⬤" as const : null,
+      melody: index === 0
+        ? { pitch: "E4", state: "attack" as const }
+        : { pitch: null, state: "rest" as const },
+      lyric: null,
+      tablature: index === 0
+        ? [{ string: 1 as const, fret: 0, finger: "a" as const, role: "melody" as const }]
+        : [],
+    })),
+  };
+}
+
+function adjacentEqualPitchFillMeasure(): TimeSliceMeasure {
+  return {
+    measure: 1,
+    lineIndex: 0,
+    style_profile: { key: "Em", comping_style: "Sparse PIMA", voicing_plan: "Open Em" },
+    grid: Array.from({ length: 16 }, (_, index) => ({
+      step: index + 1,
+      chord: "Em",
+      weight: null,
+      melody: { pitch: null, state: "rest" as const },
+      lyric: null,
+      tablature: index === 3
+        ? [{ string: 3 as const, fret: 0, finger: "i" as const, role: "fill" as const, durationSteps: 9 }]
+        : index === 12
+          ? [{ string: 3 as const, fret: 0, finger: "i" as const, role: "fill" as const, durationSteps: 2 }]
+          : [],
+    })),
+  };
+}
+
 describe("time-slice ABC interval renderer", () => {
+  it("renders a sparse full measure as a note followed by rests", () => {
+    const rendered = convertTimeSliceMeasureToAbc(
+      sparseOpeningMeasure(),
+      buildAbcDurationContext(ABC),
+      getKeyAccidentalsFromAbc(ABC),
+      true,
+    );
+
+    expect(rendered).toBe("!1!e/2 z7/2");
+  });
+
   it("splits and ties a held melody around a fill without shortening or retriggering it", () => {
     const rendered = convertTimeSliceMeasureToAbc(
       heldMelodyMeasure(),
@@ -54,6 +105,18 @@ describe("time-slice ABC interval renderer", () => {
     expect(rendered).toBe("!1!e- [!1!e!3!G] z2");
     expect(rendered).toContain("!1!e-");
     expect(rendered).toContain("[!1!e!3!G]");
+  });
+
+  it("renders adjacent equal-pitch fills as separate untied attacks", () => {
+    const rendered = convertTimeSliceMeasureToAbc(
+      adjacentEqualPitchFillMeasure(),
+      buildAbcDurationContext(ABC),
+      getKeyAccidentalsFromAbc(ABC),
+      true,
+    );
+
+    expect(rendered).toBe("z3/2 !3!G9/2 !3!G z");
+    expect(rendered).not.toContain("!3!G-");
   });
 
   it("preserves explicit fill duration provenance on the source measure", () => {

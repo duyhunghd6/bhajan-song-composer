@@ -113,6 +113,21 @@ function findNextMelodyAttack(
   return null;
 }
 
+function findNextChord(
+  measures: TimeSliceMeasure[],
+  measureIndex: number,
+  stepIndex: number,
+  nextLineMeasures?: TimeSliceMeasure[],
+): string | undefined {
+  const nextStepChord = measures[measureIndex]?.grid[stepIndex + 1]?.chord;
+  if (nextStepChord) return nextStepChord;
+
+  const nextMeasureChord = measures[measureIndex + 1]?.grid[0]?.chord;
+  if (nextMeasureChord) return nextMeasureChord;
+
+  return nextLineMeasures?.find(measure => measure.grid[0]?.chord)?.grid[0]?.chord;
+}
+
 function findMelodyCeilingMidi(
   measures: TimeSliceMeasure[],
   measureIndex: number,
@@ -279,7 +294,7 @@ export function analyzeFillOpportunities(input: AnalyzeFillOpportunitiesInput): 
         step: measure.grid[stepIndex],
         endStep: endStep.step,
         key: measure.style_profile.key,
-        nextChord: stepIndex < measure.grid.length - 1 ? measure.grid[stepIndex + 1].chord : input.nextLineMeasures?.[0]?.grid[0]?.chord,
+        nextChord: findNextChord(input.measures, rawWindow.measureIndex, stepIndex, input.nextLineMeasures),
         skillLevel: policy.skillLevel,
         protectedStrings: protectedStringAtStep(measure, stepIndex),
         occupiedStrings: measure.grid[stepIndex].tablature?.map(tab => tab.string) ?? [],

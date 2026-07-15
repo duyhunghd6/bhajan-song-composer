@@ -89,6 +89,13 @@ describe("fingerstyle LLM codec", () => {
       ...arranged,
       grid: arranged.grid.map((step) => ({ ...step, tablature: undefined })),
     };
+    const sourceMelody = source.grid.map(step => ({
+      step: step.step,
+      chord: step.chord,
+      weight: step.weight,
+      melody: step.melody,
+      lyric: step.lyric,
+    }));
 
     const toon = formatFingerstyleTablatureAsToon([arranged]);
     const decoded = applyFingerstyleTablatureToon(toon, [source]);
@@ -125,6 +132,13 @@ describe("fingerstyle LLM codec", () => {
       lyric: step.lyric,
       tablature: step.tablature,
     })));
+    expect(decoded.measures[0].grid.map(step => ({
+      step: step.step,
+      chord: step.chord,
+      weight: step.weight,
+      melody: step.melody,
+      lyric: step.lyric,
+    }))).toEqual(sourceMelody);
     expect(toon.length).toBeLessThan(220);
   });
 

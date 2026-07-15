@@ -1,9 +1,8 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import AbcjsPlaybackController from "@/components/music-sheet/AbcjsPlaybackController";
 import { prepareAbcjsRenderInput } from "@/components/music-sheet/abcjs-playback/render-input";
-import { convertTimeSliceMeasureToAbc, convertAbcToTimeSliceGrid, type TimeSliceMeasure } from "@/lib/theory/fingerstyle-arranger/time-slice";
+import { convertTimeSliceMeasureToAbc, convertAbcToTimeSliceGrid, joinMeasureAbcWithBarlines, type TimeSliceMeasure } from "@/lib/theory/fingerstyle-arranger/time-slice";
 import { formatLineAsToon, parseToonToLine, renderCombinedAsciiTab } from "@/lib/theory/fingerstyle-arranger/toon-utils";
-import { extractRenderedTabFromSvg } from "@/components/music-sheet/abcjs-playback/abc-rendering";
 import { buildAbcDurationContext } from "@/lib/theory/abc-duration";
 import { getKeyAccidentalsFromAbc } from "@/lib/theory/abc-key-signature";
 import { COMPOSER_PREVIEW_RENDER_OPTIONS } from "./preview";
@@ -16,6 +15,10 @@ import type {
 } from "@/app/actions/fingerstyle-line-arranger";
 import type { FingerstyleGenerationSettings } from "../useWorkspaceState";
 import type { FingerstyleGenerationDiagnosticRun } from "@/lib/theory/fingerstyle-arranger/generation-diagnostics";
+import {
+  formatAbcAsciiTabValidation,
+  type AbcAsciiTabValidationResult,
+} from "@/lib/theory/fingerstyle-arranger/abc-ascii-tab-validation";
 import { analyzeAuthoritativeMelodyPlayability } from "@/lib/theory/fingerstyle-arranger/source-playability";
 import {
   persistFingerstyleDiagnosticRun,
@@ -141,9 +144,10 @@ export function FingerstyleLineCard({
   const lineAbcResult = useMemo(() => {
     try {
       const keyAccidentals = getKeyAccidentalsFromAbc(activeAbc);
-      const lineGuitarAbc = lineMeasures
-        .map(m => convertTimeSliceMeasureToAbc(m, durationContext, keyAccidentals, true))
-        .join(" | ");
+      const lineGuitarAbc = joinMeasureAbcWithBarlines(
+        lineMeasures.map(m => convertTimeSliceMeasureToAbc(m, durationContext, keyAccidentals, true)),
+        lineMeasures,
+      );
 
       const generatedGuitar = [
         'V:Guitar clef=treble-8 name="Fingerstyle"',
@@ -196,6 +200,15 @@ export function FingerstyleLineCard({
     return renderCombinedAsciiTab(lineMeasures);
   }, [lineMeasures]);
 
+  const abcAsciiValidationLog = useMemo(() => {
+    const event = diagnosticRun?.events.findLast(candidate => (
+      candidate.source === "workflow"
+      && (candidate.kind === "abc-ascii-validated" || candidate.kind === "abc-ascii-rejected")
+    ));
+    if (!event || event.source !== "workflow" || !event.payloadPreview) return null;
+    return formatAbcAsciiTabValidation(event.payloadPreview as AbcAsciiTabValidationResult);
+  }, [diagnosticRun]);
+
   // ── Handlers ─────────────────────────────────────────────────────────
 
   const handleApply = useCallback(() => {
@@ -223,6 +236,7 @@ export function FingerstyleLineCard({
         activeAbc: workflowAppliedMusicAbc,
         skillLevel: generationSettings.skillLevel,
         densityMode: generationSettings.densityMode,
+        arrangementOptimization: generationSettings.arrangementOptimization,
         previousLineMeasures,
         nextLineMeasures,
       });
@@ -287,6 +301,10 @@ export function FingerstyleLineCard({
           {isGenerating ? "Generating Line..." : "Generate Line with AI"}
         </button>
       </div>
+
+      <p className="mb-4 rounded-xl border border-indigo-200 bg-white/70 px-3 py-2 text-xs text-indigo-900 dark:border-indigo-900/50 dark:bg-indigo-950/30 dark:text-indigo-200">
+        Melody attacks and rests stay pinned to the source. AI adds chord-based bass/harmony support, then chooses optional fills only in approved sustain/rest windows.
+      </p>
 
       {melodyPlayability.exceptions.length > 0 && (
         <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
@@ -367,6 +385,11 @@ export function FingerstyleLineCard({
                     {`\n## ABCJS Render Input\n\n\`\`\`abc\n${abcjsRenderInput}\n\`\`\``}
                   </div>
                 )}
+                {abcAsciiValidationLog && !logs.some(log => log.includes("## ABC ↔ ASCII TAB Validation")) && (
+                  <div className="mb-2 border-b border-zinc-800 pb-1 last:border-0 whitespace-pre-wrap">
+                    {`\n## ABC ↔ ASCII TAB Validation\n\n${abcAsciiValidationLog}`}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -386,7 +409,7 @@ export function FingerstyleLineCard({
                 <CopyButton label="Copy portable ABC" text={cleanAbcForExport(lineAbcResult)} />
               )}
               {lineAbcResult && (
-                <CopyTabButton label="Copy rendered TAB" containerId={`composer-line-${lineIndex}-preview`} />
+                <CopyTabButton label="Copy TAB" text={combinedAsciiTab} />
               )}
             </div>
           </div>
@@ -400,6 +423,8 @@ export function FingerstyleLineCard({
                 sheetViewportClassName="max-h-[600px] overflow-auto"
                 useContainerWidth={true}
                 showExactRenderAbcCopy={true}
+                // The generated Guitar voice already carries the melody; avoid a second Melody/chord-track attack.
+                synthOptions={{ voicesOff: [0], chordsOff: true }}
                 renderOptions={getArrangementRenderOptionsFor(lineAbcResult, COMPOSER_PREVIEW_RENDER_OPTIONS, tabEnabled)}
               />
             </div>
@@ -425,14 +450,13 @@ export function FingerstyleLineCard({
   );
 }
 
-export function CopyTabButton({ label, containerId }: { label: string; containerId: string }) {
+export function CopyTabButton({ label, text }: { label: string; text: string }) {
   const [copied, setCopied] = useState(false);
   const handleCopy = useCallback(() => {
-    const tabAscii = extractRenderedTabFromSvg(containerId);
-    navigator.clipboard.writeText(tabAscii);
+    navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  }, [containerId]);
+  }, [text]);
 
   return (
     <button

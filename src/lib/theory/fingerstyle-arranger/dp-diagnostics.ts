@@ -92,6 +92,12 @@ export interface TransitionCostBreakdown {
     costPerFrettedNote: number;
     cost: number;
   };
+  continuity: {
+    melodyStringChanged: boolean;
+    bassStringChanged: boolean;
+    costPerStringChange: number;
+    cost: number;
+  };
   skill: {
     level: SkillLevel;
     allowed: boolean;

@@ -150,6 +150,10 @@ describe("generateAIFingerstyleLine diagnostics", () => {
     expect(result.diagnostics?.events.some(event => event.source === "llm")).toBe(true);
     expect(result.diagnostics?.events.some(event => event.source === "dp")).toBe(true);
     expect(result.diagnostics?.events.some(event => event.source === "workflow")).toBe(true);
+    expect(result.diagnostics?.events.some(event => (
+      event.source === "workflow" && event.kind === "abc-ascii-validated"
+    ))).toBe(true);
+    expect(result.logs.join("\n")).toContain("## ABC ↔ ASCII TAB Validation");
     expect(result.fillSummary).toMatchObject({
       bpm: 90,
       policy: { skillLevel: "beginner", resolvedDensity: "few" },
@@ -157,6 +161,14 @@ describe("generateAIFingerstyleLine diagnostics", () => {
       composedFillCount: 1,
       finalValidation: "passed",
     });
+    expect(result.measures?.[0].grid[0].melody).toEqual({ pitch: "E4", state: "attack" });
+    expect(result.measures?.[0].grid.slice(1).every(step =>
+      step.tablature?.every(event => event.role !== "melody"),
+    )).toBe(true);
+    expect(result.measures?.[0].grid[0].tablature?.some(event => event.role === "fill")).toBe(false);
+    expect(result.measures?.[0].grid.slice(1).some(step =>
+      step.tablature?.some(event => event.role === "fill"),
+    )).toBe(true);
 
     expect(persistMock).toHaveBeenCalledOnce();
     const calls = persistMock.mock.calls as unknown as Array<[{ records: Array<{

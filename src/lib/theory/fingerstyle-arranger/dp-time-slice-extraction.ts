@@ -39,6 +39,30 @@ function normalizeChord(chord: string): string {
   return chord.trim().replace(/\s+/g, "").toLowerCase();
 }
 
+function activeStepCount(measure: TimeSliceMeasure): number {
+  if (!measure.pickupDurationUnits || measure.pickupDurationUnits <= 0) return measure.grid.length;
+  const lastSourceStep = measure.grid.reduce(
+    (last, step, index) => step.melody.state === "rest" ? last : index,
+    -1,
+  );
+  return Math.max(1, Math.min(measure.grid.length, lastSourceStep + 1));
+}
+
+function authoritativeMelodyDurationSteps(
+  measure: TimeSliceMeasure,
+  startIndex: number,
+): number | null {
+  const start = measure.grid[startIndex];
+  if (!start || start.melody.state !== "attack" || !start.melody.pitch) return null;
+  let duration = 1;
+  for (let index = startIndex + 1; index < measure.grid.length; index++) {
+    const melody = measure.grid[index].melody;
+    if (melody.state !== "sustain" || melody.pitch !== start.melody.pitch) break;
+    duration++;
+  }
+  return duration;
+}
+
 function provenance(supplied: boolean): "supplied" | "defaulted" {
   return supplied ? "supplied" : "defaulted";
 }
@@ -203,12 +227,19 @@ export function extractTimeSliceEvents(
   }
 
   for (let index = 0; index < events.length; index++) {
+    const binding = bindings[index];
+    const measure = measures[binding.measureIndex];
+    const measureEnd = measureOffsets[binding.measureIndex] + activeStepCount(measure);
     const nextOnset = events[index + 1]?.absoluteOnsetStep ?? totalGridSteps;
     const onset = events[index].absoluteOnsetStep ?? 0;
     const previousOnset = events[index - 1]?.absoluteOnsetStep;
-    events[index].durationSteps = Math.max(1, nextOnset - onset);
+    const sourceMelodyDuration = authoritativeMelodyDurationSteps(measure, binding.stepIndex);
+    const boundedPhysicalDuration = Math.max(1, Math.min(nextOnset - onset, measureEnd - onset));
+    events[index].durationSteps = Math.max(
+      1,
+      Math.min(sourceMelodyDuration ?? boundedPhysicalDuration, measureEnd - onset),
+    );
     events[index].movementSteps = Math.max(1, previousOnset === undefined ? onset : onset - previousOnset);
-    const binding = bindings[index];
     log.item(index, [
       `M${binding.measureIndex + 1}/s${binding.stepIndex + 1}`,
       `chord=${events[index].chord}`,

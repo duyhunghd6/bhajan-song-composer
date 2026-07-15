@@ -239,6 +239,82 @@ describe("fill opportunity analysis", () => {
     expect(changed.opportunitySetId).not.toBe(original.opportunitySetId);
   });
 
+  it("uses the following measure chord at an internal boundary and keeps next-line fallback at line end", () => {
+    const first = sourceMeasure();
+    first.measure = 1;
+    first.lineIndex = 0;
+    first.grid = first.grid.map((step, index) => index === 0
+      ? step
+      : { ...step, melody: { pitch: null, state: "rest" }, tablature: [] });
+    const second = sourceMeasure();
+    second.measure = 2;
+    second.lineIndex = 0;
+    second.grid = second.grid.map((step, index) => index === 0
+      ? {
+          ...step,
+          chord: "Am",
+          melody: { pitch: "G4", state: "attack" },
+          tablature: [
+            { string: 6 as const, fret: 0, finger: "p" as const, role: "root" as const },
+            { string: 1 as const, fret: 3, finger: "a" as const, role: "melody" as const },
+          ],
+        }
+      : { ...step, chord: "Am" });
+    const nextLine = sourceMeasure();
+    nextLine.measure = 3;
+    nextLine.lineIndex = 1;
+    nextLine.grid = nextLine.grid.map(step => ({ ...step, chord: "C#" }));
+
+    const result = analyzeFillOpportunities({
+      measures: [first, second],
+      sourceFingerprint: "boundary-context",
+      nextLineMeasures: [nextLine],
+    });
+
+    const internalBoundaryCandidates = result.candidates.filter(candidate => candidate.measure === 1 && candidate.step === 8);
+    expect(internalBoundaryCandidates.length).toBeGreaterThan(0);
+    expect(internalBoundaryCandidates.some(candidate => candidate.conditions.includes("common-tone-next-chord"))).toBe(true);
+
+    const lineBoundaryCandidates = result.candidates.filter(candidate => candidate.measure === 2 && candidate.step === 8);
+    expect(lineBoundaryCandidates.length).toBeGreaterThan(0);
+    expect(lineBoundaryCandidates.some(candidate => candidate.conditions.includes("common-tone-next-chord"))).toBe(false);
+  });
+
+  it("does not allow a fill duration to cross its measure-local opportunity window", () => {
+    const result = analysis();
+    const chosenWindow = result.windows.find(window => window.startStep === 6);
+    expect(chosenWindow).toBeDefined();
+    if (!chosenWindow) return;
+    const chosenCandidate = result.candidates.find(candidate => candidate.windowId === chosenWindow.id);
+    expect(chosenCandidate).toBeDefined();
+    if (!chosenCandidate) return;
+
+    const selection: FillSelection = {
+      version: FILL_SELECTION_FORMAT_VERSION,
+      opportunitySetId: result.opportunitySetId,
+      sourceFingerprint: result.sourceFingerprint,
+      decisions: result.windows.map(window => ({
+        windowId: window.id,
+        decision: window.id === chosenWindow.id ? "use" : "skip",
+        reason: "Boundary duration regression",
+      })),
+    };
+    const composition: FillComposition = {
+      version: FILL_COMPOSITION_FORMAT_VERSION,
+      opportunitySetId: result.opportunitySetId,
+      sourceFingerprint: result.sourceFingerprint,
+      entries: [{
+        candidateId: chosenCandidate.id,
+        durationSteps: chosenWindow.endStep - chosenCandidate.step + 2,
+        finger: chosenCandidate.suggestedFinger,
+      }],
+    };
+
+    const validated = validateFillComposition(result, selection, composition);
+    expect(validated.valid).toBe(false);
+    expect(validated.message).toContain("duration");
+  });
+
   it("does not treat pickup padding as a legal window", () => {
     const pickup = sourceMeasure();
     pickup.pickupDurationUnits = 2;

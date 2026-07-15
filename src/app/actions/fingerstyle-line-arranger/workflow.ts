@@ -13,6 +13,7 @@ import {
   type FingerstyleStoredDiagnosticRecord,
 } from "../fingerstyle-diagnostics";
 import { applyDPToTimeSliceMeasures } from "@/lib/theory/fingerstyle-arranger/dp-integration";
+import { applyHeuristicToTimeSliceMeasures } from "@/lib/theory/fingerstyle-arranger/heuristic-time-slice";
 import { createFingerstyleDiagnosticRunId } from "@/lib/theory/fingerstyle-arranger/dp-diagnostics";
 import {
   analyzeFillOpportunities,
@@ -38,10 +39,21 @@ import {
 } from "@/lib/theory/fingerstyle-arranger/generation-diagnostics";
 import { renderFingerstyleDiagnosticPlaintext } from "@/lib/theory/fingerstyle-arranger/diagnostic-plaintext";
 import { applyFingerstyleTablatureToon } from "@/lib/theory/fingerstyle-arranger/llm-codec";
+import { midiForStringFret, parseScientificPitch } from "@/lib/theory/guitar-playability";
 import { validateFingerstylePhysics } from "@/lib/theory/fingerstyle-arranger/physics-validation";
 import { analyzeAuthoritativeMelodyPlayability } from "@/lib/theory/fingerstyle-arranger/source-playability";
 import { renderAsciiTab } from "@/lib/theory/fingerstyle-arranger/toon-utils";
-import type { TimeSliceMeasure } from "@/lib/theory/fingerstyle-arranger/time-slice";
+import {
+  validateGuitarAbcAgainstAsciiTab,
+  formatAbcAsciiTabValidation,
+} from "@/lib/theory/fingerstyle-arranger/abc-ascii-tab-validation";
+import { buildAbcDurationContext } from "@/lib/theory/abc-duration";
+import { getKeyAccidentalsFromAbc } from "@/lib/theory/abc-key-signature";
+import {
+  convertTimeSliceMeasureToAbc,
+  joinMeasureAbcWithBarlines,
+  type TimeSliceMeasure,
+} from "@/lib/theory/fingerstyle-arranger/time-slice";
 
 import {
   boundedToolDiagnostic,
@@ -94,6 +106,64 @@ function validateFoundation(
   return errors;
 }
 
+type MelodySourceSnapshot = {
+  measure: number;
+  step: number;
+  pitch: string | null;
+  state: TimeSliceMeasure["grid"][number]["melody"]["state"];
+};
+
+function snapshotMelodySource(measures: readonly TimeSliceMeasure[]): MelodySourceSnapshot[] {
+  return measures.flatMap(measure => measure.grid.map(step => ({
+    measure: measure.measure,
+    step: step.step,
+    pitch: step.melody.pitch,
+    state: step.melody.state,
+  })));
+}
+
+function sourceMelodyDrift(
+  source: readonly MelodySourceSnapshot[],
+  measures: readonly TimeSliceMeasure[],
+): string[] {
+  const actual = snapshotMelodySource(measures);
+  if (actual.length !== source.length) return ["source melody grid length changed."];
+  return source.flatMap((expected, index) => {
+    const observed = actual[index];
+    if (
+      expected.measure === observed.measure
+      && expected.step === observed.step
+      && expected.pitch === observed.pitch
+      && expected.state === observed.state
+    ) return [];
+    return [`M${expected.measure}/s${expected.step} source melody changed.`];
+  });
+}
+
+function countMelodyPositionRepairs(
+  sourceMeasures: readonly TimeSliceMeasure[],
+  submittedMeasures: readonly TimeSliceMeasure[],
+): number {
+  let repairs = 0;
+  for (let measureIndex = 0; measureIndex < sourceMeasures.length; measureIndex++) {
+    const sourceMeasure = sourceMeasures[measureIndex];
+    const submittedMeasure = submittedMeasures[measureIndex];
+    if (!submittedMeasure) continue;
+    for (let stepIndex = 0; stepIndex < sourceMeasure.grid.length; stepIndex++) {
+      const sourceStep = sourceMeasure.grid[stepIndex];
+      const submittedStep = submittedMeasure.grid[stepIndex];
+      const melody = submittedStep?.tablature?.find(event => event.role === "melody");
+      const authoritativeMidi = sourceStep.melody.pitch
+        ? parseScientificPitch(sourceStep.melody.pitch)?.midi ?? null
+        : null;
+      if (melody && authoritativeMidi !== null && midiForStringFret(melody.string, melody.fret) !== authoritativeMidi) {
+        repairs++;
+      }
+    }
+  }
+  return repairs;
+}
+
 function freezeFoundationDurations(measures: TimeSliceMeasure[]): TimeSliceMeasure[] {
   return measures.map(measure => ({
     ...measure,
@@ -137,7 +207,9 @@ export async function runFingerstyleLineWorkflow(
   const runId = createFingerstyleDiagnosticRunId();
   const lineIndex = input.lineMeasures[0]?.lineIndex ?? input.previousLines.length;
   const measureNumbers = input.lineMeasures.map(measure => measure.measure);
+  const sourceMelody = snapshotMelodySource(input.lineMeasures);
   const policy = normalizeFillPolicy(input);
+  const arrangementOptimization = input.arrangementOptimization ?? "heuristic";
   const melodyPlayability = analyzeAuthoritativeMelodyPlayability(input.lineMeasures, policy.skillLevel);
   const bpm = parseAbcTempo(input.activeAbc);
   const dpOptions = {
@@ -207,6 +279,7 @@ export async function runFingerstyleLineWorkflow(
         maxRequestAttempts: 2,
         maxDurationMs: 5 * 60_000,
         dpOptions,
+        arrangementOptimization,
       },
     },
   }];
@@ -314,6 +387,13 @@ export async function runFingerstyleLineWorkflow(
               recordWorkflowEvent("foundation-rejected", "foundation", "warning", decoded.error.message, decoded.error);
               return { valid: false, code: decoded.error.code, message: decoded.error.message };
             }
+            const decodedSourceDrift = sourceMelodyDrift(sourceMelody, decoded.measures);
+            if (decodedSourceDrift.length > 0) {
+              const message = `Source-pinned melody changed before optimization: ${decodedSourceDrift.join(" ")}`;
+              recordWorkflowEvent("foundation-rejected", "foundation", "warning", message, { errors: decodedSourceDrift });
+              return { valid: false, message };
+            }
+            const submittedMelodyRepairs = countMelodyPositionRepairs(input.lineMeasures, decoded.measures);
             const errors = validateFoundation(decoded.measures, policy.skillLevel, melodyPlayability.melodyMaxFret);
             if (errors.length > 0) {
               const message = errors.join(" ");
@@ -321,25 +401,40 @@ export async function runFingerstyleLineWorkflow(
               return { valid: false, message, repair: "Resubmit a complete tablature:v1 foundation with no fill rows." };
             }
             try {
-              const dpResult = applyDPToTimeSliceMeasures(decoded.measures, bpm, dpOptions);
-              logs.push(...dpResult.logs);
-              diagnosticEvents.push(...projectDpDiagnosticEvents(runId, dpResult.diagnostics, diagnosticEvents.length));
-              for (const event of dpResult.diagnostics.events) {
+              const optimizationResult = arrangementOptimization === "dynamic-programming"
+                ? applyDPToTimeSliceMeasures(decoded.measures, bpm, dpOptions)
+                : applyHeuristicToTimeSliceMeasures(decoded.measures, {
+                  bpm,
+                  skillLevel: policy.skillLevel,
+                  maxMelodyFret: melodyPlayability.melodyMaxFret,
+                });
+              logs.push(...optimizationResult.logs);
+              diagnosticEvents.push(...projectDpDiagnosticEvents(runId, optimizationResult.diagnostics, diagnosticEvents.length));
+              for (const event of optimizationResult.diagnostics.events) {
                 storedRecords.push({ type: "dp-event", timestamp: event.timestamp, runId, payload: event });
               }
-              diagnosticSummary = summaryFromDpRun(dpResult.diagnostics, Date.now() - startedAtMs);
+              diagnosticSummary = summaryFromDpRun(optimizationResult.diagnostics, Date.now() - startedAtMs);
               if (diagnosticSummary.outcome === "rolled-back" || diagnosticSummary.unresolvedEventCount > 0) {
-                const message = `Foundation DP did not resolve every required event (${diagnosticSummary.outcome}, unresolved=${diagnosticSummary.unresolvedEventCount}).`;
+                const message = `Foundation ${arrangementOptimization} did not resolve every required event (${diagnosticSummary.outcome}, unresolved=${diagnosticSummary.unresolvedEventCount}).`;
                 recordWorkflowEvent("foundation-rejected", "foundation", "warning", message, diagnosticSummary);
                 return { valid: false, message };
               }
-              frozenFoundation = freezeFoundationDurations(dpResult.measures);
-              recordWorkflowEvent("foundation-validated", "foundation", "success", `Foundation frozen after DP at ${bpm} BPM using ${policy.skillLevel} accompaniment constraints.`, {
+              const optimizedSourceDrift = sourceMelodyDrift(sourceMelody, optimizationResult.measures);
+              if (optimizedSourceDrift.length > 0) {
+                const message = `Source-pinned melody changed during ${arrangementOptimization}: ${optimizedSourceDrift.join(" ")}`;
+                recordWorkflowEvent("foundation-rejected", "foundation", "failed", message, { errors: optimizedSourceDrift });
+                return { valid: false, message };
+              }
+              frozenFoundation = freezeFoundationDurations(optimizationResult.measures);
+              recordWorkflowEvent("foundation-validated", "foundation", "success", `Foundation frozen after ${arrangementOptimization} at ${bpm} BPM using ${policy.skillLevel} accompaniment constraints.`, {
                 measureCount: frozenFoundation.length,
+                arrangementOptimization,
                 dpOutcome: diagnosticSummary.outcome,
                 maxMelodyFret: melodyPlayability.melodyMaxFret,
+                melodySource: "authoritative-source-grid",
+                submittedMelodyRepairs,
               });
-              return { valid: true, message: "Foundation accepted and frozen. Inspect fill opportunities next.", bpm, policy, dpOutcome: diagnosticSummary.outcome };
+              return { valid: true, message: "Foundation accepted and frozen. Inspect fill opportunities next.", bpm, policy, arrangementOptimization, dpOutcome: diagnosticSummary.outcome };
             } catch (error) {
               const message = error instanceof Error ? error.message : String(error);
               recordWorkflowEvent("foundation-rejected", "foundation", "failed", `DP failed: ${message}`);
@@ -465,16 +560,59 @@ export async function runFingerstyleLineWorkflow(
           recordWorkflowEvent("final-merge-rejected", "final-validation", "warning", message);
           return { valid: false, message, toolResult: { valid: false, message } };
         }
+        const finalSourceDrift = sourceMelodyDrift(sourceMelody, acceptedFinalMeasures);
+        if (finalSourceDrift.length > 0) {
+          const message = `Final merge changed the source-pinned melody: ${finalSourceDrift.join(" ")}`;
+          recordWorkflowEvent("final-merge-rejected", "final-validation", "failed", message, { errors: finalSourceDrift });
+          return { valid: false, message, toolResult: { valid: false, message } };
+        }
         const physicalErrors = physicalValidationErrors(acceptedFinalMeasures, policy, melodyPlayability.melodyMaxFret);
         if (physicalErrors.length > 0) {
           const message = physicalErrors.join(" ");
           recordWorkflowEvent("final-merge-rejected", "final-validation", "failed", message, { physicalErrors });
           return { valid: false, message, toolResult: { valid: false, message } };
         }
+
+        const durationContext = buildAbcDurationContext(input.activeAbc);
+        const keyAccidentals = getKeyAccidentalsFromAbc(input.activeAbc);
+        const guitarAbc = joinMeasureAbcWithBarlines(
+          acceptedFinalMeasures.map(measure => convertTimeSliceMeasureToAbc(
+            measure,
+            durationContext,
+            keyAccidentals,
+            true,
+          )),
+          acceptedFinalMeasures,
+        );
+        const abcAsciiValidation = validateGuitarAbcAgainstAsciiTab({
+          abc: guitarAbc,
+          measures: acceptedFinalMeasures,
+          durationContext,
+          keyAccidentals,
+        });
+        const abcAsciiMessage = formatAbcAsciiTabValidation(abcAsciiValidation);
+        recordWorkflowEvent(
+          abcAsciiValidation.valid ? "abc-ascii-validated" : "abc-ascii-rejected",
+          "final-validation",
+          abcAsciiValidation.valid ? "success" : "failed",
+          abcAsciiValidation.valid
+            ? `ABC ↔ ASCII TAB validation passed: ${abcAsciiValidation.checkedMeasures} measure(s), ${abcAsciiValidation.expectedEventCount} event(s), no mismatches.`
+            : `ABC ↔ ASCII TAB validation failed: ${abcAsciiValidation.mismatchCount} mismatch(es).`,
+          abcAsciiValidation,
+        );
+        if (!abcAsciiValidation.valid) {
+          return {
+            valid: false,
+            message: abcAsciiMessage,
+            toolResult: { valid: false, message: abcAsciiMessage },
+          };
+        }
+
         for (const measure of acceptedFinalMeasures) {
-          const tab = renderAsciiTab(measure.grid);
+          const tab = renderAsciiTab(measure.grid, measure.pickupDurationUnits);
           if (tab) logs.push(`\n## Measure ${measure.measure} — ASCII Tab\n\n${tab}`);
         }
+        logs.push(`\n## ABC ↔ ASCII TAB Validation\n\n${abcAsciiMessage}`);
         const completedFillSummary = fillSummary("passed");
         recordWorkflowEvent("final-merge-validated", "final-validation", "success", "Server reconstruction and whole-line validation passed.", completedFillSummary);
         finalOutput = { success: true, measures: acceptedFinalMeasures, logs, fillSummary: completedFillSummary };

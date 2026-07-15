@@ -42,7 +42,44 @@ export function formatMeasureAsToon(
   return toon;
 }
 
-export function renderAsciiTab(grid: TimeSliceGridStep[]): string {
+export interface CanonicalTabEvent {
+  step: number;
+  string: number;
+  fret: number;
+  durationSteps?: number;
+  role: string;
+}
+
+export function projectTabEvents(grid: TimeSliceGridStep[]): CanonicalTabEvent[] {
+  return grid.flatMap(step => (step.tablature ?? []).map(tab => ({
+    step: step.step,
+    string: tab.string,
+    fret: tab.fret,
+    durationSteps: tab.durationSteps,
+    role: tab.role,
+  })));
+}
+
+export function findDuplicateTabStrings(grid: TimeSliceGridStep[]): Array<{ step: number; string: number }> {
+  const duplicates: Array<{ step: number; string: number }> = [];
+  for (const step of grid) {
+    const seen = new Set<number>();
+    for (const tab of step.tablature ?? []) {
+      if (seen.has(tab.string)) duplicates.push({ step: step.step, string: tab.string });
+      seen.add(tab.string);
+    }
+  }
+  return duplicates;
+}
+
+function shouldRenderTablatureStep(pickupDurationUnits: number | undefined, step: TimeSliceGridStep): boolean {
+  return !pickupDurationUnits || pickupDurationUnits <= 0 || step.melody.state !== "rest";
+}
+
+export function renderAsciiTab(
+  grid: TimeSliceGridStep[],
+  pickupDurationUnits?: number,
+): string {
   const strings = {
     1: { name: "e", track: new Array(grid.length).fill("--") },
     2: { name: "B", track: new Array(grid.length).fill("--") },
@@ -54,7 +91,7 @@ export function renderAsciiTab(grid: TimeSliceGridStep[]): string {
 
   for (let i = 0; i < grid.length; i++) {
     const step = grid[i];
-    if (step.tablature && step.tablature.length > 0) {
+    if (shouldRenderTablatureStep(pickupDurationUnits, step) && step.tablature && step.tablature.length > 0) {
       for (const tab of step.tablature) {
         if (tab.string >= 1 && tab.string <= 6) {
           const fretStr = tab.fret.toString();
@@ -106,7 +143,7 @@ export function renderCombinedAsciiTab(lineMeasures: TimeSliceMeasure[], measure
 
       for (let i = 0; i < grid.length; i++) {
         const step = grid[i];
-        if (step.tablature && step.tablature.length > 0) {
+        if (shouldRenderTablatureStep(measure.pickupDurationUnits, step) && step.tablature && step.tablature.length > 0) {
           for (const tab of step.tablature) {
             if (tab.string >= 1 && tab.string <= 6) {
               const fretStr = tab.fret.toString();

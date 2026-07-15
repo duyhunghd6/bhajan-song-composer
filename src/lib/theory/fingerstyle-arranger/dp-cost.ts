@@ -24,7 +24,8 @@ export const DP_COST_CONSTANTS = {
   guideFingerShape: 0.3,
   slideGuideShape: 0.5,
   fullShapeChange: 1.5,
-  sustainInterruptionPerString: 3,
+  sustainInterruptionPerString: 1,
+  sameRoleStringChange: 4,
   barreBase: 2,
   barrePerConsecutiveMeasure: 0.3,
   frettedPlacement: 0.4,
@@ -286,6 +287,31 @@ export function placementCost(candidate: DPCandidate): number {
     + (candidate.bassString !== null && candidate.bassFret > 0 ? DP_COST_CONSTANTS.frettedPlacement : 0);
 }
 
+function continuityDetails(
+  fromState: DPHandState,
+  toCandidate: DPCandidate,
+  event: DPNoteEvent,
+): TransitionCostBreakdown["continuity"] {
+  const melodyStringChanged = event.melodyMidi !== null
+    && fromState.lastMelodyMidi !== null
+    && fromState.lastMelodyString !== null
+    && toCandidate.melodyString !== null
+    && fromState.lastMelodyString !== toCandidate.melodyString;
+  const bassStringChanged = event.bassMidi !== null
+    && fromState.lastBassMidi !== null
+    && fromState.lastBassString !== null
+    && toCandidate.bassString !== null
+    && fromState.lastBassString !== toCandidate.bassString;
+  const cost = (Number(melodyStringChanged) + Number(bassStringChanged))
+    * DP_COST_CONSTANTS.sameRoleStringChange;
+  return {
+    melodyStringChanged,
+    bassStringChanged,
+    costPerStringChange: DP_COST_CONSTANTS.sameRoleStringChange,
+    cost,
+  };
+}
+
 export interface TransitionCostDetailedOptions {
   recurringShapePenalty?: number;
   preferredShape?: string | null;
@@ -325,12 +351,13 @@ export function transitionCostDetailed(
       + DP_COST_CONSTANTS.barrePerConsecutiveMeasure * fromState.consecutiveBarreMeasures
     : 0;
   const placementValue = placementCost(toCandidate);
+  const continuity = continuityDetails(fromState, toCandidate, event);
   const multiplier = skillMultiplier(toCandidate, technique, skillLevel, event.maxMelodyFret);
   const maximumFret = maxFretUsed(toCandidate);
   const constraints = SKILL_LEVEL_CONSTRAINTS[skillLevel];
   const candidateShape = options.candidateShape ?? toCandidate.shapeFrets.map(fret => fret ?? "x").join(":");
   const recurringPenalty = options.recurringShapePenalty ?? 0;
-  const baseCost = movement.cost + shape.cost + sustain.cost + techniqueValue + barreCost + placementValue;
+  const baseCost = movement.cost + shape.cost + sustain.cost + techniqueValue + barreCost + placementValue + continuity.cost;
 
   return {
     technique,
@@ -349,6 +376,7 @@ export function transitionCostDetailed(
       costPerFrettedNote: DP_COST_CONSTANTS.frettedPlacement,
       cost: placementValue,
     },
+    continuity,
     skill: {
       level: skillLevel,
       allowed: Number.isFinite(multiplier),
@@ -397,6 +425,10 @@ export function applyCandidate(
     ringingUntil,
     barreFret: candidate.usesBarre ? detectBarreFret(candidate.shapeFrets) : null,
     consecutiveBarreMeasures: candidate.usesBarre ? fromState.consecutiveBarreMeasures + 1 : 0,
+    lastMelodyString: candidate.melodyString,
+    lastMelodyMidi: event.melodyMidi,
+    lastBassString: candidate.bassString,
+    lastBassMidi: event.bassMidi,
   };
 }
 

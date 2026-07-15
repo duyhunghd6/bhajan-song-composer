@@ -15,8 +15,7 @@ import { buildAccompanimentAbc } from "@/lib/theory/accompaniment-abc";
 import { fingerprintAccompanimentSource, getSelectedWorkflowOption } from "@/lib/theory/accompaniment-workflow";
 import { getComposerFingerstyleMeasuresStorageKey } from "./storage";
 import { formatFingerstyleTablatureAsToon } from "@/lib/theory/fingerstyle-arranger/llm-codec";
-import { formatLineAsToon } from "@/lib/theory/fingerstyle-arranger/toon-utils";
-import { extractRenderedTabFromSvg } from "@/components/music-sheet/abcjs-playback/abc-rendering";
+import { formatLineAsToon, renderCombinedAsciiTab } from "@/lib/theory/fingerstyle-arranger/toon-utils";
 import type { PreviousLineContext } from "@/app/actions/fingerstyle-line-arranger";
 import {
   buildGeneratedGuitarAbc,
@@ -208,6 +207,10 @@ export function GuitarFingerstyleStep({
     () => prepareAbcjsRenderInput({ abcString: masterAbc, tablatureEnabled: masterTabEnabled }),
     [masterAbc, masterTabEnabled],
   );
+  const masterAsciiTab = useMemo(
+    () => renderCombinedAsciiTab(measures),
+    [measures],
+  );
   const generationSettings = ws.fingerstyleGenerationSettings;
 
   return (
@@ -256,6 +259,22 @@ export function GuitarFingerstyleStep({
               <option value="many">Many</option>
             </select>
           </label>
+          <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+            Arrangement Optimization
+            <select
+              value={generationSettings.arrangementOptimization}
+              onChange={(event) => updateState({
+                fingerstyleGenerationSettings: {
+                  ...generationSettings,
+                  arrangementOptimization: event.target.value as typeof generationSettings.arrangementOptimization,
+                },
+              })}
+              className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-xs dark:border-zinc-700 dark:bg-zinc-950"
+            >
+              <option value="heuristic">Heuristic</option>
+              <option value="dynamic-programming">Dynamic Programming</option>
+            </select>
+          </label>
           <p className="text-[11px] text-zinc-500 sm:col-span-2">
             Skill limits discretionary accompaniment and fills, including frets, hand span, and notes per figure. The authoritative melody is never transposed; a labelled melody-only fret exception is used when its exact pitch requires one. Density independently controls how many scored windows may be selected. Existing lines are not regenerated when these settings change.
           </p>
@@ -283,7 +302,7 @@ export function GuitarFingerstyleStep({
                 <CopyButton label="Copy portable ABC" text={cleanAbcForExport(masterAbc)} />
               )}
               {masterAbc && (
-                <CopyTabButton label="Copy rendered TAB" containerId="composer-master-guitar-preview" />
+                <CopyTabButton label="Copy TAB" text={masterAsciiTab} />
               )}
             </div>
           </div>
@@ -362,14 +381,13 @@ function CopyButton({ label, text }: { label: string; text: string }) {
   );
 }
 
-export function CopyTabButton({ label, containerId }: { label: string; containerId: string }) {
+export function CopyTabButton({ label, text }: { label: string; text: string }) {
   const [copied, setCopied] = useState(false);
   const handleCopy = useCallback(() => {
-    const tabAscii = extractRenderedTabFromSvg(containerId);
-    navigator.clipboard.writeText(tabAscii);
+    navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  }, [containerId]);
+  }, [text]);
 
   return (
     <button

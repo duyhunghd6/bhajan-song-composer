@@ -119,6 +119,32 @@ w: Ha-ri Bol _`;
       });
     });
 
+    it("treats only the opening sparse measure as pickup padding", () => {
+      const measures = convertAbcToTimeSliceGrid(
+        `X:1\nM:4/4\nL:1/8\nK:Em\n[V:Melody] | E | E |`,
+        ["Em", "Em"],
+      );
+
+      expect(measures).toHaveLength(2);
+      expect(measures[0].pickupDurationUnits).toBe(1);
+      expect(measures[0].sourceDurationUnits).toBe(1);
+      expect(measures[1].pickupDurationUnits).toBeUndefined();
+      expect(measures[1].sourceDurationUnits).toBe(1);
+    });
+
+    it("keeps an explicitly full sparse measure full-length", () => {
+      const measures = convertAbcToTimeSliceGrid(
+        `X:1\nM:4/4\nL:1/8\nK:Em\n[V:Melody] | E z7 |`,
+        ["Em"],
+      );
+
+      expect(measures[0].pickupDurationUnits).toBeUndefined();
+      expect(measures[0].sourceDurationUnits).toBe(8);
+      expect(measures[0].grid[0].melody.state).toBe("attack");
+      expect(measures[0].grid[1].melody.state).toBe("sustain");
+      expect(measures[0].grid[2].melody.state).toBe("rest");
+    });
+
     it("parses strong beat annotations and falls back to metric weights", () => {
       const abc = `X:1
 T:Hari Bol

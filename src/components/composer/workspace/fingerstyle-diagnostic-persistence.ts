@@ -29,6 +29,8 @@ const REQUIRED_EVENT_KINDS = new Set([
   "rollback",
   "run-summary",
   "final-validation",
+  "abc-ascii-validated",
+  "abc-ascii-rejected",
   "chat-error",
   "loop-exhausted",
 ]);

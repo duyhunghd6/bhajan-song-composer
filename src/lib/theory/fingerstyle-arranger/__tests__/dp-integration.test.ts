@@ -6,9 +6,11 @@ import { applyDPToTimeSliceMeasures } from "../dp-integration";
 import {
   convertAbcToTimeSliceGrid,
   convertTimeSliceMeasureToAbc,
+  joinMeasureAbcWithBarlines,
   type TimeSliceGridStep,
   type TimeSliceMeasure,
 } from "../time-slice";
+import { validateGuitarAbcAgainstAsciiTab } from "../abc-ascii-tab-validation";
 import { renderCombinedAsciiTab } from "../toon-utils";
 
 const GANESHA_ABC = `X:1
@@ -56,10 +58,27 @@ E|-------------------------------------------------|-0-----------------------0--
 
 Measures 4–5
 e|-7-----------5-----------3-----------5-----------|-------------------------------------------------|
-B|-------------------------------------------------|-5-----5-----------0-----------------------------|
-G|-------------------------------------------------|-0-----------0-----------------------------4-----|
+B|-------------------------------------------------|-5-----5-----------0-----------------------0-----|
+G|-------------------------------------------------|-0-----------0-----------------------------------|
 D|-------------------------------------------------|-------------------------------------------------|
 A|-0-----------0-----------0-----------0-----------|-------------------------------------------------|
+E|-------------------------------------------------|-0-----------------------------------------------|
+`;
+
+const GANESHA_USER_ASCII = `Measures 1–3
+e|-------------------------------------------------|-0-----0-----------2-----3-----2-----0-----------|-0-----0-----------2-----3-----2-----0-----------|
+B|-0-----------------------------------------------|-------------------------------------------0-----|-------------------------------------------------|
+G|-------------------------------------------------|-------------------------------------------------|-------------------------------------------------|
+D|-------------------------------------------------|-------------------------------------------------|-------------------------------------------------|
+A|-------------------------------------------------|-------------------------------------------------|-------------------------------------------------|
+E|-------------------------------------------------|-0-----------------------0-----------------------|-0-----------------------0-----------------------|
+
+Measures 4–5
+e|-7-----------5-----------3-----------5-----------|-0-----0-----------------------------------------|
+B|-------------------------------------------------|-------------------------------------------0-----|
+G|----------------------------------------5--------|----------0--------------------------------------|
+D|-------------------------------------------------|-------------------------------------------------|
+A|-0-----------------------------------------------|-------------------------------------------------|
 E|-------------------------------------------------|-0-----------------------------------------------|
 `;
 
@@ -175,6 +194,67 @@ describe("fingerstyle DP integration", () => {
     expect(new Set(output.map(tab => tab.string)).size).toBe(output.length);
   });
 
+  it("does not synthesize a missing bass or chord-tone event", () => {
+    const input = makeRegressionMeasure();
+    input.grid[0].tablature = input.grid[0].tablature?.filter(tab => tab.role === "melody");
+
+    const { measures } = applyDPToTimeSliceMeasures([input], 120, {
+      skillLevel: "intermediate",
+      capo: 0,
+      autoCapo: false,
+    });
+
+    expect(measures[0].grid[0].tablature).toHaveLength(1);
+    expect(measures[0].grid[0].tablature?.[0]).toMatchObject({ role: "melody" });
+  });
+
+  it("omits tablature from pickup padding that ABCJS does not render", () => {
+    const input = makeRegressionMeasure();
+    input.pickupDurationUnits = 1;
+    input.grid[4].tablature = [{ string: 3, fret: 4, finger: "i", role: "fill" }];
+
+    expect(renderCombinedAsciiTab([input])).toBe(`Measures 1–1
+e|-------------------------------------------------|
+B|-------------------------------------------------|
+G|-0-----------------------------------------------|
+D|-------------------------------------------------|
+A|-7-----------------------------------------------|
+E|-0-----------------------------------------------|
+`);
+  });
+
+  it("serializes the supplied Ganesha ASCII testcase into matching forced ABC", () => {
+    const source = convertAbcToTimeSliceGrid(
+      GANESHA_ABC,
+      ["C", "Em", "Em", "Am", "Em"]
+    );
+    const measures = attachReportedAscii(source, GANESHA_USER_ASCII);
+    const durationContext = buildAbcDurationContext(GANESHA_ABC);
+    const keyAccidentals = getKeyAccidentalsFromAbc(GANESHA_ABC);
+    const abc = joinMeasureAbcWithBarlines(
+      measures.map(measure => convertTimeSliceMeasureToAbc(
+        measure,
+        durationContext,
+        keyAccidentals,
+        true,
+      )),
+      measures,
+    );
+    const validation = validateGuitarAbcAgainstAsciiTab({
+      abc,
+      measures,
+      durationContext,
+      keyAccidentals,
+    });
+
+    expect(renderCombinedAsciiTab(measures)).toBe(GANESHA_USER_ASCII);
+    expect(validation.valid).toBe(true);
+    expect(validation.mismatchCount).toBe(0);
+    expect(abc).toContain("!2!B");
+    expect(abc).toContain("[!1!b!5!A,]");
+    expect(abc).toContain("[!1!e!6!E,]");
+  });
+
   it("corrects the reported Ganesha melody-pitch regression", () => {
     const source = convertAbcToTimeSliceGrid(
       GANESHA_ABC,
@@ -209,7 +289,7 @@ describe("fingerstyle DP integration", () => {
       true
     );
     expect(correctedFinalMeasure).toBe(
-      "[!2!e!3!G!6!E,] !2!e- [!2!e-!3!G] !2!B3- !2!B !3!B"
+      "[!2!e!3!G!6!E,] !2!e- [!2!e-!3!G] !2!B3- !2!B !2!B"
     );
 
     const correctedAscii = renderCombinedAsciiTab(measures);

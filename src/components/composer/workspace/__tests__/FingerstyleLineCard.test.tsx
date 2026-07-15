@@ -2,17 +2,26 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 import type { TimeSliceMeasure } from "@/lib/theory/fingerstyle-arranger/time-slice";
+import { renderCombinedAsciiTab } from "@/lib/theory/fingerstyle-arranger/toon-utils";
 import { FingerstyleLineCard } from "../FingerstyleLineCard";
 
 vi.mock("@/components/music-sheet/AbcjsPlaybackController", () => ({
   default: ({
     abcString,
     showExactRenderAbcCopy,
+    synthOptions,
   }: {
     abcString: string;
     showExactRenderAbcCopy?: boolean;
+    synthOptions?: { voicesOff?: boolean | number[]; chordsOff?: boolean };
   }) => (
-    <pre data-testid="abc-input" data-exact-copy={String(showExactRenderAbcCopy)}>{abcString}</pre>
+    <pre
+      data-testid="abc-input"
+      data-exact-copy={String(showExactRenderAbcCopy)}
+      data-synth-options={JSON.stringify(synthOptions)}
+    >
+      {abcString}
+    </pre>
   ),
 }));
 
@@ -75,7 +84,11 @@ describe("FingerstyleLineCard", () => {
       "[V:Guitar] | [!2!B!3!G-!6!E,-]/2 [!3!G!6!E,]/2 !2!e !3!G !2!B4 !3!B |"
     );
     expect(markup).toContain('data-exact-copy="true"');
+    expect(markup).toContain('data-synth-options="{&quot;voicesOff&quot;:[0],&quot;chordsOff&quot;:true}"');
     expect(markup).toContain("Copy ABCJS ABC");
     expect(markup).toContain("Copy portable ABC");
+    expect(markup).toContain(renderCombinedAsciiTab([makeFinalMeasure()]));
+    expect(markup).toContain('Copy TAB');
+    expect(markup).not.toContain('Copy rendered TAB');
   });
 });

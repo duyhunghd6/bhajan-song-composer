@@ -65,6 +65,8 @@ export interface TimeSliceMeasure {
   /** If this measure is a pickup (anacrusis), the actual duration in ABC units.
    *  Undefined or 0 means it is a normal full measure. */
   pickupDurationUnits?: number;
+  /** Parsed source duration before pickup normalization, retained for DP/render diagnostics. */
+  sourceDurationUnits?: number;
   /** Repeat barline metadata (|:, :|, volta brackets) from the source ABC. */
   barline?: AbcBarlineInfo;
   visualTablature?: string;
@@ -563,10 +565,12 @@ export function convertAbcToTimeSliceGrid(
       tablature: undefined,
     }));
 
-    // Detect pickup: if the melody for this measure is shorter than a full measure,
-    // record the actual duration so the LLM prompt and ABC converter can respect it.
+    // Only the opening source measure can be an anacrusis. A later sparse
+    // measure is still a full measure whose unoccupied steps render as rests.
     const actualMelodyUnits = measureDurationUnits(measureStr);
-    const isPickup = actualMelodyUnits > 0 && actualMelodyUnits < durationContext.fullMeasureUnits;
+    const isPickup = measureIndex === 0
+      && actualMelodyUnits > 0
+      && actualMelodyUnits < durationContext.fullMeasureUnits;
 
     const bi = finalBarlines[measureIndex];
     const hasBarline = bi && (bi.repeatStart || bi.repeatEnd || bi.volta !== null);
@@ -582,6 +586,7 @@ export function convertAbcToTimeSliceGrid(
       },
       grid: finalGrid,
       pickupDurationUnits: isPickup ? actualMelodyUnits : undefined,
+      sourceDurationUnits: actualMelodyUnits > 0 ? actualMelodyUnits : undefined,
       barline: hasBarline ? bi : undefined,
       source_abc: {
         melody: measureStr,

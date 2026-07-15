@@ -260,14 +260,29 @@ describe("DP Cost Function", () => {
     expect(shapeChangeCost(shape, [...shape])).toBe(0);
   });
 
-  it("sustain violation → penalty ≥ 3.0 per violated string", () => {
+  it("prefers a repeated melody string for pitch-equivalent E notes", () => {
+    const result = optimizeFingerstylePath([
+      makeEvent({ index: 0, melodyMidi: 69, bassMidi: null, chord: "A", durationSteps: 4, movementSteps: 4 }),
+      makeEvent({ index: 1, melodyMidi: 64, bassMidi: null, chord: "E", durationSteps: 4, movementSteps: 4 }),
+      makeEvent({ index: 2, melodyMidi: 64, bassMidi: null, chord: "E", durationSteps: 4, movementSteps: 4 }),
+    ], "intermediate");
+
+    expect(result.path[0].melodyString).toBe(1);
+    expect(result.path[1].melodyString).toBe(1);
+    expect(result.path[2].melodyString).toBe(1);
+    expect(result.path[1].melodyFret).toBe(0);
+    expect(result.path[2].melodyFret).toBe(0);
+  });
+
+  it("sustain violation → lower soft penalty per violated string", () => {
     const state = initialHandState();
     state.frets = [null, null, null, null, 1, null]; // string 2 fretted at 1
     state.ringingUntil = [null, null, null, null, 10, null]; // string 2 ringing until step 10
 
     const toFrets = [null, null, null, null, 3, null]; // string 2 changed to fret 3
     const cost = sustainViolationCost(state, toFrets, 5); // current step = 5 (before 10)
-    expect(cost).toBeGreaterThanOrEqual(3.0);
+    expect(cost).toBe(1);
+    expect(cost).toBeLessThan(3.0);
   });
 
   it("no sustain violation when note already decayed", () => {

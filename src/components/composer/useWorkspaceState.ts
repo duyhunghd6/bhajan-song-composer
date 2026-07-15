@@ -44,14 +44,18 @@ export interface EnsembleLayerAbcBundle {
   conflictReport?: EnsembleConflictReportEntry[];
 }
 
+export type FingerstyleArrangementOptimization = "heuristic" | "dynamic-programming";
+
 export interface FingerstyleGenerationSettings {
   skillLevel: SkillLevel;
   densityMode: FillDensityMode;
+  arrangementOptimization?: FingerstyleArrangementOptimization;
 }
 
 export const DEFAULT_FINGERSTYLE_GENERATION_SETTINGS: FingerstyleGenerationSettings = {
   skillLevel: "beginner",
   densityMode: "auto",
+  arrangementOptimization: "heuristic",
 };
 
 export interface WorkspaceState {

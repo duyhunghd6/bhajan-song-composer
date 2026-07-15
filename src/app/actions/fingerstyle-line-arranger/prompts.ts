@@ -20,9 +20,11 @@ MANDATORY TOOL ORDER
 6. Call submit_arranged_line with the exact accepted fills_toon payload.
 
 FOUNDATION RULES
-- Preserve authoritative melody exactly. Every melody attack needs exactly one role=melody note with the correct pitch.
-- A listed source-melody exception may exceed the selected skill fret limit only for role=melody. Never lower, octave-shift, or transpose it; all discretionary notes remain skill-limited.
-- Never retrigger role=melody on sustain or rest steps.
+- The current source grid is read-only. Treat every step's melody pitch and attack/sustain/rest state as pinned source data; tablature rows may not redefine it.
+- Preserve authoritative melody exactly. Every source melody attack needs exactly one role=melody note with the correct pitch.
+- A listed source-melody exception may exceed the selected skill fret limit only for role=melody. Never lower, octave-shift, or transpose it; all discretionary notes remain skill-limited. The server may repair a wrong physical string/fret to the same authoritative pitch during DP.
+- Never retrigger role=melody on sustain or rest steps. Missing or extra melody attacks are structural errors, not creative choices.
+- Bass/root/fifth/harmony rows are optional accompaniment choices. Add bass from the current chord progression when useful, but do not expect DP to create a missing bass row; submitted bass positions may be physically optimized without changing their pitch.
 - Use root, fifth, bass, or harmony for the non-fill foundation. role=fill is forbidden before opportunity analysis.
 - Non-melody foundation attacks belong on weighted structural steps or in a pinch with a melody attack; leave unweighted sustain/rest steps empty for scored fill analysis.
 - For sparse/PIMA profiles, use at most one thumb note plus i/m/a treble notes per attack. Avoid full-strum density.

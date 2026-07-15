@@ -114,6 +114,12 @@ export interface DPHandState {
   barreFret: number | null;
   /** How many consecutive measures the hand has been in a barre shape. */
   consecutiveBarreMeasures: number;
+  /** Previous selected melody assignment, used for soft continuity preferences. */
+  lastMelodyString?: GuitarStringNumber | null;
+  lastMelodyMidi?: number | null;
+  /** Previous selected bass assignment, used for soft continuity preferences. */
+  lastBassString?: GuitarStringNumber | null;
+  lastBassMidi?: number | null;
 }
 
 /**
@@ -301,6 +307,10 @@ export function initialHandState(): DPHandState {
     ringingUntil: [null, null, null, null, null, null],
     barreFret: null,
     consecutiveBarreMeasures: 0,
+    lastMelodyString: null,
+    lastMelodyMidi: null,
+    lastBassString: null,
+    lastBassMidi: null,
   };
 }
 

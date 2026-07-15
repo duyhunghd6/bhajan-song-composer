@@ -54,6 +54,7 @@ describe("accompaniment workflow wizard state", () => {
     expect(DEFAULT_FINGERSTYLE_GENERATION_SETTINGS).toEqual({
       skillLevel: "beginner",
       densityMode: "auto",
+      arrangementOptimization: "heuristic",
     });
   });
 

@@ -26,6 +26,14 @@ The corrected final measure is:
 
 The optimizer now treats melody pitch and physical playability as invariants. Cost optimization may choose among valid positions, but it may not change the requested concert pitch or collapse independent simultaneous notes.
 
+### Generate Line with AI source contract
+
+The staged `Generate Line with AI` workflow treats the source `TimeSliceMeasure.grid[].melody` fields as pinned input. The LLM may choose chord-derived bass/root/fifth/harmony additions for the non-fill foundation and may later select and compose optional fills from server-scored windows and legal candidate IDs. It may not change melody pitch, attack/sustain/rest state, source timing, or retrigger melody on a sustain or rest step.
+
+`tablature:v1` is therefore an accompaniment and physical-placement payload, not an alternate melody source. The server reconstructs the source grid, validates the foundation, applies DP or heuristic positioning, freezes that foundation, and merges fills only after deterministic server validation. A wrong submitted melody string/fret may be repaired to a playable position with the authoritative source MIDI; structural melody violations are rejected. Diagnostics retain authoritative versus submitted melody positions so repairs remain visible.
+
+Bass is optional: DP can reposition a supplied chord-derived bass while preserving its pitch, but it does not invent a missing bass event. Fills never pass through the foundation DP and can only be added by the server merge.
+
 ## 2. Optimization Goals
 
 The DP minimizes physical difficulty across the complete event sequence while preserving musical correctness.
@@ -286,6 +294,7 @@ C_transition = (
   + C_technique
   + C_barre
   + C_placement
+  + C_continuity
 ) × M_skill
 ```
 
@@ -335,7 +344,7 @@ For each string that should still be ringing:
 
 ```text
 if previousFret[string] != nextFret[string]:
-  cost += 3.0
+  cost += 1.0
 ```
 
 The comparison uses `absoluteOnsetStep`, while ringing end time is stored as:
@@ -346,7 +355,11 @@ ringingUntil = absoluteOnsetStep + durationSteps
 
 This keeps onset, duration, and sustain in the same coordinate system across measure boundaries.
 
-### 7.4 Technique
+### 7.4 Same-Role String Continuity
+
+Melody and bass assignments retain their previous physical string in the DP hand state. When the same role is present on consecutive events, changing its string adds a soft `4.0` cost per role. This favors simple repeated-string routes such as A4 on string 1 fret 5 followed by E4 on string 1 open, without overriding pitch correctness, fixed-string occupancy, skill limits, or rollback validation. The preference remains soft so a better-positioned or physically required route can still win globally.
+
+### 7.5 Technique
 
 The transition detector can select:
 
@@ -371,7 +384,7 @@ grace-note:      0.10
 
 The detected technique is written into the resolved candidate stored in the trellis, so the backtracked result carries the selected technique.
 
-### 7.5 Open-String Placement
+### 7.6 Open-String Placement
 
 Open strings are explicitly easier than equivalent fretted positions:
 
@@ -383,7 +396,7 @@ open selected note:       0.0
 
 This is a preference, not an absolute rule. Movement, sustain, recurring shape, and playability costs may select a fretted equivalent when it produces a better global path.
 
-### 7.6 Skill Constraints
+### 7.7 Skill Constraints
 
 | Level | Max fret | Max span | Barre | Max jump/beat | Forbidden techniques |
 |---|---:|---:|---|---:|---|
@@ -454,6 +467,8 @@ All values are clamped to at least one grid step where necessary.
 
 Fill-only steps are not independent DP decision events. They remain present as fixed simultaneous occupancy when they share a selected onset, but they do not shorten the preceding melody event by creating phantom rest decisions.
 
+Only an underfull opening source measure is treated as pickup/anacrusis padding. Later sparse measures retain their full grid and render unoccupied steps as explicit rests. The parsed `sourceDurationUnits` is retained for diagnostics, while extraction bounds physical events to the authoritative melody interval and the active measure boundary. This prevents a one-note preparation measure from becoming a synthetic fill window or from leaking its duration into the next measure.
+
 ## 10. Capo Optimization
 
 When `autoCapo` is enabled, `optimizeWithCapo()` evaluates capo positions from 0 through `maxCapo` (default 7):
@@ -479,15 +494,15 @@ B|-------------------------------------------------|-0-----5-----------0--------
 At the first Em attack, string 2 fret 0 is B3, but the authoritative source melody is E4. The corrected line is:
 
 ```text
-B|-------------------------------------------------|-5-----5-----------0-----------------------------|
+B|-------------------------------------------------|-5-----5-----------0-----------------------0-----|
 ```
 
-String 2 fret 5 is E4. The repeated E uses the same physical position, while the independent Em root and fifth remain intact on their own strings.
+String 2 fret 5 is E4. The repeated E uses the same physical position, while the independent Em root and fifth remain intact on their own strings. The continuity preference also keeps the final B on string 2 when that route remains pitch-safe, avoiding an unnecessary move to string 3.
 
 The integration golden asserts the exact corrected ABC:
 
 ```abc
-[!2!e!3!G!6!E,] !2!e !3!G !2!B4 !3!B
+[!2!e!3!G!6!E,] !2!e- [!2!e-!3!G] !2!B3- !2!B !2!B
 ```
 
 The `!N!` decorations are required at render time to force ABCJS to use the selected physical strings.

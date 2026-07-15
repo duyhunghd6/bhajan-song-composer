@@ -1,6 +1,7 @@
 import type { FillDensityMode, FingerstyleGenerationPolicy } from "@/lib/theory/fingerstyle-arranger/fill-opportunities";
 import type { FingerstyleGenerationDiagnosticRun } from "@/lib/theory/fingerstyle-arranger/generation-diagnostics";
 import type { SkillLevel } from "@/lib/theory/fingerstyle-arranger/dp-types";
+import type { FingerstyleArrangementOptimization } from "@/components/composer/useWorkspaceState";
 import type { TimeSliceMeasure } from "@/lib/theory/fingerstyle-arranger/time-slice";
 
 export interface PreviousLineContext {
@@ -17,6 +18,7 @@ export interface GenerateFingerstyleLineInput {
   activeAbc: string;
   skillLevel?: SkillLevel;
   densityMode?: FillDensityMode;
+  arrangementOptimization?: FingerstyleArrangementOptimization;
   previousLineMeasures?: TimeSliceMeasure[];
   nextLineMeasures?: TimeSliceMeasure[];
 }
