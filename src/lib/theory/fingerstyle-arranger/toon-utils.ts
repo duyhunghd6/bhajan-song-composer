@@ -76,7 +76,7 @@ function shouldRenderTablatureStep(pickupDurationUnits: number | undefined, step
   return !pickupDurationUnits || pickupDurationUnits <= 0 || step.melody.state !== "rest";
 }
 
-export function renderAsciiTab(
+export function renderAsciiGuitarTab(
   grid: TimeSliceGridStep[],
   pickupDurationUnits?: number,
 ): string {
@@ -101,7 +101,7 @@ export function renderAsciiTab(
     }
   }
 
-  let output = "## 7. The Final Visual Output\n\n";
+  let output = "## 7. The Final ASCII-GuitarTab Output\n\n";
   for (let s = 1; s <= 6; s++) {
     const stringNum = s as 1|2|3|4|5|6;
     output += `${strings[stringNum].name}|-${strings[stringNum].track.join("-")}-|\n`;
@@ -109,71 +109,46 @@ export function renderAsciiTab(
   return output;
 }
 
-export function renderCombinedAsciiTab(lineMeasures: TimeSliceMeasure[], measuresPerLine = 3): string {
-  if (lineMeasures.length === 0) return "No tablature yet.";
+export function renderCombinedAsciiGuitarTab(lineMeasures: TimeSliceMeasure[]): string {
+  if (lineMeasures.length === 0) return "No ASCII-GuitarTab yet.";
 
-  const chunks: TimeSliceMeasure[][] = [];
-  for (let i = 0; i < lineMeasures.length; i += measuresPerLine) {
-    chunks.push(lineMeasures.slice(i, i + measuresPerLine));
+  const stringNames = { 1: "e", 2: "B", 3: "G", 4: "D", 5: "A", 6: "E" };
+  const stringLines = { 1: "", 2: "", 3: "", 4: "", 5: "", 6: "" };
+
+  for (let s = 1; s <= 6; s++) {
+    stringLines[s as 1|2|3|4|5|6] = `${stringNames[s as 1|2|3|4|5|6]}|`;
   }
 
-  let finalOutput = "";
+  for (const measure of lineMeasures) {
+    const grid = measure.grid;
+    const strings = {
+      1: new Array(grid.length).fill("--"),
+      2: new Array(grid.length).fill("--"),
+      3: new Array(grid.length).fill("--"),
+      4: new Array(grid.length).fill("--"),
+      5: new Array(grid.length).fill("--"),
+      6: new Array(grid.length).fill("--"),
+    };
 
-  chunks.forEach((chunk, chunkIdx) => {
-    // For each chunk, initialize the 6 strings
-    const stringNames = { 1: "e", 2: "B", 3: "G", 4: "D", 5: "A", 6: "E" };
-    const stringLines = { 1: "", 2: "", 3: "", 4: "", 5: "", 6: "" };
-
-    // Initialize each string line with the name and start bar line
-    for (let s = 1; s <= 6; s++) {
-      stringLines[s as 1|2|3|4|5|6] = `${stringNames[s as 1|2|3|4|5|6]}|`;
-    }
-
-    // Append each measure in the chunk
-    chunk.forEach((measure) => {
-      const grid = measure.grid;
-      const strings = {
-        1: new Array(grid.length).fill("--"),
-        2: new Array(grid.length).fill("--"),
-        3: new Array(grid.length).fill("--"),
-        4: new Array(grid.length).fill("--"),
-        5: new Array(grid.length).fill("--"),
-        6: new Array(grid.length).fill("--"),
-      };
-
-      for (let i = 0; i < grid.length; i++) {
-        const step = grid[i];
-        if (shouldRenderTablatureStep(measure.pickupDurationUnits, step) && step.tablature && step.tablature.length > 0) {
-          for (const tab of step.tablature) {
-            if (tab.string >= 1 && tab.string <= 6) {
-              const fretStr = tab.fret.toString();
-              strings[tab.string as 1|2|3|4|5|6][i] = fretStr.padEnd(2, "-");
-            }
+    for (let i = 0; i < grid.length; i++) {
+      const step = grid[i];
+      if (shouldRenderTablatureStep(measure.pickupDurationUnits, step) && step.tablature && step.tablature.length > 0) {
+        for (const tab of step.tablature) {
+          if (tab.string >= 1 && tab.string <= 6) {
+            const fretStr = tab.fret.toString();
+            strings[tab.string as 1|2|3|4|5|6][i] = fretStr.padEnd(2, "-");
           }
         }
       }
-
-      // Add this measure's track to the string lines
-      for (let s = 1; s <= 6; s++) {
-        const stringNum = s as 1|2|3|4|5|6;
-        stringLines[stringNum] += `-${strings[stringNum].join("-")}-|`;
-      }
-    });
-
-    if (chunkIdx > 0) {
-      finalOutput += "\n";
     }
-    // Add the measures header for this chunk
-    const startMeasure = chunk[0].measure;
-    const endMeasure = chunk[chunk.length - 1].measure;
-    finalOutput += `Measures ${startMeasure}–${endMeasure}\n`;
 
     for (let s = 1; s <= 6; s++) {
-      finalOutput += `${stringLines[s as 1|2|3|4|5|6]}\n`;
+      const stringNum = s as 1|2|3|4|5|6;
+      stringLines[stringNum] += `-${strings[stringNum].join("-")}-|`;
     }
-  });
+  }
 
-  return finalOutput;
+  return Array.from({ length: 6 }, (_, index) => stringLines[(index + 1) as 1|2|3|4|5|6]).join("\n");
 }
 
 

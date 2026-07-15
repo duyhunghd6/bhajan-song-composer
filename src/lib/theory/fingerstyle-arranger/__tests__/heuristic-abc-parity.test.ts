@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildAbcDurationContext } from "../../abc-duration";
 import { getKeyAccidentalsFromAbc } from "../../abc-key-signature";
 import { convertTimeSliceMeasureToAbc, type TimeSliceMeasure } from "../time-slice";
-import { findDuplicateTabStrings, projectTabEvents, renderAsciiTab } from "../toon-utils";
+import { findDuplicateTabStrings, projectTabEvents, renderAsciiGuitarTab } from "../toon-utils";
 
 const sourceAbc = "M:4/4\nL:1/8\nK:Em\nE E |";
 
@@ -29,7 +29,7 @@ function makeMeasure(): TimeSliceMeasure {
 }
 
 describe("heuristic physical tab parity", () => {
-  it("uses the same string/fret events for ASCII and forced ABC", () => {
+  it("uses the same string/fret events for ASCII-GuitarTab and forced ABC", () => {
     const measure = makeMeasure();
     const events = projectTabEvents(measure.grid);
     const abc = convertTimeSliceMeasureToAbc(
@@ -42,7 +42,7 @@ describe("heuristic physical tab parity", () => {
     expect(abc).toContain("!1!e");
     expect(abc).toContain("!4!D");
     expect(abc).toContain("!6!E,");
-    expect(renderAsciiTab(measure.grid)).toContain("e|-0");
+    expect(renderAsciiGuitarTab(measure.grid)).toContain("e|-0");
     expect(events.map(event => [event.step, event.string, event.fret])).toEqual([
       [1, 6, 0],
       [1, 4, 0],

@@ -10,8 +10,8 @@ import {
   type TimeSliceGridStep,
   type TimeSliceMeasure,
 } from "../time-slice";
-import { validateGuitarAbcAgainstAsciiTab } from "../abc-ascii-tab-validation";
-import { renderCombinedAsciiTab } from "../toon-utils";
+import { validateGuitarAbcAgainstAsciiGuitarTab } from "../abc-ascii-guitartab-validation";
+import { renderCombinedAsciiGuitarTab } from "../toon-utils";
 
 const GANESHA_ABC = `X:1
 T:Ganesha, Ganesha — Voice-leading Option 1 Sparse Bass
@@ -31,7 +31,7 @@ w: Ga- | ne- sha Ga- ne- * sha Ga- | ne- sha Ga- ne- * sha | Jay jay Shri Ga- | 
 w: | ⬤ | ⬤ * * ● * • * | ⬤ * * ● * • | ⬤ • ● • | ⬤ * ● * |
 [V:Guitar] | [!2!B] z7 | : [!1!e!2!B!3!G!6!E,] [!1!e] [!2!B] [!1!f] [!1!g!6!E,] [!1!f] [!1!e!6!E,] [!2!B] | [!1!e!2!B!3!G!6!E,] [!1!e] [!3!G] [!1!f] [!1!g!6!E,] [!1!f] [!2!e!6!E,] [!2!B] | [!1!b!5!A,]2 [!1!a!5!A,]2 [!1!g!5!A,]2 [!1!a!5!A,]2 | [!2!B!3!G!6!E,] [!2!e] [!3!G] [!2!B]4 [!3!B] |`;
 
-const GANESHA_REPORTED_ASCII = `Measures 1–3
+const GANESHA_REPORTED_ASCII_GUITAR_TAB = `Measures 1–3
 e|-------------------------------------------------|-0-----0-----------2-----3-----2-----0-----------|-0-----0-----------2-----3-----2-----------------|
 B|-0-----------------------------------------------|-0-----------0-----------------------------0-----|-0-----------------------------------5-----0-----|
 G|-------------------------------------------------|-0-----------------------------------------------|-0-----------0-----------------------------------|
@@ -48,7 +48,7 @@ A|-0-----------0-----------0-----------0-----------|----------------------------
 E|-------------------------------------------------|-0-----------------------------------------------|
 `;
 
-const GANESHA_CORRECTED_ASCII = `Measures 1–3
+const GANESHA_CORRECTED_ASCII_GUITAR_TAB = `Measures 1–3
 e|-------------------------------------------------|-0-----0-----------2-----3-----2-----0-----------|-0-----0-----------2-----3-----2-----------------|
 B|-0-----------------------------------------------|-0-----------0-----------------------------0-----|-0-----------------------------------5-----0-----|
 G|-------------------------------------------------|-0-----------------------------------------------|-0-----------0-----------------------------------|
@@ -65,7 +65,7 @@ A|-0-----------0-----------0-----------0-----------|----------------------------
 E|-------------------------------------------------|-0-----------------------------------------------|
 `;
 
-const GANESHA_USER_ASCII = `Measures 1–3
+const GANESHA_USER_ASCII_GUITAR_TAB = `Measures 1–3
 e|-------------------------------------------------|-0-----0-----------2-----3-----2-----0-----------|-0-----0-----------2-----3-----2-----0-----------|
 B|-0-----------------------------------------------|-------------------------------------------0-----|-------------------------------------------------|
 G|-------------------------------------------------|-------------------------------------------------|-------------------------------------------------|
@@ -85,7 +85,7 @@ E|-------------------------------------------------|-0--------------------------
 const STRING_BY_LINE = { e: 1, B: 2, G: 3, D: 4, A: 5, E: 6 } as const;
 const FINGER_BY_STRING = { 1: "a", 2: "m", 3: "i", 4: "p", 5: "p", 6: "p" } as const;
 
-function attachReportedAscii(
+function attachReportedAsciiGuitarTab(
   sourceMeasures: TimeSliceMeasure[],
   ascii: string
 ): TimeSliceMeasure[] {
@@ -139,6 +139,14 @@ function attachReportedAscii(
   }
 
   return measures;
+}
+
+function continuousAsciiGuitarTab(ascii: string): string {
+  const blocks = ascii.trim().split(/\n\s*\n/).map(block => block.split("\n").slice(1));
+  return blocks[0].map((_, index) => blocks.map((block, blockIndex) => {
+    const line = block[index];
+    return blockIndex === 0 ? line : line.slice(2);
+  }).join("")).join("\n");
 }
 
 function makeRegressionMeasure(): TimeSliceMeasure {
@@ -213,22 +221,20 @@ describe("fingerstyle DP integration", () => {
     input.pickupDurationUnits = 1;
     input.grid[4].tablature = [{ string: 3, fret: 4, finger: "i", role: "fill" }];
 
-    expect(renderCombinedAsciiTab([input])).toBe(`Measures 1–1
-e|-------------------------------------------------|
+    expect(renderCombinedAsciiGuitarTab([input])).toBe(`e|-------------------------------------------------|
 B|-------------------------------------------------|
 G|-0-----------------------------------------------|
 D|-------------------------------------------------|
 A|-7-----------------------------------------------|
-E|-0-----------------------------------------------|
-`);
+E|-0-----------------------------------------------|`);
   });
 
-  it("serializes the supplied Ganesha ASCII testcase into matching forced ABC", () => {
+  it("serializes the supplied Ganesha ASCII-GuitarTab testcase into matching forced ABC", () => {
     const source = convertAbcToTimeSliceGrid(
       GANESHA_ABC,
       ["C", "Em", "Em", "Am", "Em"]
     );
-    const measures = attachReportedAscii(source, GANESHA_USER_ASCII);
+    const measures = attachReportedAsciiGuitarTab(source, GANESHA_USER_ASCII_GUITAR_TAB);
     const durationContext = buildAbcDurationContext(GANESHA_ABC);
     const keyAccidentals = getKeyAccidentalsFromAbc(GANESHA_ABC);
     const abc = joinMeasureAbcWithBarlines(
@@ -240,14 +246,14 @@ E|-0-----------------------------------------------|
       )),
       measures,
     );
-    const validation = validateGuitarAbcAgainstAsciiTab({
+    const validation = validateGuitarAbcAgainstAsciiGuitarTab({
       abc,
       measures,
       durationContext,
       keyAccidentals,
     });
 
-    expect(renderCombinedAsciiTab(measures)).toBe(GANESHA_USER_ASCII);
+    expect(renderCombinedAsciiGuitarTab(measures)).toBe(continuousAsciiGuitarTab(GANESHA_USER_ASCII_GUITAR_TAB));
     expect(validation.valid).toBe(true);
     expect(validation.mismatchCount).toBe(0);
     expect(abc).toContain("!2!B");
@@ -260,9 +266,9 @@ E|-0-----------------------------------------------|
       GANESHA_ABC,
       ["C", "Em", "Em", "Am", "Em"]
     );
-    const reported = attachReportedAscii(source, GANESHA_REPORTED_ASCII);
+    const reported = attachReportedAsciiGuitarTab(source, GANESHA_REPORTED_ASCII_GUITAR_TAB);
     for (const measure of reported) measure.style_profile.fill_density = "many";
-    expect(renderCombinedAsciiTab(reported)).toBe(GANESHA_REPORTED_ASCII);
+    expect(renderCombinedAsciiGuitarTab(reported)).toBe(continuousAsciiGuitarTab(GANESHA_REPORTED_ASCII_GUITAR_TAB));
 
     const { measures } = applyDPToTimeSliceMeasures(reported, 120, {
       skillLevel: "intermediate",
@@ -292,7 +298,7 @@ E|-0-----------------------------------------------|
       "[!2!e!3!G!6!E,] !2!e- [!2!e-!3!G] !2!B3- !2!B !2!B"
     );
 
-    const correctedAscii = renderCombinedAsciiTab(measures);
-    expect(correctedAscii).toBe(GANESHA_CORRECTED_ASCII);
+    const correctedAsciiGuitarTab = renderCombinedAsciiGuitarTab(measures);
+    expect(correctedAsciiGuitarTab).toBe(continuousAsciiGuitarTab(GANESHA_CORRECTED_ASCII_GUITAR_TAB));
   });
 });

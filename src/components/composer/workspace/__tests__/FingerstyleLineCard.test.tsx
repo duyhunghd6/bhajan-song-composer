@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 import type { TimeSliceMeasure } from "@/lib/theory/fingerstyle-arranger/time-slice";
-import { renderCombinedAsciiTab } from "@/lib/theory/fingerstyle-arranger/toon-utils";
+import { renderCombinedAsciiGuitarTab } from "@/lib/theory/fingerstyle-arranger/toon-utils";
 import { FingerstyleLineCard } from "../FingerstyleLineCard";
 
 vi.mock("@/components/music-sheet/AbcjsPlaybackController", () => ({
@@ -63,7 +63,7 @@ function makeFinalMeasure(): TimeSliceMeasure {
 }
 
 describe("FingerstyleLineCard", () => {
-  it("passes the exact Resulting ASCII Tablature strings to abcjs", () => {
+  it("passes the exact Resulting ASCII-GuitarTab strings to abcjs", () => {
     const activeAbc = `X:1\nT:Ganesha\nM:4/4\nL:1/8\nK:Em\n| [eBGE,] e G B4 B |`;
     const markup = renderToStaticMarkup(
       <FingerstyleLineCard
@@ -87,8 +87,11 @@ describe("FingerstyleLineCard", () => {
     expect(markup).toContain('data-synth-options="{&quot;voicesOff&quot;:[0],&quot;chordsOff&quot;:true}"');
     expect(markup).toContain("Copy ABCJS ABC");
     expect(markup).toContain("Copy portable ABC");
-    expect(markup).toContain(renderCombinedAsciiTab([makeFinalMeasure()]));
-    expect(markup).toContain('Copy TAB');
+    expect(markup).toContain(renderCombinedAsciiGuitarTab([makeFinalMeasure()]));
+    expect(markup).toContain("overflow-x-auto");
+    expect(markup).toContain("whitespace-pre");
+    expect(markup).toContain('style="font-size:9.333px;white-space:pre;overflow-wrap:normal;word-break:normal"');
+    expect(markup).toContain('Copy ASCII-GuitarTab');
     expect(markup).not.toContain('Copy rendered TAB');
   });
 });

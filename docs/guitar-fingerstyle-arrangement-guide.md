@@ -299,7 +299,7 @@ Only one line can generate at a time on the route. Other line buttons and settin
 Use:
 
 - `Hari Bol` for ordinary 4/4 and cross-line phrase-transfer checks;
-- `Ganesha` for pickup, tie, rest, repeat, DP, ABC, and ASCII regressions.
+- `Ganesha` for pickup, tie, rest, repeat, DP, ABC, and ASCII-GuitarTab regressions.
 
 `data/songs/marathi/jago-kundalini-ma.melody.abc` is currently header-only. The route remains stable, but there are no melody notes, lyrics, or chord events to arrange end to end until song content is authored.
 

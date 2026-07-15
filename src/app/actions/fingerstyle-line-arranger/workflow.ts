@@ -42,11 +42,11 @@ import { applyFingerstyleTablatureToon } from "@/lib/theory/fingerstyle-arranger
 import { midiForStringFret, parseScientificPitch } from "@/lib/theory/guitar-playability";
 import { validateFingerstylePhysics } from "@/lib/theory/fingerstyle-arranger/physics-validation";
 import { analyzeAuthoritativeMelodyPlayability } from "@/lib/theory/fingerstyle-arranger/source-playability";
-import { renderAsciiTab } from "@/lib/theory/fingerstyle-arranger/toon-utils";
+import { renderAsciiGuitarTab } from "@/lib/theory/fingerstyle-arranger/toon-utils";
 import {
-  validateGuitarAbcAgainstAsciiTab,
-  formatAbcAsciiTabValidation,
-} from "@/lib/theory/fingerstyle-arranger/abc-ascii-tab-validation";
+  validateGuitarAbcAgainstAsciiGuitarTab,
+  formatAbcAsciiGuitarTabValidation,
+} from "@/lib/theory/fingerstyle-arranger/abc-ascii-guitartab-validation";
 import { buildAbcDurationContext } from "@/lib/theory/abc-duration";
 import { getKeyAccidentalsFromAbc } from "@/lib/theory/abc-key-signature";
 import {
@@ -584,35 +584,35 @@ export async function runFingerstyleLineWorkflow(
           )),
           acceptedFinalMeasures,
         );
-        const abcAsciiValidation = validateGuitarAbcAgainstAsciiTab({
+        const asciiGuitarTabValidation = validateGuitarAbcAgainstAsciiGuitarTab({
           abc: guitarAbc,
           measures: acceptedFinalMeasures,
           durationContext,
           keyAccidentals,
         });
-        const abcAsciiMessage = formatAbcAsciiTabValidation(abcAsciiValidation);
+        const asciiGuitarTabValidationMessage = formatAbcAsciiGuitarTabValidation(asciiGuitarTabValidation);
         recordWorkflowEvent(
-          abcAsciiValidation.valid ? "abc-ascii-validated" : "abc-ascii-rejected",
+          asciiGuitarTabValidation.valid ? "abc-ascii-guitartab-validated" : "abc-ascii-guitartab-rejected",
           "final-validation",
-          abcAsciiValidation.valid ? "success" : "failed",
-          abcAsciiValidation.valid
-            ? `ABC ↔ ASCII TAB validation passed: ${abcAsciiValidation.checkedMeasures} measure(s), ${abcAsciiValidation.expectedEventCount} event(s), no mismatches.`
-            : `ABC ↔ ASCII TAB validation failed: ${abcAsciiValidation.mismatchCount} mismatch(es).`,
-          abcAsciiValidation,
+          asciiGuitarTabValidation.valid ? "success" : "failed",
+          asciiGuitarTabValidation.valid
+            ? `ABC ↔ ASCII-GuitarTab validation passed: ${asciiGuitarTabValidation.checkedMeasures} measure(s), ${asciiGuitarTabValidation.expectedEventCount} event(s), no mismatches.`
+            : `ABC ↔ ASCII-GuitarTab validation failed: ${asciiGuitarTabValidation.mismatchCount} mismatch(es).`,
+          asciiGuitarTabValidation,
         );
-        if (!abcAsciiValidation.valid) {
+        if (!asciiGuitarTabValidation.valid) {
           return {
             valid: false,
-            message: abcAsciiMessage,
-            toolResult: { valid: false, message: abcAsciiMessage },
+            message: asciiGuitarTabValidationMessage,
+            toolResult: { valid: false, message: asciiGuitarTabValidationMessage },
           };
         }
 
         for (const measure of acceptedFinalMeasures) {
-          const tab = renderAsciiTab(measure.grid, measure.pickupDurationUnits);
-          if (tab) logs.push(`\n## Measure ${measure.measure} — ASCII Tab\n\n${tab}`);
+          const asciiGuitarTab = renderAsciiGuitarTab(measure.grid, measure.pickupDurationUnits);
+          if (asciiGuitarTab) logs.push(`\n## Measure ${measure.measure} — ASCII-GuitarTab\n\n${asciiGuitarTab}`);
         }
-        logs.push(`\n## ABC ↔ ASCII TAB Validation\n\n${abcAsciiMessage}`);
+        logs.push(`\n## ABC ↔ ASCII-GuitarTab Validation\n\n${asciiGuitarTabValidationMessage}`);
         const completedFillSummary = fillSummary("passed");
         recordWorkflowEvent("final-merge-validated", "final-validation", "success", "Server reconstruction and whole-line validation passed.", completedFillSummary);
         finalOutput = { success: true, measures: acceptedFinalMeasures, logs, fillSummary: completedFillSummary };

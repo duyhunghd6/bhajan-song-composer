@@ -56,8 +56,8 @@ export interface FingerstyleWorkflowDiagnosticEvent
     | "composition-rejected"
     | "final-merge-validated"
     | "final-merge-rejected"
-    | "abc-ascii-validated"
-    | "abc-ascii-rejected";
+    | "abc-ascii-guitartab-validated"
+    | "abc-ascii-guitartab-rejected";
   payloadPreview?: unknown;
 }
 

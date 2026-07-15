@@ -22,7 +22,7 @@ type TabEvent = {
   attack: boolean;
 };
 
-export interface AbcAsciiTabMismatch {
+export interface AbcAsciiGuitarTabMismatch {
   measure?: number;
   step?: number;
   string?: GuitarStringNumber;
@@ -40,13 +40,13 @@ export interface AbcAsciiTabMismatch {
   message: string;
 }
 
-export interface AbcAsciiTabValidationResult {
+export interface AbcAsciiGuitarTabValidationResult {
   valid: boolean;
   checkedMeasures: number;
   expectedEventCount: number;
   actualEventCount: number;
   mismatchCount: number;
-  mismatches: AbcAsciiTabMismatch[];
+  mismatches: AbcAsciiGuitarTabMismatch[];
   warnings: string[];
 }
 
@@ -58,8 +58,8 @@ interface ParsedNote {
 }
 
 function pushMismatch(
-  result: AbcAsciiTabValidationResult,
-  mismatch: AbcAsciiTabMismatch,
+  result: AbcAsciiGuitarTabValidationResult,
+  mismatch: AbcAsciiGuitarTabMismatch,
 ): void {
   result.mismatchCount += 1;
   if (result.mismatches.length < MAX_MISMATCHES) result.mismatches.push(mismatch);
@@ -136,7 +136,7 @@ function parseMeasure(
   measure: number,
   context: AbcDurationContext,
   keyAccidentals: AbcKeyAccidentalMap | undefined,
-  result: AbcAsciiTabValidationResult,
+  result: AbcAsciiGuitarTabValidationResult,
   tieState: Map<GuitarStringNumber, { midi: number; fret: number }>,
 ): TabEvent[] {
   const events: TabEvent[] = [];
@@ -321,13 +321,13 @@ function mergeTiedEvents(events: TabEvent[]): TabEvent[] {
   return merged;
 }
 
-export function validateGuitarAbcAgainstAsciiTab(input: {
+export function validateGuitarAbcAgainstAsciiGuitarTab(input: {
   abc: string;
   measures: readonly TimeSliceMeasure[];
   durationContext: AbcDurationContext;
   keyAccidentals?: AbcKeyAccidentalMap;
-}): AbcAsciiTabValidationResult {
-  const result: AbcAsciiTabValidationResult = {
+}): AbcAsciiGuitarTabValidationResult {
+  const result: AbcAsciiGuitarTabValidationResult = {
     valid: true,
     checkedMeasures: input.measures.length,
     expectedEventCount: 0,
@@ -398,7 +398,7 @@ function parseMeasureDuration(segment: string, context: AbcDurationContext): num
   return total;
 }
 
-export function formatAbcAsciiTabValidation(result: AbcAsciiTabValidationResult): string {
+export function formatAbcAsciiGuitarTabValidation(result: AbcAsciiGuitarTabValidationResult): string {
   const header = `[${result.valid ? "OK" : "XX"}] measures=${result.checkedMeasures} expected-events=${result.expectedEventCount} actual-events=${result.actualEventCount} mismatches=${result.mismatchCount}`;
   const details = result.mismatches.slice(0, 8).map(mismatch => `- ${mismatch.message}`);
   return [header, ...details].join("\n");

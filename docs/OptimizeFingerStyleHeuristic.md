@@ -17,7 +17,7 @@ LLM foundation payload
   → paginate and select fill opportunities
   → compose and merge accepted fills
   → final physical validation
-  → forced-string ABC + ASCII output
+  → forced-string ABC + ASCII-GuitarTab output
 ```
 
 The heuristic implementation is local to `fingerstyle-arranger/heuristic-time-slice.ts`. It does not call the DP optimizer.
@@ -61,13 +61,13 @@ Both optimization modes share these contracts:
 5. Validate string/fret MIDI equality after every physical choice.
 6. Keep discretionary frets, spans, and techniques within the selected skill profile.
 7. Apply changes to a deep copy and retain safe unresolved/fallback behavior.
-8. Render ASCII and ABC from the same physical `string`/`fret` events.
+8. Render ASCII-GuitarTab and ABC from the same physical `string`/`fret` events.
 
 A failed foundation or unresolved required event is rejected before the fill stages are allowed to proceed.
 
-## 4. ABCJS and ASCII agreement
+## 4. ABCJS and ASCII-GuitarTab agreement
 
-`TimeSliceMeasure.tablature` is the canonical physical representation. The ASCII renderer writes its string/fret cells directly from this grid. The time-slice ABC renderer converts each same grid event through `scientificPitchForStringFret()` and emits a forced decoration when requested:
+`TimeSliceMeasure.tablature` is the canonical physical representation. The ASCII-GuitarTab renderer writes its string/fret cells directly from this grid. The time-slice ABC renderer converts each same grid event through `scientificPitchForStringFret()` and emits a forced decoration when requested:
 
 ```abc
 [!1!e!3!G!6!E,]
@@ -75,7 +75,7 @@ A failed foundation or unresolved required event is rejected before the fill sta
 
 The `treble-8` guitar voice uses concert-pitch ABC. abcjs applies its internal clef transpose during tablature calculation; the heuristic must not add an octave in the physical-to-ABC conversion. Key signatures use explicit naturals when a physical natural would otherwise inherit a sharp or flat.
 
-At the render boundary, `ensureGuitarStringForcing()` and `prepareGuitarStringForcingForAbcjs()` protect raw or single-note output by preserving `!N!` assignments and wrapping forced notes when abcjs requires a chord event. TAB copied from the rendered SVG is therefore expected to describe the same physical events as the algorithm-generated ASCII view, not merely the same sounding pitches.
+At the render boundary, `ensureGuitarStringForcing()` and `prepareGuitarStringForcingForAbcjs()` protect raw or single-note output by preserving `!N!` assignments and wrapping forced notes when abcjs requires a chord event. TAB copied from the rendered SVG is therefore expected to describe the same physical events as the algorithm-generated ASCII-GuitarTab view, not merely the same sounding pitches.
 
 ## 5. Diagnostics and determinism
 
@@ -91,7 +91,7 @@ The heuristic commits local decisions in musical order:
 melody → chord shape → bass/support → fills
 ```
 
-It is fast, explainable, and suitable as the default. DP evaluates a trellis over complete event sequences and can trade local choices against future movement, sustain, technique, and recurring-grip costs. Both modes are required to preserve the same pitch, occupancy, skill, rollback, ABC, and ASCII invariants.
+It is fast, explainable, and suitable as the default. DP evaluates a trellis over complete event sequences and can trade local choices against future movement, sustain, technique, and recurring-grip costs. Both modes are required to preserve the same pitch, occupancy, skill, rollback, ABC, and ASCII-GuitarTab invariants.
 
 ## 7. Verification anchors
 
@@ -101,7 +101,7 @@ Regression coverage should retain the Ganesha final-measure fixture and assert:
 - independent root/fifth preservation;
 - unique simultaneous physical strings;
 - exact forced-string ABC;
-- exact ASCII tablature;
+- exact ASCII-GuitarTab;
 - duplicate pitches on distinct strings;
 - open/multi-digit frets, rests, ties, naturals, and pickup boundaries;
 - stable behavior when switching between Heuristic and Dynamic Programming.

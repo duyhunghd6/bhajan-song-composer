@@ -71,7 +71,7 @@ It accounts for:
 | `fingerstyle-arranger/diagnostic-plaintext.ts` | Dependency-free ASCII report for human and AI inspection |
 | `fingerstyle-arranger/physics-validation.ts` | Detailed and compatibility post-optimization physical validation |
 | `fingerstyle-arranger/time-slice.ts` | ABC/time-slice conversion and forced-string ABC rendering |
-| `fingerstyle-arranger/toon-utils.ts` | ASCII tablature rendering used by golden regressions |
+| `fingerstyle-arranger/toon-utils.ts` | ASCII-GuitarTab rendering used by golden regressions |
 
 The existing public fingerstyle entrypoints remain stable. DP behavior is contained in nearby `fingerstyle-arranger/` modules.
 
@@ -483,7 +483,7 @@ The result preserves the selected physical capo number in `DPResult.capo`.
 
 ## 11. Ganesha Regression
 
-The regression fixture contains the complete supplied ABC and ASCII tablature.
+The regression fixture contains the complete supplied ABC and ASCII-GuitarTab.
 
 The original final-measure B-string line was:
 
@@ -539,10 +539,10 @@ The `!N!` decorations are required at render time to force ABCJS to use the sele
 2. Preservation of independent root and fifth events.
 3. Unique simultaneous physical strings.
 4. The complete supplied Ganesha ABC fixture.
-5. The complete reported ASCII fixture.
+5. The complete reported ASCII-GuitarTab fixture.
 6. Melody MIDI equality for every source attack after DP.
 7. Exact forced-string ABC for the corrected final measure.
-8. Exact complete corrected ASCII tablature.
+8. Exact complete corrected ASCII-GuitarTab.
 
 `diagnostic-plaintext.test.ts` exercises the dependency-free report against a real DP run and asserts the LLM timeline, complete input/configuration sections, candidate funnels, both Viterbi passes, ASCII trellis, selected cost components, and writeback/validation sections. `fingerstyle-diagnostic-persistence.test.ts` covers source mismatch rejection, per-line eviction, safe plaintext retention, removal of LLM payload previews, and quota-failure isolation. `fingerstyle-line-arranger.test.ts` verifies the shared LLM/DP run, plaintext compatibility log, and append-only `run-input → events → run-complete` persistence order.
 

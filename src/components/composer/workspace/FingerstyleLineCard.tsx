@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import AbcjsPlaybackController from "@/components/music-sheet/AbcjsPlaybackController";
 import { prepareAbcjsRenderInput } from "@/components/music-sheet/abcjs-playback/render-input";
 import { convertTimeSliceMeasureToAbc, convertAbcToTimeSliceGrid, joinMeasureAbcWithBarlines, type TimeSliceMeasure } from "@/lib/theory/fingerstyle-arranger/time-slice";
-import { formatLineAsToon, parseToonToLine, renderCombinedAsciiTab } from "@/lib/theory/fingerstyle-arranger/toon-utils";
+import { formatLineAsToon, parseToonToLine, renderCombinedAsciiGuitarTab } from "@/lib/theory/fingerstyle-arranger/toon-utils";
 import { buildAbcDurationContext } from "@/lib/theory/abc-duration";
 import { getKeyAccidentalsFromAbc } from "@/lib/theory/abc-key-signature";
 import { COMPOSER_PREVIEW_RENDER_OPTIONS } from "./preview";
@@ -16,9 +16,9 @@ import type {
 import type { FingerstyleGenerationSettings } from "../useWorkspaceState";
 import type { FingerstyleGenerationDiagnosticRun } from "@/lib/theory/fingerstyle-arranger/generation-diagnostics";
 import {
-  formatAbcAsciiTabValidation,
-  type AbcAsciiTabValidationResult,
-} from "@/lib/theory/fingerstyle-arranger/abc-ascii-tab-validation";
+  formatAbcAsciiGuitarTabValidation,
+  type AbcAsciiGuitarTabValidationResult,
+} from "@/lib/theory/fingerstyle-arranger/abc-ascii-guitartab-validation";
 import { analyzeAuthoritativeMelodyPlayability } from "@/lib/theory/fingerstyle-arranger/source-playability";
 import {
   persistFingerstyleDiagnosticRun,
@@ -195,18 +195,18 @@ export function FingerstyleLineCard({
     }
   }, [lineMeasures, durationContext, activeAbc, accompLayerVisibility, parsedMeasures]);
 
-  // Combined ASCII tab for all measures in the line
-  const combinedAsciiTab = useMemo(() => {
-    return renderCombinedAsciiTab(lineMeasures);
+  // Combined ASCII-GuitarTab for all measures in the line
+  const combinedAsciiGuitarTab = useMemo(() => {
+    return renderCombinedAsciiGuitarTab(lineMeasures);
   }, [lineMeasures]);
 
-  const abcAsciiValidationLog = useMemo(() => {
+  const asciiGuitarTabValidationLog = useMemo(() => {
     const event = diagnosticRun?.events.findLast(candidate => (
       candidate.source === "workflow"
-      && (candidate.kind === "abc-ascii-validated" || candidate.kind === "abc-ascii-rejected")
+      && (candidate.kind === "abc-ascii-guitartab-validated" || candidate.kind === "abc-ascii-guitartab-rejected")
     ));
     if (!event || event.source !== "workflow" || !event.payloadPreview) return null;
-    return formatAbcAsciiTabValidation(event.payloadPreview as AbcAsciiTabValidationResult);
+    return formatAbcAsciiGuitarTabValidation(event.payloadPreview as AbcAsciiGuitarTabValidationResult);
   }, [diagnosticRun]);
 
   // ── Handlers ─────────────────────────────────────────────────────────
@@ -375,9 +375,9 @@ export function FingerstyleLineCard({
                 {logs.map((log, i) => (
                   <div key={i} className="mb-2 border-b border-zinc-800 pb-1 last:border-0 whitespace-pre-wrap">{log}</div>
                 ))}
-                {combinedAsciiTab && (
+                {combinedAsciiGuitarTab && (
                   <div className="mb-2 border-b border-zinc-800 pb-1 last:border-0 whitespace-pre-wrap">
-                    {`\n## ASCII Tab\n\n${combinedAsciiTab}`}
+                    {`\n## ASCII-GuitarTab\n\n${combinedAsciiGuitarTab}`}
                   </div>
                 )}
                 {lineAbcResult && (
@@ -385,9 +385,9 @@ export function FingerstyleLineCard({
                     {`\n## ABCJS Render Input\n\n\`\`\`abc\n${abcjsRenderInput}\n\`\`\``}
                   </div>
                 )}
-                {abcAsciiValidationLog && !logs.some(log => log.includes("## ABC ↔ ASCII TAB Validation")) && (
+                {asciiGuitarTabValidationLog && !logs.some(log => log.includes("## ABC ↔ ASCII-GuitarTab Validation")) && (
                   <div className="mb-2 border-b border-zinc-800 pb-1 last:border-0 whitespace-pre-wrap">
-                    {`\n## ABC ↔ ASCII TAB Validation\n\n${abcAsciiValidationLog}`}
+                    {`\n## ABC ↔ ASCII-GuitarTab Validation\n\n${asciiGuitarTabValidationLog}`}
                   </div>
                 )}
               </div>
@@ -396,7 +396,7 @@ export function FingerstyleLineCard({
         </div>
 
         {/* ── Right: ABC + ASCII Preview ── */}
-        <div className="flex flex-col lg:col-span-7">
+        <div className="flex min-w-0 flex-col lg:col-span-7">
           <div className="flex items-center justify-between mb-1">
             <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
               Resulting ABC Tablature — Line {lineIndex + 1}
@@ -409,7 +409,7 @@ export function FingerstyleLineCard({
                 <CopyButton label="Copy portable ABC" text={cleanAbcForExport(lineAbcResult)} />
               )}
               {lineAbcResult && (
-                <CopyTabButton label="Copy TAB" text={combinedAsciiTab} />
+                <CopyAsciiGuitarTabButton label="Copy ASCII-GuitarTab" text={combinedAsciiGuitarTab} />
               )}
             </div>
           </div>
@@ -436,13 +436,23 @@ export function FingerstyleLineCard({
           <div className="mt-4">
             <div className="flex items-center justify-between mb-1">
               <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                Resulting ASCII Tablature
+                Resulting ASCII-GuitarTab
               </label>
-              {combinedAsciiTab && <CopyButton label="Copy" text={combinedAsciiTab} />}
+              {combinedAsciiGuitarTab && <CopyButton label="Copy" text={combinedAsciiGuitarTab} />}
             </div>
-            <pre className="border border-zinc-200 dark:border-zinc-800 rounded-xl bg-zinc-50 dark:bg-zinc-900/50 p-3 overflow-x-auto text-xs font-mono text-zinc-700 dark:text-zinc-300">
-              {combinedAsciiTab || "No tablature yet."}
-            </pre>
+            <div className="min-w-0 max-w-full overflow-x-auto">
+              <pre
+                className="w-max min-w-full whitespace-pre break-normal rounded-xl border border-zinc-200 bg-zinc-50 p-3 font-mono leading-4 text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-300"
+                style={{
+                  fontSize: "9.333px",
+                  whiteSpace: "pre",
+                  overflowWrap: "normal",
+                  wordBreak: "normal",
+                }}
+              >
+                {combinedAsciiGuitarTab || "No ASCII-GuitarTab yet."}
+              </pre>
+            </div>
           </div>
         </div>
       </div>
@@ -450,7 +460,7 @@ export function FingerstyleLineCard({
   );
 }
 
-export function CopyTabButton({ label, text }: { label: string; text: string }) {
+export function CopyAsciiGuitarTabButton({ label, text }: { label: string; text: string }) {
   const [copied, setCopied] = useState(false);
   const handleCopy = useCallback(() => {
     navigator.clipboard.writeText(text);

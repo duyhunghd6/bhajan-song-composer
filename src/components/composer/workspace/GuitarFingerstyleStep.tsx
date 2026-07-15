@@ -15,7 +15,7 @@ import { buildAccompanimentAbc } from "@/lib/theory/accompaniment-abc";
 import { fingerprintAccompanimentSource, getSelectedWorkflowOption } from "@/lib/theory/accompaniment-workflow";
 import { getComposerFingerstyleMeasuresStorageKey } from "./storage";
 import { formatFingerstyleTablatureAsToon } from "@/lib/theory/fingerstyle-arranger/llm-codec";
-import { formatLineAsToon, renderCombinedAsciiTab } from "@/lib/theory/fingerstyle-arranger/toon-utils";
+import { formatLineAsToon, renderCombinedAsciiGuitarTab } from "@/lib/theory/fingerstyle-arranger/toon-utils";
 import type { PreviousLineContext } from "@/app/actions/fingerstyle-line-arranger";
 import {
   buildGeneratedGuitarAbc,
@@ -207,8 +207,8 @@ export function GuitarFingerstyleStep({
     () => prepareAbcjsRenderInput({ abcString: masterAbc, tablatureEnabled: masterTabEnabled }),
     [masterAbc, masterTabEnabled],
   );
-  const masterAsciiTab = useMemo(
-    () => renderCombinedAsciiTab(measures),
+  const masterAsciiGuitarTab = useMemo(
+    () => renderCombinedAsciiGuitarTab(measures),
     [measures],
   );
   const generationSettings = ws.fingerstyleGenerationSettings;
@@ -302,7 +302,7 @@ export function GuitarFingerstyleStep({
                 <CopyButton label="Copy portable ABC" text={cleanAbcForExport(masterAbc)} />
               )}
               {masterAbc && (
-                <CopyTabButton label="Copy TAB" text={masterAsciiTab} />
+                <CopyAsciiGuitarTabButton label="Copy ASCII-GuitarTab" text={masterAsciiGuitarTab} />
               )}
             </div>
           </div>
@@ -381,7 +381,7 @@ function CopyButton({ label, text }: { label: string; text: string }) {
   );
 }
 
-export function CopyTabButton({ label, text }: { label: string; text: string }) {
+export function CopyAsciiGuitarTabButton({ label, text }: { label: string; text: string }) {
   const [copied, setCopied] = useState(false);
   const handleCopy = useCallback(() => {
     navigator.clipboard.writeText(text);

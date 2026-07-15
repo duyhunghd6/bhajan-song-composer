@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import { buildAbcDurationContext } from "../../abc-duration";
 import { getKeyAccidentalsFromAbc } from "../../abc-key-signature";
 import {
-  validateGuitarAbcAgainstAsciiTab,
-  formatAbcAsciiTabValidation,
-} from "../abc-ascii-tab-validation";
+  validateGuitarAbcAgainstAsciiGuitarTab,
+  formatAbcAsciiGuitarTabValidation,
+} from "../abc-ascii-guitartab-validation";
 import { convertTimeSliceMeasureToAbc } from "../time-slice";
 import type { TimeSliceMeasure } from "../time-slice";
 
@@ -77,7 +77,7 @@ function singleLongFillMeasure(): TimeSliceMeasure {
 
 function validate(abcBody: string, measure = makeMeasure()) {
   const abc = `${BASE_ABC}${abcBody}`;
-  return validateGuitarAbcAgainstAsciiTab({
+  return validateGuitarAbcAgainstAsciiGuitarTab({
     abc,
     measures: [measure],
     durationContext: buildAbcDurationContext(BASE_ABC),
@@ -85,7 +85,7 @@ function validate(abcBody: string, measure = makeMeasure()) {
   });
 }
 
-describe("ABC ↔ ASCII guitar TAB validation", () => {
+describe("ABC ↔ ASCII-GuitarTab validation", () => {
   it("accepts canonical time-slice ABC with forced strings and rests", () => {
     const measure = makeMeasure();
     const body = convertTimeSliceMeasureToAbc(
@@ -150,7 +150,7 @@ describe("ABC ↔ ASCII guitar TAB validation", () => {
 
   it("formats a bounded human-readable diagnostic", () => {
     const result = validate("[!6!E,!1!e]2 !3!B2 z4");
-    const formatted = formatAbcAsciiTabValidation(result);
+    const formatted = formatAbcAsciiGuitarTabValidation(result);
 
     expect(formatted).toContain("measures=1");
     expect(formatted).toContain("mismatches=");

@@ -27,9 +27,7 @@ V:Guitar clef=treble-8 name="Guitar" stem=down
 w: Ke-sha-va Ma- _ dha-va
 w: ⬤ * * ● * • * |
 [V:Guitar] | [!1!b!2!B!3!G!4!D!5!D!6!B,] !1!b !4!D !1!b/2 !3!G/2 [!1!b!6!B,] !1!d'/2 !2!B/2 [!1!c'!4!D] !1!b/2 !3!G/2 |`,
-    expectedTab: `## 7. The Final Visual Output
-
-e|-7-----7-----------7-----7-----10----8-----7-----|
+    expectedAsciiGuitarTab: `e|-7-----7-----------7-----7-----10----8-----7-----|
 B|-0--------------------------------0--------------|
 G|-0--------------------0-----------------------0--|
 D|-0-----------0-----------------------0-----------|
@@ -136,11 +134,11 @@ export default function TestTabPage() {
                   renderOptions={getTestTabRenderOptions(ex.abc, true)}
                 />
               </div>
-              {ex.expectedTab && (
+              {ex.expectedAsciiGuitarTab && (
                 <div className="mt-4 p-4 bg-zinc-950 rounded-xl border border-zinc-800">
                   <h4 className="text-sm font-bold text-zinc-300 mb-2 font-mono">Expected Custom Fingerstyle Output (to Compare):</h4>
                   <pre className="text-xs text-emerald-400 font-mono overflow-x-auto whitespace-pre p-2 bg-zinc-900 rounded-lg">
-                    {ex.expectedTab}
+                    {ex.expectedAsciiGuitarTab}
                   </pre>
                 </div>
               )}

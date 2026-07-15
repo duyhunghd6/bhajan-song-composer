@@ -151,9 +151,9 @@ describe("generateAIFingerstyleLine diagnostics", () => {
     expect(result.diagnostics?.events.some(event => event.source === "dp")).toBe(true);
     expect(result.diagnostics?.events.some(event => event.source === "workflow")).toBe(true);
     expect(result.diagnostics?.events.some(event => (
-      event.source === "workflow" && event.kind === "abc-ascii-validated"
+      event.source === "workflow" && event.kind === "abc-ascii-guitartab-validated"
     ))).toBe(true);
-    expect(result.logs.join("\n")).toContain("## ABC ↔ ASCII TAB Validation");
+    expect(result.logs.join("\n")).toContain("## ABC ↔ ASCII-GuitarTab Validation");
     expect(result.fillSummary).toMatchObject({
       bpm: 90,
       policy: { skillLevel: "beginner", resolvedDensity: "few" },
