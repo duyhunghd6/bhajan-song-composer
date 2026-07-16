@@ -42,7 +42,7 @@ export interface TimeSliceGridStep {
     string: GuitarStringNumber;
     fret: number;
     finger: "p" | "i" | "m" | "a" | null;
-    role: "bass" | "melody" | "fill" | "harmony" | "root" | "fifth";
+    role: "bass" | "melody" | "fill" | "harmony" | "root" | "fifth" | "imported";
     /** Number of quantized grid steps sounded; omitted events retain legacy attack-to-next-attack rendering. */
     durationSteps?: number;
     /** Deterministic fill provenance populated only for accepted composed fills. */
@@ -70,6 +70,8 @@ export interface TimeSliceMeasure {
   /** Repeat barline metadata (|:, :|, volta brackets) from the source ABC. */
   barline?: AbcBarlineInfo;
   visualTablature?: string;
+  /** Normalized Guitar phrase boundaries imported from ABC slur parentheses. */
+  guitarSlurs?: Array<{ startStep: number; endStep: number }>;
   source_abc?: {
     melody: string;
     lyric: string;

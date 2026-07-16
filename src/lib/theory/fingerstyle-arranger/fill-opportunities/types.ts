@@ -6,7 +6,7 @@ export const FILL_OPPORTUNITY_FORMAT_VERSION = "fill-opportunities:v1" as const;
 export const FILL_SELECTION_FORMAT_VERSION = "fill-selection:v1" as const;
 export const FILL_COMPOSITION_FORMAT_VERSION = "fills:v1" as const;
 
-export type FillDensityMode = "auto" | "few" | "normal" | "many";
+export type FillDensityMode = "auto" | "none" | "few" | "normal" | "many";
 export type ResolvedFillDensity = "off" | "few" | "normal" | "many";
 
 export interface FingerstyleGenerationPolicy {

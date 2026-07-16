@@ -1,10 +1,9 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import AbcjsPlaybackController from "@/components/music-sheet/AbcjsPlaybackController";
 import { prepareAbcjsRenderInput } from "@/components/music-sheet/abcjs-playback/render-input";
-import { convertTimeSliceMeasureToAbc, convertAbcToTimeSliceGrid, joinMeasureAbcWithBarlines, type TimeSliceMeasure } from "@/lib/theory/fingerstyle-arranger/time-slice";
+import { convertAbcToTimeSliceGrid, type TimeSliceMeasure } from "@/lib/theory/fingerstyle-arranger/time-slice";
+import { buildGeneratedGuitarAbc } from "@/lib/theory/fingerstyle-arranger/guitar-abc-output";
 import { renderCombinedAsciiGuitarTab } from "@/lib/theory/fingerstyle-arranger/toon-utils";
-import { buildAbcDurationContext } from "@/lib/theory/abc-duration";
-import { getKeyAccidentalsFromAbc } from "@/lib/theory/abc-key-signature";
 import { COMPOSER_PREVIEW_RENDER_OPTIONS } from "./preview";
 import { buildAccompanimentAbc } from "@/lib/theory/accompaniment-abc";
 import { applyAbcLayerVisibility, isAbcLayerVisible, ABC_LAYER_IDS, cleanAbcForExport } from "@/lib/theory/abc-layer-visibility";
@@ -25,6 +24,7 @@ import {
   restoreFingerstyleDiagnosticRuns,
 } from "./fingerstyle-diagnostic-persistence";
 import { getComposerFingerstyleDiagnosticsStorageKey } from "./storage";
+import type { FingerstyleLineGenerationClaim } from "./fingerstyle-line-measures";
 
 interface FingerstyleLineCardProps {
   songSlug: string;
@@ -39,12 +39,11 @@ interface FingerstyleLineCardProps {
   generationSettings: FingerstyleGenerationSettings;
   previousLineMeasures?: TimeSliceMeasure[];
   nextLineMeasures?: TimeSliceMeasure[];
-  generationLock?: {
-    isLocked: boolean;
-    activeLineIndex: number | null;
-    claim: (lineIndex: number) => { token: string; revision: number } | null;
-    release: (token: string) => void;
-    apply: (lineIndex: number, token: string, revision: number, measures: TimeSliceMeasure[]) => boolean;
+  generationLock: {
+    isGenerating: boolean;
+    claim: (lineIndex: number) => FingerstyleLineGenerationClaim | null;
+    release: (claim: FingerstyleLineGenerationClaim) => void;
+    apply: (claim: FingerstyleLineGenerationClaim, measures: TimeSliceMeasure[]) => boolean;
   };
 }
 
@@ -93,8 +92,7 @@ export function FingerstyleLineCard({
 }: FingerstyleLineCardProps) {
   const measureNums = lineMeasures.map(m => m.measure);
   const [error, setError] = useState<string | null>(null);
-  const isGenerating = generationLock?.activeLineIndex === lineIndex;
-  const generationLocked = generationLock?.isLocked ?? false;
+  const isGenerating = generationLock.isGenerating;
   const [logs, setLogs] = useState<string[]>([]);
   const [fillSummary, setFillSummary] = useState<FingerstyleFillGenerationSummary | null>(null);
   const [diagnosticRun, setDiagnosticRun] = useState<FingerstyleGenerationDiagnosticRun | null>(null);
@@ -106,6 +104,7 @@ export function FingerstyleLineCard({
     () => analyzeAuthoritativeMelodyPlayability(lineMeasures, generationSettings.skillLevel),
     [generationSettings.skillLevel, lineMeasures],
   );
+  const isGenerateDisabled = isGenerating || !melodyPlayability.playable;
 
   useEffect(() => {
     let restored: FingerstyleGenerationDiagnosticRun[] = [];
@@ -133,8 +132,6 @@ export function FingerstyleLineCard({
     );
   }, [diagnosticStorageKey, lineIndex, sourceFingerprint]);
 
-  const durationContext = useMemo(() => buildAbcDurationContext(activeAbc), [activeAbc]);
-
   const parsedMeasures = useMemo(() => {
     try { return convertAbcToTimeSliceGrid(activeAbc, []); }
     catch { return []; }
@@ -143,17 +140,9 @@ export function FingerstyleLineCard({
   // Build the ABC preview for the whole line
   const lineAbcResult = useMemo(() => {
     try {
-      const keyAccidentals = getKeyAccidentalsFromAbc(activeAbc);
-      const lineGuitarAbc = joinMeasureAbcWithBarlines(
-        lineMeasures.map(m => convertTimeSliceMeasureToAbc(m, durationContext, keyAccidentals, true)),
-        lineMeasures,
-      );
-
-      const generatedGuitar = [
-        'V:Guitar clef=treble-8 name="Fingerstyle"',
-        "%%MIDI program 24",
-        `| ${lineGuitarAbc} |`
-      ].join("\n");
+      // Use the same canonical TimeGrid → Guitar ABC projection as the full workspace
+      // and /test-timegrid-to-abcnotation; the card never persists this line-only preview.
+      const generatedGuitar = buildGeneratedGuitarAbc(lineMeasures, workflowAppliedMusicAbc);
 
       // Build a mini base ABC with just this line's melody measures
       const headerLines = activeAbc.split(/\r?\n/).filter(line => line.match(/^[A-Za-z]:/) && !line.startsWith("V:"));
@@ -185,7 +174,6 @@ export function FingerstyleLineCard({
           __chords__: isAbcLayerVisible("ChordProgression", accompLayerVisibility, true),
           __strong_beats__: isAbcLayerVisible("StrongBeats", accompLayerVisibility, true),
         },
-        disablePickupLogic: true,
       });
 
       return applyAbcLayerVisibility(result.abc, accompLayerVisibility);
@@ -193,7 +181,7 @@ export function FingerstyleLineCard({
       console.error(e);
       return "";
     }
-  }, [lineMeasures, durationContext, activeAbc, accompLayerVisibility, parsedMeasures]);
+  }, [lineMeasures, workflowAppliedMusicAbc, activeAbc, accompLayerVisibility, parsedMeasures]);
 
   // Combined ASCII-GuitarTab for all measures in the line
   const combinedAsciiGuitarTab = useMemo(() => {
@@ -212,7 +200,7 @@ export function FingerstyleLineCard({
   // ── Handlers ─────────────────────────────────────────────────────────
 
   const handleGenerate = useCallback(async () => {
-    const generation = generationLock?.claim(lineIndex);
+    const generation = generationLock.claim(lineIndex);
     if (!generation) return;
 
     try {
@@ -243,12 +231,7 @@ export function FingerstyleLineCard({
         });
       }
       if (result.success && result.measures) {
-        const applied = generationLock?.apply(
-          lineIndex,
-          generation.token,
-          generation.revision,
-          result.measures,
-        );
+        const applied = generationLock.apply(generation, result.measures);
         if (!applied) setError("The source changed while this line was generating, so the stale result was not applied.");
       } else {
         setError(result.error || "AI Generation Failed");
@@ -256,7 +239,7 @@ export function FingerstyleLineCard({
     } catch (e) {
       setError(e instanceof Error ? e.message : "AI Generation Failed");
     } finally {
-      generationLock?.release(generation.token);
+      generationLock.release(generation);
     }
   }, [
     songSlug,
@@ -292,7 +275,8 @@ export function FingerstyleLineCard({
         <button
           type="button"
           onClick={handleGenerate}
-          disabled={generationLocked || !melodyPlayability.playable}
+          disabled={isGenerateDisabled}
+          aria-busy={isGenerating}
           className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-indigo-700 flex items-center gap-1.5 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
         >
           <span>✨</span>

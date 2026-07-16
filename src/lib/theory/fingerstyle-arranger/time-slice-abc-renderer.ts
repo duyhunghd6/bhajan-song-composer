@@ -32,7 +32,7 @@ export function scientificPitchToAbc(
   return abcAccidental + abcLetter;
 }
 
-function melodyDurationSteps(measure: TimeSliceMeasure, startIndex: number): number {
+export function melodyDurationSteps(measure: TimeSliceMeasure, startIndex: number): number {
   const sourcePitch = measure.grid[startIndex].melody.pitch;
   let duration = 1;
   for (let index = startIndex + 1; index < measure.grid.length; index++) {
@@ -51,29 +51,24 @@ function activeStepCount(measure: TimeSliceMeasure, stepDurationUnits: number): 
   ));
 }
 
-export function inferLegacyTabDurationSteps(
+export function resolveTabDurationSteps(
   measure: TimeSliceMeasure,
   startIndex: number,
-  string: GuitarStringNumber,
+  tab: NonNullable<TimeSliceGridStep["tablature"]>[number],
   maxSteps: number,
 ): number {
-  for (let index = startIndex + 1; index < maxSteps; index++) {
-    if (measure.grid[index].tablature?.some(tab => tab.string === string)) {
-      return index - startIndex;
-    }
-  }
-  return maxSteps - startIndex;
+  const requestedDuration = tab.durationSteps
+    ?? (tab.role === "melody" && measure.grid[startIndex].melody.state === "attack"
+      ? melodyDurationSteps(measure, startIndex)
+      : 1);
+  return Math.max(1, Math.min(requestedDuration, maxSteps - startIndex));
 }
 
 function collectSoundingEvents(measure: TimeSliceMeasure, maxSteps: number): SoundingEvent[] {
   const events: SoundingEvent[] = [];
   for (let start = 0; start < maxSteps; start++) {
     for (const tab of measure.grid[start].tablature ?? []) {
-      const requestedDuration = tab.durationSteps
-        ?? (tab.role === "melody" && measure.grid[start].melody.state === "attack"
-          ? melodyDurationSteps(measure, start)
-          : inferLegacyTabDurationSteps(measure, start, tab.string, maxSteps));
-      const duration = Math.max(1, Math.min(requestedDuration, maxSteps - start));
+      const duration = resolveTabDurationSteps(measure, start, tab, maxSteps);
       events.push({
         id: `${start}:${tab.string}:${tab.fret}:${tab.role}`,
         start,
@@ -142,9 +137,12 @@ export function renderTimeSliceMeasureToAbc(
       keyAccidentals,
       includeTabStringForcing,
     ));
-    rendered.push(tokens.length === 1
+    const token = tokens.length === 1
       ? `${tokens[0].token}${durationSuffix}${tokens[0].continues ? "-" : ""}`
-      : `[${tokens.map(value => `${value.token}${value.continues ? "-" : ""}`).join("")}]${durationSuffix}`);
+      : `[${tokens.map(value => `${value.token}${value.continues ? "-" : ""}`).join("")}]${durationSuffix}`;
+    const opens = measure.guitarSlurs?.filter(slur => slur.startStep - 1 === start).length ?? 0;
+    const closes = measure.guitarSlurs?.filter(slur => slur.endStep === end).length ?? 0;
+    rendered.push(`${"(".repeat(opens)}${token}${")".repeat(closes)}`);
   }
 
   return rendered.join(" ");

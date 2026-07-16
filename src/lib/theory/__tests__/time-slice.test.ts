@@ -245,7 +245,7 @@ w: ⬤ * ● *`;
     }
 
     it("keeps source ABC plain until string forcing is explicitly requested", () => {
-      const measure = measureWithTablature([{ string: 1, fret: 0, finger: "a", role: "harmony" }]);
+      const measure = measureWithTablature([{ string: 1, fret: 0, finger: "a", role: "harmony", durationSteps: 16 }]);
 
       expect(convertTimeSliceMeasureToAbc(measure, context, keyAccidentals, false)).toBe("e8");
       expect(convertTimeSliceMeasureToAbc(measure, context, keyAccidentals, true)).toBe("!1!e8");
@@ -253,15 +253,15 @@ w: ⬤ * ● *`;
 
     it("preserves duplicate pitches assigned to different strings", () => {
       const measure = measureWithTablature([
-        { string: 5, fret: 5, finger: "p", role: "bass" },
-        { string: 4, fret: 0, finger: "i", role: "harmony" },
+        { string: 5, fret: 5, finger: "p", role: "bass", durationSteps: 16 },
+        { string: 4, fret: 0, finger: "i", role: "harmony", durationSteps: 16 },
       ]);
 
       expect(convertTimeSliceMeasureToAbc(measure, context, keyAccidentals, true)).toBe("[!4!D!5!D]8");
     });
 
     it("emits an explicit natural when the key signature sharpens the note", () => {
-      const measure = measureWithTablature([{ string: 1, fret: 1, finger: "a", role: "harmony" }]);
+      const measure = measureWithTablature([{ string: 1, fret: 1, finger: "a", role: "harmony", durationSteps: 16 }]);
 
       expect(convertTimeSliceMeasureToAbc(measure, context, keyAccidentals, true)).toBe("!1!=f8");
     });
@@ -269,14 +269,14 @@ w: ⬤ * ● *`;
     it("preserves the exact Ganesha final-measure string assignments", () => {
       const attacks = new Map<number, NonNullable<TimeSliceMeasure["grid"][number]["tablature"]>>([
         [0, [
-          { string: 6, fret: 0, finger: "p", role: "bass" },
-          { string: 3, fret: 0, finger: "i", role: "fill" },
-          { string: 2, fret: 0, finger: "m", role: "melody" },
+          { string: 6, fret: 0, finger: "p", role: "bass", durationSteps: 16 },
+          { string: 3, fret: 0, finger: "i", role: "fill", durationSteps: 4 },
+          { string: 2, fret: 0, finger: "m", role: "melody", durationSteps: 1 },
         ]],
-        [2, [{ string: 2, fret: 5, finger: "m", role: "melody" }]],
-        [4, [{ string: 3, fret: 0, finger: "i", role: "fill" }]],
-        [6, [{ string: 2, fret: 0, finger: "m", role: "melody" }]],
-        [14, [{ string: 3, fret: 4, finger: "i", role: "melody" }]],
+        [2, [{ string: 2, fret: 5, finger: "m", role: "melody", durationSteps: 4 }]],
+        [4, [{ string: 3, fret: 0, finger: "i", role: "fill", durationSteps: 10 }]],
+        [6, [{ string: 2, fret: 0, finger: "m", role: "melody", durationSteps: 10 }]],
+        [14, [{ string: 3, fret: 4, finger: "i", role: "melody", durationSteps: 2 }]],
       ]);
       const measure: TimeSliceMeasure = {
         ...measureWithTablature(attacks.get(0)!),

@@ -133,7 +133,7 @@ describe("ABC ↔ ASCII-GuitarTab validation", () => {
     expect(result.mismatches.some(issue => issue.kind === "fret-mismatch")).toBe(true);
   });
 
-  it("validates independent same-string duration inference", () => {
+  it("validates independent one-step durationless non-melody attacks", () => {
     const measure = sameStringDurationMeasure();
     const body = convertTimeSliceMeasureToAbc(
       measure,

@@ -152,9 +152,13 @@ export function validateFillComposition(
     resolvedEntries.push({ candidate, entry });
   }
 
+  const uncoveredWindowIds: string[] = [];
   for (const windowId of selectedIds) {
     const count = notesByWindow.get(windowId) ?? 0;
-    if (count === 0) errors.push(`Selected window ${windowId} needs at least one composed note.`);
+    if (count === 0) {
+      uncoveredWindowIds.push(windowId);
+      errors.push(`Selected window ${windowId} needs at least one composed note.`);
+    }
     if (count > analysis.budget.maxNotesPerWindow) {
       errors.push(`Window ${windowId} has ${count} notes; maximum is ${analysis.budget.maxNotesPerWindow}.`);
     }
@@ -179,7 +183,11 @@ export function validateFillComposition(
     || left.candidate.string - right.candidate.string
     || left.candidate.id.localeCompare(right.candidate.id)
   ));
-  const issues = [...new Set(errors)].map(message => validationIssue("invalid-fill-composition", message));
+  const uncoveredMessages = new Set(uncoveredWindowIds.map(windowId => `Selected window ${windowId} needs at least one composed note.`));
+  const issues = [...new Set(errors)].map(message => validationIssue(
+    uncoveredMessages.has(message) ? "selected-window-uncovered" : "invalid-fill-composition",
+    message,
+  ));
   return {
     valid: issues.length === 0,
     value: issues.length === 0 ? resolvedEntries.map(entry => entry.entry) : undefined,

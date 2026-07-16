@@ -68,4 +68,23 @@ describe("fingerstyle physical validation policy", () => {
       expect.objectContaining({ code: "duration-out-of-range" }),
     ]));
   });
+
+  it("counts only true fills against none density and treats root/fifth as bass foundation", () => {
+    const root = step(1, [{ string: 6, fret: 0, finger: "p", role: "root" }]);
+    const fifth = step(2, [{ string: 5, fret: 2, finger: "p", role: "fifth" }]);
+    const foundation = validateFingerstylePhysicsDetailed([root, fifth], { fillDensity: "none" });
+    expect(foundation.issues).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "fill-density-none-exceeded" }),
+    ]));
+    expect(foundation.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "bass-on-unweighted-step" }),
+    ]));
+
+    const fill = validateFingerstylePhysicsDetailed([
+      step(1, [{ string: 3, fret: 0, finger: "i", role: "fill" }]),
+    ], { fillDensity: "none" });
+    expect(fill.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "fill-density-none-exceeded" }),
+    ]));
+  });
 });

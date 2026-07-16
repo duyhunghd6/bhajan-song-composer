@@ -28,6 +28,7 @@ export type FingerstylePhysicsIssueCode =
   | "melody-pitch-mismatch"
   | `guitar-tab-${GuitarTabValidationIssue["code"]}`
   | "fill-interrupts-melody-sustain"
+  | "accompaniment-interrupts-melody-sustain"
   | "bass-on-unweighted-step"
   | "fill-density-none-exceeded"
   | "fill-density-few-exceeded";
@@ -206,6 +207,11 @@ export function validateFingerstylePhysicsDetailed(
     });
   }
 
+  const isFillRole = (role: string) => role === "fill";
+  const isBassFoundationRole = (role: string) => (
+    role === "bass" || role === "root" || role === "fifth"
+  );
+
   let melodyString: GuitarStringNumber | null = null;
   for (let stepIndex = 0; stepIndex < grid.length; stepIndex++) {
     const step = grid[stepIndex];
@@ -213,13 +219,19 @@ export function validateFingerstylePhysicsDetailed(
       melodyString = step.tablature?.find(tab => tab.role === "melody")?.string ?? melodyString;
     }
     if (step.melody.state === "sustain" && melodyString !== null) {
-      const fill = step.tablature?.find(tab => tab.string === melodyString && tab.role !== "melody");
-      if (fill) {
-        issue(issues, "fill-interrupts-melody-sustain", `Step ${step.step}: Fill played on string ${melodyString} which is currently sustaining the melody note.`, {
-          stepIndex,
-          step: step.step,
-          details: { melodyString, fill },
-        });
+      const accompaniment = step.tablature?.find(tab => tab.string === melodyString && tab.role !== "melody");
+      if (accompaniment) {
+        const fill = isFillRole(accompaniment.role);
+        issue(
+          issues,
+          fill ? "fill-interrupts-melody-sustain" : "accompaniment-interrupts-melody-sustain",
+          `Step ${step.step}: ${fill ? "Fill" : "Accompaniment"} played on string ${melodyString} which is currently sustaining the melody note.`,
+          {
+            stepIndex,
+            step: step.step,
+            details: { melodyString, accompaniment },
+          },
+        );
       }
     }
     if (step.melody.state === "rest") melodyString = null;
@@ -227,7 +239,7 @@ export function validateFingerstylePhysicsDetailed(
 
   for (let stepIndex = 0; stepIndex < grid.length; stepIndex++) {
     const step = grid[stepIndex];
-    if (step.tablature?.some(tab => tab.role === "bass") && !step.weight) {
+    if (step.tablature?.some(tab => isBassFoundationRole(tab.role)) && !step.weight) {
       issue(issues, "bass-on-unweighted-step", `Step ${step.step}: Bass note on unweighted step. Bass should only play on strong (⬤), medium (●), or weak (*) beat positions.`, {
         stepIndex,
         step: step.step,
@@ -238,7 +250,7 @@ export function validateFingerstylePhysicsDetailed(
 
   const fillDensity = options?.fillDensity ?? "few";
   const totalFills = grid.reduce((count, step) =>
-    count + (step.tablature?.filter(tab => tab.role === "fill").length ?? 0), 0);
+    count + (step.tablature?.filter(tab => isFillRole(tab.role)).length ?? 0), 0);
   if (fillDensity === "none" && totalFills > 0) {
     issue(issues, "fill-density-none-exceeded", `Fill density violation: ${totalFills} fill attack(s) found but fill_density "none" allows 0.`, {
       details: { fillDensity, totalFills, limit: 0 },

@@ -36,6 +36,12 @@ This source-identity assertion is distinct from derived-artifact validation:
 - **Source identity:** `reEmittedSourceAbc === rawSourceAbc` exactly, including comments, lyrics, directives, voices, repeat/volta syntax, spacing, and line endings.
 - **Guitar projection:** generate forced-string Guitar ABC from the validated TimeGrid and verify its physical strings, frets, attacks, durations, and measure timing against that grid. Generated Guitar ABC is expected to differ from imported source ABC.
 
+### Forced-string Guitar import
+
+`abc-timegrid-import.ts` imports the supported `V:Guitar` subset into physical TimeGrid events without treating it as a replacement for `source.rawAbc`. It recognizes `!1!`–`!6!` string forcing, notes and bracket chords, rests, explicit durations, quoted chord symbols, trailing event ties, and per-member chord ties. A tie extends only the same adjacent pitch on the same physical string; it never creates a fresh attack or becomes a slur. Guitar parentheses are stored as normalized, one-based inclusive/exclusive `guitarSlurs` boundaries and are regenerated around the corresponding rendered intervals.
+
+Tuplets, broken rhythm, grace syntax, non-grid durations, malformed ties, unforced Guitar notes, overlapping same-string attacks, and out-of-range positions are not lossless TimeGrid syntax. The importer uses deterministic nearest-step normalization when a physical event can still be represented and emits a diagnostic; it retains the original source unchanged regardless. A document with no forced Guitar strings continues through the Melody diagnostic projection rather than inventing physical string assignments.
+
 ### Source loops, repeats, voltas, and visual line breaks
 
 Source ABC may contain repeat-start (`|:`), repeat-end (`:|`), volta endings (`|[1`, `|[2`), and intentional visual line breaks. These are source-structure facts, not discretionary guitar edits.
@@ -186,6 +192,7 @@ A single step may contain several simultaneous events: a locked melody attack on
 | `root` / `fifth` | Chord-derived bass/support anchors | Editable after chord validation |
 | `harmony` | Inner chord/support pitch | Editable after chord and playability validation |
 | `fill` | Discretionary melodic/gap material | Editable only in legal windows and density limits |
+| `imported` | Authoritative forced-string Guitar event imported from source ABC | Preserve until explicitly replaced by an arrangement edit |
 
 The current persisted event type has physical fields (`string`, `fret`, `finger`, `role`, optional `durationSteps`) and optional server-generated fill provenance (`fillWindowId`, `fillCandidateId`). It does not yet persist a general event `id` or `locked` flag. A future UI command layer may add stable IDs and presentation metadata, but it must preserve this canonical physical/event contract or migrate it explicitly.
 

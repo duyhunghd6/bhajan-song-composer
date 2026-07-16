@@ -3,6 +3,7 @@ import { midiForStringFret, parseScientificPitch } from "../guitar-playability";
 import type { SkillLevel } from "./fingerstyle-constraints";
 import { SKILL_LEVEL_CONSTRAINTS } from "./fingerstyle-constraints";
 import type { TimeSliceMeasure } from "./time-slice";
+import { melodyDurationSteps } from "./time-slice-abc-renderer";
 
 export interface BassPosition {
   id: string;
@@ -227,7 +228,7 @@ export function materializeBassFoundation(
   let priorMelodyString: 1 | 2 | 3 | null = null;
   return source.map(measure => ({
     ...measure,
-    grid: measure.grid.map(step => {
+    grid: measure.grid.map((step, stepIndex) => {
       const tab: NonNullable<typeof step.tablature> = [];
       if (step.melody.state === "attack" && step.melody.pitch) {
         const melodyMidi = parseScientificPitch(step.melody.pitch)?.midi;
@@ -238,12 +239,21 @@ export function materializeBassFoundation(
           .sort((left, right) => Number(left.string !== priorMelodyString) - Number(right.string !== priorMelodyString) || left.fret - right.fret)[0];
         if (position) {
           priorMelodyString = position.string;
-          tab.push({ ...position, finger: "a", role: "melody" });
+          tab.push({ ...position, finger: "a", role: "melody", durationSteps: melodyDurationSteps(measure, stepIndex) });
         }
       }
       const candidate = bassByLocation.get(`m${measure.measure}-s${step.step}`);
-      if (candidate) tab.push({ string: candidate.string, fret: candidate.fret, finger: "p", role: candidate.role, durationSteps: 1 });
-      return { ...step, ...(tab.length ? { tablature: tab } : {}) };
+      if (candidate) {
+        // A bass note that begins with a melody attack supports the source token;
+        // isolated bass positions remain one-step transient attacks.
+        const durationSteps = step.melody.state === "attack"
+          ? melodyDurationSteps(measure, stepIndex)
+          : 1;
+        tab.push({ string: candidate.string, fret: candidate.fret, finger: "p", role: candidate.role, durationSteps });
+      }
+      // Regeneration starts from the pinned source melody plus the chosen bass foundation.
+      // Never carry prior fills (or prior accompaniment) into this pre-fill validation stage.
+      return { ...step, tablature: tab };
     }),
   }));
 }

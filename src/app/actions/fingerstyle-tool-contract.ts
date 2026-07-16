@@ -123,7 +123,7 @@ export const INSPECT_FILL_OPPORTUNITIES_TOOL_DEFINITION = {
   type: "function",
   function: {
     name: "inspect_fill_opportunities",
-    description: "Inspect the next compact page of deterministically scored legal fill windows and atomic candidates. Start at cursor 0 and follow nextCursor until end.",
+    description: "After selected bass pitches have materialized the frozen TimeGrid, inspect the next compact page of deterministically scored legal fill windows and atomic candidates. Start at cursor 0 and follow nextCursor until end.",
     parameters: {
       type: "object",
       additionalProperties: false,
@@ -137,7 +137,7 @@ export const INSPECT_FILL_OPPORTUNITIES_TOOL_DEFINITION = {
 
 export const SELECT_FILL_WINDOWS_TOOL_DEFINITION = buildStringPayloadToolDefinition(
   "select_fill_windows",
-  "Submit one use/skip decision for every inspected fill window.",
+  "Submit one use/skip decision for every inspected fill window. Every use decision must later have at least one composed note for that exact window; choose skip when no legal note will be submitted.",
   "selection_toon",
   "Strict fill-selection:v1 payload without Markdown fences.",
 );

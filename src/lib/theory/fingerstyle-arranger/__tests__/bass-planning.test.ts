@@ -16,7 +16,11 @@ function makeMeasure(): TimeSliceMeasure {
       step: index + 1,
       chord: "Em",
       weight: index === 0 || index === 8 ? (index === 0 ? "⬤" as const : "●" as const) : null,
-      melody: { pitch: index === 0 ? "E4" : null, state: index === 0 ? "attack" as const : "rest" as const },
+      melody: index === 0
+        ? { pitch: "E4", state: "attack" as const }
+        : index < 4
+          ? { pitch: "E4", state: "sustain" as const }
+          : { pitch: null, state: "rest" as const },
       lyric: null,
     })),
   };
@@ -43,5 +47,78 @@ describe("bass planning", () => {
       expect.objectContaining({ role: "melody", string: 1, fret: 0 }),
       expect.objectContaining({ role: "root", string: 6, fret: 0 }),
     ]));
+  });
+
+  it("sustains co-onset bass for the source melody duration", () => {
+    const measures = [makeMeasure()];
+    const positions = analyzeBassPositions({ measures, sourceFingerprint: "source", reservedFillSlotIds: [] });
+    const pitches = analyzeBassPitchCandidates({
+      positions: positions.positions,
+      positionSetId: positions.setId,
+      sourceFingerprint: "source",
+      skillLevel: "beginner",
+    });
+    const rootAtMelodyAttack = pitches.candidates.find(candidate => (
+      candidate.positionId === "bp-m1-s1" && candidate.pitch === "E2" && candidate.role === "root"
+    ));
+    const rootDuringRest = pitches.candidates.find(candidate => (
+      candidate.positionId === "bp-m1-s9" && candidate.pitch === "E2" && candidate.role === "root"
+    ));
+
+    expect(rootAtMelodyAttack).toBeDefined();
+    expect(rootDuringRest).toBeDefined();
+
+    const materialized = materializeBassFoundation(
+      measures,
+      [rootAtMelodyAttack!, rootDuringRest!],
+      "beginner",
+      5,
+    );
+
+    expect(materialized[0].grid[0].tablature).toEqual(expect.arrayContaining([
+      expect.objectContaining({ role: "melody", durationSteps: 4 }),
+      expect.objectContaining({ role: "root", durationSteps: 4 }),
+    ]));
+    expect(materialized[0].grid[8].tablature).toEqual([
+      expect.objectContaining({ role: "root", durationSteps: 1 }),
+    ]);
+  });
+
+  it("clears stale fills while rebuilding the pre-fill foundation", () => {
+    const measureFour = { ...makeMeasure(), measure: 4 };
+    const measureFive = { ...makeMeasure(), measure: 5 };
+    measureFour.grid[3].tablature = [{ string: 3, fret: 2, finger: "i", role: "fill" }];
+    measureFive.grid[5].tablature = [{ string: 2, fret: 3, finger: "m", role: "fill" }];
+
+    const positions = analyzeBassPositions({
+      measures: [measureFour, measureFive],
+      sourceFingerprint: "source",
+      reservedFillSlotIds: [],
+    });
+    const pitches = analyzeBassPitchCandidates({
+      positions: positions.positions,
+      positionSetId: positions.setId,
+      sourceFingerprint: "source",
+      skillLevel: "beginner",
+    });
+    const selected = pitches.candidates.filter(candidate => (
+      candidate.positionId === "bp-m4-s1" || candidate.positionId === "bp-m5-s1"
+    ) && candidate.role === "root" && candidate.fret === 0);
+
+    const materialized = materializeBassFoundation(
+      [measureFour, measureFive],
+      selected,
+      "beginner",
+      5,
+    );
+
+    expect(materialized[0].grid[0].tablature).toEqual(expect.arrayContaining([
+      expect.objectContaining({ role: "melody" }),
+      expect.objectContaining({ role: "root" }),
+    ]));
+    expect(materialized[0].grid[3].tablature).toEqual([]);
+    expect(materialized[1].grid[5].tablature).toEqual([]);
+    expect(materialized.flatMap(measure => measure.grid).flatMap(step => step.tablature ?? []))
+      .not.toEqual(expect.arrayContaining([expect.objectContaining({ role: "fill" })]));
   });
 });

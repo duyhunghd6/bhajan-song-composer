@@ -21,7 +21,7 @@ export function normalizeFillPolicy(input: {
   const rawDensity = input.densityMode?.trim().toLowerCase();
 
   if (rawDensity === "none") {
-    return { skillLevel, densityMode: "few", resolvedDensity: "off", densitySource: "legacy" };
+    return { skillLevel, densityMode: "none", resolvedDensity: "off", densitySource: "explicit" };
   }
   if (rawDensity === "all") {
     return { skillLevel, densityMode: "many", resolvedDensity: "many", densitySource: "legacy" };

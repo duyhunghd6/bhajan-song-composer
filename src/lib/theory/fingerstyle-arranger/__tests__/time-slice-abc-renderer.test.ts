@@ -84,6 +84,48 @@ function sameStringDurationMeasure(): TimeSliceMeasure {
   };
 }
 
+function sourceRhythmMeasure(): TimeSliceMeasure {
+  const notes = [
+    { start: 0, duration: 2, pitch: "E4", string: 1 as const, fret: 0 },
+    { start: 2, duration: 4, pitch: "E4", string: 1 as const, fret: 0 },
+    { start: 6, duration: 2, pitch: "F#4", string: 1 as const, fret: 2 },
+    { start: 8, duration: 2, pitch: "G4", string: 1 as const, fret: 3 },
+    { start: 10, duration: 2, pitch: "F#4", string: 1 as const, fret: 2 },
+    { start: 12, duration: 2, pitch: "E4", string: 1 as const, fret: 0 },
+    { start: 14, duration: 2, pitch: "B3", string: 2 as const, fret: 0 },
+  ];
+  return {
+    measure: 1,
+    lineIndex: 0,
+    style_profile: { key: "Em", comping_style: "Sparse PIMA", voicing_plan: "Open Em" },
+    grid: Array.from({ length: 16 }, (_, index) => {
+      const note = notes.find(candidate => candidate.start === index);
+      const sustainedNote = notes.find(candidate => (
+        candidate.start < index && index < candidate.start + candidate.duration
+      ));
+      return {
+        step: index + 1,
+        chord: "Em",
+        weight: index === 0 ? "⬤" as const : null,
+        melody: note
+          ? { pitch: note.pitch, state: "attack" as const }
+          : sustainedNote
+            ? { pitch: sustainedNote.pitch, state: "sustain" as const }
+            : { pitch: null, state: "rest" as const },
+        lyric: null,
+        tablature: note
+          ? [
+              { string: note.string, fret: note.fret, finger: "a" as const, role: "melody" as const, durationSteps: note.duration },
+              ...(note.start === 8
+                ? [{ string: 6 as const, fret: 0, finger: "p" as const, role: "root" as const, durationSteps: note.duration }]
+                : []),
+            ]
+          : [],
+      };
+    }),
+  };
+}
+
 function adjacentEqualPitchFillMeasure(): TimeSliceMeasure {
   return {
     measure: 1,
@@ -129,6 +171,18 @@ describe("time-slice ABC interval renderer", () => {
     expect(rendered).toContain("[!1!e!3!G]");
   });
 
+  it("keeps source melody rhythm when bass starts with a melody attack", () => {
+    const rendered = convertTimeSliceMeasureToAbc(
+      sourceRhythmMeasure(),
+      buildAbcDurationContext(ABC),
+      getKeyAccidentalsFromAbc(ABC),
+      true,
+    );
+
+    expect(rendered).toBe("!1!e !1!e2 !1!f [!1!g!6!E,] !1!f !1!e !2!B");
+    expect(rendered).not.toContain("[!1!g!6!E,]/2 !1!g/2");
+  });
+
   it("honors an explicit melody duration before source sustain fallback", () => {
     const measure = heldMelodyMeasure();
     measure.grid[0].tablature![0].durationSteps = 1;
@@ -143,7 +197,7 @@ describe("time-slice ABC interval renderer", () => {
     expect(rendered).not.toContain("!1!e-");
   });
 
-  it("infers legacy duration from the next attack on the same string", () => {
+  it("renders durationless non-melody attacks for one step", () => {
     const rendered = convertTimeSliceMeasureToAbc(
       sameStringDurationMeasure(),
       buildAbcDurationContext(ABC),
@@ -151,9 +205,9 @@ describe("time-slice ABC interval renderer", () => {
       true,
     );
 
-    expect(rendered).toContain("!6!E,-");
-    expect(rendered).toContain("[!1!e-!6!E,]");
-    expect(rendered).toContain("[!1!e!6!F,]2");
+    expect(rendered).toBe("!6!E,/2 z/2 !1!e/2 z/2 !6!F,/2 z3/2");
+    expect(rendered).not.toContain("!6!E,-");
+    expect(rendered).not.toContain("[!1!e!6!E,]");
   });
 
   it("renders adjacent equal-pitch fills as separate untied attacks", () => {

@@ -62,6 +62,12 @@ export interface ToolLoopValidationResult {
   toolResult?: unknown;
 }
 
+export interface ToolLoopTurn {
+  tools: unknown[];
+  toolChoice?: unknown;
+  maxToolCallsPerTurn?: number;
+}
+
 export type ToolDiagnosticEvent =
   | { type: "chat-request"; iteration?: number; messageCount: number; toolChoice: unknown; toolNames: string[]; requestTimeoutMs?: number; maxRequestAttempts?: number }
   | { type: "chat-response"; iteration?: number; toolCallNames: string[]; elapsedMs?: number; requestAttempts?: number }
@@ -325,6 +331,7 @@ export async function requestOpenAiCompatibleToolLoop(input: {
   finalToolName: string;
   localTools: LocalToolDefinition[];
   validateFinalResult: (args: unknown) => ToolLoopValidationResult;
+  shouldComplete?: () => boolean;
   temperature?: number;
   maxIterations?: number;
   maxValidationAttempts?: number;
@@ -332,6 +339,8 @@ export async function requestOpenAiCompatibleToolLoop(input: {
   maxRequestAttempts?: number;
   maxDurationMs?: number;
   contextBudget?: ToolLoopContextBudget;
+  /** Resolves phase-scoped tools immediately before each model request. */
+  resolveToolTurn?: () => ToolLoopTurn;
   onDiagnostic?: ToolDiagnosticRecorder;
 }): Promise<unknown> {
   const messages: ChatMessage[] = [
@@ -363,7 +372,13 @@ export async function requestOpenAiCompatibleToolLoop(input: {
       });
       throw new Error(`LLM tool loop exceeded its ${input.maxDurationMs}ms deadline. Last validation: ${lastValidationMessage}`);
     }
-    const budgetError = withinContextBudget(messages, input.tools, contextBudget);
+    const toolTurn = input.resolveToolTurn?.() ?? { tools: input.tools, toolChoice: "required" };
+    const activeToolNames = new Set(toolTurn.tools.flatMap(tool => {
+      const name = (tool as { function?: { name?: unknown } })?.function?.name;
+      return typeof name === "string" ? [name] : [];
+    }));
+    const maxToolCallsPerTurn = toolTurn.maxToolCallsPerTurn ?? contextBudget.maxToolCallsPerTurn;
+    const budgetError = withinContextBudget(messages, toolTurn.tools, contextBudget);
     if (budgetError) {
       await emitDiagnostic(input.onDiagnostic, {
         type: "context-budget-exceeded",
@@ -374,8 +389,8 @@ export async function requestOpenAiCompatibleToolLoop(input: {
     }
     const message = await requestChatCompletion({
       messages,
-      tools: input.tools,
-      toolChoice: "required",
+      tools: toolTurn.tools,
+      toolChoice: toolTurn.toolChoice ?? "required",
       temperature: input.temperature,
       iteration,
       onDiagnostic: input.onDiagnostic,
@@ -385,10 +400,17 @@ export async function requestOpenAiCompatibleToolLoop(input: {
     });
     const toolCalls = message.tool_calls ?? [];
 
-    if (toolCalls.length > contextBudget.maxToolCallsPerTurn) {
-      const message = `LLM returned ${toolCalls.length} tool calls; limit is ${contextBudget.maxToolCallsPerTurn}.`;
+    if (toolCalls.length > maxToolCallsPerTurn) {
+      const message = `LLM returned ${toolCalls.length} tool calls; limit is ${maxToolCallsPerTurn}.`;
       await emitDiagnostic(input.onDiagnostic, { type: "context-budget-exceeded", iteration, message });
       throw new Error(`LLM context budget exceeded: ${message}`);
+    }
+    const nonExposedTool = toolCalls.find(call => !activeToolNames.has(call.function?.name ?? ""));
+    if (nonExposedTool) {
+      const toolName = nonExposedTool.function?.name ?? "unknown";
+      const message = `LLM called ${toolName}, which is not exposed in the current workflow phase.`;
+      await emitDiagnostic(input.onDiagnostic, { type: "chat-error", iteration, message });
+      throw new Error(message);
     }
 
     if (toolCalls.length === 0) {
@@ -500,6 +522,7 @@ export async function requestOpenAiCompatibleToolLoop(input: {
         invalidResultAttempts: localInvalidResultAttempts[toolName] ?? 0,
         maxInvalidResults: localTool.maxInvalidResults,
       });
+      if (!invalidResult && input.shouldComplete?.()) return {};
       if (invalidResult && localTool.maxInvalidResults !== undefined
         && localInvalidResultAttempts[toolName] >= localTool.maxInvalidResults) {
         await emitDiagnostic(input.onDiagnostic, {

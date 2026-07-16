@@ -83,6 +83,47 @@ describe("requestOpenAiCompatibleToolLoop", () => {
     );
   });
 
+  it("restricts a staged caller to the server-selected next tool", async () => {
+    vi.stubEnv("AI_API_URL", "http://llm.test");
+    vi.stubEnv("AI_API_KEY", "test-key");
+    vi.stubEnv("AI_MODEL", "test-model");
+
+    const toolResponse = (id: string, name: string) => new Response(JSON.stringify({
+      choices: [{ message: { role: "assistant", content: null, tool_calls: [{ id, function: { name, arguments: "{}" } }] } }],
+    }), { status: 200 });
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(toolResponse("call-foundation", "materialize_foundation"))
+      .mockResolvedValueOnce(toolResponse("call-final", "submit_arrangement"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    let materialized = false;
+    await requestOpenAiCompatibleToolLoop({
+      systemPrompt: "system",
+      userPrompt: "user",
+      tools: [],
+      resolveToolTurn: () => materialized
+        ? {
+            tools: [{ type: "function", function: { name: "submit_arrangement", parameters: { type: "object" } } }],
+            toolChoice: { type: "function", function: { name: "submit_arrangement" } },
+            maxToolCallsPerTurn: 1,
+          }
+        : {
+            tools: [{ type: "function", function: { name: "materialize_foundation", parameters: { type: "object" } } }],
+            toolChoice: { type: "function", function: { name: "materialize_foundation" } },
+            maxToolCallsPerTurn: 1,
+          },
+      finalToolName: "submit_arrangement",
+      localTools: [{ name: "materialize_foundation", execute: () => { materialized = true; return { valid: true }; } }],
+      validateFinalResult: () => ({ valid: true }),
+    });
+
+    const firstRequest = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    const secondRequest = JSON.parse(fetchMock.mock.calls[1][1].body as string);
+    expect(firstRequest.tools.map((tool: { function: { name: string } }) => tool.function.name)).toEqual(["materialize_foundation"]);
+    expect(firstRequest.tool_choice).toEqual({ type: "function", function: { name: "materialize_foundation" } });
+    expect(secondRequest.tools.map((tool: { function: { name: string } }) => tool.function.name)).toEqual(["submit_arrangement"]);
+  });
+
   it("feeds multiline string tool results back without JSON quoting", async () => {
     vi.stubEnv("AI_API_URL", "http://llm.test");
     vi.stubEnv("AI_API_KEY", "test-key");

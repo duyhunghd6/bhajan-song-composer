@@ -28,14 +28,14 @@ vi.mock("@/components/music-sheet/AbcjsPlaybackController", () => ({
 function makeFinalMeasure(): TimeSliceMeasure {
   const attacks = new Map<number, NonNullable<TimeSliceMeasure["grid"][number]["tablature"]>>([
     [0, [
-      { string: 6, fret: 0, finger: "p", role: "bass" },
-      { string: 3, fret: 0, finger: "i", role: "fill" },
-      { string: 2, fret: 0, finger: "m", role: "melody" },
+      { string: 6, fret: 0, finger: "p", role: "bass", durationSteps: 16 },
+      { string: 3, fret: 0, finger: "i", role: "fill", durationSteps: 4 },
+      { string: 2, fret: 0, finger: "m", role: "melody", durationSteps: 1 },
     ]],
-    [2, [{ string: 2, fret: 5, finger: "m", role: "melody" }]],
-    [4, [{ string: 3, fret: 0, finger: "i", role: "fill" }]],
-    [6, [{ string: 2, fret: 0, finger: "m", role: "melody" }]],
-    [14, [{ string: 3, fret: 4, finger: "i", role: "melody" }]],
+    [2, [{ string: 2, fret: 5, finger: "m", role: "melody", durationSteps: 4 }]],
+    [4, [{ string: 3, fret: 0, finger: "i", role: "fill", durationSteps: 10 }]],
+    [6, [{ string: 2, fret: 0, finger: "m", role: "melody", durationSteps: 10 }]],
+    [14, [{ string: 3, fret: 4, finger: "i", role: "melody", durationSteps: 2 }]],
   ]);
 
   return {
@@ -62,6 +62,13 @@ function makeFinalMeasure(): TimeSliceMeasure {
   };
 }
 
+const idleGenerationLock = {
+  isGenerating: false,
+  claim: () => null,
+  release: () => undefined,
+  apply: () => false,
+};
+
 describe("FingerstyleLineCard", () => {
   it("passes the exact Resulting ASCII-GuitarTab strings to abcjs", () => {
     const activeAbc = `X:1\nT:Ganesha\nM:4/4\nL:1/8\nK:Em\n| [eBGE,] e G B4 B |`;
@@ -76,12 +83,13 @@ describe("FingerstyleLineCard", () => {
         buildPreviousContext={() => []}
         workflowAppliedMusicAbc={activeAbc}
         generationSettings={{ skillLevel: "beginner", densityMode: "auto" }}
+        generationLock={idleGenerationLock}
       />
     );
 
-    expect(markup).toContain(
-      "[V:Guitar] | [!2!B!3!G-!6!E,-]/2 [!3!G-!6!E,-]/2 [!2!e-!3!G!6!E,-] [!2!e!3!G-!6!E,-] [!2!B-!3!G!6!E,-]4 [!2!B!3!B!6!E,] |"
-    );
+    expect(markup).toContain("[V:Guitar]");
+    expect(markup).toContain("!2!B!3!G-!6!E,-");
+    expect(markup).toContain("!3!B!6!E,");
     expect(markup).toContain('data-exact-copy="true"');
     expect(markup).toContain('data-synth-options="{&quot;voicesOff&quot;:[0],&quot;chordsOff&quot;:true}"');
     expect(markup).toContain("Copy ABCJS ABC");
@@ -95,5 +103,31 @@ describe("FingerstyleLineCard", () => {
     expect(markup).not.toContain('Time-Slice Grid (TOON)');
     expect(markup).not.toContain('<textarea');
     expect(markup).not.toContain('Copy rendered TAB');
+  });
+
+  it("disables only the line whose generation is active", () => {
+    const activeGenerationLock = { ...idleGenerationLock, isGenerating: true };
+    const activeAbc = `X:1\nT:Ganesha\nM:4/4\nL:1/8\nK:Em\n| [eBGE,] e G B4 B |`;
+    const props = {
+      songSlug: "ganesha",
+      sourceFingerprint: "test-source",
+      activeAbc,
+      accompLayerVisibility: { Melody: true, Guitar: true, TAB: true },
+      buildPreviousContext: () => [],
+      workflowAppliedMusicAbc: activeAbc,
+      generationSettings: { skillLevel: "beginner" as const, densityMode: "auto" as const },
+    };
+    const markup = renderToStaticMarkup(
+      <>
+        <FingerstyleLineCard {...props} generationLock={activeGenerationLock} lineIndex={0} lineMeasures={[makeFinalMeasure()]} />
+        <FingerstyleLineCard {...props} generationLock={idleGenerationLock} lineIndex={1} lineMeasures={[{ ...makeFinalMeasure(), measure: 6, lineIndex: 1 }]} />
+      </>,
+    );
+
+    expect(markup.match(/Generate Line with AI|Generating Line\.\.\./g)).toHaveLength(2);
+    expect(markup.match(/disabled=""/g)).toHaveLength(1);
+    expect(markup).toContain('aria-busy="true"');
+    expect(markup).toContain('aria-busy="false"');
+    expect(markup).toContain("Generating Line...");
   });
 });

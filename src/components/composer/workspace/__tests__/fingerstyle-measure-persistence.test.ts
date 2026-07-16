@@ -36,14 +36,14 @@ function makeMeasure(sourceMelody: string): TimeSliceMeasure {
 function withGaneshaTablature(measure: TimeSliceMeasure): TimeSliceMeasure {
   const attacks = new Map<number, NonNullable<TimeSliceMeasure["grid"][number]["tablature"]>>([
     [0, [
-      { string: 6, fret: 0, finger: "p", role: "bass" },
-      { string: 3, fret: 0, finger: "i", role: "fill" },
-      { string: 2, fret: 0, finger: "m", role: "melody" },
+      { string: 6, fret: 0, finger: "p", role: "bass", durationSteps: 16 },
+      { string: 3, fret: 0, finger: "i", role: "fill", durationSteps: 4 },
+      { string: 2, fret: 0, finger: "m", role: "melody", durationSteps: 1 },
     ]],
-    [2, [{ string: 2, fret: 5, finger: "m", role: "melody" }]],
-    [4, [{ string: 3, fret: 0, finger: "i", role: "fill" }]],
-    [6, [{ string: 2, fret: 0, finger: "m", role: "melody" }]],
-    [14, [{ string: 3, fret: 4, finger: "i", role: "melody" }]],
+    [2, [{ string: 2, fret: 5, finger: "m", role: "melody", durationSteps: 4 }]],
+    [4, [{ string: 3, fret: 0, finger: "i", role: "fill", durationSteps: 10 }]],
+    [6, [{ string: 2, fret: 0, finger: "m", role: "melody", durationSteps: 10 }]],
+    [14, [{ string: 3, fret: 4, finger: "i", role: "melody", durationSteps: 2 }]],
   ]);
   return {
     ...measure,
@@ -64,7 +64,7 @@ describe("fingerstyle measure persistence", () => {
 
     expect(restored.source_abc?.melody).toBe("current melody");
     expect(restored.grid[2].tablature).toEqual([
-      { string: 2, fret: 5, finger: "m", role: "melody" },
+      { string: 2, fret: 5, finger: "m", role: "melody", durationSteps: 4 },
     ]);
   });
 

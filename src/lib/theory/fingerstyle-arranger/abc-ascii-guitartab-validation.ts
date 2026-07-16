@@ -8,7 +8,7 @@ import { abcNoteToMidiWithKey, type AbcKeyAccidentalMap } from "../abc-key-signa
 import { parseScientificPitch, scientificPitchForStringFret } from "../guitar-playability";
 import type { GuitarStringNumber } from "../fingerstyle-compressor";
 import type { TimeSliceMeasure } from "./time-slice";
-import { inferLegacyTabDurationSteps } from "./time-slice-abc-renderer";
+import { resolveTabDurationSteps } from "./time-slice-abc-renderer";
 
 const MAX_MISMATCHES = 32;
 const EPSILON = 1e-6;
@@ -244,27 +244,21 @@ function parseMeasure(
   return events;
 }
 
+function activeStepCount(measure: TimeSliceMeasure, stepDurationUnits: number): number {
+  if (!measure.pickupDurationUnits || measure.pickupDurationUnits <= 0) return measure.grid.length;
+  return Math.max(0, Math.min(
+    measure.grid.length,
+    Math.ceil(measure.pickupDurationUnits / stepDurationUnits),
+  ));
+}
+
 function expectedEvents(measures: readonly TimeSliceMeasure[], stepDurationUnits: number): TabEvent[] {
   const output: TabEvent[] = [];
   measures.forEach((measure) => {
-    measure.grid.forEach((step, index) => {
+    const maxSteps = activeStepCount(measure, stepDurationUnits);
+    measure.grid.slice(0, maxSteps).forEach((step, index) => {
       for (const tab of step.tablature ?? []) {
-        let durationSteps = tab.durationSteps;
-        if (tab.role === "melody" && step.melody.state === "attack") {
-          durationSteps = 1;
-          for (let next = index + 1; next < measure.grid.length; next += 1) {
-            const melody = measure.grid[next].melody;
-            if (melody.state !== "sustain" || melody.pitch !== step.melody.pitch) break;
-            durationSteps += 1;
-          }
-        } else if (!durationSteps) {
-          durationSteps = inferLegacyTabDurationSteps(
-            measure,
-            index,
-            tab.string,
-            measure.grid.length,
-          );
-        }
+        const durationSteps = resolveTabDurationSteps(measure, index, tab, maxSteps);
         const pitch = scientificPitchForStringFret(tab.string, tab.fret);
         const actualMidi = parseScientificPitch(pitch)?.midi ?? -1;
         output.push({
@@ -313,9 +307,14 @@ function extractGuitarMusicBody(abc: string): string {
       continue;
     }
     if (line.startsWith("V:")) {
-      guitarVoiceActive = line.slice(2).trim().split(/\s+/)[0] === "Guitar";
-      const body = line.replace(/^V:\S+\s*/, "").trim();
-      if (guitarVoiceActive && body) guitarLines.push(body);
+      const voice = line.match(/^V:([^\s]+)(?:\s+(.*))?$/);
+      guitarVoiceActive = voice?.[1] === "Guitar";
+      const body = voice?.[2]?.trim() ?? "";
+      // A voice declaration can carry ABC attributes such as clef/name. It is
+      // not a music body and must not be fed to the Guitar ABC event parser.
+      if (guitarVoiceActive && body && !/^(?:clef|name|stem|middle|transpose|octave)=/.test(body)) {
+        guitarLines.push(body);
+      }
       continue;
     }
     if (guitarVoiceActive && line && !line.startsWith("%") && !/^[A-Za-z]:/.test(line)) {

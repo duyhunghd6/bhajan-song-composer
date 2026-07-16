@@ -7,6 +7,7 @@ import {
   type AbcAsciiGuitarTabValidationResult,
 } from "./abc-ascii-guitartab-validation";
 import { buildGeneratedGuitarAbc, buildStandaloneGeneratedGuitarAbc } from "./guitar-abc-output";
+import { importAbcNotationToTimeGrid } from "./abc-timegrid-import";
 import { validateFingerstylePhysicsDetailed, type FingerstylePhysicsValidationResult } from "./physics-validation";
 import { convertAbcToTimeSliceGrid, type TimeSliceMeasure } from "./time-slice";
 import {
@@ -124,9 +125,15 @@ function attachMelodyTablature(measures: TimeSliceMeasure[]): {
  * guitar-arrangement model, not a lossless ABC concrete-syntax tree.
  */
 export function runSourceTimeGridConversionDiagnostic(sourceAbc: string): SourceTimeGridConversionDiagnostic {
+  const hasImportableForcedGuitar = /(?:^V:Guitar\b|^\[V:Guitar\])/m.test(sourceAbc)
+    && /![1-6]!/.test(sourceAbc);
+  const imported = hasImportableForcedGuitar ? importAbcNotationToTimeGrid(sourceAbc) : undefined;
   const sourceMeasures = convertAbcToTimeSliceGrid(sourceAbc, []);
+  // Keep Melody routing as a diagnostic trace even when the source includes an
+  // authoritative forced-string Guitar voice, whose physical events take
+  // precedence in the imported document.
   const attached = attachMelodyTablature(sourceMeasures);
-  const document: ImportedTimeGridDocument = {
+  const document: ImportedTimeGridDocument = imported?.document ?? {
     version: 1,
     source: { rawAbc: sourceAbc },
     measures: attached.measures,

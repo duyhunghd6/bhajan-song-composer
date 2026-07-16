@@ -1,7 +1,5 @@
 import { requestOpenAiCompatibleToolLoop, type ToolDiagnosticEvent } from "../ai-config";
 import {
-  executeGuitarVoicingQuery,
-  GUITAR_VOICING_TOOL_DEFINITION,
   INSPECT_FILL_RESERVATION_SLOTS_TOOL_DEFINITION,
   SELECT_FILL_RESERVATIONS_TOOL_DEFINITION,
   INSPECT_BASS_POSITIONS_TOOL_DEFINITION,
@@ -9,6 +7,7 @@ import {
   INSPECT_BASS_PITCH_CANDIDATES_TOOL_DEFINITION,
   SELECT_BASS_PITCHES_TOOL_DEFINITION,
   INSPECT_FILL_OPPORTUNITIES_TOOL_DEFINITION,
+  SELECT_FILL_WINDOWS_TOOL_DEFINITION,
   SUBMIT_ARRANGED_LINE_TOOL_DEFINITION,
   VALIDATE_COMPOSED_FILLS_TOOL_DEFINITION,
 } from "../fingerstyle-tool-contract";
@@ -68,11 +67,8 @@ import {
 } from "@/lib/theory/fingerstyle-arranger/abc-ascii-guitartab-validation";
 import { buildAbcDurationContext } from "@/lib/theory/abc-duration";
 import { getKeyAccidentalsFromAbc } from "@/lib/theory/abc-key-signature";
-import {
-  convertTimeSliceMeasureToAbc,
-  joinMeasureAbcWithBarlines,
-  type TimeSliceMeasure,
-} from "@/lib/theory/fingerstyle-arranger/time-slice";
+import { buildGeneratedGuitarAbc } from "@/lib/theory/fingerstyle-arranger/guitar-abc-output";
+import type { TimeSliceMeasure } from "@/lib/theory/fingerstyle-arranger/time-slice";
 
 import {
   boundedToolDiagnostic,
@@ -190,10 +186,9 @@ export async function runFingerstyleLineWorkflow(
   const policy = normalizeFillPolicy(input);
   const melodyPlayability = analyzeAuthoritativeMelodyPlayability(input.lineMeasures, policy.skillLevel);
   const bpm = parseAbcTempo(input.activeAbc);
-  const systemPrompt = buildLineSystemPrompt();
+  const systemPrompt = buildLineSystemPrompt({ fillDensityOff: policy.resolvedDensity === "off" });
   const userPrompt = buildLineUserPrompt(input, melodyPlayability);
   const tools = [
-    GUITAR_VOICING_TOOL_DEFINITION,
     INSPECT_FILL_RESERVATION_SLOTS_TOOL_DEFINITION,
     SELECT_FILL_RESERVATIONS_TOOL_DEFINITION,
     INSPECT_BASS_POSITIONS_TOOL_DEFINITION,
@@ -201,6 +196,7 @@ export async function runFingerstyleLineWorkflow(
     INSPECT_BASS_PITCH_CANDIDATES_TOOL_DEFINITION,
     SELECT_BASS_PITCHES_TOOL_DEFINITION,
     INSPECT_FILL_OPPORTUNITIES_TOOL_DEFINITION,
+    SELECT_FILL_WINDOWS_TOOL_DEFINITION,
     VALIDATE_COMPOSED_FILLS_TOOL_DEFINITION,
     SUBMIT_ARRANGED_LINE_TOOL_DEFINITION,
   ];
@@ -208,6 +204,7 @@ export async function runFingerstyleLineWorkflow(
   let reservationAnalysis: FillReservationAnalysis | null = null;
   let acceptedReservations: FillReservationSelection | null = null;
   let bassPositionAnalysis: BassPositionAnalysis | null = null;
+  let bassPositionsSelected = false;
   let acceptedBassPositions: string[] = [];
   let bassPitchAnalysis: BassPitchAnalysis | null = null;
   let frozenFoundation: TimeSliceMeasure[] | null = null;
@@ -218,6 +215,30 @@ export async function runFingerstyleLineWorkflow(
   let acceptedCompositionToon: string | null = null;
   let acceptedFinalMeasures: TimeSliceMeasure[] | null = null;
   let finalOutput: GenerateFingerstyleLineOutput | null = null;
+  let fillRepairStage: "bass" | "reservation" | null = null;
+  let fillRepairAttempts = 0;
+  let selectionRepairAttempts = 0;
+  let selectionRepairWindowIds: string[] = [];
+  const forceToolTurn = (tool: (typeof tools)[number]) => ({
+    tools: [tool],
+    toolChoice: { type: "function", function: { name: tool.function.name } },
+    maxToolCallsPerTurn: 1,
+  });
+  const resolveFingerstyleToolTurn = () => {
+    if (fillRepairStage === "reservation") return forceToolTurn(SELECT_FILL_RESERVATIONS_TOOL_DEFINITION);
+    if (fillRepairStage === "bass") return forceToolTurn(SELECT_BASS_POSITIONS_TOOL_DEFINITION);
+    if (!reservationAnalysis) return forceToolTurn(INSPECT_FILL_RESERVATION_SLOTS_TOOL_DEFINITION);
+    if (!acceptedReservations) return forceToolTurn(SELECT_FILL_RESERVATIONS_TOOL_DEFINITION);
+    if (!bassPositionAnalysis) return forceToolTurn(INSPECT_BASS_POSITIONS_TOOL_DEFINITION);
+    if (!bassPositionsSelected) return forceToolTurn(SELECT_BASS_POSITIONS_TOOL_DEFINITION);
+    if (!bassPitchAnalysis) return forceToolTurn(INSPECT_BASS_PITCH_CANDIDATES_TOOL_DEFINITION);
+    if (!frozenFoundation) return forceToolTurn(SELECT_BASS_PITCHES_TOOL_DEFINITION);
+    if (policy.resolvedDensity === "off") return forceToolTurn(SUBMIT_ARRANGED_LINE_TOOL_DEFINITION);
+    if (!opportunityAnalysis || nextInspectionCursor !== null) return forceToolTurn(INSPECT_FILL_OPPORTUNITIES_TOOL_DEFINITION);
+    if (!acceptedSelection || selectionRepairWindowIds.length > 0) return forceToolTurn(SELECT_FILL_WINDOWS_TOOL_DEFINITION);
+    if (!acceptedComposition) return forceToolTurn(VALIDATE_COMPOSED_FILLS_TOOL_DEFINITION);
+    return forceToolTurn(SUBMIT_ARRANGED_LINE_TOOL_DEFINITION);
+  };
   let diagnosticSummary: FingerstyleGenerationDiagnosticSummary = {
     outcome: "failed",
     inputEventCount: 0,
@@ -324,6 +345,70 @@ export async function runFingerstyleLineWorkflow(
   logs.push(`=== SYSTEM PROMPT ===\n${systemPrompt}\n`);
   logs.push(`=== USER PROMPT ===\n${userPrompt}\n`);
 
+  const completeFinalOutput = (fillsToon?: string | null) => {
+    if (!acceptedFinalMeasures) {
+      const message = "Materialize a validated foundation before final submission.";
+      recordWorkflowEvent("final-merge-rejected", "final-validation", "warning", message);
+      return { valid: false, message, toolResult: { valid: false, message } };
+    }
+    if (acceptedCompositionToon && fillsToon !== acceptedCompositionToon) {
+      const message = "Final fills_toon must exactly match the payload accepted by validate_composed_fills.";
+      recordWorkflowEvent("final-merge-rejected", "final-validation", "warning", message);
+      return { valid: false, message, toolResult: { valid: false, message } };
+    }
+    const finalSourceDrift = sourceMelodyDrift(sourceMelody, acceptedFinalMeasures);
+    if (finalSourceDrift.length > 0) {
+      const message = `Final merge changed the source-pinned melody: ${finalSourceDrift.join(" ")}`;
+      recordWorkflowEvent("final-merge-rejected", "final-validation", "failed", message, { errors: finalSourceDrift });
+      return { valid: false, message, toolResult: { valid: false, message } };
+    }
+    const physicalErrors = physicalValidationErrors(acceptedFinalMeasures, policy, melodyPlayability.melodyMaxFret);
+    if (physicalErrors.length > 0) {
+      const message = physicalErrors.join(" ");
+      recordWorkflowEvent("final-merge-rejected", "final-validation", "failed", message, { physicalErrors });
+      return { valid: false, message, toolResult: { valid: false, message } };
+    }
+
+    const durationContext = buildAbcDurationContext(input.activeAbc);
+    const keyAccidentals = getKeyAccidentalsFromAbc(input.activeAbc);
+    // Keep server validation on the same canonical TimeGrid projection used by
+    // the workspace and /test-timegrid-to-abcnotation.
+    const guitarAbc = buildGeneratedGuitarAbc(acceptedFinalMeasures, input.activeAbc);
+    const asciiGuitarTabValidation = validateGuitarAbcAgainstAsciiGuitarTab({
+      abc: guitarAbc,
+      measures: acceptedFinalMeasures,
+      durationContext,
+      keyAccidentals,
+    });
+    const asciiGuitarTabValidationMessage = formatAbcAsciiGuitarTabValidation(asciiGuitarTabValidation);
+    recordWorkflowEvent(
+      asciiGuitarTabValidation.valid ? "abc-ascii-guitartab-validated" : "abc-ascii-guitartab-rejected",
+      "final-validation",
+      asciiGuitarTabValidation.valid ? "success" : "failed",
+      asciiGuitarTabValidation.valid
+        ? `ABC ↔ ASCII-GuitarTab validation passed: ${asciiGuitarTabValidation.checkedMeasures} measure(s), ${asciiGuitarTabValidation.expectedEventCount} event(s), no mismatches.`
+        : `ABC ↔ ASCII-GuitarTab validation failed: ${asciiGuitarTabValidation.mismatchCount} mismatch(es).`,
+      asciiGuitarTabValidation,
+    );
+    if (!asciiGuitarTabValidation.valid) {
+      return {
+        valid: false,
+        message: asciiGuitarTabValidationMessage,
+        toolResult: { valid: false, message: asciiGuitarTabValidationMessage },
+      };
+    }
+
+    for (const measure of acceptedFinalMeasures) {
+      const asciiGuitarTab = renderAsciiGuitarTab(measure.grid, measure.pickupDurationUnits);
+      if (asciiGuitarTab) logs.push(`\n## Measure ${measure.measure} — ASCII-GuitarTab\n\n${asciiGuitarTab}`);
+    }
+    logs.push(`\n## ABC ↔ ASCII-GuitarTab Validation\n\n${asciiGuitarTabValidationMessage}`);
+    const completedFillSummary = fillSummary("passed");
+    recordWorkflowEvent("final-merge-validated", "final-validation", "success", "Server reconstruction and whole-line validation passed.", completedFillSummary);
+    finalOutput = { success: true, measures: acceptedFinalMeasures, logs, fillSummary: completedFillSummary };
+    return { valid: true };
+  };
+
   try {
     if (!melodyPlayability.playable) {
       const message = melodyPlayability.issues.map(issue => issue.message).join(" ");
@@ -343,10 +428,10 @@ export async function runFingerstyleLineWorkflow(
       systemPrompt,
       userPrompt,
       tools,
+      resolveToolTurn: resolveFingerstyleToolTurn,
       finalToolName: "submit_arranged_line",
       onDiagnostic: recordLlmDiagnostic,
       localTools: [
-        { name: "query_guitar_voicings", execute: executeGuitarVoicingQuery },
         {
           name: "inspect_fill_reservation_slots",
           execute: () => {
@@ -373,9 +458,18 @@ export async function runFingerstyleLineWorkflow(
             }
             acceptedReservations = parsed.value;
             acceptedBassPositions = [];
+            bassPositionsSelected = false;
             bassPositionAnalysis = null;
             bassPitchAnalysis = null;
             frozenFoundation = null;
+            opportunityAnalysis = null;
+            nextInspectionCursor = 0;
+            acceptedSelection = null;
+            acceptedComposition = null;
+            acceptedCompositionToon = null;
+            acceptedFinalMeasures = null;
+            fillRepairStage = null;
+            fillRepairAttempts = 0;
             recordWorkflowEvent("fill-reservations-accepted", "fill-reservations", "success", `Note Fills Position: ${validated.selectedSlotIds.map(id => id.replace("fr-", "")).join(", ") || "none"}.`, { selectedSlotIds: validated.selectedSlotIds });
             return { valid: true, selectedSlotIds: validated.selectedSlotIds };
           },
@@ -402,7 +496,9 @@ export async function runFingerstyleLineWorkflow(
               return { valid: false, message: validated.errors.join(" ") };
             }
             acceptedBassPositions = validated.selectedPositionIds;
+            bassPositionsSelected = true;
             bassPitchAnalysis = null;
+            fillRepairStage = null;
             frozenFoundation = null;
             opportunityAnalysis = null;
             nextInspectionCursor = 0;
@@ -452,6 +548,13 @@ export async function runFingerstyleLineWorkflow(
             acceptedFinalMeasures = null;
             recordWorkflowEvent("bass-pitches-accepted", "bass-pitches", "success", `Bass note choices: ${validated.selected.map(candidate => `${candidate.positionId}=${candidate.pitch} (${candidate.role})`).join(", ") || "none"}.`, { selected: validated.selected });
             recordWorkflowEvent("timegrid-materialized", "timegrid", "success", `Updated and froze canonical TimeGrid with ${validated.selected.length} bass note(s).`, placement.diagnostics);
+            if (policy.resolvedDensity === "off") {
+              acceptedFinalMeasures = frozenFoundation;
+              recordWorkflowEvent("fill-stages-skipped", "fill-analysis", "info", "Fill density is none; skipped opportunity analysis, fill selection, composition, and final LLM submission.");
+              const finalization = completeFinalOutput();
+              if (!finalization.valid) return finalization;
+              return { valid: true, selected: validated.selected, message: "TimeGrid updated and finalized without discretionary fills." };
+            }
             return { valid: true, selected: validated.selected, message: "TimeGrid updated. Inspect post-bass fill opportunities next." };
           },
         },
@@ -500,22 +603,21 @@ export async function runFingerstyleLineWorkflow(
                 return window && match && window.measure === Number(match[1]) && Number(match[2]) >= window.startStep && Number(match[2]) <= window.endStep;
               }));
               if (unresolved.length > 0) {
-                recordWorkflowEvent("fill-reservations-reconciled", "fill-reconciliation", "warning", `Repair required: selected fill reservation(s) have no legal post-bass candidate window: ${unresolved.join(", ")}.`, { unresolved });
-                return { valid: false, message: `Repair required: revise bass or fill reservations for ${unresolved.join(", ")}.` };
+                fillRepairAttempts += 1;
+                fillRepairStage = fillRepairAttempts === 1 ? "bass" : "reservation";
+                opportunityAnalysis = null;
+                nextInspectionCursor = 0;
+                acceptedSelection = null;
+                acceptedComposition = null;
+                acceptedCompositionToon = null;
+                acceptedFinalMeasures = null;
+                recordWorkflowEvent("fill-reservations-reconciled", "fill-reconciliation", "warning", `Repair required: selected fill reservation(s) have no legal post-bass candidate window: ${unresolved.join(", ")}.`, { unresolved, repair: fillRepairStage });
+                return { valid: false, message: `Repair required: revise ${fillRepairStage === "bass" ? "bass positions" : "fill reservations"} for ${unresolved.join(", ")}.` };
               }
-              acceptedSelection = {
-                version: "fill-selection:v1",
-                opportunitySetId: opportunityAnalysis!.opportunitySetId,
-                sourceFingerprint: input.sourceFingerprint,
-                decisions: opportunityAnalysis!.windows.map(window => ({ windowId: window.id, decision: selectedWindowIds.has(window.id) ? "use" : "skip", reason: selectedWindowIds.has(window.id) ? "Selected earlier as a fill reservation." : "Not reserved during fill-position planning." })),
-              };
-              const validated = validateFillSelection(opportunityAnalysis!, acceptedSelection);
-              if (!validated.valid) return { valid: false, message: `Repair required: ${validated.errors.join(" ")}` };
               recordWorkflowEvent("fill-reservations-reconciled", "fill-reconciliation", "success", `Reconciled ${reserved.length} fill reservation(s) against the frozen bass TimeGrid.`, { reserved, selectedWindowIds: [...selectedWindowIds] });
             }
             return page.toon;
           },
-          maxInvalidResults: 3,
         },
         {
           name: "select_fill_windows",
@@ -539,6 +641,7 @@ export async function runFingerstyleLineWorkflow(
               return { valid: false, message };
             }
             acceptedSelection = parsed.value;
+            selectionRepairWindowIds = [];
             acceptedComposition = null;
             acceptedCompositionToon = null;
             acceptedFinalMeasures = null;
@@ -567,6 +670,16 @@ export async function runFingerstyleLineWorkflow(
             }
             const validated = validateFillComposition(opportunityAnalysis, acceptedSelection, parsed.value);
             if (!validated.valid) {
+              const uncoveredWindowIds = validated.issues
+                .filter(issue => issue.code === "selected-window-uncovered")
+                .flatMap(issue => /^Selected window (.+) needs at least one composed note\.$/.exec(issue.message)?.[1] ?? []);
+              if (uncoveredWindowIds.length > 0 && selectionRepairAttempts < 2) {
+                selectionRepairAttempts += 1;
+                selectionRepairWindowIds = uncoveredWindowIds;
+                acceptedSelection = null;
+                recordWorkflowEvent("composition-rejected", "fill-selection-repair", "warning", `Selected windows need a note or skip decision: ${uncoveredWindowIds.join(", ")}.`, { uncoveredWindowIds, selectionRepairAttempts });
+                return { valid: false, message: `Revise fill-window decisions: add a note for or skip ${uncoveredWindowIds.join(", ")}.` };
+              }
               recordWorkflowEvent("composition-rejected", "fill-composition", "warning", validated.message, { issues: validated.issues });
               return { valid: false, message: validated.message };
             }
@@ -585,79 +698,17 @@ export async function runFingerstyleLineWorkflow(
             });
             return { valid: true, message: "Composed fills accepted. Submit the exact same fills_toon payload." };
           },
-          maxInvalidResults: 3,
         },
       ],
       validateFinalResult: args => {
-        const fillsToon = toolPayloadString(args, "fills_toon");
-        if (!acceptedCompositionToon || !acceptedFinalMeasures || !acceptedComposition) {
+        if (!acceptedCompositionToon || !acceptedComposition) {
           const message = "Validate composed fills before final submission.";
           recordWorkflowEvent("final-merge-rejected", "final-validation", "warning", message);
           return { valid: false, message, toolResult: { valid: false, message } };
         }
-        if (fillsToon !== acceptedCompositionToon) {
-          const message = "Final fills_toon must exactly match the payload accepted by validate_composed_fills.";
-          recordWorkflowEvent("final-merge-rejected", "final-validation", "warning", message);
-          return { valid: false, message, toolResult: { valid: false, message } };
-        }
-        const finalSourceDrift = sourceMelodyDrift(sourceMelody, acceptedFinalMeasures);
-        if (finalSourceDrift.length > 0) {
-          const message = `Final merge changed the source-pinned melody: ${finalSourceDrift.join(" ")}`;
-          recordWorkflowEvent("final-merge-rejected", "final-validation", "failed", message, { errors: finalSourceDrift });
-          return { valid: false, message, toolResult: { valid: false, message } };
-        }
-        const physicalErrors = physicalValidationErrors(acceptedFinalMeasures, policy, melodyPlayability.melodyMaxFret);
-        if (physicalErrors.length > 0) {
-          const message = physicalErrors.join(" ");
-          recordWorkflowEvent("final-merge-rejected", "final-validation", "failed", message, { physicalErrors });
-          return { valid: false, message, toolResult: { valid: false, message } };
-        }
-
-        const durationContext = buildAbcDurationContext(input.activeAbc);
-        const keyAccidentals = getKeyAccidentalsFromAbc(input.activeAbc);
-        const guitarAbc = joinMeasureAbcWithBarlines(
-          acceptedFinalMeasures.map(measure => convertTimeSliceMeasureToAbc(
-            measure,
-            durationContext,
-            keyAccidentals,
-            true,
-          )),
-          acceptedFinalMeasures,
-        );
-        const asciiGuitarTabValidation = validateGuitarAbcAgainstAsciiGuitarTab({
-          abc: guitarAbc,
-          measures: acceptedFinalMeasures,
-          durationContext,
-          keyAccidentals,
-        });
-        const asciiGuitarTabValidationMessage = formatAbcAsciiGuitarTabValidation(asciiGuitarTabValidation);
-        recordWorkflowEvent(
-          asciiGuitarTabValidation.valid ? "abc-ascii-guitartab-validated" : "abc-ascii-guitartab-rejected",
-          "final-validation",
-          asciiGuitarTabValidation.valid ? "success" : "failed",
-          asciiGuitarTabValidation.valid
-            ? `ABC ↔ ASCII-GuitarTab validation passed: ${asciiGuitarTabValidation.checkedMeasures} measure(s), ${asciiGuitarTabValidation.expectedEventCount} event(s), no mismatches.`
-            : `ABC ↔ ASCII-GuitarTab validation failed: ${asciiGuitarTabValidation.mismatchCount} mismatch(es).`,
-          asciiGuitarTabValidation,
-        );
-        if (!asciiGuitarTabValidation.valid) {
-          return {
-            valid: false,
-            message: asciiGuitarTabValidationMessage,
-            toolResult: { valid: false, message: asciiGuitarTabValidationMessage },
-          };
-        }
-
-        for (const measure of acceptedFinalMeasures) {
-          const asciiGuitarTab = renderAsciiGuitarTab(measure.grid, measure.pickupDurationUnits);
-          if (asciiGuitarTab) logs.push(`\n## Measure ${measure.measure} — ASCII-GuitarTab\n\n${asciiGuitarTab}`);
-        }
-        logs.push(`\n## ABC ↔ ASCII-GuitarTab Validation\n\n${asciiGuitarTabValidationMessage}`);
-        const completedFillSummary = fillSummary("passed");
-        recordWorkflowEvent("final-merge-validated", "final-validation", "success", "Server reconstruction and whole-line validation passed.", completedFillSummary);
-        finalOutput = { success: true, measures: acceptedFinalMeasures, logs, fillSummary: completedFillSummary };
-        return { valid: true };
+        return completeFinalOutput(toolPayloadString(args, "fills_toon"));
       },
+      shouldComplete: () => Boolean(finalOutput),
       temperature: 0.25,
       maxIterations: 24,
       maxValidationAttempts: 3,

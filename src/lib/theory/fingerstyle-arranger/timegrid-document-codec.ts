@@ -19,11 +19,11 @@ export interface ImportedTimeGridDocument {
 
 const V1_FORMAT = "timegrid-document:v1";
 const FINGERS = new Set(["p", "i", "m", "a", null]);
-const ROLES = new Set(["bass", "melody", "fill", "harmony", "root", "fifth"]);
+const ROLES = new Set(["bass", "melody", "fill", "harmony", "root", "fifth", "imported"]);
 const WEIGHTS = new Set(["⬤", "●", "*", null]);
 const MELODY_STATES = new Set(["attack", "sustain", "rest"]);
 
-type CompactEvent = [number, number, "p" | "i" | "m" | "a" | null, "bass" | "melody" | "fill" | "harmony" | "root" | "fifth", number | null, string | null, string | null];
+type CompactEvent = [number, number, "p" | "i" | "m" | "a" | null, "bass" | "melody" | "fill" | "harmony" | "root" | "fifth" | "imported", number | null, string | null, string | null];
 type CompactStep = [number, string, "⬤" | "●" | "*" | null, string | null, "attack" | "sustain" | "rest", string | null, CompactEvent[] | null];
 type CompactMeasure = [number, number, [string, string, string, string | null], number | null, number | null, [boolean, boolean, string | null] | null, string | null, [string, string, string] | null, CompactStep[]];
 type CompactDocument = { f: typeof V1_FORMAT; a: string; m: CompactMeasure[] };
@@ -60,7 +60,7 @@ function parseV1Event(value: unknown, path: string) {
   const durationSteps = durationValue === null ? undefined : integer(durationValue, `${path}[4]`, 1);
   const fillWindowId = nullableString(windowValue, `${path}[5]`) ?? undefined;
   const fillCandidateId = nullableString(candidateValue, `${path}[6]`) ?? undefined;
-  return { string: string as GuitarStringNumber, fret, finger: fingerValue as "p" | "i" | "m" | "a" | null, role: roleValue as "bass" | "melody" | "fill" | "harmony" | "root" | "fifth", ...(durationSteps === undefined ? {} : { durationSteps }), ...(fillWindowId === undefined ? {} : { fillWindowId }), ...(fillCandidateId === undefined ? {} : { fillCandidateId }) };
+  return { string: string as GuitarStringNumber, fret, finger: fingerValue as "p" | "i" | "m" | "a" | null, role: roleValue as "bass" | "melody" | "fill" | "harmony" | "root" | "fifth" | "imported", ...(durationSteps === undefined ? {} : { durationSteps }), ...(fillWindowId === undefined ? {} : { fillWindowId }), ...(fillCandidateId === undefined ? {} : { fillCandidateId }) };
 }
 function parseV1Step(value: unknown, path: string): TimeSliceGridStep {
   const [stepValue, chordValue, weightValue, pitchValue, stateValue, lyricValue, tablatureValue] = tuple(value, 7, path);

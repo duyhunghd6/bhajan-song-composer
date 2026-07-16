@@ -111,4 +111,15 @@ describe("fingerstyle diagnostic persistence", () => {
       run: makeRun(1),
     })).not.toThrow();
   });
+
+  it("does not restore diagnostic runs from an older run schema", () => {
+    const legacyRun = { ...makeRun(1), version: 1, plaintext: "FINGERSTYLE LLM + DP DIAGNOSTIC VISUALIZATION" };
+    const saved = JSON.stringify({
+      version: 1,
+      sourceFingerprint: "current-source",
+      runs: [legacyRun, makeRun(2)],
+    });
+
+    expect(restoreFingerstyleDiagnosticRuns(saved, "current-source").map(run => run.runId)).toEqual(["run-2"]);
+  });
 });

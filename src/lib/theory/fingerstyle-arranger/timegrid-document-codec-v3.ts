@@ -4,7 +4,7 @@ import type { ImportedTimeGridDocument } from "./timegrid-document-codec";
 
 export const V3_FORMAT = "timegrid-document:v3";
 const FINGERS = new Set(["p", "i", "m", "a", null]);
-const ROLES = new Set(["bass", "melody", "fill", "harmony", "root", "fifth"]);
+const ROLES = new Set(["bass", "melody", "fill", "harmony", "root", "fifth", "imported"]);
 const WEIGHTS = new Set(["⬤", "●", "*", null]);
 const STATES = new Set(["attack", "sustain", "rest"]);
 
@@ -52,6 +52,7 @@ function formatMeasure(measure: TimeSliceMeasure): string {
     ...(measure.sourceDurationUnits === undefined ? [] : [["sourceDurationUnits", measure.sourceDurationUnits]]),
     ...(measure.barline === undefined ? [] : [["barline", measure.barline]]),
     ...(measure.visualTablature === undefined ? [] : [["visualTablature", measure.visualTablature]]),
+    ...(measure.guitarSlurs === undefined ? [] : [["guitarSlurs", measure.guitarSlurs]]),
     ...(measure.source_abc === undefined ? [] : [["sourceAbc", measure.source_abc]]),
   ];
   const propertyLines = fields.map(([key, value]) => `      ${JSON.stringify(key)}: ${JSON.stringify(value)},`);
@@ -93,7 +94,17 @@ function parseEvent(value: unknown, path: string) {
   const finger = item.finger; const role = item.role;
   if (!FINGERS.has(finger as null) || !ROLES.has(role as string)) fail(`${path} has invalid finger or role.`);
   const durationSteps = item.durationSteps === undefined ? undefined : integer(item.durationSteps, `${path}.durationSteps`, 1);
-  return { string: guitarString as GuitarStringNumber, fret: integer(item.fret, `${path}.fret`), finger: finger as "p" | "i" | "m" | "a" | null, role: role as "bass" | "melody" | "fill" | "harmony" | "root" | "fifth", ...(durationSteps === undefined ? {} : { durationSteps }), ...(item.fillWindowId === undefined ? {} : { fillWindowId: string(item.fillWindowId, `${path}.fillWindowId`) }), ...(item.fillCandidateId === undefined ? {} : { fillCandidateId: string(item.fillCandidateId, `${path}.fillCandidateId`) }) };
+  return { string: guitarString as GuitarStringNumber, fret: integer(item.fret, `${path}.fret`), finger: finger as "p" | "i" | "m" | "a" | null, role: role as "bass" | "melody" | "fill" | "harmony" | "root" | "fifth" | "imported", ...(durationSteps === undefined ? {} : { durationSteps }), ...(item.fillWindowId === undefined ? {} : { fillWindowId: string(item.fillWindowId, `${path}.fillWindowId`) }), ...(item.fillCandidateId === undefined ? {} : { fillCandidateId: string(item.fillCandidateId, `${path}.fillCandidateId`) }) };
+}
+
+function parseGuitarSlurs(value: unknown, path: string): TimeSliceMeasure["guitarSlurs"] {
+  if (value === undefined) return undefined;
+  return array(value, path).map((raw, index) => {
+    const item = record(raw, `${path}[${index}]`);
+    const startStep = integer(item.startStep, `${path}[${index}].startStep`, 1);
+    const endStep = integer(item.endStep, `${path}[${index}].endStep`, startStep);
+    return { startStep, endStep };
+  });
 }
 
 export function parseV3Document(value: Record<string, unknown>): ImportedTimeGridDocument {
@@ -109,6 +120,6 @@ export function parseV3Document(value: Record<string, unknown>): ImportedTimeGri
       const tablature = step.tab === undefined ? undefined : array(step.tab, "tab").map((tab, tabIndex) => parseEvent(tab, `tab[${tabIndex}]`)); const strings = new Set<number>(); for (const tab of tablature ?? []) { if (strings.has(tab.string)) fail("Duplicate tablature string."); strings.add(tab.string); }
       return { step: integer(step.step, "step", 1), chord: string(step.chord, "chord"), weight: weight as TimeSliceGridStep["weight"], melody: { pitch, state: state as TimeSliceGridStep["melody"]["state"] }, lyric: step.lyric === undefined ? null : nullableString(step.lyric, "lyric"), ...(tablature === undefined ? {} : { tablature }) };
     });
-    return { measure: integer(item.measure, "measure", 1), lineIndex: integer(item.lineIndex, "lineIndex"), style_profile: overrides.get(measureIndex) ?? rootStyle, ...(optionalNumber(item.pickupDurationUnits, "pickupDurationUnits") === undefined ? {} : { pickupDurationUnits: optionalNumber(item.pickupDurationUnits, "pickupDurationUnits") }), ...(optionalNumber(item.sourceDurationUnits, "sourceDurationUnits") === undefined ? {} : { sourceDurationUnits: optionalNumber(item.sourceDurationUnits, "sourceDurationUnits") }), ...(item.barline === undefined ? {} : { barline: record(item.barline, "barline") as unknown as TimeSliceMeasure["barline"] }), ...(item.visualTablature === undefined ? {} : { visualTablature: string(item.visualTablature, "visualTablature") }), ...(item.sourceAbc === undefined ? {} : { source_abc: record(item.sourceAbc, "sourceAbc") as TimeSliceMeasure["source_abc"] }), grid };
+    return { measure: integer(item.measure, "measure", 1), lineIndex: integer(item.lineIndex, "lineIndex"), style_profile: overrides.get(measureIndex) ?? rootStyle, ...(optionalNumber(item.pickupDurationUnits, "pickupDurationUnits") === undefined ? {} : { pickupDurationUnits: optionalNumber(item.pickupDurationUnits, "pickupDurationUnits") }), ...(optionalNumber(item.sourceDurationUnits, "sourceDurationUnits") === undefined ? {} : { sourceDurationUnits: optionalNumber(item.sourceDurationUnits, "sourceDurationUnits") }), ...(item.barline === undefined ? {} : { barline: record(item.barline, "barline") as unknown as TimeSliceMeasure["barline"] }), ...(item.visualTablature === undefined ? {} : { visualTablature: string(item.visualTablature, "visualTablature") }), ...(item.guitarSlurs === undefined ? {} : { guitarSlurs: parseGuitarSlurs(item.guitarSlurs, "guitarSlurs") }), ...(item.sourceAbc === undefined ? {} : { source_abc: record(item.sourceAbc, "sourceAbc") as TimeSliceMeasure["source_abc"] }), grid };
   }) };
 }

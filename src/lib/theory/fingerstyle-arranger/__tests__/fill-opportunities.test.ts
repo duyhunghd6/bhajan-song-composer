@@ -142,7 +142,11 @@ describe("fill opportunity policy", () => {
 
   it("normalizes explicit and legacy density values", () => {
     expect(normalizeFillPolicy({ densityMode: "normal" }).densitySource).toBe("explicit");
-    expect(normalizeFillPolicy({ densityMode: "none" }).resolvedDensity).toBe("off");
+    expect(normalizeFillPolicy({ densityMode: "none" })).toMatchObject({
+      densityMode: "none",
+      resolvedDensity: "off",
+      densitySource: "explicit",
+    });
     expect(normalizeFillPolicy({ densityMode: "all" }).resolvedDensity).toBe("many");
     expect(normalizeFillPolicy({ densityMode: "unexpected" }).densityMode).toBe("auto");
   });

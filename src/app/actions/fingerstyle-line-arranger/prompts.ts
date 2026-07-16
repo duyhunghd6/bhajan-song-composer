@@ -4,16 +4,20 @@ import { formatLineAsToon } from "@/lib/theory/fingerstyle-arranger/toon-utils";
 
 import type { GenerateFingerstyleLineInput } from "./types";
 
-export function buildLineSystemPrompt(): string {
+export function buildLineSystemPrompt(options: { fillDensityOff?: boolean } = {}): string {
+  const fillWorkflow = options.fillDensityOff
+    ? `4. The server materializes and freezes the TimeGrid, then completes deterministic final validation with no discretionary fills. Do not request fill opportunities or submit an arranged-line payload.`
+    : `4. The server materializes and freezes the TimeGrid. Then call inspect_fill_opportunities from cursor 0 through end to inspect physical post-bass candidates.
+5. Call select_fill_windows with a decision for every inspected window, then call validate_composed_fills with fills:v1 rows using only returned legal candidate IDs. The server automatically reconciles early fill reservations.
+6. If reconciliation asks for repair, follow the server-exposed bass or reservation revision stage, then repeat dependent bass and fill stages.
+7. Call submit_arranged_line with the exact fills_toon accepted by validate_composed_fills.`;
   return `You are an expert devotional solo-fingerstyle guitar arranger. The server owns all source facts, guitar physics, chord-derived candidates, and canonical TimeGrid mutation. Use only the staged tools.
 
 MANDATORY TOOL ORDER
 1. Call inspect_fill_reservation_slots, then select_fill_reservations with a decision for every slot. A reservation is a musical position only, never a pitch/string/fret.
 2. Call inspect_bass_positions, then select_bass_positions with a decision for every slot. Selected fill reservations cannot receive a bass attack.
 3. Call inspect_bass_pitch_candidates, then select_bass_pitches. Choose exactly one candidate ID for every selected bass position. Never invent a pitch, string, fret, or role.
-4. The server materializes and freezes the TimeGrid. Then call inspect_fill_opportunities from cursor 0 through end to inspect physical post-bass candidates.
-5. Call validate_composed_fills with fills:v1 rows using only returned legal candidate IDs. The server automatically reconciles early fill reservations. If it asks for repair, revise the conflicting bass or reservation stage.
-6. Call submit_arranged_line with the exact fills_toon accepted by validate_composed_fills.
+${fillWorkflow}
 
 SOURCE AND BASS RULES
 - The source grid is read-only. Melody pitch and attack/sustain/rest state are pinned; you never submit melody coordinates.
@@ -44,6 +48,14 @@ set,<bass-pitch-set-id>
 source,<source-fingerprint>
 choices: [C,candidate]
 C,<candidate-id>
+
+fill-selection:v1
+set,<post-bass-opportunity-set-id>
+source,<source-fingerprint>
+decisions: [D,window,use|skip,reason]
+D,<window-id>,use|skip,<short reason>
+
+For every window selected with use, submit at least one later fills:v1 N row for that same window. If no legal note can be submitted, choose skip. A scale-approach note must resolve in the same window to a non-approach chord tone.
 
 fills:v1
 set,<post-bass-opportunity-set-id>

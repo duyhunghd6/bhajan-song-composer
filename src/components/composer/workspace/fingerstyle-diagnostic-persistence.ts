@@ -1,6 +1,7 @@
-import type {
-  FingerstyleGenerationDiagnosticEvent,
-  FingerstyleGenerationDiagnosticRun,
+import {
+  FINGERSTYLE_GENERATION_DIAGNOSTIC_VERSION,
+  type FingerstyleGenerationDiagnosticEvent,
+  type FingerstyleGenerationDiagnosticRun,
 } from "@/lib/theory/fingerstyle-arranger/generation-diagnostics";
 
 const PERSISTENCE_VERSION = 1 as const;
@@ -86,7 +87,11 @@ function parseEnvelope(
     return {
       version: PERSISTENCE_VERSION,
       sourceFingerprint,
-      runs: parsed.runs.filter(run => run && typeof run.runId === "string"),
+      runs: parsed.runs.filter(run => (
+        run
+        && run.version === FINGERSTYLE_GENERATION_DIAGNOSTIC_VERSION
+        && typeof run.runId === "string"
+      )),
     };
   } catch {
     return { version: PERSISTENCE_VERSION, sourceFingerprint, runs: [] };

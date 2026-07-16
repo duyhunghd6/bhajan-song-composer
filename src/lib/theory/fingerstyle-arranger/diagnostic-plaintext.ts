@@ -20,7 +20,7 @@ function mark(status: FingerstyleGenerationDiagnosticEvent["status"]): string {
 /** A bounded, copyable summary; detailed source/grid/prompt payloads never enter this view. */
 export function renderFingerstyleDiagnosticPlaintext(input: PlaintextDiagnosticInput): string {
   const lines = [
-    "FINGERSTYLE LLM + TIMEGRID WORKFLOW DIAGNOSTICS",
+    "FINGERSTYLE STAGED TIMEGRID WORKFLOW DIAGNOSTICS",
     `Run: ${input.runId}`,
     `Scope: ${input.scope.songSlug ?? "song"}, line ${input.scope.lineIndex ?? "-"}, measures ${(input.scope.measureIndexes ?? []).join(", ") || "-"}`,
     "",
@@ -39,6 +39,7 @@ export function renderFingerstyleDiagnosticPlaintext(input: PlaintextDiagnosticI
   section("NOTE FILLS POSITION", ["fill-reservations-accepted", "fill-reservations-reconciled"]);
   section("BASS POSITIONS IN SOURCE ABC", ["bass-positions-accepted", "bass-source-abc-annotated"]);
   section("CHORD-DERIVED BASS NOTES", ["bass-pitches-accepted"]);
+  section("FILL POLICY", ["fill-stages-skipped"]);
   section("TIMEGRID / ASCII / GUITAR ABC", ["timegrid-materialized", "abc-ascii-guitartab-validated", "abc-ascii-guitartab-rejected", "final-merge-validated", "final-merge-rejected"]);
   lines.push(
     "",
