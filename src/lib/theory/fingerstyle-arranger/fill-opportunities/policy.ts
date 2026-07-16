@@ -1,5 +1,5 @@
 import type { TimeSliceMeasure } from "../time-slice";
-import type { SkillLevel } from "../dp-types";
+import type { SkillLevel } from "../fingerstyle-constraints";
 import type {
   FillDensityMode,
   FillSelectionBudget,

@@ -138,6 +138,8 @@ function diagnosticMessage(event: ToolDiagnosticEvent): string {
         : `Final ${event.toolName} output failed validation: ${event.message ?? "no validation message"}`;
     case "loop-exhausted":
       return `LLM validation loop exhausted after ${event.maxIterations} iteration${event.maxIterations === 1 ? "" : "s"}: ${event.lastValidationMessage}`;
+    case "context-budget-exceeded":
+      return `LLM context budget exceeded: ${event.message}`;
   }
 }
 

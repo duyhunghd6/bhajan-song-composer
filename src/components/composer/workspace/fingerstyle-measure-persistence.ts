@@ -1,10 +1,7 @@
-import { buildAbcDurationContext } from "@/lib/theory/abc-duration";
-import { getKeyAccidentalsFromAbc } from "@/lib/theory/abc-key-signature";
-import {
-  convertTimeSliceMeasureToAbc,
-  joinMeasureAbcWithBarlines,
-  type TimeSliceMeasure,
-} from "@/lib/theory/fingerstyle-arranger/time-slice";
+import { buildGeneratedGuitarAbc } from "@/lib/theory/fingerstyle-arranger/guitar-abc-output";
+import type { TimeSliceMeasure } from "@/lib/theory/fingerstyle-arranger/time-slice";
+
+export { buildGeneratedGuitarAbc };
 
 const FINGERSTYLE_MEASURES_VERSION = 1;
 
@@ -89,17 +86,4 @@ export function serializeFingerstyleMeasures(
     measures,
   };
   return JSON.stringify(payload);
-}
-
-export function buildGeneratedGuitarAbc(measures: TimeSliceMeasure[], sourceAbc: string): string {
-  const durationContext = buildAbcDurationContext(sourceAbc);
-  const keyAccidentals = getKeyAccidentalsFromAbc(sourceAbc);
-  const tablatureAbcList = measures.map((measure) => (
-    convertTimeSliceMeasureToAbc(measure, durationContext, keyAccidentals, true)
-  ));
-  return [
-    'V:Guitar clef=treble-8 name="Fingerstyle Tablature"',
-    "%%MIDI program 24",
-    joinMeasureAbcWithBarlines(tablatureAbcList, measures),
-  ].join("\n");
 }

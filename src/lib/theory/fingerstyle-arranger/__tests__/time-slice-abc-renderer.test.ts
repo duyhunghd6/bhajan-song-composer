@@ -62,6 +62,28 @@ function sparseOpeningMeasure(): TimeSliceMeasure {
   };
 }
 
+function sameStringDurationMeasure(): TimeSliceMeasure {
+  return {
+    measure: 1,
+    lineIndex: 0,
+    style_profile: { key: "Em", comping_style: "Sparse PIMA", voicing_plan: "Open Em" },
+    grid: Array.from({ length: 8 }, (_, index) => ({
+      step: index + 1,
+      chord: "Em",
+      weight: null,
+      melody: { pitch: null, state: "rest" as const },
+      lyric: null,
+      tablature: index === 0
+        ? [{ string: 6 as const, fret: 0, finger: "p" as const, role: "fill" as const }]
+        : index === 2
+          ? [{ string: 1 as const, fret: 0, finger: "a" as const, role: "fill" as const }]
+          : index === 4
+            ? [{ string: 6 as const, fret: 2, finger: "p" as const, role: "fill" as const }]
+            : [],
+    })),
+  };
+}
+
 function adjacentEqualPitchFillMeasure(): TimeSliceMeasure {
   return {
     measure: 1,
@@ -105,6 +127,33 @@ describe("time-slice ABC interval renderer", () => {
     expect(rendered).toBe("!1!e- [!1!e!3!G] z2");
     expect(rendered).toContain("!1!e-");
     expect(rendered).toContain("[!1!e!3!G]");
+  });
+
+  it("honors an explicit melody duration before source sustain fallback", () => {
+    const measure = heldMelodyMeasure();
+    measure.grid[0].tablature![0].durationSteps = 1;
+    const rendered = convertTimeSliceMeasureToAbc(
+      measure,
+      buildAbcDurationContext(ABC),
+      getKeyAccidentalsFromAbc(ABC),
+      true,
+    );
+
+    expect(rendered).toContain("!1!e/2");
+    expect(rendered).not.toContain("!1!e-");
+  });
+
+  it("infers legacy duration from the next attack on the same string", () => {
+    const rendered = convertTimeSliceMeasureToAbc(
+      sameStringDurationMeasure(),
+      buildAbcDurationContext(ABC),
+      getKeyAccidentalsFromAbc(ABC),
+      true,
+    );
+
+    expect(rendered).toContain("!6!E,-");
+    expect(rendered).toContain("[!1!e-!6!E,]");
+    expect(rendered).toContain("[!1!e!6!F,]2");
   });
 
   it("renders adjacent equal-pitch fills as separate untied attacks", () => {

@@ -8,4 +8,14 @@ describe("ABC duration normalization", () => {
     expect(measureDurationUnits(measure)).toBe(8);
     expect(normalizeAbcMeasureDuration(measure, 8)).toBe(measure);
   });
+
+  it("preserves ties while normalizing a sustained note", () => {
+    expect(normalizeAbcMeasureDuration("E4- E4", 8)).toBe("E4- E4");
+  });
+
+  it("preserves ties on forced-string chord tokens", () => {
+    const measure = "[!1!e!3!G]4- [!1!e!3!G]4";
+
+    expect(normalizeAbcMeasureDuration(measure, 8)).toBe(measure);
+  });
 });

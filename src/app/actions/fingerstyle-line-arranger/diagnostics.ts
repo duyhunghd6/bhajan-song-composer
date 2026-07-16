@@ -28,6 +28,7 @@ function llmDiagnosticMessage(event: ToolDiagnosticEvent): string {
     case "tool-result": return `Tool result received from ${event.toolName}.`;
     case "final-validation": return event.valid ? `Final ${event.toolName} payload passed local validation.` : `Final ${event.toolName} payload failed local validation.`;
     case "loop-exhausted": return `Tool loop exhausted after ${event.maxIterations} iteration(s): ${event.lastValidationMessage}`;
+    case "context-budget-exceeded": return `Context budget exceeded: ${event.message}`;
   }
 }
 

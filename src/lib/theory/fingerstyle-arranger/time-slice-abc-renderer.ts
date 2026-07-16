@@ -51,9 +51,16 @@ function activeStepCount(measure: TimeSliceMeasure, stepDurationUnits: number): 
   ));
 }
 
-function legacyDurationSteps(measure: TimeSliceMeasure, startIndex: number, maxSteps: number): number {
+export function inferLegacyTabDurationSteps(
+  measure: TimeSliceMeasure,
+  startIndex: number,
+  string: GuitarStringNumber,
+  maxSteps: number,
+): number {
   for (let index = startIndex + 1; index < maxSteps; index++) {
-    if ((measure.grid[index].tablature?.length ?? 0) > 0) return index - startIndex;
+    if (measure.grid[index].tablature?.some(tab => tab.string === string)) {
+      return index - startIndex;
+    }
   }
   return maxSteps - startIndex;
 }
@@ -62,9 +69,10 @@ function collectSoundingEvents(measure: TimeSliceMeasure, maxSteps: number): Sou
   const events: SoundingEvent[] = [];
   for (let start = 0; start < maxSteps; start++) {
     for (const tab of measure.grid[start].tablature ?? []) {
-      const requestedDuration = tab.role === "melody" && measure.grid[start].melody.state === "attack"
-        ? melodyDurationSteps(measure, start)
-        : tab.durationSteps ?? legacyDurationSteps(measure, start, maxSteps);
+      const requestedDuration = tab.durationSteps
+        ?? (tab.role === "melody" && measure.grid[start].melody.state === "attack"
+          ? melodyDurationSteps(measure, start)
+          : inferLegacyTabDurationSteps(measure, start, tab.string, maxSteps));
       const duration = Math.max(1, Math.min(requestedDuration, maxSteps - start));
       events.push({
         id: `${start}:${tab.string}:${tab.fret}:${tab.role}`,

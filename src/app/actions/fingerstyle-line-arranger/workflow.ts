@@ -12,9 +12,7 @@ import {
   persistFingerstyleDiagnosticRecords,
   type FingerstyleStoredDiagnosticRecord,
 } from "../fingerstyle-diagnostics";
-import { applyDPToTimeSliceMeasures } from "@/lib/theory/fingerstyle-arranger/dp-integration";
-import { applyHeuristicToTimeSliceMeasures } from "@/lib/theory/fingerstyle-arranger/heuristic-time-slice";
-import { createFingerstyleDiagnosticRunId } from "@/lib/theory/fingerstyle-arranger/dp-diagnostics";
+import { placeFingerstyleFoundationOnTimeGrid } from "@/lib/theory/fingerstyle-arranger/heuristic-time-slice";
 import {
   analyzeFillOpportunities,
   mergeAcceptedFills,
@@ -30,8 +28,6 @@ import {
 } from "@/lib/theory/fingerstyle-arranger/fill-opportunities";
 import {
   FINGERSTYLE_GENERATION_DIAGNOSTIC_VERSION,
-  projectDpDiagnosticEvents,
-  summaryFromDpRun,
   type FingerstyleGenerationDiagnosticEvent,
   type FingerstyleGenerationDiagnosticRun,
   type FingerstyleGenerationDiagnosticSummary,
@@ -204,27 +200,20 @@ export async function runFingerstyleLineWorkflow(
 ): Promise<GenerateFingerstyleLineOutput> {
   const startedAt = new Date().toISOString();
   const startedAtMs = Date.now();
-  const runId = createFingerstyleDiagnosticRunId();
+  const runId = crypto.randomUUID();
   const lineIndex = input.lineMeasures[0]?.lineIndex ?? input.previousLines.length;
   const measureNumbers = input.lineMeasures.map(measure => measure.measure);
   const sourceMelody = snapshotMelodySource(input.lineMeasures);
   const policy = normalizeFillPolicy(input);
-  const arrangementOptimization = input.arrangementOptimization ?? "heuristic";
   const melodyPlayability = analyzeAuthoritativeMelodyPlayability(input.lineMeasures, policy.skillLevel);
   const bpm = parseAbcTempo(input.activeAbc);
-  const dpOptions = {
-    skillLevel: policy.skillLevel,
-    maxMelodyFret: melodyPlayability.melodyMaxFret,
-    autoCapo: false,
-    capo: 0,
-  } as const;
   const systemPrompt = buildLineSystemPrompt();
   const userPrompt = buildLineUserPrompt(input, melodyPlayability);
   const tools = [
     GUITAR_VOICING_TOOL_DEFINITION,
     buildFingerstyleTablatureToolDefinition(
       "submit_fingerstyle_foundation",
-      "Validate, DP-position, and freeze the complete non-fill foundation before fill analysis.",
+      "Validate, deterministically place, and freeze the complete non-fill foundation before fill analysis.",
     ),
     INSPECT_FILL_OPPORTUNITIES_TOOL_DEFINITION,
     SELECT_FILL_WINDOWS_TOOL_DEFINITION,
@@ -259,27 +248,24 @@ export async function runFingerstyleLineWorkflow(
     payload: {
       scope: { songSlug: input.songSlug, lineIndex, measureNumbers, sourceFingerprint: input.sourceFingerprint },
       inputs: {
-        lineMeasures: input.lineMeasures,
-        previousLines: input.previousLines,
-        nextLineMeasures: input.nextLineMeasures,
-        activeAbc: input.activeAbc,
-        systemPrompt,
-        userPrompt,
-        tools,
+        lineMeasureCount: input.lineMeasures.length,
+        previousLineCount: input.previousLines.length,
+        nextLineMeasureCount: input.nextLineMeasures?.length ?? 0,
+        sourceAbcLength: input.activeAbc.length,
+        systemPromptLength: systemPrompt.length,
+        userPromptLength: userPrompt.length,
+        toolCount: tools.length,
       },
       conditioning: {
         policy,
         bpm,
-        melodyPlayability,
+        melodyMaxFret: melodyPlayability.melodyMaxFret,
         finalToolName: "submit_arranged_line",
-        temperature: 0.25,
         maxIterations: 24,
         maxValidationAttempts: 3,
         requestTimeoutMs: 60_000,
         maxRequestAttempts: 2,
         maxDurationMs: 5 * 60_000,
-        dpOptions,
-        arrangementOptimization,
       },
     },
   }];
@@ -401,44 +387,41 @@ export async function runFingerstyleLineWorkflow(
               return { valid: false, message, repair: "Resubmit a complete tablature:v1 foundation with no fill rows." };
             }
             try {
-              const optimizationResult = arrangementOptimization === "dynamic-programming"
-                ? applyDPToTimeSliceMeasures(decoded.measures, bpm, dpOptions)
-                : applyHeuristicToTimeSliceMeasures(decoded.measures, {
-                  bpm,
-                  skillLevel: policy.skillLevel,
-                  maxMelodyFret: melodyPlayability.melodyMaxFret,
-                });
-              logs.push(...optimizationResult.logs);
-              diagnosticEvents.push(...projectDpDiagnosticEvents(runId, optimizationResult.diagnostics, diagnosticEvents.length));
-              for (const event of optimizationResult.diagnostics.events) {
-                storedRecords.push({ type: "dp-event", timestamp: event.timestamp, runId, payload: event });
-              }
-              diagnosticSummary = summaryFromDpRun(optimizationResult.diagnostics, Date.now() - startedAtMs);
-              if (diagnosticSummary.outcome === "rolled-back" || diagnosticSummary.unresolvedEventCount > 0) {
-                const message = `Foundation ${arrangementOptimization} did not resolve every required event (${diagnosticSummary.outcome}, unresolved=${diagnosticSummary.unresolvedEventCount}).`;
+              const placement = placeFingerstyleFoundationOnTimeGrid(decoded.measures, {
+                bpm,
+                skillLevel: policy.skillLevel,
+                maxMelodyFret: melodyPlayability.melodyMaxFret,
+              });
+              logs.push(...placement.logs);
+              diagnosticSummary = {
+                ...placement.diagnostics,
+                unchangedEventCount: 0,
+                totalCost: null,
+              };
+              recordWorkflowEvent("foundation-placed", "foundation-placement", placement.unresolvedEventCount > 0 ? "warning" : "success", `TimeGrid foundation placement ${placement.diagnostics.outcome}: ${placement.changedEventCount} position(s) updated, ${placement.unresolvedEventCount} unresolved.`, placement.diagnostics);
+              if (placement.unresolvedEventCount > 0) {
+                const message = `Foundation placement did not resolve every required event (unresolved=${placement.unresolvedEventCount}).`;
                 recordWorkflowEvent("foundation-rejected", "foundation", "warning", message, diagnosticSummary);
                 return { valid: false, message };
               }
-              const optimizedSourceDrift = sourceMelodyDrift(sourceMelody, optimizationResult.measures);
-              if (optimizedSourceDrift.length > 0) {
-                const message = `Source-pinned melody changed during ${arrangementOptimization}: ${optimizedSourceDrift.join(" ")}`;
-                recordWorkflowEvent("foundation-rejected", "foundation", "failed", message, { errors: optimizedSourceDrift });
+              const placedSourceDrift = sourceMelodyDrift(sourceMelody, placement.measures);
+              if (placedSourceDrift.length > 0) {
+                const message = `Source-pinned melody changed during foundation placement: ${placedSourceDrift.join(" ")}`;
+                recordWorkflowEvent("foundation-rejected", "foundation", "failed", message, { errors: placedSourceDrift });
                 return { valid: false, message };
               }
-              frozenFoundation = freezeFoundationDurations(optimizationResult.measures);
-              recordWorkflowEvent("foundation-validated", "foundation", "success", `Foundation frozen after ${arrangementOptimization} at ${bpm} BPM using ${policy.skillLevel} accompaniment constraints.`, {
+              frozenFoundation = freezeFoundationDurations(placement.measures);
+              recordWorkflowEvent("foundation-validated", "foundation", "success", `Foundation frozen after deterministic TimeGrid placement at ${bpm} BPM using ${policy.skillLevel} accompaniment constraints.`, {
                 measureCount: frozenFoundation.length,
-                arrangementOptimization,
-                dpOutcome: diagnosticSummary.outcome,
                 maxMelodyFret: melodyPlayability.melodyMaxFret,
                 melodySource: "authoritative-source-grid",
                 submittedMelodyRepairs,
               });
-              return { valid: true, message: "Foundation accepted and frozen. Inspect fill opportunities next.", bpm, policy, arrangementOptimization, dpOutcome: diagnosticSummary.outcome };
+              return { valid: true, message: "Foundation accepted and frozen. Inspect fill opportunities next.", bpm, policy, placementOutcome: diagnosticSummary.outcome };
             } catch (error) {
               const message = error instanceof Error ? error.message : String(error);
-              recordWorkflowEvent("foundation-rejected", "foundation", "failed", `DP failed: ${message}`);
-              return { valid: false, message: `Foundation DP failed: ${message}` };
+              recordWorkflowEvent("foundation-rejected", "foundation", "failed", `Foundation placement failed: ${message}`);
+              return { valid: false, message: `Foundation placement failed: ${message}` };
             }
           },
           maxInvalidResults: 3,

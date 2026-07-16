@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { midiForStringFret } from "../../guitar-playability";
-import { applyHeuristicToTimeSliceMeasures } from "../heuristic-time-slice";
+import { placeFingerstyleFoundationOnTimeGrid } from "../heuristic-time-slice";
 import type { TimeSliceMeasure } from "../time-slice";
 
 function makeMeasure(): TimeSliceMeasure {
@@ -32,9 +32,9 @@ function makeMeasure(): TimeSliceMeasure {
   };
 }
 
-describe("heuristic time-slice optimizer", () => {
+describe("TimeGrid foundation placement", () => {
   it("prefers an available open string over the submitted fretted position", () => {
-    const result = applyHeuristicToTimeSliceMeasures([makeMeasure()], { skillLevel: "beginner" });
+    const result = placeFingerstyleFoundationOnTimeGrid([makeMeasure()], { skillLevel: "beginner" });
     const melody = result.measures[0].grid[0].tablature?.find(tab => tab.role === "melody");
 
     expect(melody).toMatchObject({ string: 1, fret: 0 });
@@ -52,7 +52,7 @@ describe("heuristic time-slice optimizer", () => {
       { string: 2 as const, fret: 7, finger: "m" as const, role: "melody" as const },
     ];
 
-    const result = applyHeuristicToTimeSliceMeasures([input], {
+    const result = placeFingerstyleFoundationOnTimeGrid([input], {
       skillLevel: "beginner",
       maxMelodyFret: 12,
     });
@@ -70,7 +70,7 @@ describe("heuristic time-slice optimizer", () => {
       { string: 6 as const, fret: 0, finger: "p" as const, role: "root" as const },
     ];
 
-    const result = applyHeuristicToTimeSliceMeasures([input]);
+    const result = placeFingerstyleFoundationOnTimeGrid([input]);
     const melody = result.measures[0].grid[0].tablature?.find(tab => tab.role === "melody");
 
     expect(melody).toMatchObject({ string: 2, fret: 5 });
@@ -79,19 +79,18 @@ describe("heuristic time-slice optimizer", () => {
 
   it("is deterministic and does not mutate source measures", () => {
     const input = makeMeasure();
-    const first = applyHeuristicToTimeSliceMeasures([input]);
-    const second = applyHeuristicToTimeSliceMeasures([input]);
+    const first = placeFingerstyleFoundationOnTimeGrid([input]);
+    const second = placeFingerstyleFoundationOnTimeGrid([input]);
 
     expect(first.measures).toEqual(second.measures);
     expect(input.grid[0].tablature?.find(tab => tab.role === "melody")).toMatchObject({ string: 2, fret: 5 });
   });
 
-  it("reports the heuristic strategy and shared staged-fill boundary", () => {
-    const result = applyHeuristicToTimeSliceMeasures([makeMeasure()]);
+  it("reports the deterministic TimeGrid placement outcome", () => {
+    const result = placeFingerstyleFoundationOnTimeGrid([makeMeasure()]);
 
-    expect(result.logs.join("\n")).toContain("Strategy: heuristic");
-    expect(result.logs.join("\n")).toContain("fill opportunities remain delegated");
-    expect(result.diagnostics.events.some(event => event.type === "configuration")).toBe(true);
-    expect(result.diagnostics.events.some(event => event.type === "run-summary")).toBe(true);
+    expect(result.logs.join("\n")).toContain("TIMEGRID");
+    expect(result.diagnostics.outcome).toBe("accepted");
+    expect(result.diagnostics.unresolvedEventCount).toBe(0);
   });
 });

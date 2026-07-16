@@ -236,7 +236,6 @@ export function FingerstyleLineCard({
         activeAbc: workflowAppliedMusicAbc,
         skillLevel: generationSettings.skillLevel,
         densityMode: generationSettings.densityMode,
-        arrangementOptimization: generationSettings.arrangementOptimization,
         previousLineMeasures,
         nextLineMeasures,
       });
@@ -358,7 +357,7 @@ export function FingerstyleLineCard({
               <div className="flex items-center justify-between mb-1">
                 <div>
                   <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                    LLM + Workflow + DP Diagnostic Logs
+                    LLM + TimeGrid Workflow Diagnostic Logs
                   </label>
                   {diagnosticRun && (
                     <div className="text-[10px] text-zinc-500">

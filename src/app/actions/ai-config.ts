@@ -38,6 +38,24 @@ interface LocalToolDefinition {
   maxInvalidResults?: number;
 }
 
+export interface ToolLoopContextBudget {
+  maxPromptBytes?: number;
+  maxToolSchemaBytes?: number;
+  maxMessages?: number;
+  maxTranscriptBytes?: number;
+  maxToolCallsPerTurn?: number;
+  maxToolResultBytes?: number;
+}
+
+export const FINGERSTYLE_TOOL_LOOP_CONTEXT_BUDGET: Required<ToolLoopContextBudget> = {
+  maxPromptBytes: 96_000,
+  maxToolSchemaBytes: 48_000,
+  maxMessages: 80,
+  maxTranscriptBytes: 220_000,
+  maxToolCallsPerTurn: 6,
+  maxToolResultBytes: 28_000,
+};
+
 export interface ToolLoopValidationResult {
   valid: boolean;
   message?: string;
@@ -51,7 +69,8 @@ export type ToolDiagnosticEvent =
   | { type: "tool-call"; iteration: number; toolName: string; toolCallId: string; local: boolean; final: boolean; input?: unknown }
   | { type: "tool-result"; iteration: number; toolName: string; toolCallId: string; result: unknown; invalidResultAttempts?: number; maxInvalidResults?: number }
   | { type: "final-validation"; iteration: number; toolName: string; valid: boolean; failedValidationAttempts: number; maxValidationAttempts: number; message?: string; toolResult?: unknown }
-  | { type: "loop-exhausted"; maxIterations: number; failedValidationAttempts: number; maxValidationAttempts: number; lastValidationMessage: string; reason?: "iteration-limit" | "final-validation-limit" | "local-validation-limit" | "deadline"; localInvalidResultAttempts?: Record<string, number> };
+  | { type: "loop-exhausted"; maxIterations: number; failedValidationAttempts: number; maxValidationAttempts: number; lastValidationMessage: string; reason?: "iteration-limit" | "final-validation-limit" | "local-validation-limit" | "deadline"; localInvalidResultAttempts?: Record<string, number> }
+  | { type: "context-budget-exceeded"; iteration: number; message: string };
 
 export type ToolDiagnosticRecorder = (event: ToolDiagnosticEvent) => void | Promise<void>;
 
@@ -66,6 +85,25 @@ async function emitDiagnostic(onDiagnostic: ToolDiagnosticRecorder | undefined, 
 
 function serializeToolResultContent(result: unknown): string {
   return typeof result === "string" ? result : JSON.stringify(result);
+}
+
+function utf8Bytes(value: string): number {
+  return Buffer.byteLength(value, "utf8");
+}
+
+function withinContextBudget(
+  messages: ChatMessage[],
+  tools: unknown[],
+  budget: Required<ToolLoopContextBudget>,
+): string | null {
+  const promptBytes = utf8Bytes(messages.slice(0, 2).map(message => message.content ?? "").join("\n"));
+  if (promptBytes > budget.maxPromptBytes) return `prompt is ${promptBytes} bytes; limit is ${budget.maxPromptBytes}.`;
+  const toolSchemaBytes = utf8Bytes(JSON.stringify(tools));
+  if (toolSchemaBytes > budget.maxToolSchemaBytes) return `tool schema is ${toolSchemaBytes} bytes; limit is ${budget.maxToolSchemaBytes}.`;
+  if (messages.length > budget.maxMessages) return `transcript has ${messages.length} messages; limit is ${budget.maxMessages}.`;
+  const transcriptBytes = utf8Bytes(JSON.stringify(messages));
+  if (transcriptBytes > budget.maxTranscriptBytes) return `transcript is ${transcriptBytes} bytes; limit is ${budget.maxTranscriptBytes}.`;
+  return null;
 }
 
 export async function readAiConfig(): Promise<AiConfig> {
@@ -293,6 +331,7 @@ export async function requestOpenAiCompatibleToolLoop(input: {
   requestTimeoutMs?: number;
   maxRequestAttempts?: number;
   maxDurationMs?: number;
+  contextBudget?: ToolLoopContextBudget;
   onDiagnostic?: ToolDiagnosticRecorder;
 }): Promise<unknown> {
   const messages: ChatMessage[] = [
@@ -302,6 +341,10 @@ export async function requestOpenAiCompatibleToolLoop(input: {
   const localTools = new Map(input.localTools.map((tool) => [tool.name, tool]));
   const maxIterations = input.maxIterations ?? 8;
   const maxValidationAttempts = input.maxValidationAttempts ?? maxIterations;
+  const contextBudget: Required<ToolLoopContextBudget> = {
+    ...FINGERSTYLE_TOOL_LOOP_CONTEXT_BUDGET,
+    ...input.contextBudget,
+  };
   let failedValidationAttempts = 0;
   let lastValidationMessage = "The LLM did not call a validation tool before the loop ended.";
   const localInvalidResultAttempts: Record<string, number> = {};
@@ -320,6 +363,15 @@ export async function requestOpenAiCompatibleToolLoop(input: {
       });
       throw new Error(`LLM tool loop exceeded its ${input.maxDurationMs}ms deadline. Last validation: ${lastValidationMessage}`);
     }
+    const budgetError = withinContextBudget(messages, input.tools, contextBudget);
+    if (budgetError) {
+      await emitDiagnostic(input.onDiagnostic, {
+        type: "context-budget-exceeded",
+        iteration,
+        message: budgetError,
+      });
+      throw new Error(`LLM context budget exceeded: ${budgetError}`);
+    }
     const message = await requestChatCompletion({
       messages,
       tools: input.tools,
@@ -332,6 +384,12 @@ export async function requestOpenAiCompatibleToolLoop(input: {
       deadlineAtMs,
     });
     const toolCalls = message.tool_calls ?? [];
+
+    if (toolCalls.length > contextBudget.maxToolCallsPerTurn) {
+      const message = `LLM returned ${toolCalls.length} tool calls; limit is ${contextBudget.maxToolCallsPerTurn}.`;
+      await emitDiagnostic(input.onDiagnostic, { type: "context-budget-exceeded", iteration, message });
+      throw new Error(`LLM context budget exceeded: ${message}`);
+    }
 
     if (toolCalls.length === 0) {
       await emitDiagnostic(input.onDiagnostic, { type: "chat-error", iteration, message: `LLM did not call ${input.finalToolName} or a local validation tool` });
@@ -463,6 +521,12 @@ export async function requestOpenAiCompatibleToolLoop(input: {
       });
     }
 
+    const oversizedResult = toolResults.find(result => utf8Bytes(result.content ?? "") > contextBudget.maxToolResultBytes);
+    if (oversizedResult) {
+      const message = `Tool result is ${utf8Bytes(oversizedResult.content ?? "")} bytes; limit is ${contextBudget.maxToolResultBytes}.`;
+      await emitDiagnostic(input.onDiagnostic, { type: "context-budget-exceeded", iteration, message });
+      throw new Error(`LLM context budget exceeded: ${message}`);
+    }
     messages.push(...toolResults);
   }
 

@@ -5,7 +5,7 @@ import {
   STANDARD_TUNING_OPEN_MIDI,
   scientificPitchForStringFret,
 } from "../../guitar-playability";
-import { SKILL_LEVEL_CONSTRAINTS, type SkillLevel } from "../dp-types";
+import { SKILL_LEVEL_CONSTRAINTS, type SkillLevel } from "../fingerstyle-constraints";
 import type { TimeSliceGridStep } from "../time-slice";
 import type {
   FillAtomicCandidate,

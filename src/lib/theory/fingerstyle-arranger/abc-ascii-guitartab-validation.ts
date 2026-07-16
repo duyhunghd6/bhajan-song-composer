@@ -8,6 +8,7 @@ import { abcNoteToMidiWithKey, type AbcKeyAccidentalMap } from "../abc-key-signa
 import { parseScientificPitch, scientificPitchForStringFret } from "../guitar-playability";
 import type { GuitarStringNumber } from "../fingerstyle-compressor";
 import type { TimeSliceMeasure } from "./time-slice";
+import { inferLegacyTabDurationSteps } from "./time-slice-abc-renderer";
 
 const MAX_MISMATCHES = 32;
 const EPSILON = 1e-6;
@@ -21,6 +22,15 @@ type TabEvent = {
   midi: number;
   attack: boolean;
 };
+
+/** An independently authored physical attack/duration contract for forced TAB ABC. */
+export interface ExpectedAsciiGuitarTabEvent {
+  measure: number;
+  stepIndex: number;
+  durationSteps: number;
+  string: GuitarStringNumber;
+  fret: number;
+}
 
 export interface AbcAsciiGuitarTabMismatch {
   measure?: number;
@@ -65,9 +75,8 @@ function pushMismatch(
   if (result.mismatches.length < MAX_MISMATCHES) result.mismatches.push(mismatch);
 }
 
-function parseDuration(suffix: string, _context: AbcDurationContext): number {
-  // ABC duration units are already normalized to the L: default note length;
-  // AbcDurationContext.unitsPerBeat expresses the same unit grid.
+function parseDuration(suffix: string): number {
+  // ABC duration units are already normalized to the L: default note length.
   return parseNoteDuration(suffix);
 }
 
@@ -134,7 +143,6 @@ function parseChord(text: string, cursor: { index: number }, keyAccidentals?: Ab
 function parseMeasure(
   text: string,
   measure: number,
-  context: AbcDurationContext,
   keyAccidentals: AbcKeyAccidentalMap | undefined,
   result: AbcAsciiGuitarTabValidationResult,
   tieState: Map<GuitarStringNumber, { midi: number; fret: number }>,
@@ -166,6 +174,14 @@ function parseMeasure(
       continue;
     }
 
+    // A volta marker (`[1`, `[2`, `[1,3`) appears before a measure's music;
+    // it is structure, not an ABC chord event.
+    const volta = text.slice(cursor.index).match(/^\[[0-9,\-]+/);
+    if (volta) {
+      cursor.index += volta[0].length;
+      continue;
+    }
+
     let notes: ParsedNote[] = [];
     if (char === "[") notes = parseChord(text, cursor, keyAccidentals);
     else if (char === "z" || char === "x") cursor.index += 1;
@@ -181,7 +197,7 @@ function parseMeasure(
 
     const suffixStart = cursor.index;
     while (/[0-9/]/.test(text[cursor.index] ?? "")) cursor.index += 1;
-    const durationUnits = parseDuration(text.slice(suffixStart, cursor.index), context);
+    const durationUnits = parseDuration(text.slice(suffixStart, cursor.index));
     const hasTrailingTie = text[cursor.index] === "-";
     if (hasTrailingTie) cursor.index += 1;
     const end = onset + durationUnits;
@@ -242,13 +258,12 @@ function expectedEvents(measures: readonly TimeSliceMeasure[], stepDurationUnits
             durationSteps += 1;
           }
         } else if (!durationSteps) {
-          durationSteps = measure.grid.length - index;
-          for (let next = index + 1; next < measure.grid.length; next += 1) {
-            if ((measure.grid[next].tablature?.length ?? 0) > 0) {
-              durationSteps = next - index;
-              break;
-            }
-          }
+          durationSteps = inferLegacyTabDurationSteps(
+            measure,
+            index,
+            tab.string,
+            measure.grid.length,
+          );
         }
         const pitch = scientificPitchForStringFret(tab.string, tab.fret);
         const actualMidi = parseScientificPitch(pitch)?.midi ?? -1;
@@ -265,6 +280,24 @@ function expectedEvents(measures: readonly TimeSliceMeasure[], stepDurationUnits
     });
   });
   return output;
+}
+
+function expectedEventsFromPhysicalContract(
+  events: readonly ExpectedAsciiGuitarTabEvent[],
+  stepDurationUnits: number,
+): TabEvent[] {
+  return events.map(event => {
+    const pitch = scientificPitchForStringFret(event.string, event.fret);
+    return {
+      measure: event.measure,
+      startUnits: event.stepIndex * stepDurationUnits,
+      endUnits: (event.stepIndex + event.durationSteps) * stepDurationUnits,
+      string: event.string,
+      fret: event.fret,
+      midi: parseScientificPitch(pitch)?.midi ?? -1,
+      attack: true,
+    };
+  });
 }
 
 function extractGuitarMusicBody(abc: string): string {
@@ -326,6 +359,8 @@ export function validateGuitarAbcAgainstAsciiGuitarTab(input: {
   measures: readonly TimeSliceMeasure[];
   durationContext: AbcDurationContext;
   keyAccidentals?: AbcKeyAccidentalMap;
+  /** Use this for conversions where physical ASCII attacks own the duration contract. */
+  expectedPhysicalEvents?: readonly ExpectedAsciiGuitarTabEvent[];
 }): AbcAsciiGuitarTabValidationResult {
   const result: AbcAsciiGuitarTabValidationResult = {
     valid: true,
@@ -337,14 +372,16 @@ export function validateGuitarAbcAgainstAsciiGuitarTab(input: {
     warnings: [],
   };
   const stepDurationUnits = input.durationContext.unitsPerBeat / 4;
-  const expected = expectedEvents(input.measures, stepDurationUnits);
+  const expected = input.expectedPhysicalEvents
+    ? expectedEventsFromPhysicalContract(input.expectedPhysicalEvents, stepDurationUnits)
+    : expectedEvents(input.measures, stepDurationUnits);
   result.expectedEventCount = expected.length;
 
   const body = extractGuitarMusicBody(input.abc);
   const segments = splitAbcMeasureSegments(body);
   const actual: TabEvent[] = [];
   const tieState = new Map<GuitarStringNumber, { midi: number; fret: number }>();
-  segments.forEach((segment, index) => actual.push(...parseMeasure(segment, input.measures[index]?.measure ?? index + 1, input.durationContext, input.keyAccidentals, result, tieState)));
+  segments.forEach((segment, index) => actual.push(...parseMeasure(segment, input.measures[index]?.measure ?? index + 1, input.keyAccidentals, result, tieState)));
   const mergedActual = mergeTiedEvents(actual);
   result.actualEventCount = mergedActual.length;
 
@@ -381,7 +418,7 @@ export function validateGuitarAbcAgainstAsciiGuitarTab(input: {
     const expectedDuration = pickupDuration && pickupDuration > 0
       ? pickupDuration
       : input.measures[index].grid.length * stepDurationUnits;
-    const actualDuration = segments[index] ? parseMeasureDuration(segments[index], input.durationContext) : 0;
+    const actualDuration = segments[index] ? parseMeasureDuration(segments[index]) : 0;
     if (Math.abs(expectedDuration - actualDuration) > EPSILON) pushMismatch(result, { measure: input.measures[index].measure, kind: "measure-duration-mismatch", expected: String(expectedDuration), actual: String(actualDuration), message: `Measure ${input.measures[index].measure} duration mismatch: expected ${expectedDuration}, got ${actualDuration}.` });
   }
 
@@ -389,12 +426,12 @@ export function validateGuitarAbcAgainstAsciiGuitarTab(input: {
   return result;
 }
 
-function parseMeasureDuration(segment: string, context: AbcDurationContext): number {
+function parseMeasureDuration(segment: string): number {
   let total = 0;
   const music = segment.replace(/"[^"]*"/g, "");
   const regex = /(?:\[[^\]]+\]|(?:![1-6]!)?[_^=]{0,2}[A-Ga-g][,']*|[zx])([0-9]*(?:\/[0-9]*)?|\/[0-9]*)/g;
   let match: RegExpExecArray | null;
-  while ((match = regex.exec(music)) !== null) total += parseDuration(match[1] ?? "", context);
+  while ((match = regex.exec(music)) !== null) total += parseDuration(match[1] ?? "");
   return total;
 }
 

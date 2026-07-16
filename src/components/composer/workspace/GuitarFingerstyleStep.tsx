@@ -152,7 +152,9 @@ export function GuitarFingerstyleStep({
   // Build previous-line context for a given lineGroupIndex
   const buildPreviousLineContext = useCallback((lineGroupIndex: number): PreviousLineContext[] => {
     const context: PreviousLineContext[] = [];
-    for (let i = 0; i < lineGroupIndex; i++) {
+    // Continuity is deliberately compact: the immediately preceding rendered line
+    // supplies a useful hand/phrase landing without flooding the LLM transcript.
+    for (let i = Math.max(0, lineGroupIndex - 1); i < lineGroupIndex; i++) {
       const lineMeasures = lineGroups[i];
       if (!lineMeasures || lineMeasures.length === 0) continue;
       context.push({
@@ -257,22 +259,6 @@ export function GuitarFingerstyleStep({
               <option value="few">Few</option>
               <option value="normal">Normal</option>
               <option value="many">Many</option>
-            </select>
-          </label>
-          <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-            Arrangement Optimization
-            <select
-              value={generationSettings.arrangementOptimization}
-              onChange={(event) => updateState({
-                fingerstyleGenerationSettings: {
-                  ...generationSettings,
-                  arrangementOptimization: event.target.value as typeof generationSettings.arrangementOptimization,
-                },
-              })}
-              className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-xs dark:border-zinc-700 dark:bg-zinc-950"
-            >
-              <option value="heuristic">Heuristic</option>
-              <option value="dynamic-programming">Dynamic Programming</option>
             </select>
           </label>
           <p className="text-[11px] text-zinc-500 sm:col-span-2">

@@ -65,7 +65,7 @@ export interface TimeSliceMeasure {
   /** If this measure is a pickup (anacrusis), the actual duration in ABC units.
    *  Undefined or 0 means it is a normal full measure. */
   pickupDurationUnits?: number;
-  /** Parsed source duration before pickup normalization, retained for DP/render diagnostics. */
+  /** Parsed source duration before pickup normalization, retained for render diagnostics. */
   sourceDurationUnits?: number;
   /** Repeat barline metadata (|:, :|, volta brackets) from the source ABC. */
   barline?: AbcBarlineInfo;

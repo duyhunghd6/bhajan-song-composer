@@ -125,6 +125,29 @@ K:Em
     expect(guitarBars.every((bar) => measureDurationUnits(bar) === 8)).toBe(true);
   });
 
+  it("preserves generated Guitar ties while aligning measures", () => {
+    const melodyAbc = `X:1
+T:Tied Guitar Test
+M:4/4
+L:1/8
+K:Em
+| E8 | E8 |`;
+    const generatedGuitar = `V:Guitar clef=treble-8
+%%MIDI program 24
+| [!1!e!3!G]8- | [!1!e!3!G]8 |`;
+
+    const result = buildAccompanimentAbc({
+      baseAbc: melodyAbc,
+      generatedGuitar,
+      layerVisibility: {},
+    });
+
+    const guitarBars = splitAbcMeasureSegments(getVoiceMusicBody(result.abc, "Guitar"));
+    expect(guitarBars).toHaveLength(2);
+    expect(guitarBars.map(measureDurationUnits)).toEqual([8, 8]);
+    expect(guitarBars[0]).toContain("[!1!e!3!G]8-");
+  });
+
   it("renames an exact Guitar Left Hand source voice to Harmonium without touching generic Guitar", () => {
     const melodyAbc = `X:1
 T:Harmonium Retarget Test

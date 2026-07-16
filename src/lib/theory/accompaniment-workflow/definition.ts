@@ -140,7 +140,8 @@ export type AccompanimentWorkflowLlmLogKind =
   | "tool-call"
   | "tool-result"
   | "final-validation"
-  | "loop-exhausted";
+  | "loop-exhausted"
+  | "context-budget-exceeded";
 
 export interface AccompanimentWorkflowLlmLogEntry {
   id: string;

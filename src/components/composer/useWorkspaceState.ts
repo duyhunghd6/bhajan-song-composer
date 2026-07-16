@@ -9,7 +9,7 @@ import type { EnsembleWorkflowSession } from "@/lib/theory/ensemble-workflow";
 import type { EnsembleExpansionValidation } from "@/lib/theory/ensemble-output-contract";
 import type { EnsembleConflictReportEntry } from "@/lib/theory/ensemble-conflicts";
 import type { FillDensityMode } from "@/lib/theory/fingerstyle-arranger/fill-opportunities";
-import type { SkillLevel } from "@/lib/theory/fingerstyle-arranger/dp-types";
+import type { SkillLevel } from "@/lib/theory/fingerstyle-arranger/fingerstyle-constraints";
 import { getComposerWorkspaceStorageKey } from "./workspace/storage";
 
 export const DEFAULT_HARMONY_LAYER_VISIBILITY: Record<string, boolean> = {
@@ -44,18 +44,14 @@ export interface EnsembleLayerAbcBundle {
   conflictReport?: EnsembleConflictReportEntry[];
 }
 
-export type FingerstyleArrangementOptimization = "heuristic" | "dynamic-programming";
-
 export interface FingerstyleGenerationSettings {
   skillLevel: SkillLevel;
   densityMode: FillDensityMode;
-  arrangementOptimization?: FingerstyleArrangementOptimization;
 }
 
 export const DEFAULT_FINGERSTYLE_GENERATION_SETTINGS: FingerstyleGenerationSettings = {
   skillLevel: "beginner",
   densityMode: "auto",
-  arrangementOptimization: "heuristic",
 };
 
 export interface WorkspaceState {

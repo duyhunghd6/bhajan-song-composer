@@ -20,7 +20,7 @@ class MemoryStorage implements Storage {
 function makeRun(index: number, lineIndex = 0): FingerstyleGenerationDiagnosticRun {
   const runId = `run-${index}`;
   return {
-    version: 1,
+    version: 2,
     runId,
     startedAt: `2026-07-14T00:00:${String(index).padStart(2, "0")}.000Z`,
     completedAt: `2026-07-14T00:01:${String(index).padStart(2, "0")}.000Z`,
@@ -50,7 +50,7 @@ function makeRun(index: number, lineIndex = 0): FingerstyleGenerationDiagnosticR
       unresolvedEventCount: 0,
       changedEventCount: 1,
       unchangedEventCount: 0,
-      totalCost: 1,
+      totalCost: null,
       elapsedMs: 10,
     },
     plaintext: `diagnostic plaintext ${index}`,

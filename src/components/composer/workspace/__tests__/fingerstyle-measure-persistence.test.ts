@@ -99,7 +99,7 @@ describe("fingerstyle measure persistence", () => {
     );
 
     expect(generated).toContain(
-      "[!2!B!3!G-!6!E,-]/2 [!3!G!6!E,]/2 !2!e !3!G !2!B4 !3!B",
+      "[!2!B!3!G-!6!E,-]/2 [!3!G-!6!E,-]/2 [!2!e-!3!G!6!E,-] [!2!e!3!G-!6!E,-] [!2!B-!3!G!6!E,-]4 [!2!B!3!B!6!E,]",
     );
   });
 });

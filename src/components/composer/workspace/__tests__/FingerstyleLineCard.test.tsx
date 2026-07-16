@@ -81,7 +81,7 @@ describe("FingerstyleLineCard", () => {
     );
 
     expect(markup).toContain(
-      "[V:Guitar] | [!2!B!3!G-!6!E,-]/2 [!3!G!6!E,]/2 !2!e !3!G !2!B4 !3!B |"
+      "[V:Guitar] | [!2!B!3!G-!6!E,-]/2 [!3!G-!6!E,-]/2 [!2!e-!3!G!6!E,-] [!2!e!3!G-!6!E,-] [!2!B-!3!G!6!E,-]4 [!2!B!3!B!6!E,] |"
     );
     expect(markup).toContain('data-exact-copy="true"');
     expect(markup).toContain('data-synth-options="{&quot;voicesOff&quot;:[0],&quot;chordsOff&quot;:true}"');

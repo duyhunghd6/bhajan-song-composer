@@ -1,6 +1,6 @@
 import type { GuitarStringNumber } from "../../fingerstyle-compressor";
 import type { TimeSliceMeasure } from "../time-slice";
-import type { SkillLevel } from "../dp-types";
+import type { SkillLevel } from "../fingerstyle-constraints";
 
 export const FILL_OPPORTUNITY_FORMAT_VERSION = "fill-opportunities:v1" as const;
 export const FILL_SELECTION_FORMAT_VERSION = "fill-selection:v1" as const;

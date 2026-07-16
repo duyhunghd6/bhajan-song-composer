@@ -1,15 +1,17 @@
 # Guitar Fingerstyle Arrangement Guide
 
-This document describes the line-level solo-guitar pipeline used by `/compose/:slug/guitar-fingerstyle`. The design keeps the melody and physical constraints server-owned while leaving two genuinely musical decisions to the LLM:
+This document describes the line-level solo-guitar pipeline used by `/compose/:slug/guitar-fingerstyle`. The canonical arrangement document is an event-based, meter-aware `TimeSliceMeasure[]` TimeGrid: it retains source-derived melody/context facts and stores independent physical guitar attacks in each `grid[].tablature[]` array. Guitar ABC notation and ASCII-GuitarTab are deterministic generated artifacts, not raw-text editing targets.
+
+The design keeps locked melody facts and physical constraints server-owned while leaving two genuinely musical decisions to the LLM:
 
 1. which scored fill windows should be used or skipped;
 2. which legal atomic notes, sequence, durations, and right-hand fingers should form each fill.
 
-The LLM does **not** invent timing coordinates, strings, frets, or replacement source grids.
+The LLM does **not** replace locked source fields or invent unvalidated timing coordinates, strings, or frets. It may propose accompaniment events only through the staged, server-validated workflow.
 
-## 1. Authoritative source model
+## 1. Canonical TimeGrid and locked source facts
 
-The input is ABC notation with melody, inline chord symbols, lyrics, and optional beat-weight metadata. The time-slice compiler preserves these as server-owned fields:
+Source ABC provides melody, inline chord symbols, lyrics, optional beat-weight metadata, meter, key, and barline context. The time-slice compiler pins those facts into the canonical TimeGrid, where they are not editable as part of a fingerstyle arrangement edit:
 
 - `measure` and source `lineIndex`;
 - active `chord` at every quantized step;
@@ -19,7 +21,22 @@ The input is ABC notation with melody, inline chord symbols, lyrics, and optiona
 - pickup and repeat/barline metadata;
 - key, comping profile, voicing plan, and legacy fill-density context.
 
+The editable arrangement layer is the independent `tablature` attack-event array on each grid step. Its events carry physical string/fret coordinates, right-hand finger, role, and optional explicit `durationSteps`; they can be `bass`, `root`, `fifth`, `harmony`, or `fill`, alongside physically realized locked `melody` attacks. An edit must never alter the source melody pitch, attack timing, grid structure, or contextual fields.
+
 A source line is useful structural evidence, but it is not assumed to be a perfect phrase annotation. Phrase-transfer scoring also considers rest length, lyric termination, repeat boundaries, current chord/key, cadence character, and the next line's melody entrance.
+
+### Canonical data flow
+
+```text
+source ABC → compile locked source facts into TimeGrid
+           → add or revise validated tablature events
+           → persist versioned TimeGrid with source fingerprint
+           → deterministically render Guitar ABC and ASCII-GuitarTab
+```
+
+The working representation has three distinct layers: the in-memory canonical `{ version: 1, source, measures }` document; the emitted `timegrid-document:v3` import/copy/download JSON; and the separate `{ version: 1, sourceFingerprint, measures }` local-restore envelope. Only the TimeGrid is editable authority. The v3 document preserves the immutable raw source ABC plus literal melody states and physical tab events; local restore overlays only compatible tab/visual-tab data on freshly compiled source facts.
+
+See [TimeGrid Conversion Guide](./timegrid-conversion-guide.md) for the exact v3 wire shape, persisted envelope, representation-level edit operations, validation sequence, and serialization rules.
 
 ### Meter-aware resolution
 
@@ -43,7 +60,7 @@ Guitar complexity and fill quantity are separate controls.
 | Intermediate | fret ≤ 9, span ≤ 4, broader jumps, at most 2 notes per window |
 | Advanced | fret ≤ 19, span ≤ 5, at most 3 notes per window |
 
-The canonical limits come from `SKILL_LEVEL_CONSTRAINTS` in `fingerstyle-arranger/dp-types.ts`. The selected skill is passed to foundation validation, DP positioning, fill enumeration, and final physical validation.
+The canonical limits come from `SKILL_LEVEL_CONSTRAINTS` in `fingerstyle-arranger/fingerstyle-constraints.ts`. The selected skill is passed to deterministic TimeGrid foundation placement, fill enumeration, and final physical validation.
 
 ### Fill density
 
@@ -75,11 +92,11 @@ The foundation must:
 - leave unweighted sustain/rest steps empty for later fill analysis;
 - obey sparse PIMA/right-hand and selected-skill constraints.
 
-### Stage 2 — DP positioning and freeze
+### Stage 2 — Deterministic TimeGrid placement and freeze
 
-The server validates the foundation, parses the actual ABC `Q:` tempo, and runs the fingerstyle dynamic-programming optimizer with the selected skill level. The resulting grip path is frozen.
+The server validates the foundation, parses the actual ABC `Q:` tempo, and deterministically places submitted physical melody and bass events on the canonical TimeGrid using the selected skill constraints. The validated foundation is then frozen.
 
-No mutating DP pass runs after opportunity scoring. Otherwise the hand costs shown to the LLM would become stale.
+No mutating placement pass runs after opportunity scoring. The frozen TimeGrid is the sole basis for fill analysis.
 
 ### Stage 3 — Exhaustive fill analysis
 
@@ -129,9 +146,9 @@ The server rejects unknown or duplicate candidates, candidates from skipped wind
 
 ### Stage 6 — Server merge and final reference
 
-The server reconstructs the final measures from the frozen foundation and accepted candidate IDs. It adds `durationSteps`, `fillWindowId`, and `fillCandidateId` provenance to accepted fill events.
+The server reconstructs the final canonical TimeGrid measures from the frozen foundation and accepted candidate IDs. It adds `durationSteps`, `fillWindowId`, and `fillCandidateId` provenance to accepted fill events.
 
-The final `submit_arranged_line` call must reference the same accepted `fills:v1` payload. The LLM cannot replace the server-owned grid at final submission.
+The final `submit_arranged_line` call must reference the same accepted `fills:v1` payload. The LLM cannot replace locked source fields or submit a replacement grid at final submission; generated Guitar ABC and ASCII-GuitarTab derive only after this accepted merge.
 
 ## 4. Opportunity and candidate generation
 
@@ -162,7 +179,7 @@ Each candidate receives a deterministic readable ID such as:
 c-m3-s7-B3-str2f0
 ```
 
-The opportunity-set ID includes the source fingerprint, policy, and frozen foundation signature. A selection from a different DP result is therefore rejected as stale.
+The opportunity-set ID includes the source fingerprint, policy, and frozen TimeGrid foundation signature. A selection from a different foundation is rejected as stale.
 
 ## 5. Stable 0–100 opportunity score
 
@@ -241,7 +258,9 @@ N,c-m3-s7-D4-str2f3,2,m
 
 All codecs validate exact versions and headers, byte/row limits, bindings, row shape, enum values, and integer durations.
 
-## 7. Duration, ties, and ABC tablature
+## 7. Duration, ties, and generated tablature
+
+The accepted TimeGrid is the source for both Guitar ABC notation and ASCII-GuitarTab. Neither generated text format is a canonical editing surface; changes are made to validated `TimeSliceGridStep.tablature` events and then rendered again. The detailed conversion contract is in the [TimeGrid Conversion Guide](./timegrid-conversion-guide.md).
 
 `TimeSliceGridStep.tablature` supports:
 
@@ -268,7 +287,7 @@ One run ID covers:
 
 - LLM requests and tool calls;
 - foundation acceptance/rejection;
-- DP extraction, candidates, costs, path, writeback, and rollback;
+- deterministic TimeGrid foundation placement and validation;
 - fill placement evaluation and rejection counts;
 - opportunity pagination;
 - LLM selection;
@@ -299,7 +318,7 @@ Only one line can generate at a time on the route. Other line buttons and settin
 Use:
 
 - `Hari Bol` for ordinary 4/4 and cross-line phrase-transfer checks;
-- `Ganesha` for pickup, tie, rest, repeat, DP, ABC, and ASCII-GuitarTab regressions.
+- `Ganesha` for pickup, tie, rest, repeat, TimeGrid, ABC, and ASCII-GuitarTab regressions.
 
 `data/songs/marathi/jago-kundalini-ma.melody.abc` is currently header-only. The route remains stable, but there are no melody notes, lyrics, or chord events to arrange end to end until song content is authored.
 

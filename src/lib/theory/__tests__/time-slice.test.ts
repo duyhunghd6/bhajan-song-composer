@@ -295,10 +295,10 @@ w: ⬤ * ● *`;
       };
 
       expect(convertTimeSliceMeasureToAbc(measure, context, keyAccidentals, false)).toBe(
-        "[BG-E,-]/2 [GE,]/2 e G B4 B",
+        "[BG-E,-]/2 [G-E,-]/2 [e-GE,-] [eG-E,-] [B-GE,-]4 [BBE,]",
       );
       expect(convertTimeSliceMeasureToAbc(measure, context, keyAccidentals, true)).toBe(
-        "[!2!B!3!G-!6!E,-]/2 [!3!G!6!E,]/2 !2!e !3!G !2!B4 !3!B",
+        "[!2!B!3!G-!6!E,-]/2 [!3!G-!6!E,-]/2 [!2!e-!3!G!6!E,-] [!2!e!3!G-!6!E,-] [!2!B-!3!G!6!E,-]4 [!2!B!3!B!6!E,]",
       );
     });
 

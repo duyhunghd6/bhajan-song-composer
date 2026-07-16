@@ -29,12 +29,38 @@ function makeMeasure(): TimeSliceMeasure {
       lyric: null,
       tablature: index === 0
         ? [
-            { string: 6 as const, fret: 0, finger: "p" as const, role: "bass" as const },
+            { string: 6 as const, fret: 0, finger: "p" as const, role: "bass" as const, durationSteps: 4 },
             { string: 1 as const, fret: 0, finger: "a" as const, role: "melody" as const },
           ]
         : index === 4
           ? [{ string: 3 as const, fret: 4, finger: "i" as const, role: "fill" as const, durationSteps: 2 }]
           : [],
+    })),
+  };
+}
+
+function sameStringDurationMeasure(): TimeSliceMeasure {
+  return {
+    measure: 1,
+    lineIndex: 0,
+    style_profile: {
+      key: "Em",
+      comping_style: "PIMA",
+      voicing_plan: "Open Em",
+    },
+    grid: Array.from({ length: 16 }, (_, index) => ({
+      step: index + 1,
+      chord: "Em",
+      weight: null,
+      melody: { pitch: null, state: "rest" as const },
+      lyric: null,
+      tablature: index === 0
+        ? [{ string: 6 as const, fret: 0, finger: "p" as const, role: "fill" as const }]
+        : index === 2
+          ? [{ string: 1 as const, fret: 0, finger: "a" as const, role: "fill" as const }]
+          : index === 4
+            ? [{ string: 6 as const, fret: 2, finger: "p" as const, role: "fill" as const }]
+            : [],
     })),
   };
 }
@@ -105,6 +131,24 @@ describe("ABC ↔ ASCII-GuitarTab validation", () => {
     const result = validate("[!6!E,!1!e]2 !3!c2 z4");
     expect(result.valid).toBe(false);
     expect(result.mismatches.some(issue => issue.kind === "fret-mismatch")).toBe(true);
+  });
+
+  it("validates independent same-string duration inference", () => {
+    const measure = sameStringDurationMeasure();
+    const body = convertTimeSliceMeasureToAbc(
+      measure,
+      buildAbcDurationContext(BASE_ABC),
+      getKeyAccidentalsFromAbc(BASE_ABC),
+      true,
+    );
+    const result = validate(body, measure);
+
+    expect(result.valid).toBe(true);
+    expect(result.expectedEventCount).toBe(3);
+    expect(result.actualEventCount).toBe(3);
+    expect(result.mismatches).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: "duration-mismatch" }),
+    ]));
   });
 
   it("keeps adjacent equal-pitch fill attacks distinct", () => {

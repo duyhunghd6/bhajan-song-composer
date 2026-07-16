@@ -17,9 +17,10 @@ export interface AbcDurationToken {
   token: string;
   durationSuffix: string;
   durationUnits: number;
+  tieSuffix: "" | "-";
 }
 
-const ABC_EVENT_REGEX = /(\[[^\]]+\]|(?:![1-6]!)?[_^=]{0,2}[A-Ga-g][,']*|[zx])([0-9]*(?:\/[0-9]*)?|\/[0-9]*)/g;
+const ABC_EVENT_REGEX = /(\[[^\]]+\]|(?:![1-6]!)?[_^=]{0,2}[A-Ga-g][,']*|[zx])([0-9]*(?:\/[0-9]*)?|\/[0-9]*)(-?)/g;
 
 function parseFraction(value: string): number | null {
   const [rawNumerator, rawDenominator] = value.trim().split("/");
@@ -263,6 +264,7 @@ export function extractDurationTokens(abcMeasure: string): AbcDurationToken[] {
       token: match[1],
       durationSuffix,
       durationUnits: parseNoteDuration(durationSuffix),
+      tieSuffix: match[3] === "-" ? "-" : "",
     });
   }
 
@@ -294,7 +296,7 @@ export function normalizeAbcMeasureDuration(abcMeasure: string, targetUnits: num
     if (elapsed >= targetUnits) break;
     const remaining = targetUnits - elapsed;
     const duration = Math.min(token.durationUnits, remaining);
-    normalized.push(`${token.token}${formatAbcDuration(duration)}`);
+    normalized.push(`${token.token}${formatAbcDuration(duration)}${token.tieSuffix}`);
     elapsed += duration;
   }
 

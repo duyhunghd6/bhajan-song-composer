@@ -1,39 +1,42 @@
 import { parseScientificPitch, midiForStringFret, type GuitarPlayabilityStringNumber } from "../guitar-playability";
-import { getGuitarVoicings } from "../guitar-voicings";
 import { validateFingerstylePhysicsDetailed } from "./physics-validation";
-import { DPDiagnosticLogger, SKILL_LEVEL_CONSTRAINTS, type SkillLevel } from "./dp-types";
+import { SKILL_LEVEL_CONSTRAINTS, type SkillLevel } from "./fingerstyle-constraints";
 import type { TimeSliceMeasure, TimeSliceGridStep } from "./time-slice";
-import type { FingerstyleDiagnosticRun } from "./dp-diagnostics";
 
-export interface HeuristicTimeSliceOptions {
+export interface FingerstyleFoundationPlacementOptions {
   skillLevel?: SkillLevel;
   maxMelodyFret?: number;
   bpm?: number;
 }
 
-export interface HeuristicTimeSliceResult {
+export type FingerstyleFoundationPlacementOutcome =
+  | "accepted"
+  | "accepted-with-unresolved-events"
+  | "no-effective-change";
+
+export interface FingerstyleFoundationPlacementDiagnostic {
+  outcome: FingerstyleFoundationPlacementOutcome;
+  inputEventCount: number;
+  resolvedEventCount: number;
+  unresolvedEventCount: number;
+  changedEventCount: number;
+  elapsedMs: number;
+}
+
+export interface FingerstyleFoundationPlacementResult {
   measures: TimeSliceMeasure[];
   logs: string[];
-  diagnostics: FingerstyleDiagnosticRun;
+  diagnostics: FingerstyleFoundationPlacementDiagnostic;
   changedEventCount: number;
   unresolvedEventCount: number;
 }
 
 const TREBLE_STRINGS: GuitarPlayabilityStringNumber[] = [1, 2, 3];
 const BASS_STRINGS: GuitarPlayabilityStringNumber[] = [6, 5, 4];
-
 type TabEvent = NonNullable<TimeSliceGridStep["tablature"]>[number];
 
 function cloneMeasures(measures: TimeSliceMeasure[]): TimeSliceMeasure[] {
   return JSON.parse(JSON.stringify(measures)) as TimeSliceMeasure[];
-}
-
-function normalizedChord(chord: string): string {
-  return chord.trim().replace(/\s+/g, "").toLowerCase();
-}
-
-function shapeKey(frets: (number | "X")[]): string {
-  return frets.join(":");
 }
 
 function choosePosition(
@@ -46,10 +49,8 @@ function choosePosition(
   const candidates: Array<{ string: GuitarPlayabilityStringNumber; fret: number }> = [];
   for (const string of strings) {
     if (occupied.has(string)) continue;
-    const openMidi = midiForStringFret(string, 0);
-    const fret = midi - openMidi;
-    if (fret < 0 || fret > maxFret) continue;
-    if (midiForStringFret(string, fret) !== midi) continue;
+    const fret = midi - midiForStringFret(string, 0);
+    if (fret < 0 || fret > maxFret || midiForStringFret(string, fret) !== midi) continue;
     candidates.push({ string, fret });
   }
   candidates.sort((left, right) => (
@@ -68,53 +69,47 @@ function replaceTabPosition(tab: TabEvent, position: { string: GuitarPlayability
   return changed;
 }
 
-function preserveChordShapePreference(
+/**
+ * Deterministically places the submitted non-fill foundation on the canonical
+ * TimeGrid. It repairs only physical positions; source melody facts stay pinned.
+ */
+export function placeFingerstyleFoundationOnTimeGrid(
   measures: TimeSliceMeasure[],
-  logger: DPDiagnosticLogger,
-): Map<string, string> {
-  const established = new Map<string, string>();
-  for (const measure of measures) {
-    for (const step of measure.grid) {
-      const chord = normalizedChord(step.chord);
-      if (!chord || established.has(chord)) continue;
-      const voicing = getGuitarVoicings(step.chord)[0];
-      if (voicing) established.set(chord, shapeKey(voicing.frets));
-    }
-  }
-  logger.entry("Chord shapes established", established.size);
-  return established;
-}
-
-function applyMelodyAndBass(
-  measures: TimeSliceMeasure[],
-  options: Required<Pick<HeuristicTimeSliceOptions, "skillLevel" | "maxMelodyFret">>,
-  logger: DPDiagnosticLogger,
-): { changed: number; unresolved: number } {
-  const maxFret = SKILL_LEVEL_CONSTRAINTS[options.skillLevel].maxFret;
+  options: FingerstyleFoundationPlacementOptions = {},
+): FingerstyleFoundationPlacementResult {
+  const startedAt = Date.now();
+  const skillLevel = options.skillLevel ?? "beginner";
+  const constraints = SKILL_LEVEL_CONSTRAINTS[skillLevel];
+  const maxMelodyFret = options.maxMelodyFret ?? constraints.maxFret;
+  const copy = cloneMeasures(measures);
+  const logs = [
+    "=== FINGERSTYLE FOUNDATION PLACEMENT (TIMEGRID) ===",
+    `  Skill level: ${skillLevel}`,
+    `  BPM: ${options.bpm ?? 120}`,
+    "  Source melody is anchored to exact pitches on available treble strings.",
+  ];
   let changed = 0;
   let unresolved = 0;
   let previousMelodyString: GuitarPlayabilityStringNumber | null = null;
 
-  for (const measure of measures) {
+  for (const measure of copy) {
     for (const step of measure.grid) {
       const tabs = step.tablature ?? [];
       const melody = tabs.find(tab => tab.role === "melody");
-      const sourcePitch = step.melody.state === "attack" ? parseScientificPitch(step.melody.pitch ?? "") : null;
-      const occupied = new Set(tabs.filter(tab => tab !== melody).map(tab => tab.string));
-
-      if (sourcePitch && melody) {
+      const authoritative = step.melody.state === "attack"
+        ? parseScientificPitch(step.melody.pitch ?? "")
+        : null;
+      if (authoritative && melody) {
         const position = choosePosition(
-          sourcePitch.midi,
+          authoritative.midi,
           TREBLE_STRINGS,
-          melody.string === 1 || melody.string === 2 || melody.string === 3
-            ? melody.string
-            : previousMelodyString,
-          Math.max(maxFret, options.maxMelodyFret),
-          occupied,
+          TREBLE_STRINGS.includes(melody.string) ? melody.string : previousMelodyString,
+          Math.max(constraints.maxFret, maxMelodyFret),
+          new Set(tabs.filter(tab => tab !== melody).map(tab => tab.string)),
         );
         if (!position) {
           unresolved++;
-          logger.log(`  M${measure.measure}/s${step.step}: no treble position for authoritative ${step.melody.pitch}`);
+          logs.push(`  M${measure.measure}/s${step.step}: no available treble position for ${step.melody.pitch}.`);
         } else {
           if (replaceTabPosition(melody, position)) changed++;
           previousMelodyString = position.string;
@@ -123,76 +118,41 @@ function applyMelodyAndBass(
 
       const bass = tabs.find(tab => tab.role === "bass");
       if (bass) {
-        const bassMidi = midiForStringFret(bass.string, bass.fret);
-        const bassPosition = choosePosition(bassMidi, BASS_STRINGS, bass.string, maxFret, new Set(tabs.filter(tab => tab !== bass).map(tab => tab.string)));
-        if (bassPosition) {
-          if (replaceTabPosition(bass, bassPosition)) changed++;
-        } else {
+        const position = choosePosition(
+          midiForStringFret(bass.string, bass.fret),
+          BASS_STRINGS,
+          bass.string,
+          constraints.maxFret,
+          new Set(tabs.filter(tab => tab !== bass).map(tab => tab.string)),
+        );
+        if (!position) {
           unresolved++;
-          logger.log(`  M${measure.measure}/s${step.step}: bass retained at s${bass.string}/f${bass.fret}`);
+          logs.push(`  M${measure.measure}/s${step.step}: bass remains at s${bass.string}/f${bass.fret}.`);
+        } else if (replaceTabPosition(bass, position)) {
+          changed++;
         }
       }
     }
-  }
-  return { changed, unresolved };
-}
-
-export function applyHeuristicToTimeSliceMeasures(
-  measures: TimeSliceMeasure[],
-  options: HeuristicTimeSliceOptions = {},
-): HeuristicTimeSliceResult {
-  const skillLevel = options.skillLevel ?? "beginner";
-  const maxMelodyFret = options.maxMelodyFret ?? SKILL_LEVEL_CONSTRAINTS[skillLevel].maxFret;
-  const logger = new DPDiagnosticLogger();
-  logger.section("HEURISTIC FINGERSTYLE OPTIMIZATION (TIME-SLICE)");
-  logger.entry("Skill level", skillLevel);
-  logger.entry("BPM", options.bpm ?? 120);
-  logger.entry("Strategy", "heuristic");
-  logger.event({
-    type: "configuration",
-    phase: "configuration",
-    values: { skillLevel, bpm: options.bpm ?? 120, arrangementOptimization: "heuristic", maxMelodyFret },
-    provenance: { skillLevel: options.skillLevel ? "supplied" : "defaulted", bpm: options.bpm ? "supplied" : "defaulted", arrangementOptimization: "constant", maxMelodyFret: options.maxMelodyFret ? "supplied" : "derived" },
-  });
-  logger.log("Stage 1: authoritative melody anchored on strings 1–3.");
-  logger.log("Stage 2: deterministic chord-shape preference established from available voicings.");
-  const copy = cloneMeasures(measures);
-  preserveChordShapePreference(copy, logger);
-  logger.log("Stage 3: existing bass events routed to low strings without displacing melody.");
-  const counts = applyMelodyAndBass(copy, { skillLevel, maxMelodyFret }, logger);
-  logger.log("Stage 4: fill opportunities remain delegated to the shared staged fill pipeline.");
-
-  for (const measure of copy) {
     const validation = validateFingerstylePhysicsDetailed(measure.grid, {
       fillDensity: "none",
       skillLevel,
       maxMelodyFret,
     });
-    if (!validation.valid) logger.log(`  M${measure.measure}: heuristic foundation retains validation issue: ${validation.message}`);
+    if (!validation.valid) logs.push(`  M${measure.measure}: ${validation.message}`);
   }
 
-  const outcome = counts.unresolved > 0 ? "accepted-with-unresolved-events" : counts.changed === 0 ? "no-effective-dp-change" : "accepted";
-  logger.entry("Events updated", counts.changed);
-  logger.entry("Events unresolved", counts.unresolved);
-  logger.entry("Outcome", outcome);
-  logger.event({
-    type: "run-summary",
-    phase: "summary",
+  const inputEventCount = measures.reduce((count, measure) => count + measure.grid.length, 0);
+  const outcome: FingerstyleFoundationPlacementOutcome = unresolved > 0
+    ? "accepted-with-unresolved-events"
+    : changed === 0 ? "no-effective-change" : "accepted";
+  const diagnostics = {
     outcome,
-    inputEventCount: measures.reduce((count, measure) => count + measure.grid.length, 0),
-    resolvedEventCount: Math.max(0, measures.reduce((count, measure) => count + measure.grid.length, 0) - counts.unresolved),
-    unresolvedEventCount: counts.unresolved,
-    changedEventCount: counts.changed,
-    unchangedEventCount: 0,
-    totalCost: 0,
-    elapsedMs: 0,
-  });
-  logger.collector.complete(outcome);
-  return {
-    measures: copy,
-    logs: logger.getLines(),
-    diagnostics: logger.getDiagnostics(),
-    changedEventCount: counts.changed,
-    unresolvedEventCount: counts.unresolved,
+    inputEventCount,
+    resolvedEventCount: inputEventCount - unresolved,
+    unresolvedEventCount: unresolved,
+    changedEventCount: changed,
+    elapsedMs: Date.now() - startedAt,
   };
+  logs.push(`  Outcome: ${outcome}; ${changed} position(s) updated, ${unresolved} unresolved.`);
+  return { measures: copy, logs, diagnostics, changedEventCount: changed, unresolvedEventCount: unresolved };
 }

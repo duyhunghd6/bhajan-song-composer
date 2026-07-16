@@ -4,7 +4,7 @@ import {
   parseScientificPitch,
   type GuitarPlayabilityStringNumber,
 } from "../guitar-playability";
-import { SKILL_LEVEL_CONSTRAINTS, type SkillLevel } from "./dp-types";
+import { SKILL_LEVEL_CONSTRAINTS, type SkillLevel } from "./fingerstyle-constraints";
 import type { TimeSliceMeasure } from "./time-slice";
 
 export interface AuthoritativeMelodyPosition {

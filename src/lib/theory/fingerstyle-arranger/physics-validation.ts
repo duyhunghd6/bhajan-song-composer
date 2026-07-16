@@ -5,7 +5,7 @@ import {
   type GuitarTabValidationIssue,
 } from "../guitar-tab-validation";
 import { scientificPitchForStringFret } from "../guitar-playability";
-import { SKILL_LEVEL_CONSTRAINTS, type SkillLevel } from "./dp-types";
+import { SKILL_LEVEL_CONSTRAINTS, type SkillLevel } from "./fingerstyle-constraints";
 import type { TimeSliceGridStep } from "./time-slice";
 
 export interface FingerstylePhysicsOptions {

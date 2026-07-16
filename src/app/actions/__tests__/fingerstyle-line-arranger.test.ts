@@ -133,7 +133,7 @@ describe("generateAIFingerstyleLine diagnostics", () => {
     persistMock.mockClear();
   });
 
-  it("combines LLM and DP events, appends plaintext logs, and persists run-complete last", async () => {
+  it("combines LLM, placement, and workflow events, appends plaintext logs, and persists run-complete last", async () => {
     const result = await generateAIFingerstyleLine({
       songSlug: "ganesha",
       sourceFingerprint: "source-test",
@@ -144,11 +144,11 @@ describe("generateAIFingerstyleLine diagnostics", () => {
 
     expect(result.success, `${result.error}\n${result.logs.join("\n")}`).toBe(true);
     expect(result.diagnostics?.plaintext).toContain(
-      "FINGERSTYLE LLM + DP DIAGNOSTIC VISUALIZATION (PLAINTEXT)",
+      "FINGERSTYLE LLM + TIMEGRID WORKFLOW DIAGNOSTICS",
     );
     expect(result.logs.at(-1)).toBe(result.diagnostics?.plaintext);
     expect(result.diagnostics?.events.some(event => event.source === "llm")).toBe(true);
-    expect(result.diagnostics?.events.some(event => event.source === "dp")).toBe(true);
+    expect(result.diagnostics?.events.some(event => event.kind === "foundation-placed")).toBe(true);
     expect(result.diagnostics?.events.some(event => event.source === "workflow")).toBe(true);
     expect(result.diagnostics?.events.some(event => (
       event.source === "workflow" && event.kind === "abc-ascii-guitartab-validated"
