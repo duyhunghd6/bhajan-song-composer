@@ -1,4 +1,4 @@
-import { buildAbcDurationContext, joinAbcMeasuresWithBarlines, EMPTY_BARLINE_INFO } from "../abc-duration";
+import { buildAbcDurationContext, joinAbcMeasuresWithBarlines, cleanAbcMeasureSegment, EMPTY_BARLINE_INFO } from "../abc-duration";
 import { getKeyAccidentalsFromAbc } from "../abc-key-signature";
 import { processGuitarLine } from "../guitar-string-forcing";
 import { convertTimeSliceMeasureToAbc, groupMeasuresByLine, joinMeasureAbcWithBarlines, type TimeSliceMeasure } from "./time-slice";
@@ -43,13 +43,16 @@ export function buildStandaloneGeneratedGuitarAbc(measures: TimeSliceMeasure[], 
  * ABC text stored in `source_abc.melody` and applies `!N!` guitar string-forcing
  * decorations to each note token.
  *
+ * `cleanAbcMeasureSegment` strips structural markers (volta brackets `[1,2`,
+ * repeat colons `:`) that the raw `|`-split stores in the text — these are
+ * reconstructed by `joinAbcMeasuresWithBarlines` from barline metadata instead.
+ *
  * This preserves 100% of original ABC characteristics:
- * - Ties (`-`)
- * - Slurs (`()`)
+ * - Ties (`-`) including cross-measure ties like `B4-` → `B4`
+ * - Slurs (`()`) including cross-measure slurs
  * - Chord symbols (`"Em"`, `"Am"`)
  * - Duration suffixes (`E2`, `E3`, `z/2`)
- * - Fermata (`!fermata!`)
- * - Segno (`S`)
+ * - Fermata (`!fermata!`), Segno (`S`)
  * - All other ABC decorations and annotations
  */
 export function buildReconstructedGuitarAbc(measures: TimeSliceMeasure[], sourceAbc: string): string {
@@ -57,8 +60,10 @@ export function buildReconstructedGuitarAbc(measures: TimeSliceMeasure[], source
 
   const guitarLines = groupMeasuresByLine(measures).map(lineMeasures => {
     const forcedMeasures = lineMeasures.map(m => {
-      const melodyText = m.source_abc?.melody ?? "";
-      // Apply guitar string-forcing to each note token, preserving everything else
+      // Clean structural markers (volta, repeat colons) — they'll be added back
+      // by joinAbcMeasuresWithBarlines from barline metadata.
+      // This preserves ties (-), slurs (()), chord symbols, durations, etc.
+      const melodyText = cleanAbcMeasureSegment(m.source_abc?.melody ?? "");
       return processGuitarLine(melodyText, keyAccidentals);
     });
     return joinAbcMeasuresWithBarlines(
