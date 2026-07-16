@@ -34,7 +34,7 @@ source ABC → compile locked source facts into TimeGrid
            → deterministically render Guitar ABC and ASCII-GuitarTab
 ```
 
-The working representation has three distinct layers: the in-memory canonical `{ version: 1, source, measures }` document; the emitted `timegrid-document:v3` import/copy/download JSON; and the separate `{ version: 1, sourceFingerprint, measures }` local-restore envelope. Only the TimeGrid is editable authority. The v3 document preserves the immutable raw source ABC plus literal melody states and physical tab events; local restore overlays only compatible tab/visual-tab data on freshly compiled source facts.
+The working representation has three distinct layers: the in-memory canonical `{ version: 1, source, measures }` document; the emitted `timegrid-document:v3` import/copy/download JSON; and the separate `{ version: 1, sourceFingerprint, measures }` local-restore envelope. Only the TimeGrid is editable authority. The Composer Guitar Fingerstyle page exposes v3 copy, download, paste import, and file import; imports must match the current workflow-applied raw source ABC, then overlay only validated physical tab events on freshly compiled source facts. The v3 document preserves the immutable raw source ABC plus literal melody states and physical tab events; local restore overlays only compatible tab/visual-tab data on freshly compiled source facts and rejects malformed or physically invalid browser drafts.
 
 See [TimeGrid Conversion Guide](./timegrid-conversion-guide.md) for the exact v3 wire shape, persisted envelope, representation-level edit operations, validation sequence, and serialization rules.
 
@@ -79,26 +79,23 @@ Settings are persisted in the per-song Composer workspace. Changing settings doe
 
 `generateAIFingerstyleLine` remains the public server action. Its implementation is local to `src/app/actions/fingerstyle-line-arranger/` and uses one OpenAI-compatible tool loop with server-owned phase state.
 
-### Stage 1 — Non-fill foundation
+### Stage 1 — Fill-position reservations
 
-The LLM may query compact guitar voicings, then calls `submit_fingerstyle_foundation` with `tablature:v1`.
+The LLM first inspects every source-only fill reservation slot and explicitly selects or skips each musical location. A reservation contains measure/step, melody state, chord, metric context, and rationale only; it is not a physical note and contains no pitch, string, fret, duration, or finger.
 
-The foundation must:
+### Stage 2 — Bass positions and annotated source ABC
 
-- cover every authoritative melody attack exactly once;
-- preserve the exact melody pitch;
-- contain no `fill` roles;
-- use `bass`, `root`, `fifth`, or `harmony` for structural support;
-- leave unweighted sustain/rest steps empty for later fill analysis;
-- obey sparse PIMA/right-hand and selected-skill constraints.
+The server exposes legal weighted bass-anchor slots after excluding pickup padding and selected fill reservations. The LLM explicitly selects or skips each slot. The diagnostic log then emits a read-only source-ABC projection with below-note labels such as `"_Bass M3:S1"`; raw source ABC remains byte-identical and annotations are never canonical input.
 
-### Stage 2 — Deterministic TimeGrid placement and freeze
+### Stage 3 — Chord-derived bass pitch selection
 
-The server validates the foundation, parses the actual ABC `Q:` tempo, and deterministically places submitted physical melody and bass events on the canonical TimeGrid using the selected skill constraints. The validated foundation is then frozen.
+For each selected bass position the server enumerates ranked root/fifth low-register candidates with legal physical string/fret options. The LLM chooses candidate IDs only. It cannot invent a pitch, role, string, or fret.
 
-No mutating placement pass runs after opportunity scoring. The frozen TimeGrid is the sole basis for fill analysis.
+### Stage 4 — Deterministic TimeGrid materialization and freeze
 
-### Stage 3 — Exhaustive fill analysis
+The server rebuilds from pristine source facts, realizes exact melody attacks and selected bass candidates, assigns/repairs physical positions under the selected skill constraints, writes explicit structural durations, validates physics, and freezes the canonical non-fill TimeGrid.
+
+### Stage 5 — Post-bass fill analysis and composition
 
 The LLM calls `inspect_fill_opportunities` beginning at cursor `0` and follows every `nextCursor` until `end`. The server rejects skipped, repeated, or out-of-order pages.
 
@@ -117,17 +114,11 @@ Analysis visits every active grid step and records a typed eligibility rejection
 
 Safe windows are formed from contiguous melody rests or protected sustains. Windows split at melody attacks, foundation attacks, chord changes, measure boundaries, pickup padding, and line boundaries.
 
-### Stage 4 — LLM window selection
+### Stage 5a — Reservation reconciliation
 
-After every page is inspected, the LLM calls `select_fill_windows` with a use/skip decision and short reason for every scored window. The server validates:
+After every post-bass page is inspected, the server reconciles each earlier selected fill reservation against a physical scored window. A reservation must still have legal candidates at its original measure/step; it is never silently moved. If bass materialization invalidates it, the LLM receives a repair result and must revise bass or reservation choices. The server validates source and opportunity-set fingerprints, reservation bindings, density/per-measure budgets, and zero-fill compatibility mode before it exposes late candidate composition.
 
-- source and opportunity-set fingerprints;
-- unknown, duplicate, or omitted window IDs;
-- total density budget;
-- per-measure budget;
-- zero-fill compatibility mode.
-
-### Stage 5 — LLM fill composition
+### Stage 5b — LLM physical fill composition
 
 The LLM calls `validate_composed_fills` with selected atomic candidate IDs plus its chosen duration and right-hand finger.
 
@@ -144,11 +135,11 @@ The LLM still decides the note sequence, rhythmic duration inside each legal cap
 
 The server rejects unknown or duplicate candidates, candidates from skipped windows, duration overflow, per-window note-budget overflow, same-string interval overlap, and scale approaches that do not resolve by step to a nearby chord tone.
 
-### Stage 6 — Server merge and final reference
+### Stage 6 — Server merge, ASCII-GuitarTab, and Guitar ABC/ABCJS
 
 The server reconstructs the final canonical TimeGrid measures from the frozen foundation and accepted candidate IDs. It adds `durationSteps`, `fillWindowId`, and `fillCandidateId` provenance to accepted fill events.
 
-The final `submit_arranged_line` call must reference the same accepted `fills:v1` payload. The LLM cannot replace locked source fields or submit a replacement grid at final submission; generated Guitar ABC and ASCII-GuitarTab derive only after this accepted merge.
+The final `submit_arranged_line` call must reference the same accepted `fills:v1` payload. The LLM cannot replace locked source fields or submit a replacement grid at final submission. After accepted merge the server first renders and validates ASCII-GuitarTab, then generates forced-string `[V:Guitar]` ABC notation, and the Composer sends that generated ABC to the ABCJS music-staff/playback canvas.
 
 ## 4. Opportunity and candidate generation
 
@@ -311,7 +302,7 @@ Each line card shows a compact run summary with:
 - composed fill-note count;
 - final validation status.
 
-Only one line can generate at a time on the route. Other line buttons and settings controls are disabled until the active run finishes.
+Only one line can generate at a time on the route. Other line buttons, skill/density settings, and TimeGrid import controls are disabled until the active run finishes. A response is accepted only when its source fingerprint and route revision still match the active canonical TimeGrid; source/import changes discard stale results.
 
 ## 9. Source fixtures and validation
 

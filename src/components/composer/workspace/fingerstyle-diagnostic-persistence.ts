@@ -31,6 +31,12 @@ const REQUIRED_EVENT_KINDS = new Set([
   "final-validation",
   "abc-ascii-guitartab-validated",
   "abc-ascii-guitartab-rejected",
+  "fill-reservations-accepted",
+  "fill-reservations-reconciled",
+  "bass-positions-accepted",
+  "bass-source-abc-annotated",
+  "bass-pitches-accepted",
+  "timegrid-materialized",
   "chat-error",
   "loop-exhausted",
 ]);

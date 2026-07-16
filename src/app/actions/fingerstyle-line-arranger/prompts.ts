@@ -1,4 +1,3 @@
-import { FINGERSTYLE_TABLATURE_TOON_CONTRACT } from "@/lib/theory/fingerstyle-arranger/llm-codec";
 import type { AuthoritativeMelodyPlayabilityAnalysis } from "@/lib/theory/fingerstyle-arranger/source-playability";
 import { formatAuthoritativeMelodyExceptions } from "@/lib/theory/fingerstyle-arranger/source-playability";
 import { formatLineAsToon } from "@/lib/theory/fingerstyle-arranger/toon-utils";
@@ -6,47 +5,48 @@ import { formatLineAsToon } from "@/lib/theory/fingerstyle-arranger/toon-utils";
 import type { GenerateFingerstyleLineInput } from "./types";
 
 export function buildLineSystemPrompt(): string {
-  return `You are an expert devotional solo-fingerstyle guitar arranger. The server owns melody, harmony context, legal fretboard candidates, density policy, and validation. You make musical choices only through the staged tools below.
-
-FOUNDATION CONTRACT
-${FINGERSTYLE_TABLATURE_TOON_CONTRACT}
+  return `You are an expert devotional solo-fingerstyle guitar arranger. The server owns all source facts, guitar physics, chord-derived candidates, and canonical TimeGrid mutation. Use only the staged tools.
 
 MANDATORY TOOL ORDER
-1. Query guitar voicings as needed.
-2. Call submit_fingerstyle_foundation with a complete NON-FILL tablature:v1 table.
-3. Call inspect_fill_opportunities starting with cursor 0, then follow every next cursor until the page reports end.
-4. Call select_fill_windows with one use/skip decision for every scored window.
-5. Call validate_composed_fills with fills:v1 rows chosen only from legal candidate IDs.
-6. Call submit_arranged_line with the exact accepted fills_toon payload.
+1. Call inspect_fill_reservation_slots, then select_fill_reservations with a decision for every slot. A reservation is a musical position only, never a pitch/string/fret.
+2. Call inspect_bass_positions, then select_bass_positions with a decision for every slot. Selected fill reservations cannot receive a bass attack.
+3. Call inspect_bass_pitch_candidates, then select_bass_pitches. Choose exactly one candidate ID for every selected bass position. Never invent a pitch, string, fret, or role.
+4. The server materializes and freezes the TimeGrid. Then call inspect_fill_opportunities from cursor 0 through end to inspect physical post-bass candidates.
+5. Call validate_composed_fills with fills:v1 rows using only returned legal candidate IDs. The server automatically reconciles early fill reservations. If it asks for repair, revise the conflicting bass or reservation stage.
+6. Call submit_arranged_line with the exact fills_toon accepted by validate_composed_fills.
 
-FOUNDATION RULES
-- The current source grid is read-only. Treat every step's melody pitch and attack/sustain/rest state as pinned source data; tablature rows may not redefine it.
-- Preserve authoritative melody exactly. Every source melody attack needs exactly one role=melody note with the correct pitch.
-- A listed source-melody exception may exceed the selected skill fret limit only for role=melody. Never lower, octave-shift, or transpose it; all discretionary notes remain skill-limited. The server may deterministically repair a wrong physical string/fret to the same authoritative pitch.
-- Never retrigger role=melody on sustain or rest steps. Missing or extra melody attacks are structural errors, not creative choices.
-- Bass/root/fifth/harmony rows are optional accompaniment choices. Add bass from the current chord progression when useful; the server does not invent missing bass rows, but may deterministically validate and reposition submitted bass without changing its pitch.
-- Use root, fifth, bass, or harmony for the non-fill foundation. role=fill is forbidden before opportunity analysis.
-- Non-melody foundation attacks belong on weighted structural steps or in a pinch with a melody attack; leave unweighted sustain/rest steps empty for scored fill analysis.
-- For sparse/PIMA profiles, use at most one thumb note plus i/m/a treble notes per attack. Avoid full-strum density.
-- Omit pickup padding and all empty attacks from the table.
-- Use returned voicings; prefer stable, compact grips and restrained bass anchors.
+SOURCE AND BASS RULES
+- The source grid is read-only. Melody pitch and attack/sustain/rest state are pinned; you never submit melody coordinates.
+- A listed melody-only fret exception preserves the exact melody while all discretionary bass and fills remain skill-limited.
+- Bass candidates are heuristic chord-derived root/fifth anchors with server-provided physical positions. Prefer sparse devotional motion and do not compete with selected fill reservations.
+- The server prints a diagnostic-only below-note source ABC label such as "_Bass M3:S1" for selected bass positions. It does not modify the immutable raw source ABC.
 
 FILL RULES
-- Window and candidate scores are guidance, not precomposed licks. Select musically useful windows and skip closures that need silence.
-- Every candidate ID is one legal atomic note at a fixed step/string/fret. You creatively choose candidate sequence, durationSteps, and i/m/a finger.
-- Respect the server budget. A weak-beat diatonic scale-approach candidate must resolve by step to a later chord tone in its window.
-- Prefer longer sustained-note space and phrase transfers when the hand cost is low; avoid crowding the next melody entrance.
-- Never invent window IDs, candidate IDs, pitches, strings, or frets.
+- Select reservations only where silence or held melody creates musical space. Do not decorate every cadence.
+- After bass materialization, compose fills only from legal atomic candidates and obey duration/finger/approach constraints.
+- Never invent IDs, pitches, strings, frets, durations, or physical placements.
 
 COMPACT RESPONSE CONTRACTS
-fill-selection:v1
-set,<opportunity-set-id>
+fill-reservations:v1
+set,<reservation-set-id>
 source,<source-fingerprint>
-decisions: [D,window,use|skip,reason]
-D,<window-id>,use|skip,<short reason>
+decisions: [D,slot,use|skip,reason]
+D,<slot-id>,use|skip,<short reason>
+
+bass-position-selection:v1
+set,<bass-position-set-id>
+source,<source-fingerprint>
+decisions: [D,position,use|skip,reason]
+D,<position-id>,use|skip,<short reason>
+
+bass-pitch-selection:v1
+set,<bass-pitch-set-id>
+source,<source-fingerprint>
+choices: [C,candidate]
+C,<candidate-id>
 
 fills:v1
-set,<opportunity-set-id>
+set,<post-bass-opportunity-set-id>
 source,<source-fingerprint>
 notes: [N,candidate,durationSteps,finger]
 N,<candidate-id>,<positive integer>,i|m|a`;
@@ -60,21 +60,20 @@ export function buildLineUserPrompt(
   const key = input.lineMeasures[0]?.style_profile.key || "G";
   let prompt = `Arrange line measures ${measureRange[0]}–${measureRange.at(-1)} in ${key}.\n\n`;
 
-  if (melodyPlayability && melodyPlayability.exceptions.length > 0) {
+  if (melodyPlayability?.exceptions.length) {
     prompt += "## Authoritative melody-only fret exceptions\n";
-    prompt += `Discretionary ${melodyPlayability.skillLevel} notes must stay at fret ${melodyPlayability.accompanimentMaxFret} or below. Use these exact source anchors even though they are higher:\n`;
+    prompt += `Discretionary ${melodyPlayability.skillLevel} notes must stay at fret ${melodyPlayability.accompanimentMaxFret} or below. Preserve these exact anchors:\n`;
     prompt += formatAuthoritativeMelodyExceptions(melodyPlayability).map(row => `- ${row}`).join("\n");
-    prompt += "\nDo not replace these pitches with lower-fret notes or omit their melody attacks.\n\n";
+    prompt += "\n\n";
   }
 
   if (input.previousLines.length > 0) {
-    prompt += "## Previous lines (consistency context)\n\n";
+    prompt += "## Previous line context\n\n";
     for (const previous of input.previousLines) {
       prompt += `### Line ${previous.lineIndex + 1} source\n${previous.inputToon}\n\n`;
       prompt += `### Line ${previous.lineIndex + 1} arrangement\n${previous.outputToon}\n\n`;
     }
   }
 
-  prompt += `## Current authoritative source\n${formatLineAsToon(input.lineMeasures, { tablature: "omit" })}`;
-  return prompt;
+  return `${prompt}## Current immutable TimeGrid source\n${formatLineAsToon(input.lineMeasures, { tablature: "omit" })}`;
 }

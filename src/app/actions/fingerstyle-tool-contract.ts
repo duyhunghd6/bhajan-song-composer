@@ -71,6 +71,54 @@ export function buildFingerstyleTablatureToolDefinition(name: string, descriptio
   };
 }
 
+export const INSPECT_FILL_RESERVATION_SLOTS_TOOL_DEFINITION = {
+  type: "function",
+  function: {
+    name: "inspect_fill_reservation_slots",
+    description: "Inspect source-only fill reservation locations before bass planning. These are musical time positions only, never physical notes.",
+    parameters: { type: "object", additionalProperties: false, properties: {} },
+  },
+};
+
+export const SELECT_FILL_RESERVATIONS_TOOL_DEFINITION = buildStringPayloadToolDefinition(
+  "select_fill_reservations",
+  "Choose use or skip for every source-only fill reservation slot.",
+  "reservations_toon",
+  "Strict fill-reservations:v1 payload without Markdown fences.",
+);
+
+export const INSPECT_BASS_POSITIONS_TOOL_DEFINITION = {
+  type: "function",
+  function: {
+    name: "inspect_bass_positions",
+    description: "Inspect legal structural bass positions after fill reservations are selected.",
+    parameters: { type: "object", additionalProperties: false, properties: {} },
+  },
+};
+
+export const SELECT_BASS_POSITIONS_TOOL_DEFINITION = buildStringPayloadToolDefinition(
+  "select_bass_positions",
+  "Choose use or skip for every legal bass position.",
+  "bass_positions_toon",
+  "Strict bass-position-selection:v1 payload without Markdown fences.",
+);
+
+export const INSPECT_BASS_PITCH_CANDIDATES_TOOL_DEFINITION = {
+  type: "function",
+  function: {
+    name: "inspect_bass_pitch_candidates",
+    description: "Inspect server-generated chord-derived bass pitch candidates for selected positions.",
+    parameters: { type: "object", additionalProperties: false, properties: {} },
+  },
+};
+
+export const SELECT_BASS_PITCHES_TOOL_DEFINITION = buildStringPayloadToolDefinition(
+  "select_bass_pitches",
+  "Choose exactly one server-generated bass candidate for each selected bass position.",
+  "bass_pitches_toon",
+  "Strict bass-pitch-selection:v1 payload without Markdown fences.",
+);
+
 export const INSPECT_FILL_OPPORTUNITIES_TOOL_DEFINITION = {
   type: "function",
   function: {

@@ -72,7 +72,6 @@ describe("FingerstyleLineCard", () => {
         lineIndex={0}
         lineMeasures={[makeFinalMeasure()]}
         activeAbc={activeAbc}
-        onUpdateMeasures={() => {}}
         accompLayerVisibility={{ Melody: true, Guitar: true, TAB: true }}
         buildPreviousContext={() => []}
         workflowAppliedMusicAbc={activeAbc}
@@ -92,6 +91,9 @@ describe("FingerstyleLineCard", () => {
     expect(markup).toContain("whitespace-pre");
     expect(markup).toContain('style="font-size:9.333px;white-space:pre;overflow-wrap:normal;word-break:normal"');
     expect(markup).toContain('Copy ASCII-GuitarTab');
+    expect(markup).toContain('Canonical TimeGrid');
+    expect(markup).not.toContain('Time-Slice Grid (TOON)');
+    expect(markup).not.toContain('<textarea');
     expect(markup).not.toContain('Copy rendered TAB');
   });
 });

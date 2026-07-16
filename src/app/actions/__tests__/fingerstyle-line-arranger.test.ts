@@ -22,17 +22,31 @@ vi.mock("../ai-config", () => ({
     const localTool = (name: string) => input.localTools.find(tool => tool.name === name)!;
     expect(await localTool("inspect_fill_opportunities").execute({ cursor: 0 })).toMatchObject({
       valid: false,
-      message: "Submit and freeze the foundation first.",
+      message: "Select bass pitches and materialize the TimeGrid before inspecting physical fill candidates.",
     });
-    const highMelody = input.userPrompt.includes("B4=string 1 fret 7");
-    const tablatureToon = [
-      "tablature:v1",
-      "{measure,step,string,fret,finger,role}",
-      ...(highMelody ? [] : ["1,1,6,0,p,root"]),
-      highMelody ? "1,1,1,7,a,melody" : "1,1,1,0,a,melody",
-    ].join("\n");
-    const foundation = await localTool("submit_fingerstyle_foundation").execute({ tablature_toon: tablatureToon });
-    expect(foundation).toMatchObject({ valid: true });
+    const reservations = await localTool("inspect_fill_reservation_slots").execute({}) as string;
+    const reservationSet = reservations.split("\n").find(line => line.startsWith("set,"))!.split(",")[1];
+    const reservationSource = reservations.split("\n").find(line => line.startsWith("source,"))!.split(",")[1];
+    const reservationRows = reservations.split("\n").filter(line => line.startsWith("R,"));
+    expect(await localTool("select_fill_reservations").execute({ reservations_toon: [
+      "fill-reservations:v1", `set,${reservationSet}`, `source,${reservationSource}`, "decisions: [D,slot,use|skip,reason]",
+      ...reservationRows.map((row, index) => `D,${row.split(",")[1]},${index === 0 ? "use" : "skip"},test reservation`),
+    ].join("\n") })).toMatchObject({ valid: true });
+    const positions = await localTool("inspect_bass_positions").execute({}) as string;
+    const positionSet = positions.split("\n").find(line => line.startsWith("set,"))!.split(",")[1];
+    const positionSource = positions.split("\n").find(line => line.startsWith("source,"))!.split(",")[1];
+    const positionRows = positions.split("\n").filter(line => line.startsWith("B,"));
+    expect(await localTool("select_bass_positions").execute({ bass_positions_toon: [
+      "bass-position-selection:v1", `set,${positionSet}`, `source,${positionSource}`, "decisions: [D,position,use|skip,reason]",
+      ...positionRows.map((row, index) => `D,${row.split(",")[1]},${index === 0 ? "use" : "skip"},test bass position`),
+    ].join("\n") })).toMatchObject({ valid: true });
+    const bassCandidates = await localTool("inspect_bass_pitch_candidates").execute({}) as string;
+    const bassSet = bassCandidates.split("\n").find(line => line.startsWith("set,"))!.split(",")[1];
+    const bassSource = bassCandidates.split("\n").find(line => line.startsWith("source,"))!.split(",")[1];
+    const bassCandidate = bassCandidates.split("\n").find(line => line.startsWith("C,"))!.split(",")[1];
+    expect(await localTool("select_bass_pitches").execute({ bass_pitches_toon: [
+      "bass-pitch-selection:v1", `set,${bassSet}`, `source,${bassSource}`, "choices: [C,candidate]", `C,${bassCandidate}`,
+    ].join("\n") })).toMatchObject({ valid: true });
 
     const pages: string[] = [];
     let cursor: number | null = 0;
@@ -53,14 +67,6 @@ vi.mock("../ai-config", () => ({
     const selectedWindowId = windowRows[0].split(",")[1];
     const candidateRow = candidateRows.find(line => line.split(",")[2] === selectedWindowId)!;
     const candidateId = candidateRow.split(",")[1];
-    const selectionToon = [
-      "fill-selection:v1",
-      `set,${setId}`,
-      `source,${source}`,
-      "decisions: [D,window,use|skip,reason]",
-      ...windowRows.map((row, index) => `D,${row.split(",")[1]},${index === 0 ? "use" : "skip"},test decision`),
-    ].join("\n");
-    expect(await localTool("select_fill_windows").execute({ selection_toon: selectionToon })).toMatchObject({ valid: true });
     const fillsToon = [
       "fills:v1",
       `set,${setId}`,
@@ -148,7 +154,9 @@ describe("generateAIFingerstyleLine diagnostics", () => {
     );
     expect(result.logs.at(-1)).toBe(result.diagnostics?.plaintext);
     expect(result.diagnostics?.events.some(event => event.source === "llm")).toBe(true);
-    expect(result.diagnostics?.events.some(event => event.kind === "foundation-placed")).toBe(true);
+    expect(result.diagnostics?.events.some(event => event.kind === "fill-reservations-accepted")).toBe(true);
+    expect(result.diagnostics?.events.some(event => event.kind === "bass-pitches-accepted")).toBe(true);
+    expect(result.diagnostics?.events.some(event => event.kind === "timegrid-materialized")).toBe(true);
     expect(result.diagnostics?.events.some(event => event.source === "workflow")).toBe(true);
     expect(result.diagnostics?.events.some(event => (
       event.source === "workflow" && event.kind === "abc-ascii-guitartab-validated"
@@ -163,7 +171,7 @@ describe("generateAIFingerstyleLine diagnostics", () => {
     });
     expect(result.measures?.[0].grid[0].melody).toEqual({ pitch: "E4", state: "attack" });
     expect(result.measures?.[0].grid.slice(1).every(step =>
-      step.tablature?.every(event => event.role !== "melody"),
+      step.tablature?.every(event => event.role !== "melody") ?? true,
     )).toBe(true);
     expect(result.measures?.[0].grid[0].tablature?.some(event => event.role === "fill")).toBe(false);
     expect(result.measures?.[0].grid.slice(1).some(step =>

@@ -1,4 +1,8 @@
 import { buildGeneratedGuitarAbc } from "@/lib/theory/fingerstyle-arranger/guitar-abc-output";
+import {
+  validateFingerstylePhysicsDetailed,
+  type FingerstylePhysicsOptions,
+} from "@/lib/theory/fingerstyle-arranger/physics-validation";
 import type { TimeSliceMeasure } from "@/lib/theory/fingerstyle-arranger/time-slice";
 
 export { buildGeneratedGuitarAbc };
@@ -11,18 +15,36 @@ interface PersistedFingerstyleMeasures {
   measures: TimeSliceMeasure[];
 }
 
+const FINGERS = new Set(["p", "i", "m", "a", null]);
+const ROLES = new Set(["bass", "melody", "fill", "harmony", "root", "fifth"]);
+
 function isValidTablature(value: unknown): boolean {
   if (value === undefined) return true;
   if (!Array.isArray(value)) return false;
+
+  const strings = new Set<number>();
   return value.every((event) => {
     if (!event || typeof event !== "object") return false;
     const tab = event as Record<string, unknown>;
-    return Number.isInteger(tab.string)
+    const isFill = tab.role === "fill";
+    const hasCompleteFillProvenance = typeof tab.fillWindowId === "string"
+      && tab.fillWindowId.length > 0
+      && typeof tab.fillCandidateId === "string"
+      && tab.fillCandidateId.length > 0;
+    const hasNoFillProvenance = tab.fillWindowId === undefined && tab.fillCandidateId === undefined;
+    const valid = Number.isInteger(tab.string)
       && Number(tab.string) >= 1
       && Number(tab.string) <= 6
       && Number.isInteger(tab.fret)
       && Number(tab.fret) >= 0
-      && Number(tab.fret) <= 24;
+      && Number(tab.fret) <= 24
+      && FINGERS.has(tab.finger as string | null)
+      && ROLES.has(tab.role as string)
+      && (tab.durationSteps === undefined || (Number.isInteger(tab.durationSteps) && Number(tab.durationSteps) > 0))
+      && (isFill ? hasCompleteFillProvenance || hasNoFillProvenance : hasNoFillProvenance);
+    if (!valid || strings.has(tab.string as number)) return false;
+    strings.add(tab.string as number);
+    return true;
   });
 }
 
@@ -49,10 +71,16 @@ export function restorePersistedTablature(
   saved: string | null,
   fresh: TimeSliceMeasure[],
   sourceFingerprint: string,
+  validationOptions?: FingerstylePhysicsOptions,
 ): TimeSliceMeasure[] {
   if (!saved) return fresh;
 
-  const parsed: unknown = JSON.parse(saved);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(saved);
+  } catch {
+    return fresh;
+  }
   const isLegacy = Array.isArray(parsed);
   const envelope = !isLegacy && parsed && typeof parsed === "object"
     ? parsed as Partial<PersistedFingerstyleMeasures>
@@ -66,7 +94,7 @@ export function restorePersistedTablature(
   )) return fresh;
   if (!arePersistedMeasuresCompatible(persisted, fresh, isLegacy)) return fresh;
 
-  return fresh.map((measure, measureIndex) => ({
+  const restored = fresh.map((measure, measureIndex) => ({
     ...measure,
     visualTablature: persisted[measureIndex]?.visualTablature,
     grid: measure.grid.map((step, stepIndex) => ({
@@ -74,6 +102,10 @@ export function restorePersistedTablature(
       tablature: persisted[measureIndex]?.grid[stepIndex]?.tablature,
     })),
   }));
+
+  return restored.every(measure => (
+    validateFingerstylePhysicsDetailed(measure.grid, validationOptions).valid
+  )) ? restored : fresh;
 }
 
 export function serializeFingerstyleMeasures(

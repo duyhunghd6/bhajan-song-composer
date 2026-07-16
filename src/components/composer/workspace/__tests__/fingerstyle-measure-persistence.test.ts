@@ -20,7 +20,7 @@ function makeMeasure(sourceMelody: string): TimeSliceMeasure {
       chord: "Em",
       weight: index === 0 ? "⬤" as const : null,
       melody: {
-        pitch: index === 0 ? "E4" : null,
+        pitch: index === 0 ? "B3" : null,
         state: index === 0 ? "attack" as const : "rest" as const,
       },
       lyric: null,
@@ -89,6 +89,29 @@ describe("fingerstyle measure persistence", () => {
 
     expect(restored).toBe(fresh);
     expect(restored.grid[2].tablature).toBeUndefined();
+  });
+
+  it("falls back to fresh measures for malformed browser storage", () => {
+    const fresh = makeMeasure("current melody");
+
+    expect(restorePersistedTablature("{not-json", [fresh], "current-source")).toEqual([fresh]);
+  });
+
+  it("rejects invalid tablature events before overlaying them", () => {
+    const fresh = makeMeasure("current melody");
+    const persisted = withGaneshaTablature(makeMeasure("stale melody"));
+    const saved = serializeFingerstyleMeasures([{
+      ...persisted,
+      grid: persisted.grid.map((step, index) => index === 0 ? {
+        ...step,
+        tablature: [
+          { string: 6, fret: 0, finger: "p", role: "bass" },
+          { string: 6, fret: 3, finger: "i", role: "harmony" },
+        ],
+      } : step),
+    }], "current-source");
+
+    expect(restorePersistedTablature(saved, [fresh], "current-source")).toEqual([fresh]);
   });
 
   it("rebuilds the exact forced Ganesha Guitar voice", () => {

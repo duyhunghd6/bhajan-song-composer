@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import AbcjsPlaybackController from "@/components/music-sheet/AbcjsPlaybackController";
 import { prepareAbcjsRenderInput } from "@/components/music-sheet/abcjs-playback/render-input";
@@ -16,6 +16,11 @@ import { fingerprintAccompanimentSource, getSelectedWorkflowOption } from "@/lib
 import { getComposerFingerstyleMeasuresStorageKey } from "./storage";
 import { formatFingerstyleTablatureAsToon } from "@/lib/theory/fingerstyle-arranger/llm-codec";
 import { formatLineAsToon, renderCombinedAsciiGuitarTab } from "@/lib/theory/fingerstyle-arranger/toon-utils";
+import { analyzeAuthoritativeMelodyPlayability } from "@/lib/theory/fingerstyle-arranger/source-playability";
+import {
+  formatImportedTimeGridDocumentCompact,
+  parseImportedTimeGridDocumentCompact,
+} from "@/lib/theory/fingerstyle-arranger/timegrid-document-codec";
 import type { PreviousLineContext } from "@/app/actions/fingerstyle-line-arranger";
 import {
   buildGeneratedGuitarAbc,
@@ -62,47 +67,64 @@ export function GuitarFingerstyleStep({
   );
   const [measures, setMeasures] = useState<TimeSliceMeasure[]>([]);
   const [restoredSourceFingerprint, setRestoredSourceFingerprint] = useState<string | null>(null);
+  const [timeGridJson, setTimeGridJson] = useState("");
+  const [timeGridMessage, setTimeGridMessage] = useState<string | null>(null);
+  const [activeGeneration, setActiveGeneration] = useState<{ lineIndex: number; token: string } | null>(null);
+  const arrangementRevisionRef = useRef(0);
+  const generationLockRef = useRef<{ lineIndex: number; token: string } | null>(null);
+  const timeGridFileInputRef = useRef<HTMLInputElement>(null);
+  const timeGridOptions = useMemo(() => {
+    const workflow = ws.accompanimentWorkflow;
+    const compingOpt = workflow ? getSelectedWorkflowOption(workflow, "guitar-comping-profile") : undefined;
+    const voicingOpt = workflow ? getSelectedWorkflowOption(workflow, "guitar-voicing-bass") : undefined;
+    const fillsOpt = workflow ? getSelectedWorkflowOption(workflow, "guitar-fills-validation") : undefined;
+    return {
+      comping_style: compingOpt ? (compingOpt.data?.compingProfile as string) || compingOpt.label : undefined,
+      voicing_plan: voicingOpt ? (voicingOpt.data?.voicingPlan as string) || voicingOpt.label : undefined,
+      fill_density: fillsOpt ? (fillsOpt.data?.fillDensity as string) || undefined : undefined,
+    };
+  }, [ws.accompanimentWorkflow]);
+  const compileFreshMeasures = useCallback((rawAbc: string) => (
+    convertAbcToTimeSliceGrid(rawAbc, [], timeGridOptions)
+  ), [timeGridOptions]);
 
   useEffect(() => {
     if (!hasMounted || !isWorkspaceHydrated || !workflowAppliedMusicAbc.trim()) return;
 
     try {
-      const workflow = ws.accompanimentWorkflow;
-      let compingStyle: string | undefined;
-      let voicingPlan: string | undefined;
-      let fillDensity: string | undefined;
-
-      if (workflow) {
-        const compingOpt = getSelectedWorkflowOption(workflow, "guitar-comping-profile");
-        const voicingOpt = getSelectedWorkflowOption(workflow, "guitar-voicing-bass");
-        const fillsOpt = getSelectedWorkflowOption(workflow, "guitar-fills-validation");
-        if (compingOpt) compingStyle = (compingOpt.data?.compingProfile as string) || compingOpt.label;
-        if (voicingOpt) voicingPlan = (voicingOpt.data?.voicingPlan as string) || voicingOpt.label;
-        if (fillsOpt) fillDensity = (fillsOpt.data?.fillDensity as string) || undefined;
-      }
-
-      const options = { comping_style: compingStyle, voicing_plan: voicingPlan, fill_density: fillDensity };
-      const freshMeasures = convertAbcToTimeSliceGrid(workflowAppliedMusicAbc, [], options);
+      const freshMeasures = compileFreshMeasures(workflowAppliedMusicAbc);
+      const melodyPlayability = analyzeAuthoritativeMelodyPlayability(
+        freshMeasures,
+        ws.fingerstyleGenerationSettings.skillLevel,
+      );
       const restoredMeasures = restorePersistedTablature(
         localStorage.getItem(fingerstyleStorageKey),
         freshMeasures,
         sourceFingerprint,
+        {
+          skillLevel: ws.fingerstyleGenerationSettings.skillLevel,
+          maxMelodyFret: melodyPlayability.melodyMaxFret,
+        },
       );
+      arrangementRevisionRef.current += 1;
       // eslint-disable-next-line react-hooks/set-state-in-effect -- restore is intentionally gated on both local-storage hydration phases.
       setMeasures(restoredMeasures);
       setRestoredSourceFingerprint(sourceFingerprint);
     } catch (e) {
       console.error("Failed to restore fingerstyle measures", e);
+      arrangementRevisionRef.current += 1;
       setMeasures([]);
       setRestoredSourceFingerprint(sourceFingerprint);
     }
   }, [
+    compileFreshMeasures,
     fingerstyleStorageKey,
     hasMounted,
     isWorkspaceHydrated,
     sourceFingerprint,
     workflowAppliedMusicAbc,
     ws.accompanimentWorkflow,
+    ws.fingerstyleGenerationSettings.skillLevel,
   ]);
 
   // Save the authoritative structured measures and derive workspace Guitar ABC from them.
@@ -139,6 +161,7 @@ export function GuitarFingerstyleStep({
 
   // Handle updates from a line card (replace all measures in that line)
   const handleUpdateLineMeasures = useCallback((lineGroupIndex: number, updated: TimeSliceMeasure[]) => {
+    arrangementRevisionRef.current += 1;
     setMeasures(prev => {
       const next = [...prev];
       for (const m of updated) {
@@ -148,6 +171,35 @@ export function GuitarFingerstyleStep({
       return next;
     });
   }, []);
+
+  const claimGeneration = useCallback((lineIndex: number) => {
+    if (generationLockRef.current) return null;
+    const token = `${lineIndex}-${crypto.randomUUID()}`;
+    const lock = { lineIndex, token };
+    generationLockRef.current = lock;
+    setActiveGeneration(lock);
+    return { token, revision: arrangementRevisionRef.current };
+  }, []);
+
+  const releaseGeneration = useCallback((token: string) => {
+    if (generationLockRef.current?.token !== token) return;
+    generationLockRef.current = null;
+    setActiveGeneration(null);
+  }, []);
+
+  const applyGeneratedMeasures = useCallback((
+    lineGroupIndex: number,
+    token: string,
+    revision: number,
+    updated: TimeSliceMeasure[],
+  ) => {
+    const lock = generationLockRef.current;
+    if (lock?.token !== token || lock.lineIndex !== lineGroupIndex || arrangementRevisionRef.current !== revision) {
+      return false;
+    }
+    handleUpdateLineMeasures(lineGroupIndex, updated);
+    return true;
+  }, [handleUpdateLineMeasures]);
 
   // Build previous-line context for a given lineGroupIndex
   const buildPreviousLineContext = useCallback((lineGroupIndex: number): PreviousLineContext[] => {
@@ -214,6 +266,72 @@ export function GuitarFingerstyleStep({
     [measures],
   );
   const generationSettings = ws.fingerstyleGenerationSettings;
+  const timeGridDocumentJson = useMemo(() => (
+    measures.length > 0
+      ? formatImportedTimeGridDocumentCompact({
+        version: 1,
+        source: { rawAbc: workflowAppliedMusicAbc },
+        measures,
+      })
+      : ""
+  ), [measures, workflowAppliedMusicAbc]);
+
+  const applyTimeGridDocument = useCallback((payload: string) => {
+    try {
+      const imported = parseImportedTimeGridDocumentCompact(payload);
+      if (imported.source.rawAbc !== workflowAppliedMusicAbc) {
+        throw new Error("This TimeGrid source does not match the current workflow-applied melody. Import it from the matching song and arrangement source.");
+      }
+      const freshMeasures = compileFreshMeasures(workflowAppliedMusicAbc);
+      const melodyPlayability = analyzeAuthoritativeMelodyPlayability(
+        freshMeasures,
+        generationSettings.skillLevel,
+      );
+      const restored = restorePersistedTablature(
+        serializeFingerstyleMeasures(imported.measures, sourceFingerprint),
+        freshMeasures,
+        sourceFingerprint,
+        {
+          skillLevel: generationSettings.skillLevel,
+          maxMelodyFret: melodyPlayability.melodyMaxFret,
+        },
+      );
+      const importedHasTablature = imported.measures.some(measure => (
+        measure.grid.some(step => step.tablature !== undefined)
+      ));
+      const restoredHasTablature = restored.some(measure => (
+        measure.grid.some(step => step.tablature !== undefined)
+      ));
+      if (importedHasTablature && !restoredHasTablature) {
+        throw new Error("The TimeGrid contains invalid, stale, or physically unplayable tablature and was not applied.");
+      }
+      arrangementRevisionRef.current += 1;
+      setMeasures(restored);
+      setTimeGridMessage(`Imported ${restored.length} TimeGrid measure${restored.length === 1 ? "" : "s"}.`);
+      setTimeGridJson("");
+    } catch (error) {
+      setTimeGridMessage(error instanceof Error ? error.message : "Unable to import TimeGrid JSON.");
+    }
+  }, [compileFreshMeasures, generationSettings.skillLevel, sourceFingerprint, workflowAppliedMusicAbc]);
+
+  const downloadTimeGridDocument = useCallback(() => {
+    if (!timeGridDocumentJson) return;
+    const url = URL.createObjectURL(new Blob([timeGridDocumentJson], { type: "application/json" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${slug}-fingerstyle-timegrid.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }, [slug, timeGridDocumentJson]);
+
+  const importTimeGridFile = useCallback(async (file: File | undefined) => {
+    if (!file) return;
+    try {
+      applyTimeGridDocument(await file.text());
+    } catch {
+      setTimeGridMessage("Unable to read the selected TimeGrid JSON file.");
+    }
+  }, [applyTimeGridDocument]);
 
   return (
     <div className="space-y-6">
@@ -230,6 +348,7 @@ export function GuitarFingerstyleStep({
             Player skill
             <select
               value={generationSettings.skillLevel}
+              disabled={activeGeneration !== null}
               onChange={(event) => updateState({
                 fingerstyleGenerationSettings: {
                   ...generationSettings,
@@ -265,6 +384,34 @@ export function GuitarFingerstyleStep({
             Skill limits discretionary accompaniment and fills, including frets, hand span, and notes per figure. The authoritative melody is never transposed; a labelled melody-only fret exception is used when its exact pitch requires one. Density independently controls how many scored windows may be selected. Existing lines are not regenerated when these settings change.
           </p>
         </div>
+
+        <section className="mb-6 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900/60">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Canonical TimeGrid JSON</h3>
+              <p className="text-[11px] text-zinc-500">timegrid-document:v3 · {sourceFingerprint.slice(0, 12)}… · {measures.length} measures. ABC and ASCII tab are generated projections.</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <CopyButton label="Copy TimeGrid JSON" text={timeGridDocumentJson} />
+              <button type="button" onClick={downloadTimeGridDocument} disabled={!timeGridDocumentJson} className="rounded-lg bg-zinc-100 px-2 py-1 text-[11px] font-medium text-zinc-700 hover:bg-zinc-200 disabled:opacity-50 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700">Download JSON</button>
+              <button type="button" onClick={() => timeGridFileInputRef.current?.click()} disabled={activeGeneration !== null} className="rounded-lg bg-zinc-100 px-2 py-1 text-[11px] font-medium text-zinc-700 hover:bg-zinc-200 disabled:opacity-50 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700">Choose JSON</button>
+              <input ref={timeGridFileInputRef} type="file" accept="application/json,.json" className="hidden" disabled={activeGeneration !== null} onChange={(event) => void importTimeGridFile(event.target.files?.[0])} />
+            </div>
+          </div>
+          <textarea
+            aria-label="Paste TimeGrid JSON"
+            value={timeGridJson}
+            disabled={activeGeneration !== null}
+            onChange={event => setTimeGridJson(event.target.value)}
+            placeholder="Paste a timegrid-document:v3 export to import validated tablature over this exact source."
+            className="mt-3 min-h-20 w-full rounded-lg border border-zinc-200 bg-zinc-50 p-2 font-mono text-[10px] text-zinc-800 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200"
+          />
+          <div className="mt-2 flex items-center justify-between gap-2">
+            <p className="text-[11px] text-zinc-500">Only compatible tablature is applied. Source melody, timing, chords, and barlines remain locked to the workflow source.</p>
+            <button type="button" onClick={() => applyTimeGridDocument(timeGridJson)} disabled={activeGeneration !== null || !timeGridJson.trim()} className="rounded-lg bg-indigo-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">Import JSON</button>
+          </div>
+          {timeGridMessage && <p className="mt-2 text-[11px] text-indigo-700 dark:text-indigo-300">{timeGridMessage}</p>}
+        </section>
 
         <section className="mb-4">
           <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 mb-2 font-sans">Layer Visibility</h2>
@@ -325,13 +472,19 @@ export function GuitarFingerstyleStep({
             lineIndex={lineMeasures[0]?.lineIndex ?? lineGroupIdx}
             lineMeasures={lineMeasures}
             activeAbc={workflowAppliedMusicAbc}
-            onUpdateMeasures={(updated) => handleUpdateLineMeasures(lineGroupIdx, updated)}
             accompLayerVisibility={accompLayerVisibility}
             buildPreviousContext={() => buildPreviousLineContext(lineGroupIdx)}
             workflowAppliedMusicAbc={workflowAppliedMusicAbc}
             generationSettings={generationSettings}
             previousLineMeasures={lineGroups[lineGroupIdx - 1]}
             nextLineMeasures={lineGroups[lineGroupIdx + 1]}
+            generationLock={{
+              isLocked: activeGeneration !== null,
+              activeLineIndex: activeGeneration?.lineIndex ?? null,
+              claim: claimGeneration,
+              release: releaseGeneration,
+              apply: applyGeneratedMeasures,
+            }}
           />
         ))}
       </div>

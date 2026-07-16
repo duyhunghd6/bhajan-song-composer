@@ -1,10 +1,14 @@
 import { requestOpenAiCompatibleToolLoop, type ToolDiagnosticEvent } from "../ai-config";
 import {
-  buildFingerstyleTablatureToolDefinition,
   executeGuitarVoicingQuery,
   GUITAR_VOICING_TOOL_DEFINITION,
+  INSPECT_FILL_RESERVATION_SLOTS_TOOL_DEFINITION,
+  SELECT_FILL_RESERVATIONS_TOOL_DEFINITION,
+  INSPECT_BASS_POSITIONS_TOOL_DEFINITION,
+  SELECT_BASS_POSITIONS_TOOL_DEFINITION,
+  INSPECT_BASS_PITCH_CANDIDATES_TOOL_DEFINITION,
+  SELECT_BASS_PITCHES_TOOL_DEFINITION,
   INSPECT_FILL_OPPORTUNITIES_TOOL_DEFINITION,
-  SELECT_FILL_WINDOWS_TOOL_DEFINITION,
   SUBMIT_ARRANGED_LINE_TOOL_DEFINITION,
   VALIDATE_COMPOSED_FILLS_TOOL_DEFINITION,
 } from "../fingerstyle-tool-contract";
@@ -34,8 +38,27 @@ import {
   type FingerstyleWorkflowDiagnosticEvent,
 } from "@/lib/theory/fingerstyle-arranger/generation-diagnostics";
 import { renderFingerstyleDiagnosticPlaintext } from "@/lib/theory/fingerstyle-arranger/diagnostic-plaintext";
-import { applyFingerstyleTablatureToon } from "@/lib/theory/fingerstyle-arranger/llm-codec";
-import { midiForStringFret, parseScientificPitch } from "@/lib/theory/guitar-playability";
+import {
+  analyzeFillReservationSlots,
+  formatFillReservationSlots,
+  parseFillReservationSelection,
+  validateFillReservationSelection,
+  type FillReservationAnalysis,
+  type FillReservationSelection,
+} from "@/lib/theory/fingerstyle-arranger/fill-reservations";
+import {
+  analyzeBassPositions,
+  analyzeBassPitchCandidates,
+  formatBassPitchCandidates,
+  formatBassPositions,
+  materializeBassFoundation,
+  parseBassPitchSelection,
+  parseBassPositionSelection,
+  validateBassPitchSelection,
+  validateBassPositionSelection,
+  type BassPitchAnalysis,
+  type BassPositionAnalysis,
+} from "@/lib/theory/fingerstyle-arranger/bass-planning";
 import { validateFingerstylePhysics } from "@/lib/theory/fingerstyle-arranger/physics-validation";
 import { analyzeAuthoritativeMelodyPlayability } from "@/lib/theory/fingerstyle-arranger/source-playability";
 import { renderAsciiGuitarTab } from "@/lib/theory/fingerstyle-arranger/toon-utils";
@@ -67,39 +90,6 @@ function parseAbcTempo(abc: string, fallback = 120): number {
   const match = abc.match(/^\s*Q:\s*(?:\d+\/\d+=)?(\d+)/m);
   const bpm = match ? Number.parseInt(match[1], 10) : fallback;
   return Number.isFinite(bpm) && bpm > 0 && bpm <= 600 ? bpm : fallback;
-}
-
-function validateFoundation(
-  measures: TimeSliceMeasure[],
-  skillLevel: GenerateFingerstyleLineInput["skillLevel"],
-  maxMelodyFret: number,
-): string[] {
-  const errors: string[] = [];
-  for (const measure of measures) {
-    for (const step of measure.grid) {
-      const events = step.tablature ?? [];
-      if (events.some(event => event.role === "fill")) {
-        errors.push(`Measure ${measure.measure} step ${step.step}: foundation must not contain role=fill.`);
-      }
-      const melodyEvents = events.filter(event => event.role === "melody");
-      if (step.melody.state !== "attack" && step.weight === null && events.length > 0) {
-        errors.push(`Measure ${measure.measure} step ${step.step}: unweighted rest/sustain attacks are reserved for the scored fill stage.`);
-      }
-      if (step.melody.state === "attack" && melodyEvents.length !== 1) {
-        errors.push(`Measure ${measure.measure} step ${step.step}: melody attack requires exactly one role=melody event.`);
-      }
-      if (step.melody.state !== "attack" && melodyEvents.length > 0) {
-        errors.push(`Measure ${measure.measure} step ${step.step}: role=melody may appear only on melody attacks.`);
-      }
-    }
-    const physics = validateFingerstylePhysics(measure.grid, {
-      fillDensity: "none",
-      skillLevel: skillLevel ?? "beginner",
-      maxMelodyFret,
-    });
-    if (!physics.valid) errors.push(`Measure ${measure.measure}: ${physics.message}`);
-  }
-  return errors;
 }
 
 type MelodySourceSnapshot = {
@@ -136,30 +126,6 @@ function sourceMelodyDrift(
   });
 }
 
-function countMelodyPositionRepairs(
-  sourceMeasures: readonly TimeSliceMeasure[],
-  submittedMeasures: readonly TimeSliceMeasure[],
-): number {
-  let repairs = 0;
-  for (let measureIndex = 0; measureIndex < sourceMeasures.length; measureIndex++) {
-    const sourceMeasure = sourceMeasures[measureIndex];
-    const submittedMeasure = submittedMeasures[measureIndex];
-    if (!submittedMeasure) continue;
-    for (let stepIndex = 0; stepIndex < sourceMeasure.grid.length; stepIndex++) {
-      const sourceStep = sourceMeasure.grid[stepIndex];
-      const submittedStep = submittedMeasure.grid[stepIndex];
-      const melody = submittedStep?.tablature?.find(event => event.role === "melody");
-      const authoritativeMidi = sourceStep.melody.pitch
-        ? parseScientificPitch(sourceStep.melody.pitch)?.midi ?? null
-        : null;
-      if (melody && authoritativeMidi !== null && midiForStringFret(melody.string, melody.fret) !== authoritativeMidi) {
-        repairs++;
-      }
-    }
-  }
-  return repairs;
-}
-
 function freezeFoundationDurations(measures: TimeSliceMeasure[]): TimeSliceMeasure[] {
   return measures.map(measure => ({
     ...measure,
@@ -190,6 +156,23 @@ function physicalValidationErrors(
   return errors;
 }
 
+function formatBassSourceDiagnostic(measures: TimeSliceMeasure[], positionIds: string[]): string {
+  const labels = new Map<number, string[]>();
+  for (const id of positionIds) {
+    const match = /^bp-m(\d+)-s(\d+)$/.exec(id);
+    if (!match) continue;
+    const measure = Number(match[1]);
+    const step = Number(match[2]);
+    labels.set(measure, [...(labels.get(measure) ?? []), `"_Bass M${measure}:S${step}"`]);
+  }
+  return [
+    "% Bass positions in source ABC — diagnostic projection only; raw source remains unchanged.",
+    "[V:Melody] " + measures.map(measure => (
+      `${(labels.get(measure.measure) ?? []).join("")}${measure.source_abc?.melody ?? "z"}`
+    )).join(" | ") + " |",
+  ].join("\n");
+}
+
 function toolPayloadString(args: unknown, key: string): string | null {
   const value = (args as Record<string, unknown> | null)?.[key];
   return typeof value === "string" ? value.trim() : null;
@@ -211,16 +194,22 @@ export async function runFingerstyleLineWorkflow(
   const userPrompt = buildLineUserPrompt(input, melodyPlayability);
   const tools = [
     GUITAR_VOICING_TOOL_DEFINITION,
-    buildFingerstyleTablatureToolDefinition(
-      "submit_fingerstyle_foundation",
-      "Validate, deterministically place, and freeze the complete non-fill foundation before fill analysis.",
-    ),
+    INSPECT_FILL_RESERVATION_SLOTS_TOOL_DEFINITION,
+    SELECT_FILL_RESERVATIONS_TOOL_DEFINITION,
+    INSPECT_BASS_POSITIONS_TOOL_DEFINITION,
+    SELECT_BASS_POSITIONS_TOOL_DEFINITION,
+    INSPECT_BASS_PITCH_CANDIDATES_TOOL_DEFINITION,
+    SELECT_BASS_PITCHES_TOOL_DEFINITION,
     INSPECT_FILL_OPPORTUNITIES_TOOL_DEFINITION,
-    SELECT_FILL_WINDOWS_TOOL_DEFINITION,
     VALIDATE_COMPOSED_FILLS_TOOL_DEFINITION,
     SUBMIT_ARRANGED_LINE_TOOL_DEFINITION,
   ];
 
+  let reservationAnalysis: FillReservationAnalysis | null = null;
+  let acceptedReservations: FillReservationSelection | null = null;
+  let bassPositionAnalysis: BassPositionAnalysis | null = null;
+  let acceptedBassPositions: string[] = [];
+  let bassPitchAnalysis: BassPitchAnalysis | null = null;
   let frozenFoundation: TimeSliceMeasure[] | null = null;
   let opportunityAnalysis: FillOpportunityAnalysis | null = null;
   let nextInspectionCursor: number | null = 0;
@@ -359,8 +348,61 @@ export async function runFingerstyleLineWorkflow(
       localTools: [
         { name: "query_guitar_voicings", execute: executeGuitarVoicingQuery },
         {
-          name: "submit_fingerstyle_foundation",
+          name: "inspect_fill_reservation_slots",
+          execute: () => {
+            reservationAnalysis ??= analyzeFillReservationSlots({
+              measures: input.lineMeasures,
+              sourceFingerprint: input.sourceFingerprint,
+              skillLevel: policy.skillLevel,
+              densityMode: policy.densityMode,
+            });
+            recordWorkflowEvent("fill-reservations-analyzed", "fill-reservations", "success", `Found ${reservationAnalysis.slots.length} source-only fill reservation slot(s).`, reservationAnalysis);
+            return formatFillReservationSlots(reservationAnalysis);
+          },
+        },
+        {
+          name: "select_fill_reservations",
           execute: args => {
+            if (!reservationAnalysis) return { valid: false, message: "Inspect fill reservation slots first." };
+            const parsed = parseFillReservationSelection(toolPayloadString(args, "reservations_toon") ?? "");
+            if (!parsed.valid || !parsed.value) return { valid: false, message: parsed.errors.join(" ") };
+            const validated = validateFillReservationSelection(reservationAnalysis, parsed.value);
+            if (!validated.valid) {
+              recordWorkflowEvent("fill-reservations-rejected", "fill-reservations", "warning", validated.errors.join(" "), validated.errors);
+              return { valid: false, message: validated.errors.join(" ") };
+            }
+            acceptedReservations = parsed.value;
+            acceptedBassPositions = [];
+            bassPositionAnalysis = null;
+            bassPitchAnalysis = null;
+            frozenFoundation = null;
+            recordWorkflowEvent("fill-reservations-accepted", "fill-reservations", "success", `Note Fills Position: ${validated.selectedSlotIds.map(id => id.replace("fr-", "")).join(", ") || "none"}.`, { selectedSlotIds: validated.selectedSlotIds });
+            return { valid: true, selectedSlotIds: validated.selectedSlotIds };
+          },
+        },
+        {
+          name: "inspect_bass_positions",
+          execute: () => {
+            if (!reservationAnalysis || !acceptedReservations) return { valid: false, message: "Select fill reservations first." };
+            const selectedSlotIds = acceptedReservations.decisions.filter(row => row.decision === "use").map(row => row.slotId);
+            bassPositionAnalysis = analyzeBassPositions({ measures: input.lineMeasures, sourceFingerprint: input.sourceFingerprint, reservedFillSlotIds: selectedSlotIds });
+            recordWorkflowEvent("bass-positions-analyzed", "bass-positions", "success", `Found ${bassPositionAnalysis.positions.length} legal bass position(s) after reserving fill locations.`, bassPositionAnalysis);
+            return formatBassPositions(bassPositionAnalysis);
+          },
+        },
+        {
+          name: "select_bass_positions",
+          execute: args => {
+            if (!bassPositionAnalysis) return { valid: false, message: "Inspect bass positions first." };
+            const parsed = parseBassPositionSelection(toolPayloadString(args, "bass_positions_toon") ?? "");
+            if (!parsed.valid || !parsed.value) return { valid: false, message: parsed.errors.join(" ") };
+            const validated = validateBassPositionSelection(bassPositionAnalysis, parsed.value);
+            if (!validated.valid) {
+              recordWorkflowEvent("bass-positions-rejected", "bass-positions", "warning", validated.errors.join(" "), validated.errors);
+              return { valid: false, message: validated.errors.join(" ") };
+            }
+            acceptedBassPositions = validated.selectedPositionIds;
+            bassPitchAnalysis = null;
             frozenFoundation = null;
             opportunityAnalysis = null;
             nextInspectionCursor = 0;
@@ -368,68 +410,55 @@ export async function runFingerstyleLineWorkflow(
             acceptedComposition = null;
             acceptedCompositionToon = null;
             acceptedFinalMeasures = null;
-            const decoded = applyFingerstyleTablatureToon(toolPayloadString(args, "tablature_toon"), input.lineMeasures);
-            if (!decoded.ok) {
-              recordWorkflowEvent("foundation-rejected", "foundation", "warning", decoded.error.message, decoded.error);
-              return { valid: false, code: decoded.error.code, message: decoded.error.message };
-            }
-            const decodedSourceDrift = sourceMelodyDrift(sourceMelody, decoded.measures);
-            if (decodedSourceDrift.length > 0) {
-              const message = `Source-pinned melody changed before optimization: ${decodedSourceDrift.join(" ")}`;
-              recordWorkflowEvent("foundation-rejected", "foundation", "warning", message, { errors: decodedSourceDrift });
-              return { valid: false, message };
-            }
-            const submittedMelodyRepairs = countMelodyPositionRepairs(input.lineMeasures, decoded.measures);
-            const errors = validateFoundation(decoded.measures, policy.skillLevel, melodyPlayability.melodyMaxFret);
-            if (errors.length > 0) {
-              const message = errors.join(" ");
-              recordWorkflowEvent("foundation-rejected", "foundation", "warning", message, { errors });
-              return { valid: false, message, repair: "Resubmit a complete tablature:v1 foundation with no fill rows." };
-            }
-            try {
-              const placement = placeFingerstyleFoundationOnTimeGrid(decoded.measures, {
-                bpm,
-                skillLevel: policy.skillLevel,
-                maxMelodyFret: melodyPlayability.melodyMaxFret,
-              });
-              logs.push(...placement.logs);
-              diagnosticSummary = {
-                ...placement.diagnostics,
-                unchangedEventCount: 0,
-                totalCost: null,
-              };
-              recordWorkflowEvent("foundation-placed", "foundation-placement", placement.unresolvedEventCount > 0 ? "warning" : "success", `TimeGrid foundation placement ${placement.diagnostics.outcome}: ${placement.changedEventCount} position(s) updated, ${placement.unresolvedEventCount} unresolved.`, placement.diagnostics);
-              if (placement.unresolvedEventCount > 0) {
-                const message = `Foundation placement did not resolve every required event (unresolved=${placement.unresolvedEventCount}).`;
-                recordWorkflowEvent("foundation-rejected", "foundation", "warning", message, diagnosticSummary);
-                return { valid: false, message };
-              }
-              const placedSourceDrift = sourceMelodyDrift(sourceMelody, placement.measures);
-              if (placedSourceDrift.length > 0) {
-                const message = `Source-pinned melody changed during foundation placement: ${placedSourceDrift.join(" ")}`;
-                recordWorkflowEvent("foundation-rejected", "foundation", "failed", message, { errors: placedSourceDrift });
-                return { valid: false, message };
-              }
-              frozenFoundation = freezeFoundationDurations(placement.measures);
-              recordWorkflowEvent("foundation-validated", "foundation", "success", `Foundation frozen after deterministic TimeGrid placement at ${bpm} BPM using ${policy.skillLevel} accompaniment constraints.`, {
-                measureCount: frozenFoundation.length,
-                maxMelodyFret: melodyPlayability.melodyMaxFret,
-                melodySource: "authoritative-source-grid",
-                submittedMelodyRepairs,
-              });
-              return { valid: true, message: "Foundation accepted and frozen. Inspect fill opportunities next.", bpm, policy, placementOutcome: diagnosticSummary.outcome };
-            } catch (error) {
-              const message = error instanceof Error ? error.message : String(error);
-              recordWorkflowEvent("foundation-rejected", "foundation", "failed", `Foundation placement failed: ${message}`);
-              return { valid: false, message: `Foundation placement failed: ${message}` };
-            }
+            const annotation = formatBassSourceDiagnostic(input.lineMeasures, validated.selectedPositionIds);
+            logs.push(`\n## Bass positions in source ABC\n\n\`\`\`abc\n${annotation}\n\`\`\``);
+            recordWorkflowEvent("bass-source-abc-annotated", "bass-positions", "info", "Bass positions in source ABC (diagnostic-only below-note labels).", { annotation, selectedPositionIds: validated.selectedPositionIds });
+            recordWorkflowEvent("bass-positions-accepted", "bass-positions", "success", `Accepted bass positions: ${validated.selectedPositionIds.join(", ") || "none"}.`, { selectedPositionIds: validated.selectedPositionIds });
+            return { valid: true, selectedPositionIds: validated.selectedPositionIds, sourceAbcAnnotations: annotation };
           },
-          maxInvalidResults: 3,
+        },
+        {
+          name: "inspect_bass_pitch_candidates",
+          execute: () => {
+            if (!bassPositionAnalysis || !acceptedBassPositions) return { valid: false, message: "Select bass positions first." };
+            const selected = bassPositionAnalysis.positions.filter(position => acceptedBassPositions.includes(position.id));
+            bassPitchAnalysis = analyzeBassPitchCandidates({ positionSetId: bassPositionAnalysis.setId, positions: selected, sourceFingerprint: input.sourceFingerprint, skillLevel: policy.skillLevel });
+            recordWorkflowEvent("bass-pitches-analyzed", "bass-pitches", "success", `Generated ${bassPitchAnalysis.candidates.length} heuristic chord-derived bass candidate(s).`, bassPitchAnalysis);
+            return formatBassPitchCandidates(bassPitchAnalysis);
+          },
+        },
+        {
+          name: "select_bass_pitches",
+          execute: args => {
+            if (!bassPitchAnalysis) return { valid: false, message: "Inspect bass pitch candidates first." };
+            const parsed = parseBassPitchSelection(toolPayloadString(args, "bass_pitches_toon") ?? "");
+            if (!parsed.valid || !parsed.value) return { valid: false, message: parsed.errors.join(" ") };
+            const validated = validateBassPitchSelection(bassPitchAnalysis, acceptedBassPositions, parsed.value);
+            if (!validated.valid) {
+              recordWorkflowEvent("bass-pitches-rejected", "bass-pitches", "warning", validated.errors.join(" "), validated.errors);
+              return { valid: false, message: validated.errors.join(" ") };
+            }
+            const materialized = materializeBassFoundation(input.lineMeasures, validated.selected, policy.skillLevel, melodyPlayability.melodyMaxFret);
+            const placement = placeFingerstyleFoundationOnTimeGrid(materialized, { bpm, skillLevel: policy.skillLevel, maxMelodyFret: melodyPlayability.melodyMaxFret });
+            if (placement.unresolvedEventCount > 0) return { valid: false, message: "TimeGrid materialization could not place every melody or bass event." };
+            const errors = physicalValidationErrors(placement.measures, { ...policy, resolvedDensity: "off" }, melodyPlayability.melodyMaxFret);
+            if (errors.length > 0) return { valid: false, message: errors.join(" ") };
+            frozenFoundation = freezeFoundationDurations(placement.measures);
+            opportunityAnalysis = null;
+            nextInspectionCursor = 0;
+            acceptedSelection = null;
+            acceptedComposition = null;
+            acceptedCompositionToon = null;
+            acceptedFinalMeasures = null;
+            recordWorkflowEvent("bass-pitches-accepted", "bass-pitches", "success", `Bass note choices: ${validated.selected.map(candidate => `${candidate.positionId}=${candidate.pitch} (${candidate.role})`).join(", ") || "none"}.`, { selected: validated.selected });
+            recordWorkflowEvent("timegrid-materialized", "timegrid", "success", `Updated and froze canonical TimeGrid with ${validated.selected.length} bass note(s).`, placement.diagnostics);
+            return { valid: true, selected: validated.selected, message: "TimeGrid updated. Inspect post-bass fill opportunities next." };
+          },
         },
         {
           name: "inspect_fill_opportunities",
           execute: args => {
-            if (!frozenFoundation) return { valid: false, message: "Submit and freeze the foundation first." };
+            if (!frozenFoundation || !acceptedReservations) return { valid: false, message: "Select bass pitches and materialize the TimeGrid before inspecting physical fill candidates." };
             const cursor = (args as { cursor?: unknown }).cursor;
             if (!Number.isSafeInteger(cursor) || (cursor as number) < 0) return { valid: false, message: "cursor must be a non-negative integer." };
             if (nextInspectionCursor === null) return { valid: false, message: "All opportunity pages are already inspected; select windows next." };
@@ -456,6 +485,34 @@ export async function runFingerstyleLineWorkflow(
               nextCursor: page.nextCursor,
               candidateCount: page.candidateCount,
             });
+            if (page.nextCursor === null) {
+              const reserved = acceptedReservations.decisions.filter(decision => decision.decision === "use").map(decision => decision.slotId);
+              const selectedWindowIds = new Set(reserved.flatMap(slotId => {
+                const match = /^fr-m(\d+)-s(\d+)$/.exec(slotId);
+                if (!match) return [];
+                const measure = Number(match[1]);
+                const step = Number(match[2]);
+                return opportunityAnalysis!.windows.filter(window => window.measure === measure && step >= window.startStep && step <= window.endStep).map(window => window.id);
+              }));
+              const unresolved = reserved.filter(slotId => ![...selectedWindowIds].some(windowId => {
+                const window = opportunityAnalysis!.windows.find(candidate => candidate.id === windowId);
+                const match = /^fr-m(\d+)-s(\d+)$/.exec(slotId);
+                return window && match && window.measure === Number(match[1]) && Number(match[2]) >= window.startStep && Number(match[2]) <= window.endStep;
+              }));
+              if (unresolved.length > 0) {
+                recordWorkflowEvent("fill-reservations-reconciled", "fill-reconciliation", "warning", `Repair required: selected fill reservation(s) have no legal post-bass candidate window: ${unresolved.join(", ")}.`, { unresolved });
+                return { valid: false, message: `Repair required: revise bass or fill reservations for ${unresolved.join(", ")}.` };
+              }
+              acceptedSelection = {
+                version: "fill-selection:v1",
+                opportunitySetId: opportunityAnalysis!.opportunitySetId,
+                sourceFingerprint: input.sourceFingerprint,
+                decisions: opportunityAnalysis!.windows.map(window => ({ windowId: window.id, decision: selectedWindowIds.has(window.id) ? "use" : "skip", reason: selectedWindowIds.has(window.id) ? "Selected earlier as a fill reservation." : "Not reserved during fill-position planning." })),
+              };
+              const validated = validateFillSelection(opportunityAnalysis!, acceptedSelection);
+              if (!validated.valid) return { valid: false, message: `Repair required: ${validated.errors.join(" ")}` };
+              recordWorkflowEvent("fill-reservations-reconciled", "fill-reconciliation", "success", `Reconciled ${reserved.length} fill reservation(s) against the frozen bass TimeGrid.`, { reserved, selectedWindowIds: [...selectedWindowIds] });
+            }
             return page.toon;
           },
           maxInvalidResults: 3,

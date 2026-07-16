@@ -34,6 +34,9 @@ export interface FingerstyleWorkflowDiagnosticEvent extends EventBase {
   source: "workflow" | "placement";
   kind:
     | "foundation-validated" | "foundation-rejected" | "foundation-placed"
+    | "fill-reservations-analyzed" | "fill-reservations-accepted" | "fill-reservations-rejected" | "fill-reservations-reconciled"
+    | "bass-positions-analyzed" | "bass-positions-accepted" | "bass-positions-rejected" | "bass-source-abc-annotated"
+    | "bass-pitches-analyzed" | "bass-pitches-accepted" | "bass-pitches-rejected" | "timegrid-materialized"
     | "opportunities-analyzed" | "opportunity-page-inspected"
     | "selection-accepted" | "selection-rejected"
     | "composition-accepted" | "composition-rejected"

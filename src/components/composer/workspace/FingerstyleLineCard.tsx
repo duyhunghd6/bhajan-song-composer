@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import AbcjsPlaybackController from "@/components/music-sheet/AbcjsPlaybackController";
 import { prepareAbcjsRenderInput } from "@/components/music-sheet/abcjs-playback/render-input";
 import { convertTimeSliceMeasureToAbc, convertAbcToTimeSliceGrid, joinMeasureAbcWithBarlines, type TimeSliceMeasure } from "@/lib/theory/fingerstyle-arranger/time-slice";
-import { formatLineAsToon, parseToonToLine, renderCombinedAsciiGuitarTab } from "@/lib/theory/fingerstyle-arranger/toon-utils";
+import { renderCombinedAsciiGuitarTab } from "@/lib/theory/fingerstyle-arranger/toon-utils";
 import { buildAbcDurationContext } from "@/lib/theory/abc-duration";
 import { getKeyAccidentalsFromAbc } from "@/lib/theory/abc-key-signature";
 import { COMPOSER_PREVIEW_RENDER_OPTIONS } from "./preview";
@@ -32,7 +32,6 @@ interface FingerstyleLineCardProps {
   lineIndex: number;
   lineMeasures: TimeSliceMeasure[];
   activeAbc: string;
-  onUpdateMeasures: (updated: TimeSliceMeasure[]) => void;
   accompLayerVisibility: Record<string, boolean>;
   /** Build cumulative context from all previous lines */
   buildPreviousContext: () => PreviousLineContext[];
@@ -40,6 +39,13 @@ interface FingerstyleLineCardProps {
   generationSettings: FingerstyleGenerationSettings;
   previousLineMeasures?: TimeSliceMeasure[];
   nextLineMeasures?: TimeSliceMeasure[];
+  generationLock?: {
+    isLocked: boolean;
+    activeLineIndex: number | null;
+    claim: (lineIndex: number) => { token: string; revision: number } | null;
+    release: (token: string) => void;
+    apply: (lineIndex: number, token: string, revision: number, measures: TimeSliceMeasure[]) => boolean;
+  };
 }
 
 // ── Inline copy button ─────────────────────────────────────────────────
@@ -77,18 +83,18 @@ export function FingerstyleLineCard({
   lineIndex,
   lineMeasures,
   activeAbc,
-  onUpdateMeasures,
   accompLayerVisibility,
   buildPreviousContext,
   workflowAppliedMusicAbc,
   generationSettings,
   previousLineMeasures,
   nextLineMeasures,
+  generationLock,
 }: FingerstyleLineCardProps) {
   const measureNums = lineMeasures.map(m => m.measure);
-  const [toonText, setToonText] = useState(() => formatLineAsToon(lineMeasures));
   const [error, setError] = useState<string | null>(null);
-  const [isGenerating, setIsGenerating] = useState(false);
+  const isGenerating = generationLock?.activeLineIndex === lineIndex;
+  const generationLocked = generationLock?.isLocked ?? false;
   const [logs, setLogs] = useState<string[]>([]);
   const [fillSummary, setFillSummary] = useState<FingerstyleFillGenerationSummary | null>(null);
   const [diagnosticRun, setDiagnosticRun] = useState<FingerstyleGenerationDiagnosticRun | null>(null);
@@ -126,12 +132,6 @@ export function FingerstyleLineCard({
         : null,
     );
   }, [diagnosticStorageKey, lineIndex, sourceFingerprint]);
-
-  // Sync toonText when lineMeasures change externally (localStorage restore, etc.)
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setToonText(formatLineAsToon(lineMeasures));
-  }, [lineMeasures]);
 
   const durationContext = useMemo(() => buildAbcDurationContext(activeAbc), [activeAbc]);
 
@@ -211,19 +211,11 @@ export function FingerstyleLineCard({
 
   // ── Handlers ─────────────────────────────────────────────────────────
 
-  const handleApply = useCallback(() => {
-    try {
-      const updated = parseToonToLine(toonText, lineMeasures);
-      onUpdateMeasures(updated);
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Invalid TOON format");
-    }
-  }, [toonText, lineMeasures, onUpdateMeasures]);
-
   const handleGenerate = useCallback(async () => {
+    const generation = generationLock?.claim(lineIndex);
+    if (!generation) return;
+
     try {
-      setIsGenerating(true);
       setError(null);
       setLogs([]);
       setFillSummary(null);
@@ -251,14 +243,20 @@ export function FingerstyleLineCard({
         });
       }
       if (result.success && result.measures) {
-        onUpdateMeasures(result.measures);
+        const applied = generationLock?.apply(
+          lineIndex,
+          generation.token,
+          generation.revision,
+          result.measures,
+        );
+        if (!applied) setError("The source changed while this line was generating, so the stale result was not applied.");
       } else {
         setError(result.error || "AI Generation Failed");
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "AI Generation Failed");
     } finally {
-      setIsGenerating(false);
+      generationLock?.release(generation.token);
     }
   }, [
     songSlug,
@@ -269,7 +267,8 @@ export function FingerstyleLineCard({
     generationSettings,
     previousLineMeasures,
     nextLineMeasures,
-    onUpdateMeasures,
+    generationLock,
+    lineIndex,
     diagnosticStorageKey,
   ]);
 
@@ -293,7 +292,7 @@ export function FingerstyleLineCard({
         <button
           type="button"
           onClick={handleGenerate}
-          disabled={isGenerating || !melodyPlayability.playable}
+          disabled={generationLocked || !melodyPlayability.playable}
           className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-indigo-700 flex items-center gap-1.5 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
         >
           <span>✨</span>
@@ -302,7 +301,7 @@ export function FingerstyleLineCard({
       </div>
 
       <p className="mb-4 rounded-xl border border-indigo-200 bg-white/70 px-3 py-2 text-xs text-indigo-900 dark:border-indigo-900/50 dark:bg-indigo-950/30 dark:text-indigo-200">
-        Melody attacks and rests stay pinned to the source. AI adds chord-based bass/harmony support, then chooses optional fills only in approved sustain/rest windows.
+        Melody attacks and rests stay pinned to the source. AI first reserves fill positions, then plans chord-derived bass positions and pitches, freezes the TimeGrid, and finally composes only post-bass legal fills.
       </p>
 
       {melodyPlayability.exceptions.length > 0 && (
@@ -323,15 +322,17 @@ export function FingerstyleLineCard({
       <div className="grid grid-cols-1 lg:grid-cols-10 gap-4">
         {/* ── Left: TOON Editor + Logs ── */}
         <div className="flex flex-col h-full lg:col-span-3">
-          <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
-            Time-Slice Grid (TOON) — All Measures
-          </label>
-          <textarea
-            className="flex-grow min-h-[400px] w-full rounded-xl border border-zinc-200 bg-zinc-50 p-3 font-mono text-xs text-zinc-800 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 whitespace-pre"
-            value={toonText}
-            onChange={(e) => setToonText(e.target.value)}
-            onBlur={handleApply}
-          />
+          <div className="rounded-xl border border-zinc-200 bg-white p-3 text-xs text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300">
+            <div className="font-semibold text-zinc-900 dark:text-zinc-100">Canonical TimeGrid</div>
+            <p className="mt-1 text-[11px] text-zinc-500">Source melody, chords, timing, and grid coordinates are locked. AI output and imported v3 JSON are validated before they update this line.</p>
+            <div className="mt-3 space-y-1 font-mono text-[10px]">
+              {lineMeasures.map(measure => (
+                <div key={measure.measure}>
+                  M{measure.measure} · {measure.grid.length} steps · {measure.grid.reduce((count, step) => count + (step.tablature?.length ?? 0), 0)} guitar attacks
+                </div>
+              ))}
+            </div>
+          </div>
           {error && (
             <div className="mt-2 text-xs text-rose-500 font-semibold">
               {error}
