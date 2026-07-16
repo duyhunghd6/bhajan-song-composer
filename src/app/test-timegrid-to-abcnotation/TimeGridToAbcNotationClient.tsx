@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
-import { groupMeasuresByLine } from "@/lib/theory/fingerstyle-arranger/time-slice";
+import { groupMeasuresByLine, type TimeSliceMeasure } from "@/lib/theory/fingerstyle-arranger/time-slice";
 import { runSourceTimeGridConversionDiagnostic } from "@/lib/theory/fingerstyle-arranger/melody-time-grid-round-trip";
 
 const AbcjsPlaybackController = dynamic(
@@ -21,8 +21,14 @@ const guitarRenderOptions = {
   }],
 };
 
+interface TestSong {
+  title: string;
+  slug: string;
+  melodyAbc: string;
+}
+
 interface Props {
-  sourceAbc: string;
+  songs: TestSong[];
 }
 
 function CopyButton({ label, text, testId }: { label: string; text: string; testId: string }) {
@@ -59,8 +65,55 @@ function DownloadJsonButton({ text, testId }: { text: string; testId: string }) 
 
 function Status({ passed, label, testId }: { passed: boolean; label: string; testId: string }) {
   return (
-    <div data-testid={testId} className={`rounded-xl border px-4 py-3 ${passed ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" : "border-rose-500/30 bg-rose-500/10 text-rose-300"}`}>
-      <span className="mr-2 font-bold">{passed ? "PASS" : "FAIL"}</span>{label}
+    <div data-testid={testId} className={`flex items-center gap-3 rounded-2xl border px-4 py-3 text-xs font-bold tracking-wide shadow-md ${passed ? "border-emerald-500/20 bg-emerald-500/5 text-emerald-400" : "border-rose-500/20 bg-rose-500/5 text-rose-400"}`}>
+      <span className={`inline-block h-2 w-2 rounded-full ${passed ? "bg-emerald-400 animate-pulse" : "bg-rose-400"}`} />
+      <span>{label}</span>
+    </div>
+  );
+}
+
+interface GridLineProps {
+  measures: TimeSliceMeasure[];
+}
+
+function GridLine({ measures }: GridLineProps) {
+  return (
+    <div className="flex flex-wrap gap-4">
+      {measures.map((measure, mIndex) => (
+        <article key={mIndex} className="flex-1 min-w-[280px] rounded-2xl border border-zinc-800 bg-zinc-950 p-4">
+          <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
+            <h4 className="text-xs font-semibold text-zinc-400">Measure {measure.measure}</h4>
+            {measure.barline && (
+              <span className="font-mono text-xs text-zinc-500">
+                {measure.barline.volta ? `[${measure.barline.volta}] ` : ""}
+                {measure.barline.repeatStart ? "|:" : "|"}
+                {" ... "}
+                {measure.barline.repeatEnd ? ":|" : "|"}
+              </span>
+            )}
+          </div>
+          <div className="mt-3 flex gap-0.5 overflow-x-auto pb-1">
+            {measure.grid.map((step: any, sIndex: number) => {
+              const hasAttack = step.melody.state === "attack";
+              const hasSustain = step.melody.state === "sustain";
+              const isPhysical = step.guitar !== null;
+              return (
+                <div
+                  key={sIndex}
+                  title={`Step ${sIndex + 1}: Melody=${step.melody.pitch || "rest"} (${step.melody.state}), Guitar=${step.guitar ? step.guitar.pitch : "none"}`}
+                  className={`h-8 flex-1 min-w-[12px] rounded-sm transition-colors duration-150 ${
+                    hasAttack
+                      ? "bg-amber-500/80 hover:bg-amber-400"
+                      : hasSustain
+                        ? "bg-blue-600/60 hover:bg-blue-500"
+                        : "bg-zinc-900 hover:bg-zinc-800"
+                  } ${isPhysical ? "ring-2 ring-emerald-500/70" : ""}`}
+                />
+              );
+            })}
+          </div>
+        </article>
+      ))}
     </div>
   );
 }
@@ -83,41 +136,16 @@ function CodePanel({ title, text, copyLabel, testId, color = "text-zinc-300" }: 
   );
 }
 
-function GridLine({ measures }: { measures: ReturnType<typeof runSourceTimeGridConversionDiagnostic>["document"]["measures"] }) {
-  return (
-    <div className="space-y-4">
-      {measures.map(measure => (
-        <article key={measure.measure} className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-400">
-            <span className="font-semibold text-zinc-200">Measure {measure.measure}</span>
-            <span>{measure.grid.length} steps · {measure.pickupDurationUnits ? `pickup ${measure.pickupDurationUnits} units` : "full measure"}</span>
-          </div>
-          <div className="grid grid-cols-4 gap-2 sm:grid-cols-8 lg:grid-cols-16">
-            {measure.grid.map((step, index) => {
-              const tab = step.tablature?.[0];
-              const tone = step.melody.state === "attack"
-                ? "border-amber-400/50 bg-amber-400/10 text-amber-100"
-                : step.melody.state === "sustain"
-                  ? "border-sky-400/30 bg-sky-400/10 text-sky-100"
-                  : "border-zinc-800 bg-zinc-900 text-zinc-500";
-              return (
-                <div key={step.step} className={`min-w-0 rounded-lg border p-2 font-mono text-[10px] leading-4 ${tone}`}>
-                  <div className="text-zinc-500">{index + 1}</div>
-                  <div className="truncate font-semibold">{step.melody.pitch ?? "rest"}</div>
-                  <div className="text-[9px] uppercase opacity-70">{step.melody.state}</div>
-                  {tab && <div className="mt-1 text-[9px] text-emerald-300">s{tab.string} f{tab.fret} ×{tab.durationSteps}</div>}
-                </div>
-              );
-            })}
-          </div>
-        </article>
-      ))}
-    </div>
-  );
-}
+export default function TimeGridToAbcNotationClient({ songs }: Props) {
+  const [selectedSlug, setSelectedSlug] = useState(songs[0]?.slug || "");
+  const selectedSong = useMemo(() => {
+    return songs.find(s => s.slug === selectedSlug) || songs[0];
+  }, [songs, selectedSlug]);
 
-export default function TimeGridToAbcNotationClient({ sourceAbc }: Props) {
-  const result = useMemo(() => runSourceTimeGridConversionDiagnostic(sourceAbc), [sourceAbc]);
+  const result = useMemo(() => {
+    return runSourceTimeGridConversionDiagnostic(selectedSong?.melodyAbc || "");
+  }, [selectedSong]);
+
   const groupedLines = useMemo(() => groupMeasuresByLine(result.document.measures), [result.document.measures]);
   const physicsValid = result.unmappableAttacks.length === 0 && result.physicsValidation.every(validation => validation.valid);
   const guitarProjectionValid = result.unmappableAttacks.length === 0 && result.generatedGuitarValidation.valid;
@@ -128,7 +156,26 @@ export default function TimeGridToAbcNotationClient({ sourceAbc }: Props) {
       <div className="mx-auto w-full max-w-7xl space-y-10">
         <header className="space-y-4 border-b border-zinc-800 pb-8">
           <div className="flex flex-wrap items-center justify-between gap-4">
-            <span className="rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-violet-300">Canonical TimeGrid Diagnostic</span>
+            <div className="flex items-center gap-3">
+              <span className="rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-violet-300">Canonical TimeGrid Diagnostic</span>
+              {songs.length > 1 && (
+                <div className="flex items-center gap-2">
+                  <label htmlFor="song-select" className="text-xs text-zinc-400 font-medium">Select Song:</label>
+                  <select
+                    id="song-select"
+                    value={selectedSlug}
+                    onChange={(e) => setSelectedSlug(e.target.value)}
+                    className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1 text-xs font-semibold text-zinc-200 outline-none hover:border-violet-500 focus:border-violet-500"
+                  >
+                    {songs.map((song) => (
+                      <option key={song.slug} value={song.slug}>
+                        {song.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
             <div className="flex gap-2">
               <Link href="/test-conversion-ascii-guitar-tab" className="rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm font-semibold text-zinc-300 hover:bg-zinc-800">ASCII Conversion →</Link>
               <Link href="/test-tab" className="rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm font-semibold text-zinc-300 hover:bg-zinc-800">Tablature Gallery →</Link>
@@ -136,7 +183,7 @@ export default function TimeGridToAbcNotationClient({ sourceAbc }: Props) {
           </div>
           <h1 className="bg-gradient-to-r from-violet-300 via-sky-300 to-emerald-300 bg-clip-text text-4xl font-extrabold tracking-tight text-transparent sm:text-5xl">ABCNotation → TimeGrid → Guitar ABC</h1>
           <p className="max-w-4xl text-sm leading-6 text-zinc-400">
-            The saved Ganesha ABC is retained verbatim as the immutable import document, then compiled into the meter-aware canonical TimeGrid. The TimeGrid produces a separate forced-string Guitar ABC projection. Exact source identity and physical Guitar-ABC validation are intentionally separate contracts.
+            The saved <strong>{selectedSong?.title || "Ganesha"}</strong> ABC is retained verbatim as the immutable import document, then compiled into the meter-aware canonical TimeGrid. The TimeGrid produces a separate forced-string Guitar ABC projection. Exact source identity and physical Guitar-ABC validation are intentionally separate contracts.
           </p>
         </header>
 
@@ -148,7 +195,7 @@ export default function TimeGridToAbcNotationClient({ sourceAbc }: Props) {
         </section>
 
         <section className="grid gap-6 xl:grid-cols-2">
-          <CodePanel title="Input: original saved Ganesha ABC" text={sourceAbc} copyLabel="Copy source" testId="time-grid-source-abc" color="text-amber-300" />
+          <CodePanel title={`Input: original saved ${selectedSong?.title || "Ganesha"} ABC`} text={selectedSong?.melodyAbc || ""} copyLabel="Copy source" testId="time-grid-source-abc" color="text-amber-300" />
           <CodePanel title="Output: exact re-emitted source ABC" text={result.reEmittedSourceAbc} copyLabel="Copy exact output" testId="time-grid-reemitted-source-abc" color="text-emerald-300" />
         </section>
 
