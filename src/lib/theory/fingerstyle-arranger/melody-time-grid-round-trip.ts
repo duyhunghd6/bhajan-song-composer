@@ -6,7 +6,7 @@ import {
   validateGuitarAbcAgainstAsciiGuitarTab,
   type AbcAsciiGuitarTabValidationResult,
 } from "./abc-ascii-guitartab-validation";
-import { buildGeneratedGuitarAbc, buildStandaloneGeneratedGuitarAbc } from "./guitar-abc-output";
+import { buildGeneratedGuitarAbc, buildStandaloneGeneratedGuitarAbc, buildComparisonAbc } from "./guitar-abc-output";
 import { importAbcNotationToTimeGrid } from "./abc-timegrid-import";
 import { validateFingerstylePhysicsDetailed, type FingerstylePhysicsValidationResult } from "./physics-validation";
 import { convertAbcToTimeSliceGrid, type TimeSliceMeasure } from "./time-slice";
@@ -47,6 +47,8 @@ export interface SourceTimeGridConversionDiagnostic {
   generatedGuitarAbc: string;
   standaloneGeneratedGuitarAbc: string;
   generatedGuitarValidation: AbcAsciiGuitarTabValidationResult;
+  /** Multi-voice ABC: original source melody [V:Melody] + faithfully reconstructed guitar [V:Guitar]. */
+  comparisonAbc: string;
 }
 
 function cloneMeasures(measures: TimeSliceMeasure[]): TimeSliceMeasure[] {
@@ -166,5 +168,6 @@ export function runSourceTimeGridConversionDiagnostic(sourceAbc: string): Source
       durationContext,
       keyAccidentals,
     }),
+    comparisonAbc: buildComparisonAbc(document.measures, sourceAbc),
   };
 }

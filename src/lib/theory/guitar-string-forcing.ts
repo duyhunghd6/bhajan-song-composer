@@ -179,7 +179,7 @@ function addStringForcingToChord(
  * - Already-decorated notes: `!1!e` → left unchanged
  * - Rests, chord symbols, annotations: left unchanged
  */
-function processGuitarLine(line: string, keyAccidentals: AbcKeyAccidentalMap): string {
+export function processGuitarLine(line: string, keyAccidentals: AbcKeyAccidentalMap): string {
   // Match chord groups and individual notes/rests/decorations
   // This regex captures (in priority order):
   //   1. Quoted strings: "Em", "D7", "Am7/G" — chord symbols, pass through unchanged

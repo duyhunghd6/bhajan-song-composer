@@ -175,15 +175,25 @@ export default function TimeGridToAbcNotationClient({ sourceAbc }: Props) {
             ))}
           </div>
         </section>
-
         <section className="grid gap-6 xl:grid-cols-2">
           <CodePanel title="Output: generated forced-string Guitar ABC" text={result.standaloneGeneratedGuitarAbc} copyLabel="Copy Guitar ABC" testId="time-grid-guitar-abc-output" color="text-violet-300" />
-          <article className="rounded-3xl border border-zinc-800 bg-white p-4 text-zinc-950 shadow-xl sm:p-6">
-            <h2 className="mb-4 text-lg font-bold">Generated Guitar notation + TAB</h2>
-            <div data-testid="time-grid-guitar-canvas">
-              <AbcjsPlaybackController abcString={result.standaloneGeneratedGuitarAbc} title="Ganesha Canonical TimeGrid Guitar" canvasId="test-timegrid-guitar-canvas" renderOptions={guitarRenderOptions} />
+          <CodePanel title="Comparison ABC: [V:Melody] + [V:Guitar]" text={result.comparisonAbc} copyLabel="Copy Comparison ABC" testId="time-grid-comparison-abc-output" color="text-cyan-300" />
+        </section>
+
+        <section className="rounded-3xl border border-zinc-800 bg-white p-4 text-zinc-950 shadow-xl sm:p-6">
+          <div className="mb-4 space-y-2">
+            <div className="flex flex-wrap items-center gap-3">
+              <h2 className="text-lg font-bold">Generated Guitar notation + TAB</h2>
+              <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-700">2-Staff Comparison</span>
             </div>
-          </article>
+            <p className="text-xs text-zinc-500">
+              Staff 1: [V:Melody] — original source ABC notation (verbatim). Staff 2: [V:Guitar] — reconstructed from TimeGrid&apos;s preserved source_abc.melody with <code>!N!</code> guitar string-forcing.
+              Ties, slurs, chord symbols, repeats, volta brackets, fermata, segno — all original ABC characteristics are preserved in both staves.
+            </p>
+          </div>
+          <div data-testid="time-grid-guitar-canvas">
+            <AbcjsPlaybackController abcString={result.comparisonAbc} title="Ganesha: Original Melody vs Reconstructed Guitar" canvasId="test-timegrid-guitar-canvas" renderOptions={guitarRenderOptions} />
+          </div>
         </section>
 
         <section className="rounded-3xl border border-zinc-800 bg-zinc-900/60 p-6 shadow-xl">
