@@ -11,12 +11,9 @@ videos:
     label: "Full Performance"
     default: true
 abcNotations:
-  - type: "accompaniment"
-    label: "Accompaniment Music Sheet"
-    default: true
   - type: "melody"
     label: "Melody Music Sheet"
-    default: false
+    default: true
 tags: ["bhajan", "hindi", "sahaja-yoga"]
 composer: "Traditional"
 contributors: ["community"]
@@ -24,26 +21,6 @@ contributors: ["community"]
 
 ## Lyrics
 
-Hari Bol Hari Bol
-Hari Hari Bol
-Hari Bol Hari Bol
-Hari Hari Bol
-
-Mukunda Madhava
-Govinda Bol
-Mukunda Madhava
-Govinda Bol
-
-Keshava Madhava
-Govinda Bol
-Keshava Madhava
-Govinda Bol
-
-Mukunda Madhava
-Govinda Bol
-Mukunda Madhava
-Govinda Bol
 
 ## Notes
 
-"Hari Bol" is a traditional Hindi bhajan in the Sahaja Yoga repertoire praising the names of the Divine.
