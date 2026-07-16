@@ -8,7 +8,11 @@ export {
   type FillCodecParseResult,
   type FillOpportunityPageOptions,
 } from "./fill-opportunities/codec";
-export { buildFillSelectionBudget, normalizeFillPolicy } from "./fill-opportunities/policy";
+export {
+  allowsMelodySustainFill,
+  buildFillSelectionBudget,
+  normalizeFillPolicy,
+} from "./fill-opportunities/policy";
 export { scoreFillOpportunity, type ScoreFillOpportunityInput } from "./fill-opportunities/scoring";
 export {
   mergeAcceptedFills,

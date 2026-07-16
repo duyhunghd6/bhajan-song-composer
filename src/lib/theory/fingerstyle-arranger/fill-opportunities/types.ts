@@ -26,6 +26,7 @@ export interface FillSelectionBudget {
 export type FillRejectionReason =
   | "pickup-padding"
   | "melody-attack"
+  | "protected-melody-sustain"
   | "foundation-attack"
   | "unsupported-melody-state"
   | "no-legal-pitch"

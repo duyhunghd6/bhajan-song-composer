@@ -237,4 +237,32 @@ describe("time-slice ABC interval renderer", () => {
       fillCandidateId: "c-m1-s3-G3-str3f0",
     });
   });
+
+  it("retains source Melody tie segmentation without changing physical duration", () => {
+    const measure: TimeSliceMeasure = {
+      ...sparseOpeningMeasure(),
+      source_abc: { melody: "E3- E2 z3", lyric: "", beatWeight: "" },
+      grid: Array.from({ length: 16 }, (_, index) => ({
+        step: index + 1,
+        chord: "Em",
+        weight: null,
+        melody: index === 0
+          ? { pitch: "E4", state: "attack" as const }
+          : index < 10
+            ? { pitch: "E4", state: "sustain" as const }
+            : { pitch: null, state: "rest" as const },
+        lyric: null,
+        tablature: index === 0
+          ? [{ string: 1 as const, fret: 0, finger: "a" as const, role: "melody" as const, durationSteps: 10 }]
+          : [],
+      })),
+    };
+
+    expect(convertTimeSliceMeasureToAbc(
+      measure,
+      buildAbcDurationContext(ABC),
+      getKeyAccidentalsFromAbc(ABC),
+      true,
+    )).toBe("!1!e3- !1!e2 z3");
+  });
 });

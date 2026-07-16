@@ -35,6 +35,9 @@ This source-identity assertion is distinct from derived-artifact validation:
 
 - **Source identity:** `reEmittedSourceAbc === rawSourceAbc` exactly, including comments, lyrics, directives, voices, repeat/volta syntax, spacing, and line endings.
 - **Guitar projection:** generate forced-string Guitar ABC from the validated TimeGrid and verify its physical strings, frets, attacks, durations, and measure timing against that grid. Generated Guitar ABC is expected to differ from imported source ABC.
+- **Source-faithful comparison projection:** `buildReconstructedGuitarAbc()` applies string forcing to each measure's preserved `source_abc.melody` text. It preserves source ties, slurs, chord-symbol positions, duration spelling, decorations, repeats, and lyrics for diagnostic comparison, but it intentionally omits generated bass and fill events and is not the production arrangement artifact.
+
+A selected physical fill under a sustained Melody (available only in explicit denser profiles) is represented in generated Guitar ABC by an interval split and tied Melody continuation. The renderer must preserve that physical event rather than hiding it to resemble source notation.
 
 ### Forced-string Guitar import
 
@@ -345,8 +348,11 @@ The renderer in `src/lib/theory/fingerstyle-arranger/time-slice-abc-renderer.ts`
 4. Split output at every event start and event end boundary.
 5. At each interval, group sounding events by their forced physical string.
 6. Render a rest only when no guitar event sounds.
-7. Tie an event that continues into the next rendered interval.
-8. Join measures using stored source barlines and respect active pickup duration.
+7. Add validated, quantized in-measure tie continuation boundaries from immutable `source_abc.melody` when a matching physical Guitar melody event spans them.
+8. Tie an event that continues into the next rendered interval.
+9. Join measures using stored source barlines and respect active pickup duration.
+
+Source tie boundaries preserve notation segmentation such as `E3- E2` as generated Guitar `!1!e3- !1!e2`; they do not change the canonical physical `durationSteps`. This is separate from `guitarSlurs`, which remain parenthesized phrase metadata. Cross-bar ties remain outside the measure-local renderer contract.
 
 For the step-1 bass (two steps) plus melody (four steps) example, rendering must split at step 3. It must preserve one sounding melody event with a tie/continuation, rather than creating a second melody attack merely because the bass ended.
 

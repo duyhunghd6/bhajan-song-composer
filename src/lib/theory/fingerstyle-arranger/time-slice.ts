@@ -208,8 +208,15 @@ export function extractDurationTokensWithTies(abcMeasure: string): TokenWithTie[
   return tokens;
 }
 
-export function extractMelodyMeasureTimelineWithTies(abcMeasureStr: string): TimeSliceMelodyEvent[] {
+export function extractMelodyMeasureTimelineWithTies(
+  abcMeasureStr: string,
+  keyAccidentals?: AbcKeyAccidentalMap,
+): TimeSliceMelodyEvent[] {
   const tokens = extractDurationTokensWithTies(abcMeasureStr);
+  const tiedPitch = (token: string): number | null => {
+    const note = token.match(/^[_^=]?[A-Ga-g][,']*/)?.[0];
+    return note ? abcNoteToMidiWithKey(note, keyAccidentals) : null;
+  };
 
   // Merge ties
   const mergedTokens: Array<{ token: string; durationUnits: number; kind: "note" | "rest" }> = [];
@@ -223,7 +230,13 @@ export function extractMelodyMeasureTimelineWithTies(abcMeasureStr: string): Tim
     } else {
       const prevKind = /^[zx]/.test(currentToken.token) ? "rest" : "note";
       const currentKind = /^[zx]/.test(token.token) ? "rest" : "note";
-      if (currentToken.hasTie && prevKind === "note" && currentKind === "note") {
+      if (
+        currentToken.hasTie
+        && prevKind === "note"
+        && currentKind === "note"
+        && tiedPitch(currentToken.token) !== null
+        && tiedPitch(currentToken.token) === tiedPitch(token.token)
+      ) {
         accumulatedDuration += token.durationUnits;
         currentToken = {
           token: currentToken.token,
@@ -499,7 +512,7 @@ export function convertAbcToTimeSliceGrid(
     });
 
     // Extract note events with ties merged
-    const events = extractMelodyMeasureTimelineWithTies(measureStr);
+    const events = extractMelodyMeasureTimelineWithTies(measureStr, keyAccidentals);
 
     for (const event of events) {
       const startIndex = Math.round((event.onsetUnits / unitsPerBeat) * stepsPerBeat);

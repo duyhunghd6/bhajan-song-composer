@@ -143,10 +143,11 @@ function makeMeasure(pitch = "E4"): TimeSliceMeasure {
       step: index + 1,
       chord: "Em",
       weight: index === 0 ? "⬤" as const : null,
-      melody: {
-        pitch: index === 0 ? pitch : null,
-        state: index === 0 ? "attack" as const : "rest" as const,
-      },
+      melody: index === 0
+        ? { pitch, state: "attack" as const }
+        : index < 4
+          ? { pitch, state: "sustain" as const }
+          : { pitch: null, state: "rest" as const },
       lyric: index === 0 ? "Ga-" : null,
     })),
   };
@@ -192,7 +193,10 @@ describe("generateAIFingerstyleLine diagnostics", () => {
       step.tablature?.every(event => event.role !== "melody") ?? true,
     )).toBe(true);
     expect(result.measures?.[0].grid[0].tablature?.some(event => event.role === "fill")).toBe(false);
-    expect(result.measures?.[0].grid.slice(1).some(step =>
+    expect(result.measures?.[0].grid.slice(1, 4).every(step =>
+      step.tablature?.every(event => event.role !== "fill") ?? true,
+    )).toBe(true);
+    expect(result.measures?.[0].grid.slice(4).some(step =>
       step.tablature?.some(event => event.role === "fill"),
     )).toBe(true);
 

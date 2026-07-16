@@ -1,4 +1,8 @@
-import { buildFillSelectionBudget, normalizeFillPolicy } from "./fill-opportunities";
+import {
+  allowsMelodySustainFill,
+  buildFillSelectionBudget,
+  normalizeFillPolicy,
+} from "./fill-opportunities";
 import type { SkillLevel } from "./fingerstyle-constraints";
 import type { TimeSliceMeasure } from "./time-slice";
 
@@ -45,11 +49,13 @@ export function analyzeFillReservationSlots(input: {
   skillLevel: SkillLevel;
   densityMode: string;
 }): FillReservationAnalysis {
+  const policy = normalizeFillPolicy({ skillLevel: input.skillLevel, densityMode: input.densityMode });
   const slots: FillReservationSlot[] = [];
   for (const measure of input.measures) {
     if (measure.pickupDurationUnits) continue;
     for (const step of measure.grid) {
       if (step.melody.state === "attack") continue;
+      if (step.melody.state === "sustain" && !allowsMelodySustainFill(policy)) continue;
       const melodyState = step.melody.state;
       const score = (melodyState === "rest" ? 60 : 45) + (step.weight === null ? 20 : 5);
       slots.push({
@@ -64,7 +70,6 @@ export function analyzeFillReservationSlots(input: {
       });
     }
   }
-  const policy = normalizeFillPolicy({ skillLevel: input.skillLevel, densityMode: input.densityMode });
   const maxSelections = buildFillSelectionBudget(input.measures, policy).maxWindows;
   return {
     reservationSetId: stableId(input.sourceFingerprint, input.skillLevel, input.densityMode, slots),

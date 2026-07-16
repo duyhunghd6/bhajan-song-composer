@@ -1,8 +1,8 @@
 import { formatAbcDuration, type AbcDurationContext } from "../abc-duration";
-import type { AbcKeyAccidentalMap } from "../abc-key-signature";
+import { abcNoteToMidiWithKey, type AbcKeyAccidentalMap } from "../abc-key-signature";
 import type { GuitarStringNumber } from "../fingerstyle-compressor";
 import { scientificPitchForStringFret } from "../guitar-playability";
-import type { TimeSliceGridStep, TimeSliceMeasure } from "./time-slice";
+import { extractDurationTokensWithTies, type TimeSliceGridStep, type TimeSliceMeasure } from "./time-slice";
 
 interface SoundingEvent {
   id: string;
@@ -80,6 +80,41 @@ function collectSoundingEvents(measure: TimeSliceMeasure, maxSteps: number): Sou
   return events;
 }
 
+function sourceMelodyTieBoundaries(
+  measure: TimeSliceMeasure,
+  durationContext: AbcDurationContext,
+  maxSteps: number,
+  events: SoundingEvent[],
+  keyAccidentals: AbcKeyAccidentalMap | undefined,
+): number[] {
+  if (!measure.source_abc?.melody) return [];
+
+  const stepDurationUnits = durationContext.unitsPerBeat / 4;
+  const tokens = extractDurationTokensWithTies(measure.source_abc.melody);
+  const boundaries = new Set<number>();
+  let onset = 0;
+
+  for (let index = 0; index < tokens.length - 1; index++) {
+    const token = tokens[index];
+    const next = tokens[index + 1];
+    onset += token.durationUnits;
+    const note = token.token.match(/^[_^=]?[A-Ga-g][,']*/)?.[0];
+    const nextNote = next.token.match(/^[_^=]?[A-Ga-g][,']*/)?.[0];
+    const pitch = note ? abcNoteToMidiWithKey(note, keyAccidentals) : null;
+    const nextPitch = nextNote ? abcNoteToMidiWithKey(nextNote, keyAccidentals) : null;
+    const rawStep = onset / stepDurationUnits;
+    const boundary = Math.round(rawStep);
+
+    if (!token.hasTie || pitch === null || pitch !== nextPitch || Math.abs(rawStep - boundary) > 1e-6) continue;
+    if (boundary <= 0 || boundary >= maxSteps) continue;
+    if (events.some(event => event.tab.role === "melody" && event.start < boundary && event.end > boundary)) {
+      boundaries.add(boundary);
+    }
+  }
+
+  return [...boundaries];
+}
+
 function soundingByString(events: SoundingEvent[], step: number): SoundingEvent[] {
   const byString = new Map<GuitarStringNumber, SoundingEvent>();
   for (const event of events) {
@@ -118,6 +153,13 @@ export function renderTimeSliceMeasureToAbc(
     boundaries.add(event.start);
     boundaries.add(event.end);
   }
+  for (const boundary of sourceMelodyTieBoundaries(
+    measure,
+    durationContext,
+    maxSteps,
+    events,
+    keyAccidentals,
+  )) boundaries.add(boundary);
   const orderedBoundaries = [...boundaries].sort((left, right) => left - right);
   const rendered: string[] = [];
 

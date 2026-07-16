@@ -4,7 +4,11 @@ import type { GuitarStringNumber } from "../../fingerstyle-compressor";
 import { parseScientificPitch } from "../../guitar-playability";
 import type { TimeSliceGridStep, TimeSliceMeasure } from "../time-slice";
 import { enumerateFillCandidates } from "./candidates";
-import { buildFillSelectionBudget, normalizeFillPolicy } from "./policy";
+import {
+  allowsMelodySustainFill,
+  buildFillSelectionBudget,
+  normalizeFillPolicy,
+} from "./policy";
 import { scoreFillOpportunity } from "./scoring";
 import {
   FILL_OPPORTUNITY_FORMAT_VERSION,
@@ -19,6 +23,7 @@ import {
 const REJECTION_REASONS: FillRejectionReason[] = [
   "pickup-padding",
   "melody-attack",
+  "protected-melody-sustain",
   "foundation-attack",
   "unsupported-melody-state",
   "no-legal-pitch",
@@ -213,6 +218,7 @@ interface RawWindow {
 
 function collectRawWindows(
   measures: TimeSliceMeasure[],
+  allowMelodySustain: boolean,
   rejectionCounts: Record<FillRejectionReason, number>,
 ): { windows: RawWindow[]; evaluatedStepCount: number } {
   const windows: RawWindow[] = [];
@@ -228,6 +234,7 @@ function collectRawWindows(
       let rejection: FillRejectionReason | null = null;
       if (stepIndex >= activeLimit) rejection = "pickup-padding";
       else if (step.melody.state === "attack") rejection = "melody-attack";
+      else if (step.melody.state === "sustain" && !allowMelodySustain) rejection = "protected-melody-sustain";
       else if ((step.tablature?.length ?? 0) > 0) rejection = "foundation-attack";
       else if (step.melody.state !== "rest" && step.melody.state !== "sustain") rejection = "unsupported-melody-state";
 
@@ -258,7 +265,11 @@ export function analyzeFillOpportunities(input: AnalyzeFillOpportunitiesInput): 
   const policy = normalizeFillPolicy(input);
   const budget = buildFillSelectionBudget(input.measures, policy);
   const rejectionCounts = emptyRejectionCounts();
-  const raw = collectRawWindows(input.measures, rejectionCounts);
+  const raw = collectRawWindows(
+    input.measures,
+    allowsMelodySustainFill(policy),
+    rejectionCounts,
+  );
   const allCandidates: FillAtomicCandidate[] = [];
   const windows: FillOpportunityWindow[] = [];
   let evaluatedPlacementCount = 0;
@@ -394,7 +405,7 @@ export function analyzeFillOpportunities(input: AnalyzeFillOpportunitiesInput): 
   const opportunitySetId = `fos-${hashId([
     input.sourceFingerprint,
     policy.skillLevel,
-    policy.resolvedDensity,
+    policy.densityMode,
     foundationSignature,
   ].join("|"))}`;
 

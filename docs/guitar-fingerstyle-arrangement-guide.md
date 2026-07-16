@@ -66,12 +66,12 @@ The canonical limits come from `SKILL_LEVEL_CONSTRAINTS` in `fingerstyle-arrange
 
 The UI exposes `auto`, `few`, `normal`, and `many`.
 
-- `auto`: beginner → few, intermediate → normal, advanced → many;
-- `few`: restrained use of the best windows;
-- `normal`: moderate phrase support;
-- `many`: more windows, still bounded by physical and musical constraints.
+- `auto`: beginner → few, intermediate → normal, advanced → many, while preserving held Melody spans for a sparse default texture;
+- `few`: restrained use of the best source-rest/phrase-gap windows; held Melody remains protected;
+- `normal`: moderate phrase support, including eligible held-Melody decoration when physical validation permits it;
+- `many`: more windows, including eligible held-Melody decoration, still bounded by physical and musical constraints.
 
-Legacy values normalize at the boundary: `none` becomes zero-fill compatibility mode and `all` becomes `many`. Density controls window budgets; it does not relax fret or hand constraints.
+Legacy values normalize at the boundary: `none` becomes zero-fill compatibility mode and `all` becomes `many`. Density controls window budgets; it does not relax fret or hand constraints. Skill-derived `auto` budgets do not enable held-Melody decoration: that is an explicit `normal` or `many` choice.
 
 Settings are persisted in the per-song Composer workspace. Changing settings does not regenerate existing lines.
 
@@ -103,6 +103,7 @@ Analysis visits every active grid step and records a typed eligibility rejection
 
 - pickup padding;
 - melody attack;
+- protected Melody sustain in default `auto`/`few` policy;
 - occupied foundation attack;
 - protected melody string;
 - occupied string;
@@ -112,7 +113,7 @@ Analysis visits every active grid step and records a typed eligibility rejection
 - register collision;
 - unresolved approach-note condition.
 
-Safe windows are formed from contiguous melody rests or protected sustains. Windows split at melody attacks, foundation attacks, chord changes, measure boundaries, pickup padding, and line boundaries.
+Safe windows are formed from contiguous Melody rests in default `auto`/`few` generation. Explicit `normal`/`many` may additionally form windows from protected sustains; candidate enumeration still excludes the held Melody string. Windows split at melody attacks, foundation attacks, chord changes, measure boundaries, pickup padding, and line boundaries.
 
 ### Stage 5a — Reservation reconciliation
 

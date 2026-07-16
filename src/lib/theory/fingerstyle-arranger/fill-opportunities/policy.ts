@@ -43,6 +43,14 @@ export function normalizeFillPolicy(input: {
   };
 }
 
+/**
+ * Sparse/default fingerstyle keeps a held melody clear. Sustain decoration is an
+ * explicit normal-or-many arrangement choice, independent of skill-based budget.
+ */
+export function allowsMelodySustainFill(policy: FingerstyleGenerationPolicy): boolean {
+  return policy.densityMode === "normal" || policy.densityMode === "many";
+}
+
 function activeStepCount(measure: TimeSliceMeasure): number {
   if (!measure.pickupDurationUnits) return measure.grid.length;
   const lastMelodyIndex = measure.grid.reduce(

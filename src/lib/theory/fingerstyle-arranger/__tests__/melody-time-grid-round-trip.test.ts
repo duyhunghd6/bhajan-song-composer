@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { buildReconstructedGuitarAbc } from "../guitar-abc-output";
 import { runSourceTimeGridConversionDiagnostic } from "../melody-time-grid-round-trip";
+import { convertAbcToTimeSliceGrid } from "../time-slice";
 import { parseImportedTimeGridDocumentCompact } from "../timegrid-document-codec";
 
 const SOURCE_ABC = [
@@ -63,6 +65,23 @@ describe("source ABC to canonical TimeGrid diagnostic", () => {
     expect(result.generatedGuitarAbc).toContain(":|");
     expect(result.generatedGuitarValidation.valid).toBe(true);
     expect(result.standaloneGeneratedGuitarAbc).not.toBe(SOURCE_ABC);
+  });
+
+  it("reconstructs source Melody notation with string forcing without losing concrete syntax", () => {
+    const source = `X:1
+L:1/8
+M:4/4
+K:Em
+[V:Melody] | "Em" (E2- E2) z4 |`;
+    const measures = convertAbcToTimeSliceGrid(source, []);
+    const reconstructed = buildReconstructedGuitarAbc(measures, source);
+
+    expect(reconstructed).toContain('V:Guitar clef=treble-8');
+    expect(reconstructed).toContain('"Em"');
+    expect(reconstructed).toContain("(");
+    expect(reconstructed).toContain("2-");
+    expect(reconstructed).toContain(")");
+    expect(reconstructed).toMatch(/![1-6]!/);
   });
 
   it("reports a melody outside the diagnostic guitar range without altering raw source identity", () => {

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   FILL_COMPOSITION_FORMAT_VERSION,
   FILL_SELECTION_FORMAT_VERSION,
+  allowsMelodySustainFill,
   analyzeFillOpportunities,
   encodeFillComposition,
   encodeFillSelection,
@@ -75,12 +76,12 @@ function sourceMeasure(): TimeSliceMeasure {
   };
 }
 
-function analysis() {
+function analysis(densityMode = "few") {
   return analyzeFillOpportunities({
     measures: [sourceMeasure()],
     sourceFingerprint: "source-123",
     skillLevel: "beginner",
-    densityMode: "few",
+    densityMode,
     nextLineMeasures: [{
       ...sourceMeasure(),
       measure: 4,
@@ -150,6 +151,13 @@ describe("fill opportunity policy", () => {
     expect(normalizeFillPolicy({ densityMode: "all" }).resolvedDensity).toBe("many");
     expect(normalizeFillPolicy({ densityMode: "unexpected" }).densityMode).toBe("auto");
   });
+
+  it("requires an explicit normal-or-many mode to decorate held melody", () => {
+    expect(allowsMelodySustainFill(normalizeFillPolicy({ skillLevel: "advanced" }))).toBe(false);
+    expect(allowsMelodySustainFill(normalizeFillPolicy({ densityMode: "few" }))).toBe(false);
+    expect(allowsMelodySustainFill(normalizeFillPolicy({ densityMode: "normal" }))).toBe(true);
+    expect(allowsMelodySustainFill(normalizeFillPolicy({ densityMode: "many" }))).toBe(true);
+  });
 });
 
 describe("fill opportunity scoring", () => {
@@ -205,27 +213,38 @@ describe("fill opportunity scoring", () => {
 });
 
 describe("fill opportunity analysis", () => {
-  it("enumerates deterministic sustain and phrase-ending windows with legal atomic candidates", () => {
+  it("keeps sparse fills in phrase-ending rests and protects held melody", () => {
     const first = analysis();
     const second = analysis();
 
     expect(first).toEqual(second);
     expect(first.evaluatedStepCount).toBe(8);
     expect(first.evaluatedPlacementCount).toBeGreaterThan(0);
-    expect(first.windows).toHaveLength(2);
-    expect(first.windows.map(window => [window.startStep, window.endStep])).toEqual(expect.arrayContaining([
-      [2, 4],
-      [6, 8],
-    ]));
+    expect(first.windows.map(window => [window.startStep, window.endStep])).toEqual([[6, 8]]);
     expect(first.windows.find(window => window.startStep === 6)?.boundaryEvidence).toMatchObject({
       lineEnd: true,
       nextMelodyDistanceSteps: 1,
     });
     expect(first.candidates.length).toBeGreaterThan(0);
+    expect(first.candidates.every(item => item.step >= 6)).toBe(true);
     expect(first.candidates.every(item => item.string >= 1 && item.string <= 4)).toBe(true);
     expect(first.candidates.every(item => item.fret <= 5)).toBe(true);
     expect(first.candidates.every(item => item.id.startsWith("c-m3-s"))).toBe(true);
     expect(first.rejectionCounts["melody-attack"]).toBe(2);
+    expect(first.rejectionCounts["protected-melody-sustain"]).toBe(3);
+  });
+
+  it("allows explicit dense profiles to evaluate held-melody windows", () => {
+    const dense = analysis("normal");
+
+    expect(dense.windows.map(window => [window.startStep, window.endStep])).toEqual(expect.arrayContaining([
+      [2, 4],
+      [6, 8],
+    ]));
+    const sustainCandidates = dense.candidates.filter(item => item.step >= 2 && item.step <= 4);
+    expect(sustainCandidates).not.toHaveLength(0);
+    expect(sustainCandidates.every(item => item.string !== 1)).toBe(true);
+    expect(dense.rejectionCounts["protected-melody-sustain"]).toBe(0);
   });
 
   it("binds the opportunity set to the frozen foundation, not only source metadata", () => {
@@ -337,7 +356,7 @@ describe("fill opportunity analysis", () => {
 
 describe("compact fill contracts and validation", () => {
   it("paginates without silently dropping records and round-trips selection", () => {
-    const result = analysis();
+    const result = analysis("normal");
     const firstPage = paginateFillOpportunities(result, { maxRows: 2 });
     const secondPage = paginateFillOpportunities(result, { cursor: firstPage.nextCursor, maxRows: 2 });
 
