@@ -25,6 +25,8 @@ vi.mock("../ai-config", () => ({
     const localTool = (name: string) => input.localTools.find(tool => tool.name === name)!;
     const activeToolName = () => input.resolveToolTurn().tools[0]?.function.name;
     const noFills = input.systemPrompt.includes("no discretionary fills");
+    const skipAllFills = input.userPrompt.includes("[test: skip fills]");
+    const retryFillFallback = input.userPrompt.includes("[test: fill retries]");
     expect(activeToolName()).toBe("inspect_fill_reservation_slots");
     const reservations = await localTool("inspect_fill_reservation_slots").execute({}) as string;
     const reservationSet = reservations.split("\n").find(line => line.startsWith("set,"))!.split(",")[1];
@@ -80,11 +82,20 @@ vi.mock("../ai-config", () => ({
       `set,${setId}`,
       `source,${source}`,
       "decisions: [D,window,use|skip,reason]",
-      ...windowRows.map((row, index) => `D,${row.split(",")[1]},${index === 0 ? "use" : "skip"},test selection`),
+      ...windowRows.map((row, index) => `D,${row.split(",")[1]},${!skipAllFills && index === 0 ? "use" : "skip"},test selection`),
     ].join("\n") })).toMatchObject({ valid: true });
+    if (input.shouldComplete?.()) return {};
     const candidateRow = candidateRows.find(line => line.split(",")[2] === selectedWindowId)!;
     const candidateId = candidateRow.split(",")[1];
     expect(activeToolName()).toBe("validate_composed_fills");
+    if (retryFillFallback) {
+      const invalidFills = "fills:v1\nset,invalid\nsource,invalid";
+      expect(await localTool("validate_composed_fills").execute({ fills_toon: invalidFills })).toMatchObject({ valid: false });
+      expect(await localTool("validate_composed_fills").execute({ fills_toon: invalidFills })).toMatchObject({ valid: false });
+      expect(await localTool("validate_composed_fills").execute({ fills_toon: invalidFills })).toMatchObject({ valid: true });
+      expect(input.shouldComplete?.()).toBe(true);
+      return {};
+    }
     const fillsToon = [
       "fills:v1",
       `set,${setId}`,
@@ -212,6 +223,47 @@ describe("generateAIFingerstyleLine diagnostics", () => {
     expect(lastRecord.type).toBe("run-complete");
     expect(records.filter((record: { type: string }) => record.type === "run-complete")).toHaveLength(1);
     expect(lastRecord.payload.plaintext).toBe(result.diagnostics?.plaintext);
+  });
+
+  it("finalizes a validated bass foundation when every discretionary fill is skipped", async () => {
+    const result = await generateAIFingerstyleLine({
+      songSlug: "ganesha",
+      sourceFingerprint: "source-skip-fills",
+      lineMeasures: [makeMeasure()],
+      previousLines: [{ lineIndex: 0, inputToon: "[test: skip fills]", outputToon: "" }],
+      activeAbc: "Q:1/4=90\nK:Em\nE2",
+    });
+
+    expect(result.success, `${result.error}\n${result.logs.join("\n")}`).toBe(true);
+    expect(result.notices).toEqual([expect.objectContaining({
+      code: "fills-unavailable",
+      reason: "all-windows-skipped",
+    })]);
+    expect(result.fillSummary).toMatchObject({ selectedWindowCount: 0, composedFillCount: 0, finalValidation: "passed" });
+    expect(result.measures?.flatMap(measure => measure.grid).flatMap(step => step.tablature ?? [])
+      .some(event => event.role === "fill")).toBe(false);
+    expect(result.diagnostics?.events).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: "fill-stages-unavailable", status: "warning" }),
+    ]));
+  });
+
+  it("returns the bass foundation after discretionary fill retries are exhausted", async () => {
+    const result = await generateAIFingerstyleLine({
+      songSlug: "ganesha",
+      sourceFingerprint: "source-fill-retries",
+      lineMeasures: [makeMeasure()],
+      previousLines: [{ lineIndex: 0, inputToon: "[test: fill retries]", outputToon: "" }],
+      activeAbc: "Q:1/4=90\nK:Em\nE2",
+    });
+
+    expect(result.success, `${result.error}\n${result.logs.join("\n")}`).toBe(true);
+    expect(result.notices).toEqual([expect.objectContaining({
+      code: "fills-unavailable",
+      reason: "retry-exhausted",
+    })]);
+    expect(result.fillSummary).toMatchObject({ selectedWindowCount: 0, composedFillCount: 0, finalValidation: "passed" });
+    expect(result.measures?.flatMap(measure => measure.grid).flatMap(step => step.tablature ?? [])
+      .some(event => event.role === "fill")).toBe(false);
   });
 
   it("clears stale fills before finalizing a none-density foundation", async () => {

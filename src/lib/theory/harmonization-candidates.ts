@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getDiatonicChords } from "./chords";
 import { analyzeMelody, normalizeAbcNote, parseAbcHeader } from "./melody-analyzer";
 import { parseRootAndMode } from "./harmonizer";
+import { isAbcChordSymbol, normalizeAbcChordSymbol } from "./abc-chord-symbol";
 
 export const HARMONIZATION_CANDIDATE_STYLES = [
   "simple-devotional",
@@ -101,7 +102,7 @@ const NOTE_VALUE_BY_NAME: Record<string, number> = {
 const NOTE_NAME_BY_VALUE = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 
 function normalizeChordLabel(chord: string): string {
-  return chord.trim().replace(/\s+/g, "").replace(/♯/g, "#").replace(/♭/g, "b");
+  return normalizeAbcChordSymbol(chord);
 }
 
 function normalizeProgressionKey(progression: string[]): string {
@@ -254,13 +255,6 @@ export function validateAbcParseability(abc: string): string[] {
   return issues;
 }
 
-function isChordSymbol(symbol: string): boolean {
-  const trimmed = symbol.trim();
-  if (!trimmed || /^[\^_<>@]/.test(trimmed)) return false;
-  if (/^(rit\.?|accel\.?|fine|dc|d\.c\.|ds|d\.s\.|coda|segno)$/i.test(trimmed)) return false;
-  return /^[A-G](?:#|b)?(?:m|min|maj|dim|aug|sus|add|no|\+|°|ø|\d|\(|\)|\/|-)*$/i.test(trimmed) || /^N\.?C\.?$/i.test(trimmed);
-}
-
 export function extractChordSymbolsByMeasure(abc: string): string[][] {
   const body = abc
     .split("\n")
@@ -273,7 +267,7 @@ export function extractChordSymbolsByMeasure(abc: string): string[][] {
     const chordRegex = /"([^"]+)"/g;
     let match: RegExpExecArray | null;
     while ((match = chordRegex.exec(measure)) !== null) {
-      if (isChordSymbol(match[1])) chords.push(match[1].trim());
+      if (isAbcChordSymbol(match[1])) chords.push(match[1].trim());
     }
     return chords;
   }).filter((measureChords) => measureChords.length > 0);

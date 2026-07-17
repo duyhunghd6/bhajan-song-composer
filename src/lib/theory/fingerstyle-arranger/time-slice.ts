@@ -1,5 +1,6 @@
 import { buildAbcDurationContext, stripAbcChordSymbols, cleanAbcMeasureSegment, type AbcDurationContext, measureDurationUnits, type AbcBarlineInfo, EMPTY_BARLINE_INFO, extractBarlineInfo, joinAbcMeasuresWithBarlines } from "../abc-duration";
 import { parseNoteDuration } from "../melody-analyzer";
+import { isAbcChordSymbol, normalizeAbcChordSymbol } from "../abc-chord-symbol";
 import type { GuitarStringNumber } from "../fingerstyle-compressor";
 import { getKeyAccidentalsFromAbc, abcNoteToMidiWithKey, type AbcKeyAccidentalMap } from "../abc-key-signature";
 import { renderTimeSliceMeasureToAbc } from "./time-slice-abc-renderer";
@@ -293,7 +294,9 @@ export function extractChordsFromMeasure(abcMeasure: string): { chord: string; o
   while ((match = regex.exec(cleanMeasure)) !== null) {
     if (match[1]) {
       const chordName = match[1];
-      chords.push({ chord: chordName, onsetUnits: currentOnset });
+      if (isAbcChordSymbol(chordName)) {
+        chords.push({ chord: normalizeAbcChordSymbol(chordName), onsetUnits: currentOnset });
+      }
     } else {
       const durationSuffix = match[3] ?? "";
       const parsed = parseNoteDuration(durationSuffix);

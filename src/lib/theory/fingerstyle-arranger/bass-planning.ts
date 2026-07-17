@@ -66,7 +66,7 @@ export function analyzeBassPositions(input: {
   const reserved = new Set(input.reservedFillSlotIds);
   const positions = input.measures.flatMap(measure => measure.grid.flatMap(step => {
     const slotId = `fr-m${measure.measure}-s${step.step}`;
-    if (measure.pickupDurationUnits || step.weight === null || reserved.has(slotId)) return [];
+    if (measure.pickupDurationUnits || step.weight === null || reserved.has(slotId) || !Chord.get(step.chord).tonic) return [];
     return [{
       id: `bp-m${measure.measure}-s${step.step}`,
       measure: measure.measure,

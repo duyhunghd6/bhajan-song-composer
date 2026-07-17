@@ -49,6 +49,22 @@ describe("bass planning", () => {
     ]));
   });
 
+  it("does not offer non-harmonic annotations as bass positions", () => {
+    const measure = makeMeasure();
+    measure.grid[0].chord = "^Chorus";
+
+    const positions = analyzeBassPositions({ measures: [measure], sourceFingerprint: "source", reservedFillSlotIds: [] });
+    expect(positions.positions.map(position => position.id)).not.toContain("bp-m1-s1");
+
+    const pitches = analyzeBassPitchCandidates({
+      positions: positions.positions,
+      positionSetId: positions.setId,
+      sourceFingerprint: "source",
+      skillLevel: "beginner",
+    });
+    expect(positions.positions.every(position => pitches.candidates.some(candidate => candidate.positionId === position.id))).toBe(true);
+  });
+
   it("sustains co-onset bass for the source melody duration", () => {
     const measures = [makeMeasure()];
     const positions = analyzeBassPositions({ measures, sourceFingerprint: "source", reservedFillSlotIds: [] });

@@ -78,6 +78,7 @@ import {
 import { buildLineSystemPrompt, buildLineUserPrompt } from "./prompts";
 import type {
   FingerstyleFillGenerationSummary,
+  FingerstyleGenerationNotice,
   GenerateFingerstyleLineInput,
   GenerateFingerstyleLineOutput,
 } from "./types";
@@ -217,7 +218,9 @@ export async function runFingerstyleLineWorkflow(
   let finalOutput: GenerateFingerstyleLineOutput | null = null;
   let fillRepairStage: "bass" | "reservation" | null = null;
   let fillRepairAttempts = 0;
+  let fillStageFailureAttempts = 0;
   let selectionRepairAttempts = 0;
+  const notices: FingerstyleGenerationNotice[] = [];
   let selectionRepairWindowIds: string[] = [];
   const forceToolTurn = (tool: (typeof tools)[number]) => ({
     tools: [tool],
@@ -405,8 +408,37 @@ export async function runFingerstyleLineWorkflow(
     logs.push(`\n## ABC ↔ ASCII-GuitarTab Validation\n\n${asciiGuitarTabValidationMessage}`);
     const completedFillSummary = fillSummary("passed");
     recordWorkflowEvent("final-merge-validated", "final-validation", "success", "Server reconstruction and whole-line validation passed.", completedFillSummary);
-    finalOutput = { success: true, measures: acceptedFinalMeasures, logs, fillSummary: completedFillSummary };
+    finalOutput = { success: true, measures: acceptedFinalMeasures, logs, fillSummary: completedFillSummary, notices };
     return { valid: true };
+  };
+
+  const finalizeWithoutFills = (reason: FingerstyleGenerationNotice["reason"]) => {
+    if (!frozenFoundation) return { valid: false, message: "Materialize a validated bass foundation before skipping fills." };
+    acceptedSelection = null;
+    acceptedComposition = null;
+    acceptedCompositionToon = null;
+    acceptedFinalMeasures = frozenFoundation;
+    const message = reason === "no-legal-windows"
+      ? "Bass foundation generated successfully. No playable discretionary fills were available for this line."
+      : reason === "all-windows-skipped"
+        ? "Bass foundation generated successfully. No discretionary fill was selected, so this line was returned without fills."
+        : "Bass foundation generated successfully. Discretionary fills could not be validated after retries, so this line was returned without fills.";
+    notices.push({ code: "fills-unavailable", severity: "warning", message, reason });
+    recordWorkflowEvent("fill-stages-unavailable", "fill-fallback", "warning", message, {
+      reason,
+      eligibleWindowCount: opportunityAnalysis?.windows.length ?? 0,
+      selectedWindowCount: 0,
+      composedFillCount: 0,
+    });
+    const finalization = completeFinalOutput();
+    return finalization.valid ? { valid: true, message } : finalization;
+  };
+
+  const retryFillStageOrFinalize = (message: string) => {
+    fillStageFailureAttempts += 1;
+    return fillStageFailureAttempts >= 3
+      ? finalizeWithoutFills("retry-exhausted")
+      : { valid: false, message };
   };
 
   try {
@@ -546,6 +578,7 @@ export async function runFingerstyleLineWorkflow(
             acceptedComposition = null;
             acceptedCompositionToon = null;
             acceptedFinalMeasures = null;
+            fillStageFailureAttempts = 0;
             recordWorkflowEvent("bass-pitches-accepted", "bass-pitches", "success", `Bass note choices: ${validated.selected.map(candidate => `${candidate.positionId}=${candidate.pitch} (${candidate.role})`).join(", ") || "none"}.`, { selected: validated.selected });
             recordWorkflowEvent("timegrid-materialized", "timegrid", "success", `Updated and froze canonical TimeGrid with ${validated.selected.length} bass note(s).`, placement.diagnostics);
             if (policy.resolvedDensity === "off") {
@@ -557,6 +590,7 @@ export async function runFingerstyleLineWorkflow(
             }
             return { valid: true, selected: validated.selected, message: "TimeGrid updated. Inspect post-bass fill opportunities next." };
           },
+          maxInvalidResults: 3,
         },
         {
           name: "inspect_fill_opportunities",
@@ -604,6 +638,7 @@ export async function runFingerstyleLineWorkflow(
               }));
               if (unresolved.length > 0) {
                 fillRepairAttempts += 1;
+                if (fillRepairAttempts >= 3) return finalizeWithoutFills("retry-exhausted");
                 fillRepairStage = fillRepairAttempts === 1 ? "bass" : "reservation";
                 opportunityAnalysis = null;
                 nextInspectionCursor = 0;
@@ -632,13 +667,13 @@ export async function runFingerstyleLineWorkflow(
             if (!parsed.valid || !parsed.value) {
               const message = parsed.errors.join(" ");
               recordWorkflowEvent("selection-rejected", "fill-selection", "warning", message, { errors: parsed.errors });
-              return { valid: false, message };
+              return retryFillStageOrFinalize(message);
             }
             const validated = validateFillSelection(opportunityAnalysis, parsed.value);
             if (!validated.valid) {
               const message = validated.errors.join(" ");
               recordWorkflowEvent("selection-rejected", "fill-selection", "warning", message, { errors: validated.errors });
-              return { valid: false, message };
+              return retryFillStageOrFinalize(message);
             }
             acceptedSelection = parsed.value;
             selectionRepairWindowIds = [];
@@ -650,6 +685,10 @@ export async function runFingerstyleLineWorkflow(
               targetWindows: opportunityAnalysis.budget.targetWindows,
               maxWindows: opportunityAnalysis.budget.maxWindows,
             });
+            if (validated.selectedWindowIds.length === 0) {
+              return finalizeWithoutFills(opportunityAnalysis.windows.length === 0 ? "no-legal-windows" : "all-windows-skipped");
+            }
+            fillStageFailureAttempts = 0;
             return { valid: true, selectedWindowIds: validated.selectedWindowIds, maxNotesPerWindow: opportunityAnalysis.budget.maxNotesPerWindow };
           },
           maxInvalidResults: 3,
@@ -666,7 +705,7 @@ export async function runFingerstyleLineWorkflow(
             if (!parsed.valid || !parsed.value) {
               const message = parsed.errors.join(" ");
               recordWorkflowEvent("composition-rejected", "fill-composition", "warning", message, { errors: parsed.errors });
-              return { valid: false, message };
+              return retryFillStageOrFinalize(message);
             }
             const validated = validateFillComposition(opportunityAnalysis, acceptedSelection, parsed.value);
             if (!validated.valid) {
@@ -681,14 +720,14 @@ export async function runFingerstyleLineWorkflow(
                 return { valid: false, message: `Revise fill-window decisions: add a note for or skip ${uncoveredWindowIds.join(", ")}.` };
               }
               recordWorkflowEvent("composition-rejected", "fill-composition", "warning", validated.message, { issues: validated.issues });
-              return { valid: false, message: validated.message };
+              return retryFillStageOrFinalize(validated.message);
             }
             const merged = mergeAcceptedFills(frozenFoundation, opportunityAnalysis, validated);
             const physicalErrors = physicalValidationErrors(merged, policy, melodyPlayability.melodyMaxFret);
             if (physicalErrors.length > 0) {
               const message = physicalErrors.join(" ");
               recordWorkflowEvent("composition-rejected", "fill-composition", "warning", message, { physicalErrors });
-              return { valid: false, message };
+              return retryFillStageOrFinalize(message);
             }
             acceptedComposition = parsed.value;
             acceptedCompositionToon = fillsToon;

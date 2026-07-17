@@ -10,6 +10,7 @@ import { applyAbcLayerVisibility, isAbcLayerVisible, ABC_LAYER_IDS, cleanAbcForE
 import { getArrangementRenderOptionsFor } from "./arrangement-preview-model";
 import type {
   FingerstyleFillGenerationSummary,
+  FingerstyleGenerationNotice,
   PreviousLineContext,
 } from "@/app/actions/fingerstyle-line-arranger";
 import type { FingerstyleGenerationSettings } from "../useWorkspaceState";
@@ -95,6 +96,7 @@ export function FingerstyleLineCard({
   const isGenerating = generationLock.isGenerating;
   const [logs, setLogs] = useState<string[]>([]);
   const [fillSummary, setFillSummary] = useState<FingerstyleFillGenerationSummary | null>(null);
+  const [notices, setNotices] = useState<FingerstyleGenerationNotice[]>([]);
   const [diagnosticRun, setDiagnosticRun] = useState<FingerstyleGenerationDiagnosticRun | null>(null);
   const diagnosticStorageKey = useMemo(
     () => getComposerFingerstyleDiagnosticsStorageKey(songSlug),
@@ -130,6 +132,13 @@ export function FingerstyleLineCard({
         ? summaryEvent.payloadPreview as FingerstyleFillGenerationSummary
         : null,
     );
+    const unavailableEvent = latestForLine?.events.findLast(event => (
+      event.source === "workflow" && event.kind === "fill-stages-unavailable"
+    ));
+    const reason = unavailableEvent?.source === "workflow" && unavailableEvent.payloadPreview
+      ? (unavailableEvent.payloadPreview as { reason?: FingerstyleGenerationNotice["reason"] }).reason
+      : undefined;
+    setNotices(reason ? [{ code: "fills-unavailable", severity: "warning", message: unavailableEvent!.message, reason }] : []);
   }, [diagnosticStorageKey, lineIndex, sourceFingerprint]);
 
   const parsedMeasures = useMemo(() => {
@@ -207,6 +216,7 @@ export function FingerstyleLineCard({
       setError(null);
       setLogs([]);
       setFillSummary(null);
+      setNotices([]);
       const { generateAIFingerstyleLine } = await import("@/app/actions/fingerstyle-line-arranger");
       const result = await generateAIFingerstyleLine({
         songSlug,
@@ -221,6 +231,7 @@ export function FingerstyleLineCard({
       });
       setLogs(result.logs || []);
       setFillSummary(result.fillSummary ?? null);
+      setNotices(result.notices ?? []);
       if (result.diagnostics) {
         setDiagnosticRun(result.diagnostics);
         persistFingerstyleDiagnosticRun({
@@ -322,6 +333,11 @@ export function FingerstyleLineCard({
               {error}
             </div>
           )}
+          {notices.map(notice => (
+            <div key={`${notice.code}-${notice.reason}`} className="mt-3 rounded-xl border border-amber-200 bg-amber-50/80 p-3 text-[11px] text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+              {notice.message}
+            </div>
+          ))}
           {fillSummary && (
             <div className="mt-3 rounded-xl border border-indigo-200 bg-white/80 p-3 text-[11px] text-zinc-700 dark:border-indigo-900 dark:bg-zinc-900/70 dark:text-zinc-300">
               <div className="font-semibold text-indigo-700 dark:text-indigo-300">Scored fill run</div>

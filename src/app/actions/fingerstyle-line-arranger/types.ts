@@ -32,11 +32,19 @@ export interface FingerstyleFillGenerationSummary {
   finalValidation: "passed" | "failed";
 }
 
+export interface FingerstyleGenerationNotice {
+  code: "fills-unavailable";
+  severity: "warning";
+  message: string;
+  reason: "no-legal-windows" | "all-windows-skipped" | "retry-exhausted";
+}
+
 export interface GenerateFingerstyleLineOutput {
   success: boolean;
   measures?: TimeSliceMeasure[];
   logs: string[];
   diagnostics?: FingerstyleGenerationDiagnosticRun;
   fillSummary?: FingerstyleFillGenerationSummary;
+  notices?: FingerstyleGenerationNotice[];
   error?: string;
 }

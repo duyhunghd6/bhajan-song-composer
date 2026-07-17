@@ -217,6 +217,14 @@ w: ⬤ * ● *`;
         { chord: "D", onsetUnits: 4 },
       ]);
     });
+
+    it("ignores quoted section annotations while retaining harmonic chords", () => {
+      const chords = extractChordsFromMeasure('"^Chorus" " Em "E2 "D"E2');
+      expect(chords).toEqual([
+        { chord: "Em", onsetUnits: 0 },
+        { chord: "D", onsetUnits: 2 },
+      ]);
+    });
   });
 
   describe("convertTimeSliceMeasureToAbc", () => {
