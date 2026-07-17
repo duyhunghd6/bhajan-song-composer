@@ -11,6 +11,7 @@ import { getArrangementRenderOptionsFor } from "./arrangement-preview-model";
 import type {
   FingerstyleFillGenerationSummary,
   FingerstyleGenerationNotice,
+  FingerstyleLineGenerationRun,
   PreviousLineContext,
 } from "@/app/actions/fingerstyle-line-arranger";
 import type { FingerstyleGenerationSettings } from "../useWorkspaceState";
@@ -38,6 +39,8 @@ interface FingerstyleLineCardProps {
   buildPreviousContext: () => PreviousLineContext[];
   workflowAppliedMusicAbc: string;
   generationSettings: FingerstyleGenerationSettings;
+  generationRun?: FingerstyleLineGenerationRun;
+  onGenerationRunChange: (lineIndex: number, run: FingerstyleLineGenerationRun | null) => void;
   previousLineMeasures?: TimeSliceMeasure[];
   nextLineMeasures?: TimeSliceMeasure[];
   generationLock: {
@@ -87,13 +90,16 @@ export function FingerstyleLineCard({
   buildPreviousContext,
   workflowAppliedMusicAbc,
   generationSettings,
+  generationRun,
+  onGenerationRunChange,
   previousLineMeasures,
   nextLineMeasures,
   generationLock,
 }: FingerstyleLineCardProps) {
   const measureNums = lineMeasures.map(m => m.measure);
   const [error, setError] = useState<string | null>(null);
-  const isGenerating = generationLock.isGenerating;
+  const [isSelectingOption, setIsSelectingOption] = useState(false);
+  const isGenerating = generationLock.isGenerating || isSelectingOption;
   const [logs, setLogs] = useState<string[]>([]);
   const [fillSummary, setFillSummary] = useState<FingerstyleFillGenerationSummary | null>(null);
   const [notices, setNotices] = useState<FingerstyleGenerationNotice[]>([]);
@@ -244,6 +250,7 @@ export function FingerstyleLineCard({
       if (result.success && result.measures) {
         const applied = generationLock.apply(generation, result.measures);
         if (!applied) setError("The source changed while this line was generating, so the stale result was not applied.");
+        else onGenerationRunChange(lineIndex, result.generationRun ?? null);
       } else {
         setError(result.error || "AI Generation Failed");
       }
@@ -263,8 +270,43 @@ export function FingerstyleLineCard({
     nextLineMeasures,
     generationLock,
     lineIndex,
+    onGenerationRunChange,
     diagnosticStorageKey,
   ]);
+
+  const handleSelectOption = useCallback(async (optionId: string) => {
+    if (!generationRun || optionId === generationRun.selectedOptionId) return;
+    const generation = generationLock.claim(lineIndex);
+    if (!generation) return;
+    setIsSelectingOption(true);
+    try {
+      setError(null);
+      const { selectAIFingerstyleLineOption } = await import("@/app/actions/fingerstyle-line-arranger");
+      const result = await selectAIFingerstyleLineOption({
+        sourceFingerprint,
+        lineMeasures,
+        activeAbc: workflowAppliedMusicAbc,
+        generationRun,
+        optionId,
+      });
+      if (!result.success || !result.measures || !result.selectedOptionId) {
+        setError(result.error || "Unable to apply this fill option.");
+        return;
+      }
+      if (!generationLock.apply(generation, result.measures)) {
+        setError("The source changed while this option was applying, so the stale result was not applied.");
+        return;
+      }
+      onGenerationRunChange(lineIndex, { ...generationRun, selectedOptionId: result.selectedOptionId });
+      const option = generationRun.options.find(candidate => candidate.id === result.selectedOptionId);
+      if (option) setFillSummary(option.fillSummary);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Unable to apply this fill option.");
+    } finally {
+      generationLock.release(generation);
+      setIsSelectingOption(false);
+    }
+  }, [generationLock, generationRun, lineIndex, lineMeasures, onGenerationRunChange, sourceFingerprint, workflowAppliedMusicAbc]);
 
   const tabEnabled = isAbcLayerVisible(ABC_LAYER_IDS.tab, accompLayerVisibility, false);
   const abcjsRenderInput = useMemo(
@@ -283,16 +325,37 @@ export function FingerstyleLineCard({
         <h3 className="text-sm font-bold text-indigo-900 dark:text-indigo-200">
           Line {lineIndex + 1} — Measures {measureNums[0]}–{measureNums[measureNums.length - 1]}
         </h3>
-        <button
-          type="button"
-          onClick={handleGenerate}
-          disabled={isGenerateDisabled}
-          aria-busy={isGenerating}
-          className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-indigo-700 flex items-center gap-1.5 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
-        >
-          <span>✨</span>
-          {isGenerating ? "Generating Line..." : "Generate Line with AI"}
-        </button>
+        <div className="flex flex-wrap items-center justify-end gap-1.5">
+          {generationRun?.options.map(option => {
+            const isSelected = option.id === generationRun.selectedOptionId;
+            return (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => void handleSelectOption(option.id)}
+                disabled={isGenerating}
+                aria-pressed={isSelected}
+                className={`rounded-lg px-2 py-1 text-[11px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                  isSelected
+                    ? "bg-amber-400 text-amber-950"
+                    : "bg-white text-indigo-700 ring-1 ring-indigo-200 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:text-indigo-200 dark:ring-indigo-800"
+                }`}
+              >
+                Option {option.ordinal}
+              </button>
+            );
+          })}
+          <button
+            type="button"
+            onClick={handleGenerate}
+            disabled={isGenerateDisabled}
+            aria-busy={isGenerating}
+            className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-indigo-700 flex items-center gap-1.5 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+          >
+            <span>✨</span>
+            {isGenerating ? "Generating Line..." : "Generate Line with AI"}
+          </button>
+        </div>
       </div>
 
       <p className="mb-4 rounded-xl border border-indigo-200 bg-white/70 px-3 py-2 text-xs text-indigo-900 dark:border-indigo-900/50 dark:bg-indigo-950/30 dark:text-indigo-200">

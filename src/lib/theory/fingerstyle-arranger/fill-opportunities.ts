@@ -2,9 +2,11 @@ export { analyzeFillOpportunities } from "./fill-opportunities/analyze";
 export {
   encodeFillComposition,
   encodeFillSelection,
+  encodeFillVariantProposals,
   paginateFillOpportunities,
   parseFillCompositionToon,
   parseFillSelectionToon,
+  parseFillVariantProposalsToon,
   type FillCodecParseResult,
   type FillOpportunityPageOptions,
 } from "./fill-opportunities/codec";

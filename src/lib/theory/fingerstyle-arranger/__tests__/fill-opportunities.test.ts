@@ -7,11 +7,13 @@ import {
   buildFillSelectionBudget,
   encodeFillComposition,
   encodeFillSelection,
+  encodeFillVariantProposals,
   mergeAcceptedFills,
   normalizeFillPolicy,
   paginateFillOpportunities,
   parseFillCompositionToon,
   parseFillSelectionToon,
+  parseFillVariantProposalsToon,
   scoreFillOpportunity,
   validateFillComposition,
   validateFillSelection,
@@ -474,5 +476,38 @@ describe("compact fill contracts and validation", () => {
     expect(validated.message).toContain("stale");
     expect(validated.message).toContain("used only once");
     expect(validated.message).toContain("not selected");
+  });
+
+  it("round-trips several complete fill variants with independent positions", () => {
+    const result = analysis("normal");
+    const window = result.windows[0];
+    const candidates = result.candidates.filter(candidate => candidate.windowId === window.id && candidate.harmonicRole !== "scale-approach");
+    expect(candidates.length).toBeGreaterThanOrEqual(2);
+    const decisions = result.windows.map(candidateWindow => ({
+      windowId: candidateWindow.id,
+      decision: candidateWindow.id === window.id ? "use" as const : "skip" as const,
+      reason: "variant test",
+    }));
+    const proposals = {
+      version: "fill-variants:v1" as const,
+      opportunitySetId: result.opportunitySetId,
+      sourceFingerprint: result.sourceFingerprint,
+      variants: candidates.slice(0, 2).map((candidate, index) => ({
+        id: `option-${index + 1}`,
+        selection: { version: FILL_SELECTION_FORMAT_VERSION, opportunitySetId: result.opportunitySetId, sourceFingerprint: result.sourceFingerprint, decisions },
+        composition: {
+          version: FILL_COMPOSITION_FORMAT_VERSION,
+          opportunitySetId: result.opportunitySetId,
+          sourceFingerprint: result.sourceFingerprint,
+          entries: [{ candidateId: candidate.id, durationSteps: 1, finger: candidate.suggestedFinger }],
+        },
+      })),
+    };
+
+    expect(parseFillVariantProposalsToon(encodeFillVariantProposals(proposals))).toEqual({
+      valid: true,
+      errors: [],
+      value: proposals,
+    });
   });
 });

@@ -25,9 +25,13 @@ import {
   formatImportedTimeGridDocumentCompact,
   parseImportedTimeGridDocumentCompact,
 } from "@/lib/theory/fingerstyle-arranger/timegrid-document-codec";
-import type { PreviousLineContext } from "@/app/actions/fingerstyle-line-arranger";
+import type {
+  FingerstyleLineGenerationRun,
+  PreviousLineContext,
+} from "@/app/actions/fingerstyle-line-arranger";
 import { buildGeneratedGuitarAbc } from "@/lib/theory/fingerstyle-arranger/guitar-abc-output";
 import {
+  restoreFingerstyleGenerationRuns,
   restorePersistedTablature,
   serializeFingerstyleMeasures,
 } from "./fingerstyle-measure-persistence";
@@ -70,6 +74,7 @@ export function GuitarFingerstyleStep({
     [workflowAppliedMusicAbc],
   );
   const [measures, setMeasures] = useState<TimeSliceMeasure[]>([]);
+  const [lineGenerationRunsByLine, setLineGenerationRunsByLine] = useState<Record<number, FingerstyleLineGenerationRun>>({});
   const [restoredSourceFingerprint, setRestoredSourceFingerprint] = useState<string | null>(null);
   const [timeGridJson, setTimeGridJson] = useState("");
   const [timeGridMessage, setTimeGridMessage] = useState<string | null>(null);
@@ -123,11 +128,17 @@ export function GuitarFingerstyleStep({
       invalidateLineGenerations();
       // eslint-disable-next-line react-hooks/set-state-in-effect -- restore is intentionally gated on both local-storage hydration phases.
       setMeasures(restoredMeasures);
+      setLineGenerationRunsByLine(restoreFingerstyleGenerationRuns(
+        localStorage.getItem(fingerstyleStorageKey),
+        freshMeasures,
+        sourceFingerprint,
+      ));
       setRestoredSourceFingerprint(sourceFingerprint);
     } catch (e) {
       console.error("Failed to restore fingerstyle measures", e);
       invalidateLineGenerations();
       setMeasures([]);
+      setLineGenerationRunsByLine({});
       setRestoredSourceFingerprint(sourceFingerprint);
     }
   }, [
@@ -149,7 +160,7 @@ export function GuitarFingerstyleStep({
     try {
       localStorage.setItem(
         fingerstyleStorageKey,
-        serializeFingerstyleMeasures(measures, sourceFingerprint),
+        serializeFingerstyleMeasures(measures, sourceFingerprint, lineGenerationRunsByLine),
       );
       const generatedGuitar = buildGeneratedGuitarAbc(measures, workflowAppliedMusicAbc);
       if (ws.generatedGuitar !== generatedGuitar) updateState({ generatedGuitar });
@@ -159,6 +170,7 @@ export function GuitarFingerstyleStep({
   }, [
     fingerstyleStorageKey,
     measures,
+    lineGenerationRunsByLine,
     restoredSourceFingerprint,
     sourceFingerprint,
     updateState,
@@ -200,6 +212,16 @@ export function GuitarFingerstyleStep({
     ));
     return true;
   }, [generationCoordinator, measures]);
+
+  const updateLineGenerationRun = useCallback((lineIndex: number, run: FingerstyleLineGenerationRun | null) => {
+    setLineGenerationRunsByLine(previous => {
+      if (!run) {
+        const { [lineIndex]: _removed, ...remaining } = previous;
+        return remaining;
+      }
+      return { ...previous, [lineIndex]: run };
+    });
+  }, []);
 
   // Build previous-line context for a given lineGroupIndex
   const buildPreviousLineContext = useCallback((lineGroupIndex: number): PreviousLineContext[] => {
@@ -307,6 +329,7 @@ export function GuitarFingerstyleStep({
       }
       invalidateLineGenerations();
       setMeasures(restored);
+      setLineGenerationRunsByLine({});
       setTimeGridMessage(`Imported ${restored.length} TimeGrid measure${restored.length === 1 ? "" : "s"}.`);
       setTimeGridJson("");
     } catch (error) {
@@ -477,6 +500,8 @@ export function GuitarFingerstyleStep({
             buildPreviousContext={() => buildPreviousLineContext(lineGroupIdx)}
             workflowAppliedMusicAbc={workflowAppliedMusicAbc}
             generationSettings={generationSettings}
+            generationRun={lineGenerationRunsByLine[lineMeasures[0]?.lineIndex ?? lineGroupIdx]}
+            onGenerationRunChange={updateLineGenerationRun}
             previousLineMeasures={lineGroups[lineGroupIdx - 1]}
             nextLineMeasures={lineGroups[lineGroupIdx + 1]}
             generationLock={{

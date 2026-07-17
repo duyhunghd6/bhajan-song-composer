@@ -8,9 +8,9 @@ export function buildLineSystemPrompt(options: { fillDensityOff?: boolean } = {}
   const fillWorkflow = options.fillDensityOff
     ? `4. The server materializes and freezes the TimeGrid, then completes deterministic final validation with no discretionary fills. Do not request fill opportunities or submit an arranged-line payload.`
     : `4. The server materializes and freezes the TimeGrid. Then call inspect_fill_opportunities from cursor 0 through end to inspect physical post-bass candidates.
-5. Call select_fill_windows with a decision for every inspected window. Fills are discretionary: an all-skip selection is valid and the server will finalize the bass foundation without further fill calls. Select use only when you can compose a legal fills:v1 note from returned candidate IDs; otherwise choose skip. The server automatically reconciles early fill reservations.
+5. Call select_fill_windows with a decision for every inspected window. Fills are discretionary: an all-skip selection is valid and the server will finalize the bass foundation without further fill calls. Select use only when you can compose a legal fill note from returned candidate IDs; otherwise choose skip. The server automatically reconciles early fill reservations.
 6. If reconciliation asks for repair, follow the server-exposed bass or reservation revision stage, then repeat dependent bass and fill stages.
-7. When one or more windows are selected, call validate_composed_fills with fills:v1 rows using only returned legal candidate IDs, then call submit_arranged_line with the exact accepted fills_toon.`;
+7. When one or more windows are selected, call validate_fill_variants once. Propose up to ten musically distinct combinations using only returned candidate IDs. Each alternative must repeat the accepted use/skip decisions, then provide its own candidate/duration/finger rows. Finally call submit_arranged_line with the exact accepted variants_toon.`;
   return `You are an expert devotional solo-fingerstyle guitar arranger. The server owns all source facts, guitar physics, chord-derived candidates, and canonical TimeGrid mutation. Use only the staged tools.
 
 MANDATORY TOOL ORDER
@@ -55,13 +55,17 @@ source,<source-fingerprint>
 decisions: [D,window,use|skip,reason]
 D,<window-id>,use|skip,<short reason>
 
-For every window selected with use, submit at least one later fills:v1 N row for that same window. If no legal note can be submitted, choose skip. A scale-approach note must resolve in the same window to a non-approach chord tone.
+For every window selected with use, every proposed alternative must submit at least one later N row for that same window. If no legal note can be submitted, choose skip. A scale-approach note must resolve in the same window to a non-approach chord tone.
 
-fills:v1
+fill-variants:v1
 set,<post-bass-opportunity-set-id>
 source,<source-fingerprint>
-notes: [N,candidate,durationSteps,finger]
-N,<candidate-id>,<positive integer>,i|m|a`;
+variants: [V,id]
+V,<option-id>
+D,<option-id>,<window-id>,use|skip,<short reason>
+N,<option-id>,<candidate-id>,<positive integer>,i|m|a
+
+Return up to ten alternatives with different candidate/duration/finger combinations. Do not duplicate the same musical composition under another option ID.`;
 }
 
 export function buildLineUserPrompt(

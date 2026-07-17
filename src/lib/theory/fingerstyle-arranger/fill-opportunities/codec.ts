@@ -2,12 +2,15 @@ import {
   FILL_COMPOSITION_FORMAT_VERSION,
   FILL_OPPORTUNITY_FORMAT_VERSION,
   FILL_SELECTION_FORMAT_VERSION,
+  FILL_VARIANT_FORMAT_VERSION,
   type FillComposition,
   type FillCompositionEntry,
   type FillOpportunityAnalysis,
   type FillOpportunityPage,
   type FillSelection,
   type FillSelectionDecision,
+  type FillVariantProposal,
+  type FillVariantProposalSet,
 } from "./types";
 
 const DEFAULT_PAGE_BYTES = 24_000;
@@ -324,5 +327,98 @@ export function encodeFillComposition(composition: FillComposition): string {
     csvRow(["source", composition.sourceFingerprint]),
     "notes: [N,candidate,durationSteps,finger]",
     ...composition.entries.map(entry => csvRow(["N", entry.candidateId, entry.durationSteps, entry.finger])),
+  ].join("\n");
+}
+
+const FILL_VARIANT_HEADER = "variants: [V,id]";
+const MAX_FILL_VARIANTS = 10;
+
+/**
+ * Parses several complete fill choices without allowing the model to invent
+ * pitches, strings, or frets. Every V owns its D (window decision) and N
+ * (candidate/duration/finger) rows so alternatives may differ in positions.
+ */
+export function parseFillVariantProposalsToon(input: string): FillCodecParseResult<FillVariantProposalSet> {
+  const normalized = normalizedInputLines(input, FILL_VARIANT_FORMAT_VERSION);
+  if (!normalized.valid || !normalized.value) return { valid: false, errors: normalized.errors };
+  const lines = normalized.value;
+  const errors: string[] = [];
+  if (lines.length < 5) errors.push("Payload must include at least one fill variant.");
+  if (lines[1] !== undefined && !lines[1].startsWith("set,")) errors.push("The set binding must be the second row.");
+  if (lines[2] !== undefined && !lines[2].startsWith("source,")) errors.push("The source binding must be the third row.");
+  if (lines[3] !== FILL_VARIANT_HEADER) errors.push(`Expected exact table header: ${FILL_VARIANT_HEADER}`);
+  const opportunitySetId = parseBinding(lines, "set", errors);
+  const sourceFingerprint = parseBinding(lines, "source", errors);
+  const variants = new Map<string, FillVariantProposal>();
+
+  for (const line of lines.slice(4)) {
+    const cells = parseCsvRow(line);
+    if (!cells || cells.length === 0) {
+      errors.push(`Invalid variant row: ${line.slice(0, 120)}`);
+      continue;
+    }
+    if (cells[0] === "V") {
+      if (cells.length !== 2 || !cells[1]) {
+        errors.push(`Invalid variant header: ${line.slice(0, 120)}`);
+        continue;
+      }
+      if (variants.has(cells[1])) errors.push(`Duplicate variant ID: ${cells[1]}.`);
+      else variants.set(cells[1], {
+        id: cells[1],
+        selection: { version: FILL_SELECTION_FORMAT_VERSION, opportunitySetId: opportunitySetId ?? "", sourceFingerprint: sourceFingerprint ?? "", decisions: [] },
+        composition: { version: FILL_COMPOSITION_FORMAT_VERSION, opportunitySetId: opportunitySetId ?? "", sourceFingerprint: sourceFingerprint ?? "", entries: [] },
+      });
+      continue;
+    }
+    if (cells[0] === "D") {
+      if (cells.length !== 5 || !cells[1] || !cells[2] || !cells[4] || (cells[3] !== "use" && cells[3] !== "skip")) {
+        errors.push(`Invalid variant decision row: ${line.slice(0, 120)}`);
+        continue;
+      }
+      const variant = variants.get(cells[1]);
+      if (!variant) errors.push(`Decision references unknown variant ${cells[1]}.`);
+      else variant.selection.decisions.push({ windowId: cells[2], decision: cells[3], reason: cells[4] });
+      continue;
+    }
+    if (cells[0] === "N") {
+      const durationSteps = Number(cells[3]);
+      if (cells.length !== 5 || !cells[1] || !cells[2] || !Number.isSafeInteger(durationSteps) || durationSteps < 1 || !["i", "m", "a"].includes(cells[4])) {
+        errors.push(`Invalid variant fill-note row: ${line.slice(0, 120)}`);
+        continue;
+      }
+      const variant = variants.get(cells[1]);
+      if (!variant) errors.push(`Fill note references unknown variant ${cells[1]}.`);
+      else variant.composition.entries.push({ candidateId: cells[2], durationSteps, finger: cells[4] as "i" | "m" | "a" });
+      continue;
+    }
+    errors.push(`Unexpected row in fill-variant payload: ${line.slice(0, 120)}`);
+  }
+
+  if (variants.size === 0) errors.push("At least one fill variant is required.");
+  if (variants.size > MAX_FILL_VARIANTS) errors.push(`At most ${MAX_FILL_VARIANTS} fill variants are allowed.`);
+  if (!opportunitySetId || !sourceFingerprint || errors.length > 0) return { valid: false, errors };
+  return {
+    valid: true,
+    errors: [],
+    value: {
+      version: FILL_VARIANT_FORMAT_VERSION,
+      opportunitySetId,
+      sourceFingerprint,
+      variants: [...variants.values()],
+    },
+  };
+}
+
+export function encodeFillVariantProposals(proposals: FillVariantProposalSet): string {
+  return [
+    proposals.version,
+    csvRow(["set", proposals.opportunitySetId]),
+    csvRow(["source", proposals.sourceFingerprint]),
+    FILL_VARIANT_HEADER,
+    ...proposals.variants.flatMap(variant => [
+      csvRow(["V", variant.id]),
+      ...variant.selection.decisions.map(decision => csvRow(["D", variant.id, decision.windowId, decision.decision, decision.reason])),
+      ...variant.composition.entries.map(entry => csvRow(["N", variant.id, entry.candidateId, entry.durationSteps, entry.finger])),
+    ]),
   ].join("\n");
 }

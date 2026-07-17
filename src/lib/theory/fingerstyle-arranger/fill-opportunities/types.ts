@@ -5,6 +5,7 @@ import type { SkillLevel } from "../fingerstyle-constraints";
 export const FILL_OPPORTUNITY_FORMAT_VERSION = "fill-opportunities:v1" as const;
 export const FILL_SELECTION_FORMAT_VERSION = "fill-selection:v1" as const;
 export const FILL_COMPOSITION_FORMAT_VERSION = "fills:v1" as const;
+export const FILL_VARIANT_FORMAT_VERSION = "fill-variants:v1" as const;
 
 export type FillDensityMode = "auto" | "none" | "few" | "normal" | "many";
 export type ResolvedFillDensity = "off" | "few" | "normal" | "many";
@@ -152,6 +153,20 @@ export interface FillComposition {
   opportunitySetId: string;
   sourceFingerprint: string;
   entries: FillCompositionEntry[];
+}
+
+/** A complete legal fill choice: its window decisions plus candidate placements. */
+export interface FillVariantProposal {
+  id: string;
+  selection: FillSelection;
+  composition: FillComposition;
+}
+
+export interface FillVariantProposalSet {
+  version: typeof FILL_VARIANT_FORMAT_VERSION;
+  opportunitySetId: string;
+  sourceFingerprint: string;
+  variants: FillVariantProposal[];
 }
 
 export interface FillValidationIssue {

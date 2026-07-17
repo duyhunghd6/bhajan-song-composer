@@ -144,16 +144,16 @@ export const SELECT_FILL_WINDOWS_TOOL_DEFINITION = buildStringPayloadToolDefinit
 
 export const VALIDATE_COMPOSED_FILLS_TOOL_DEFINITION = buildStringPayloadToolDefinition(
   "validate_composed_fills",
-  "Validate creative fill candidate sequence, durations, and right-hand fingers against the accepted window selection.",
-  "fills_toon",
-  "Strict fills:v1 payload without Markdown fences.",
+  "Propose up to ten distinct complete fill alternatives. Each alternative owns use/skip window decisions and candidate/duration/finger rows and is independently validated against the frozen post-bass catalog.",
+  "variants_toon",
+  "Strict fill-variants:v1 payload without Markdown fences.",
 );
 
 export const SUBMIT_ARRANGED_LINE_TOOL_DEFINITION = buildStringPayloadToolDefinition(
   "submit_arranged_line",
-  "Finalize the arrangement by referencing the exact fills:v1 payload accepted by validate_composed_fills.",
-  "fills_toon",
-  "The exact previously accepted fills:v1 payload.",
+  "Finalize the arrangement by referencing the exact fill-variants:v1 payload accepted by validate_fill_variants.",
+  "variants_toon",
+  "The exact previously accepted fill-variants:v1 payload.",
 );
 
 export function executeGuitarVoicingQuery(args: unknown): string {

@@ -1,4 +1,9 @@
-import type { FillDensityMode, FingerstyleGenerationPolicy } from "@/lib/theory/fingerstyle-arranger/fill-opportunities";
+import type {
+  FillComposition,
+  FillDensityMode,
+  FillOpportunityAnalysis,
+  FingerstyleGenerationPolicy,
+} from "@/lib/theory/fingerstyle-arranger/fill-opportunities";
 import type { FingerstyleGenerationDiagnosticRun } from "@/lib/theory/fingerstyle-arranger/generation-diagnostics";
 import type { SkillLevel } from "@/lib/theory/fingerstyle-arranger/fingerstyle-constraints";
 import type { TimeSliceMeasure } from "@/lib/theory/fingerstyle-arranger/time-slice";
@@ -39,9 +44,51 @@ export interface FingerstyleGenerationNotice {
   reason: "no-legal-windows" | "all-windows-skipped" | "retry-exhausted";
 }
 
+export interface FingerstyleLineGenerationOption {
+  id: string;
+  ordinal: number;
+  selection: import("@/lib/theory/fingerstyle-arranger/fill-opportunities").FillSelection;
+  composition: FillComposition;
+  fillSummary: FingerstyleFillGenerationSummary;
+}
+
+/**
+ * One source-bound generation run. Every option shares this frozen bass
+ * foundation and post-bass candidate catalog; only fills differ.
+ */
+export interface FingerstyleLineGenerationRun {
+  version: 1;
+  id: string;
+  sourceFingerprint: string;
+  lineIndex: number;
+  measureNumbers: number[];
+  policy: FingerstyleGenerationPolicy;
+  foundation: TimeSliceMeasure[];
+  opportunityAnalysis: FillOpportunityAnalysis;
+  options: FingerstyleLineGenerationOption[];
+  selectedOptionId: string;
+}
+
+export interface SelectFingerstyleLineOptionInput {
+  sourceFingerprint: string;
+  lineMeasures: TimeSliceMeasure[];
+  activeAbc: string;
+  generationRun: FingerstyleLineGenerationRun;
+  optionId: string;
+}
+
+export interface SelectFingerstyleLineOptionOutput {
+  success: boolean;
+  measures?: TimeSliceMeasure[];
+  selectedOptionId?: string;
+  error?: string;
+}
+
 export interface GenerateFingerstyleLineOutput {
   success: boolean;
   measures?: TimeSliceMeasure[];
+  generationRun?: FingerstyleLineGenerationRun;
+  selectedOptionId?: string;
   logs: string[];
   diagnostics?: FingerstyleGenerationDiagnosticRun;
   fillSummary?: FingerstyleFillGenerationSummary;

@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { TimeSliceMeasure } from "@/lib/theory/fingerstyle-arranger/time-slice";
+import type { FingerstyleFillGenerationSummary, FingerstyleLineGenerationRun } from "@/app/actions/fingerstyle-line-arranger";
+import type { FillBoundaryEvidence, FillOpportunityScoreBreakdown } from "@/lib/theory/fingerstyle-arranger/fill-opportunities";
+import type { GuitarStringNumber } from "@/lib/theory/fingerstyle-compressor";
 import {
   buildGeneratedGuitarAbc,
+  restoreFingerstyleGenerationRuns,
   restorePersistedTablature,
   serializeFingerstyleMeasures,
 } from "../fingerstyle-measure-persistence";
@@ -181,5 +185,171 @@ describe("fingerstyle measure persistence", () => {
     expect(generated).toContain(
       "[!2!B!3!G-!6!E,-]/2 [!3!G-!6!E,-]/2 [!2!e-!3!G!6!E,-] [!2!e!3!G-!6!E,-] [!2!B-!3!G!6!E,-]4 [!2!B!3!B!6!E,]",
     );
+  });
+
+  it("prunes non-essential fields from lineGenerationRunsByLine and restores successfully", () => {
+    const fresh = makeMeasure("melody");
+    fresh.lineIndex = 0;
+    fresh.measure = 5;
+
+    const mockRun = {
+      version: 1 as const,
+      id: "run-abc",
+      sourceFingerprint: "source-abc",
+      lineIndex: 0,
+      measureNumbers: [5],
+      policy: {
+        skillLevel: "beginner" as const,
+        densityMode: "auto" as const,
+        resolvedDensity: "normal" as const,
+        densitySource: "skill-level" as const,
+      },
+      foundation: [fresh],
+      opportunityAnalysis: {
+        version: "fill-opportunities:v1" as const,
+        opportunitySetId: "opp-set-123",
+        sourceFingerprint: "source-abc",
+        policy: {
+          skillLevel: "beginner" as const,
+          densityMode: "auto" as const,
+          resolvedDensity: "normal" as const,
+          densitySource: "skill-level" as const,
+        },
+        budget: {
+          targetWindows: 2,
+          maxWindows: 2,
+          maxWindowsPerMeasure: 1,
+          maxNotesPerWindow: 2,
+        },
+        evaluatedStepCount: 16,
+        evaluatedPlacementCount: 5,
+        rejectionCounts: {} as Record<string, number>,
+        windows: [
+          {
+            id: "w1",
+            measure: 5,
+            lineIndex: 0,
+            startStep: 1,
+            endStep: 4,
+            capacitySteps: 4,
+            activeChord: "Em",
+            key: "G",
+            melodyContext: "rest" as const,
+            protectedStrings: [1, 2],
+            boundaryEvidence: { lineEnd: false } as unknown as FillBoundaryEvidence,
+            score: 10,
+            scoreBreakdown: {} as unknown as FillOpportunityScoreBreakdown,
+            candidateIds: ["c1"],
+            flags: ["test"],
+          },
+        ],
+        candidates: [
+          {
+            id: "c1",
+            windowId: "w1",
+            measure: 5,
+            step: 1,
+            pitch: "G3",
+            midi: 55,
+            harmonicRole: "root" as const,
+            string: 3 as GuitarStringNumber,
+            fret: 0,
+            suggestedFinger: "i" as const,
+            maxDurationSteps: 4,
+            incomingHandCost: 1,
+            outgoingHandCost: 2,
+            totalHandCost: 3,
+            score: 5,
+            conditions: ["legal"],
+          },
+        ],
+      },
+      options: [
+        {
+          id: "opt1",
+          ordinal: 1,
+          selection: {
+            version: "fill-selection:v1" as const,
+            opportunitySetId: "opp-set-123",
+            sourceFingerprint: "source-abc",
+            decisions: [{ windowId: "w1", decision: "use" as const, reason: "good fill" }],
+          },
+          composition: {
+            version: "fills:v1" as const,
+            opportunitySetId: "opp-set-123",
+            sourceFingerprint: "source-abc",
+            entries: [{ candidateId: "c1", durationSteps: 4, finger: "i" as const }],
+          },
+          fillSummary: {} as unknown as FingerstyleFillGenerationSummary,
+        },
+      ],
+      selectedOptionId: "opt1",
+    };
+
+    const savedJson = serializeFingerstyleMeasures([fresh], "source-abc", { 0: mockRun as unknown as FingerstyleLineGenerationRun });
+
+    const parsed = JSON.parse(savedJson);
+
+    // Verify non-essential fields are pruned from the stored JSON
+    const storedRun = parsed.lineGenerationRunsByLine["0"];
+    expect(storedRun).toBeDefined();
+
+    // Check windows fields that should be stripped:
+    expect(storedRun.opportunityAnalysis.windows[0].activeChord).toBeUndefined();
+    expect(storedRun.opportunityAnalysis.windows[0].protectedStrings).toBeUndefined();
+    expect(storedRun.opportunityAnalysis.windows[0].score).toBeUndefined();
+
+    // Check candidates fields that should be stripped:
+    expect(storedRun.opportunityAnalysis.candidates[0].pitch).toBeUndefined();
+    expect(storedRun.opportunityAnalysis.candidates[0].suggestedFinger).toBeUndefined();
+    expect(storedRun.opportunityAnalysis.candidates[0].conditions).toBeUndefined();
+
+    // Verify they still have essential fields:
+    expect(storedRun.opportunityAnalysis.windows[0].id).toBe("w1");
+    expect(storedRun.opportunityAnalysis.candidates[0].id).toBe("c1");
+    expect(storedRun.opportunityAnalysis.candidates[0].midi).toBe(55);
+
+    // Verify restore works completely:
+    const restoredRuns = restoreFingerstyleGenerationRuns(savedJson, [fresh], "source-abc");
+    expect(restoredRuns[0]).toBeDefined();
+    expect(restoredRuns[0].selectedOptionId).toBe("opt1");
+    expect(restoredRuns[0].opportunityAnalysis.windows[0].id).toBe("w1");
+    expect(restoredRuns[0].opportunityAnalysis.candidates[0].id).toBe("c1");
+  });
+
+  it("removes superseded option runs while preserving the latest canonical tablature", () => {
+    const fresh = withGaneshaTablature(makeMeasure("current melody"));
+    const saved = serializeFingerstyleMeasures([fresh], "current-source", {});
+
+    expect(restoreFingerstyleGenerationRuns(saved, [makeMeasure("current melody")], "current-source")).toEqual({});
+    const [restored] = restorePersistedTablature(saved, [makeMeasure("current melody")], "current-source");
+    expect(restored.grid[0].tablature?.some(event => event.role === "bass")).toBe(true);
+  });
+
+  it("drops a run whose storage key does not match its line index", () => {
+    const fresh = makeMeasure("current melody");
+    const saved = serializeFingerstyleMeasures([fresh], "current-source");
+    const payload = JSON.parse(saved);
+    payload.lineGenerationRunsByLine = {
+      1: {
+        version: 1,
+        id: "mismatched",
+        sourceFingerprint: "current-source",
+        lineIndex: 0,
+        measureNumbers: [5],
+        policy: {},
+        foundation: [fresh],
+        opportunityAnalysis: { opportunitySetId: "set", windows: [], candidates: [] },
+        options: [{
+          id: "option-1",
+          ordinal: 1,
+          selection: { sourceFingerprint: "current-source", opportunitySetId: "set", decisions: [] },
+          composition: { sourceFingerprint: "current-source", opportunitySetId: "set", entries: [] },
+        }],
+        selectedOptionId: "option-1",
+      },
+    };
+
+    expect(restoreFingerstyleGenerationRuns(JSON.stringify(payload), [fresh], "current-source")).toEqual({});
   });
 });

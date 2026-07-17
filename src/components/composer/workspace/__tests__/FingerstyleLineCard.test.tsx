@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { TimeSliceMeasure } from "@/lib/theory/fingerstyle-arranger/time-slice";
 import { renderCombinedAsciiGuitarTab } from "@/lib/theory/fingerstyle-arranger/toon-utils";
 import { FingerstyleLineCard } from "../FingerstyleLineCard";
+import type { FingerstyleLineGenerationRun } from "@/app/actions/fingerstyle-line-arranger";
 
 vi.mock("@/components/music-sheet/AbcjsPlaybackController", () => ({
   default: ({
@@ -83,6 +84,7 @@ describe("FingerstyleLineCard", () => {
         buildPreviousContext={() => []}
         workflowAppliedMusicAbc={activeAbc}
         generationSettings={{ skillLevel: "beginner", densityMode: "auto" }}
+        onGenerationRunChange={() => undefined}
         generationLock={idleGenerationLock}
       />
     );
@@ -105,6 +107,46 @@ describe("FingerstyleLineCard", () => {
     expect(markup).not.toContain('Copy rendered TAB');
   });
 
+  it("shows generated fill options with Option 1 selected by default", () => {
+    const activeAbc = `X:1\nT:Ganesha\nM:4/4\nL:1/8\nK:Em\n| [eBGE,] e G B4 B |`;
+    const generationRun = {
+      version: 1,
+      id: "run-1",
+      sourceFingerprint: "test-source",
+      lineIndex: 0,
+      measureNumbers: [5],
+      policy: { skillLevel: "beginner", densityMode: "auto", resolvedDensity: "few", densitySource: "skill-level" },
+      foundation: [],
+      opportunityAnalysis: {},
+      selectedOptionId: "option-1",
+      options: [
+        { id: "option-1", ordinal: 1, selection: {}, composition: {}, fillSummary: {} },
+        { id: "option-2", ordinal: 2, selection: {}, composition: {}, fillSummary: {} },
+      ],
+    } as unknown as FingerstyleLineGenerationRun;
+    const markup = renderToStaticMarkup(
+      <FingerstyleLineCard
+        songSlug="ganesha"
+        sourceFingerprint="test-source"
+        lineIndex={0}
+        lineMeasures={[makeFinalMeasure()]}
+        activeAbc={activeAbc}
+        accompLayerVisibility={{ Melody: true, Guitar: true, TAB: true }}
+        buildPreviousContext={() => []}
+        workflowAppliedMusicAbc={activeAbc}
+        generationSettings={{ skillLevel: "beginner", densityMode: "auto" }}
+        generationRun={generationRun}
+        onGenerationRunChange={() => undefined}
+        generationLock={idleGenerationLock}
+      />,
+    );
+
+    expect(markup).toContain("Option 1");
+    expect(markup).toContain("Option 2");
+    expect(markup).toContain('aria-pressed="true"');
+    expect(markup).toContain('aria-pressed="false"');
+  });
+
   it("disables only the line whose generation is active", () => {
     const activeGenerationLock = { ...idleGenerationLock, isGenerating: true };
     const activeAbc = `X:1\nT:Ganesha\nM:4/4\nL:1/8\nK:Em\n| [eBGE,] e G B4 B |`;
@@ -116,6 +158,7 @@ describe("FingerstyleLineCard", () => {
       buildPreviousContext: () => [],
       workflowAppliedMusicAbc: activeAbc,
       generationSettings: { skillLevel: "beginner" as const, densityMode: "auto" as const },
+      onGenerationRunChange: () => undefined,
     };
     const markup = renderToStaticMarkup(
       <>

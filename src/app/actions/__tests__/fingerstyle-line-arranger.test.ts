@@ -288,6 +288,8 @@ describe("generateAIFingerstyleLine diagnostics", () => {
     });
     expect(result.measures?.flatMap(measure => measure.grid).flatMap(step => step.tablature ?? [])
       .some(event => event.role === "fill")).toBe(false);
+    expect(result.generationRun).toBeUndefined();
+    expect(result.selectedOptionId).toBeUndefined();
     expect(result.diagnostics?.events).toEqual(expect.arrayContaining([
       expect.objectContaining({ kind: "fill-stages-skipped" }),
     ]));
