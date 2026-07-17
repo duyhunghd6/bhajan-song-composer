@@ -26,7 +26,7 @@ SOURCE AND BASS RULES
 - The server prints a diagnostic-only below-note source ABC label such as "_Bass M3:S1" for selected bass positions. It does not modify the immutable raw source ABC.
 
 FILL RULES
-- In default auto/few density, select reservations and compose fills only in actual source-rest or phrase-gap space; held Melody sustains are protected. Explicit normal/many density may expose a held-Melody window when the server judges it physically legal. Do not decorate every cadence.
+- Select reservations and compose discretionary fills only in actual source-rest or phrase-gap space; Melody attacks and held Melody sustains are always protected. Normal/many density increases the number of legal rest windows that may be selected; it never authorizes sustain decoration. Do not decorate every cadence.
 - After bass materialization, compose fills only from legal atomic candidates and obey duration/finger/approach constraints.
 - Never invent IDs, pitches, strings, frets, durations, or physical placements.
 

@@ -72,6 +72,10 @@ export interface TimeSliceMeasure {
   visualTablature?: string;
   /** Normalized Guitar phrase boundaries imported from ABC slur parentheses. */
   guitarSlurs?: Array<{ startStep: number; endStep: number }>;
+  /** Explicit forced-string Guitar ties from this measure's final event to the next measure. */
+  guitarTiesToNext?: GuitarStringNumber[];
+  /** Explicit Guitar slurs that open here and close in the immediately following measure. */
+  guitarSlursToNext?: Array<{ startStep: number; endStep: number }>;
   source_abc?: {
     melody: string;
     lyric: string;

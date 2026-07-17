@@ -69,6 +69,27 @@ describe("fingerstyle physical validation policy", () => {
     ]));
   });
 
+  it("rejects discretionary different-string attacks during a melody sustain", () => {
+    const attack = step(1, [{ string: 1, fret: 0, finger: "a", role: "melody", durationSteps: 2 }]);
+    attack.melody = { pitch: "E4", state: "attack" };
+    const sustain = step(2, [{ string: 3, fret: 0, finger: "i", role: "fill" }]);
+    sustain.melody = { pitch: "E4", state: "sustain" };
+
+    expect(validateFingerstylePhysicsDetailed([attack, sustain]).issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "discretionary-attack-during-melody-sustain" }),
+    ]));
+  });
+
+  it("rejects a discretionary duration that reaches active melody", () => {
+    const rest = step(1, [{ string: 3, fret: 0, finger: "i", role: "harmony", durationSteps: 2 }]);
+    const attack = step(2, [{ string: 1, fret: 0, finger: "a", role: "melody" }]);
+    attack.melody = { pitch: "E4", state: "attack" };
+
+    expect(validateFingerstylePhysicsDetailed([rest, attack]).issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "discretionary-duration-during-melody-sustain" }),
+    ]));
+  });
+
   it("counts only true fills against none density and treats root/fifth as bass foundation", () => {
     const root = step(1, [{ string: 6, fret: 0, finger: "p", role: "root" }]);
     const fifth = step(2, [{ string: 5, fret: 2, finger: "p", role: "fifth" }]);

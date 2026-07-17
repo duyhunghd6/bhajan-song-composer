@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   FILL_COMPOSITION_FORMAT_VERSION,
   FILL_SELECTION_FORMAT_VERSION,
-  allowsMelodySustainFill,
   analyzeFillOpportunities,
+  buildFillSelectionBudget,
   encodeFillComposition,
   encodeFillSelection,
   mergeAcceptedFills,
@@ -152,11 +152,14 @@ describe("fill opportunity policy", () => {
     expect(normalizeFillPolicy({ densityMode: "unexpected" }).densityMode).toBe("auto");
   });
 
-  it("requires an explicit normal-or-many mode to decorate held melody", () => {
-    expect(allowsMelodySustainFill(normalizeFillPolicy({ skillLevel: "advanced" }))).toBe(false);
-    expect(allowsMelodySustainFill(normalizeFillPolicy({ densityMode: "few" }))).toBe(false);
-    expect(allowsMelodySustainFill(normalizeFillPolicy({ densityMode: "normal" }))).toBe(true);
-    expect(allowsMelodySustainFill(normalizeFillPolicy({ densityMode: "many" }))).toBe(true);
+  it("uses density only to increase the fill-selection budget", () => {
+    const measures = [sourceMeasure(), sourceMeasure(), sourceMeasure()];
+    const few = buildFillSelectionBudget(measures, normalizeFillPolicy({ densityMode: "few" }));
+    const normal = buildFillSelectionBudget(measures, normalizeFillPolicy({ densityMode: "normal" }));
+    const many = buildFillSelectionBudget(measures, normalizeFillPolicy({ densityMode: "many" }));
+
+    expect(normal.maxWindows).toBeGreaterThan(few.maxWindows);
+    expect(many.maxWindows).toBeGreaterThan(normal.maxWindows);
   });
 });
 
@@ -234,17 +237,17 @@ describe("fill opportunity analysis", () => {
     expect(first.rejectionCounts["protected-melody-sustain"]).toBe(3);
   });
 
-  it("allows explicit dense profiles to evaluate held-melody windows", () => {
-    const dense = analysis("normal");
+  it("keeps normal and many in the same legal rest windows", () => {
+    const sparse = analysis("few");
+    const normal = analysis("normal");
+    const many = analysis("many");
 
-    expect(dense.windows.map(window => [window.startStep, window.endStep])).toEqual(expect.arrayContaining([
-      [2, 4],
-      [6, 8],
-    ]));
-    const sustainCandidates = dense.candidates.filter(item => item.step >= 2 && item.step <= 4);
-    expect(sustainCandidates).not.toHaveLength(0);
-    expect(sustainCandidates.every(item => item.string !== 1)).toBe(true);
-    expect(dense.rejectionCounts["protected-melody-sustain"]).toBe(0);
+    for (const result of [normal, many]) {
+      expect(result.windows.map(window => [window.startStep, window.endStep]))
+        .toEqual(sparse.windows.map(window => [window.startStep, window.endStep]));
+      expect(result.candidates.every(item => item.step >= 6)).toBe(true);
+      expect(result.rejectionCounts["protected-melody-sustain"]).toBe(3);
+    }
   });
 
   it("binds the opportunity set to the frozen foundation, not only source metadata", () => {
@@ -360,7 +363,7 @@ describe("compact fill contracts and validation", () => {
     const firstPage = paginateFillOpportunities(result, { maxRows: 2 });
     const secondPage = paginateFillOpportunities(result, { cursor: firstPage.nextCursor, maxRows: 2 });
 
-    expect(firstPage.candidateCount).toBe(0);
+    expect(firstPage.candidateCount).toBe(1);
     expect(firstPage.nextCursor).toBe(2);
     expect(secondPage.cursor).toBe(2);
     expect(secondPage.candidateCount).toBe(2);

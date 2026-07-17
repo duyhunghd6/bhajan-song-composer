@@ -33,6 +33,19 @@ function makeMeasure(sourceMelody: string): TimeSliceMeasure {
   };
 }
 
+function withCrossMeasureContinuity(measure: TimeSliceMeasure, lineIndex: number): TimeSliceMeasure {
+  return {
+    ...measure,
+    lineIndex,
+    grid: measure.grid.map((step, index) => ({
+      ...step,
+      tablature: index === 0
+        ? [{ string: 1, fret: 0, finger: null, role: "imported" as const, durationSteps: 16 }]
+        : undefined,
+    })),
+  };
+}
+
 function withGaneshaTablature(measure: TimeSliceMeasure): TimeSliceMeasure {
   const attacks = new Map<number, NonNullable<TimeSliceMeasure["grid"][number]["tablature"]>>([
     [0, [
@@ -112,6 +125,50 @@ describe("fingerstyle measure persistence", () => {
     }], "current-source");
 
     expect(restorePersistedTablature(saved, [fresh], "current-source")).toEqual([fresh]);
+  });
+
+  it("restores validated adjacent-bar Guitar continuity and imported events", () => {
+    const fresh = [makeMeasure("current one"), { ...makeMeasure("current two"), measure: 6, lineIndex: 1 }];
+    const first = {
+      ...withCrossMeasureContinuity(makeMeasure("stale one"), 0),
+      guitarSlurs: [{ startStep: 1, endStep: 16 }],
+      guitarTiesToNext: [1 as const],
+      guitarSlursToNext: [{ startStep: 1, endStep: 16 }],
+    };
+    const second = { ...withCrossMeasureContinuity(makeMeasure("stale two"), 1), measure: 6 };
+
+    const restored = restorePersistedTablature(
+      serializeFingerstyleMeasures([first, second], "current-source"),
+      fresh,
+      "current-source",
+    );
+
+    expect(restored[0].guitarSlurs).toEqual([{ startStep: 1, endStep: 16 }]);
+    expect(restored[0].guitarTiesToNext).toEqual([1]);
+    expect(restored[0].guitarSlursToNext).toEqual([{ startStep: 1, endStep: 16 }]);
+    expect(restored[0].grid[0].tablature?.[0]?.role).toBe("imported");
+    expect(restored[0].source_abc?.melody).toBe("current one");
+  });
+
+  it("rejects dangling or mismatched persisted Guitar continuity", () => {
+    const fresh = [makeMeasure("current one"), { ...makeMeasure("current two"), measure: 6 }];
+    const first = {
+      ...withCrossMeasureContinuity(makeMeasure("stale one"), 0),
+      guitarTiesToNext: [1 as const],
+    };
+    const mismatchedSecond = {
+      ...withCrossMeasureContinuity(makeMeasure("stale two"), 0),
+      measure: 6,
+      grid: withCrossMeasureContinuity(makeMeasure("stale two"), 0).grid.map((step, index) => (
+        index === 0 ? { ...step, tablature: [{ string: 1 as const, fret: 1, finger: null, role: "imported" as const, durationSteps: 16 }] } : step
+      )),
+    };
+
+    expect(restorePersistedTablature(
+      serializeFingerstyleMeasures([first, mismatchedSecond], "current-source"),
+      fresh,
+      "current-source",
+    )).toEqual(fresh);
   });
 
   it("rebuilds the exact forced Ganesha Guitar voice", () => {

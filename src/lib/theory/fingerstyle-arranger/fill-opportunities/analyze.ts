@@ -5,7 +5,6 @@ import { parseScientificPitch } from "../../guitar-playability";
 import type { TimeSliceGridStep, TimeSliceMeasure } from "../time-slice";
 import { enumerateFillCandidates } from "./candidates";
 import {
-  allowsMelodySustainFill,
   buildFillSelectionBudget,
   normalizeFillPolicy,
 } from "./policy";
@@ -218,7 +217,6 @@ interface RawWindow {
 
 function collectRawWindows(
   measures: TimeSliceMeasure[],
-  allowMelodySustain: boolean,
   rejectionCounts: Record<FillRejectionReason, number>,
 ): { windows: RawWindow[]; evaluatedStepCount: number } {
   const windows: RawWindow[] = [];
@@ -234,11 +232,11 @@ function collectRawWindows(
       let rejection: FillRejectionReason | null = null;
       if (stepIndex >= activeLimit) rejection = "pickup-padding";
       else if (step.melody.state === "attack") rejection = "melody-attack";
-      else if (step.melody.state === "sustain" && !allowMelodySustain) rejection = "protected-melody-sustain";
+      else if (step.melody.state === "sustain") rejection = "protected-melody-sustain";
       else if ((step.tablature?.length ?? 0) > 0) rejection = "foundation-attack";
-      else if (step.melody.state !== "rest" && step.melody.state !== "sustain") rejection = "unsupported-melody-state";
+      else if (step.melody.state !== "rest") rejection = "unsupported-melody-state";
 
-      const context = step.melody.state === "rest" ? "rest" : "sustain";
+      const context = "rest";
       const canExtend = current
         && !rejection
         && current.melodyContext === context
@@ -265,11 +263,7 @@ export function analyzeFillOpportunities(input: AnalyzeFillOpportunitiesInput): 
   const policy = normalizeFillPolicy(input);
   const budget = buildFillSelectionBudget(input.measures, policy);
   const rejectionCounts = emptyRejectionCounts();
-  const raw = collectRawWindows(
-    input.measures,
-    allowsMelodySustainFill(policy),
-    rejectionCounts,
-  );
+  const raw = collectRawWindows(input.measures, rejectionCounts);
   const allCandidates: FillAtomicCandidate[] = [];
   const windows: FillOpportunityWindow[] = [];
   let evaluatedPlacementCount = 0;

@@ -4,6 +4,7 @@ import {
   type FingerstylePhysicsOptions,
 } from "@/lib/theory/fingerstyle-arranger/physics-validation";
 import type { TimeSliceMeasure } from "@/lib/theory/fingerstyle-arranger/time-slice";
+import { validateGuitarMeasureContinuity } from "@/lib/theory/fingerstyle-arranger/timegrid-document-codec-v3";
 
 export { buildGeneratedGuitarAbc };
 
@@ -16,7 +17,7 @@ interface PersistedFingerstyleMeasures {
 }
 
 const FINGERS = new Set(["p", "i", "m", "a", null]);
-const ROLES = new Set(["bass", "melody", "fill", "harmony", "root", "fifth"]);
+const ROLES = new Set(["bass", "melody", "fill", "harmony", "root", "fifth", "imported"]);
 
 function isValidTablature(value: unknown): boolean {
   if (value === undefined) return true;
@@ -93,15 +94,28 @@ export function restorePersistedTablature(
     || envelope.sourceFingerprint !== sourceFingerprint
   )) return fresh;
   if (!arePersistedMeasuresCompatible(persisted, fresh, isLegacy)) return fresh;
+  try {
+    validateGuitarMeasureContinuity(persisted);
+  } catch {
+    return fresh;
+  }
 
-  const restored = fresh.map((measure, measureIndex) => ({
-    ...measure,
-    visualTablature: persisted[measureIndex]?.visualTablature,
-    grid: measure.grid.map((step, stepIndex) => ({
-      ...step,
-      tablature: persisted[measureIndex]?.grid[stepIndex]?.tablature,
-    })),
-  }));
+  const restored = fresh.map((measure, measureIndex) => {
+    const persistedMeasure = persisted[measureIndex];
+    return {
+      ...measure,
+      visualTablature: persistedMeasure?.visualTablature,
+      guitarSlurs: persistedMeasure?.guitarSlurs?.map(slur => ({ ...slur })),
+      guitarTiesToNext: persistedMeasure?.guitarTiesToNext
+        ? [...persistedMeasure.guitarTiesToNext]
+        : undefined,
+      guitarSlursToNext: persistedMeasure?.guitarSlursToNext?.map(slur => ({ ...slur })),
+      grid: measure.grid.map((step, stepIndex) => ({
+        ...step,
+        tablature: persistedMeasure?.grid[stepIndex]?.tablature,
+      })),
+    };
+  });
 
   return restored.every(measure => (
     validateFingerstylePhysicsDetailed(measure.grid, validationOptions).valid

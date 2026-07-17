@@ -1,16 +1,26 @@
 import { buildAbcDurationContext, joinAbcMeasuresWithBarlines, cleanAbcMeasureSegment, EMPTY_BARLINE_INFO } from "../abc-duration";
 import { getKeyAccidentalsFromAbc } from "../abc-key-signature";
 import { processGuitarLine } from "../guitar-string-forcing";
-import { convertTimeSliceMeasureToAbc, groupMeasuresByLine, joinMeasureAbcWithBarlines, type TimeSliceMeasure } from "./time-slice";
+import { groupMeasuresByLine, joinMeasureAbcWithBarlines, type TimeSliceMeasure } from "./time-slice";
+import { renderTimeSliceMeasuresToAbc } from "./time-slice-abc-renderer";
 
 const GENERATED_HEADER_FIELDS = new Set(["X", "T", "L", "M", "Q", "K"]);
 
 export function buildGeneratedGuitarAbc(measures: TimeSliceMeasure[], sourceAbc: string): string {
   const durationContext = buildAbcDurationContext(sourceAbc);
   const keyAccidentals = getKeyAccidentalsFromAbc(sourceAbc);
+  // Render the complete ordered sequence first so an explicit tie or slur may
+  // close in the first measure of the next visual source line.
+  const renderedMeasures = renderTimeSliceMeasuresToAbc(
+    measures,
+    durationContext,
+    keyAccidentals,
+    true,
+  );
+  const renderedByMeasure = new Map(measures.map((measure, index) => [measure, renderedMeasures[index]]));
   const guitarLines = groupMeasuresByLine(measures).map(lineMeasures => (
     joinMeasureAbcWithBarlines(
-      lineMeasures.map(measure => convertTimeSliceMeasureToAbc(measure, durationContext, keyAccidentals, true)),
+      lineMeasures.map(measure => renderedByMeasure.get(measure) ?? ""),
       lineMeasures,
     )
   ));

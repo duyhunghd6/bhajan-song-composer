@@ -66,12 +66,12 @@ The canonical limits come from `SKILL_LEVEL_CONSTRAINTS` in `fingerstyle-arrange
 
 The UI exposes `auto`, `few`, `normal`, and `many`.
 
-- `auto`: beginner → few, intermediate → normal, advanced → many, while preserving held Melody spans for a sparse default texture;
-- `few`: restrained use of the best source-rest/phrase-gap windows; held Melody remains protected;
-- `normal`: moderate phrase support, including eligible held-Melody decoration when physical validation permits it;
-- `many`: more windows, including eligible held-Melody decoration, still bounded by physical and musical constraints.
+- `auto`: beginner → few, intermediate → normal, advanced → many;
+- `few`: restrained use of the best source-rest/phrase-gap windows;
+- `normal`: moderate phrase support using more legal rest windows;
+- `many`: more legal rest windows, still bounded by physical and musical constraints.
 
-Legacy values normalize at the boundary: `none` becomes zero-fill compatibility mode and `all` becomes `many`. Density controls window budgets; it does not relax fret or hand constraints. Skill-derived `auto` budgets do not enable held-Melody decoration: that is an explicit `normal` or `many` choice.
+All discretionary fills are restricted to actual source-rest/phrase-gap windows. Melody attacks and held Melody spans remain protected in every density mode. Legacy values normalize at the boundary: `none` becomes zero-fill compatibility mode and `all` becomes `many`. Density controls window budgets; it does not relax fret or hand constraints.
 
 Settings are persisted in the per-song Composer workspace. Changing settings does not regenerate existing lines.
 
@@ -103,7 +103,7 @@ Analysis visits every active grid step and records a typed eligibility rejection
 
 - pickup padding;
 - melody attack;
-- protected Melody sustain in default `auto`/`few` policy;
+- protected Melody sustain in every density policy;
 - occupied foundation attack;
 - protected melody string;
 - occupied string;
@@ -113,7 +113,7 @@ Analysis visits every active grid step and records a typed eligibility rejection
 - register collision;
 - unresolved approach-note condition.
 
-Safe windows are formed from contiguous Melody rests in default `auto`/`few` generation. Explicit `normal`/`many` may additionally form windows from protected sustains; candidate enumeration still excludes the held Melody string. Windows split at melody attacks, foundation attacks, chord changes, measure boundaries, pickup padding, and line boundaries.
+Safe windows are formed only from contiguous Melody rests in every density mode. `normal` and `many` increase selection budgets among those legal windows; they never create sustain windows. Windows split at melody attacks, foundation attacks, chord changes, measure boundaries, pickup padding, and line boundaries.
 
 ### Stage 5a — Reservation reconciliation
 
@@ -266,8 +266,8 @@ The accepted TimeGrid is the source for both Guitar ABC notation and ASCII-Guita
 - Melody duration comes from authoritative melody `attack`/`sustain` states.
 - Fill duration comes from the accepted `durationSteps`.
 - Existing persisted non-melody events without `durationSteps` retain the historical attack-to-next-attack rendering; the new staged foundation writes explicit one-step structural durations so scoring and playback agree.
-- When a fill enters during a held melody, the renderer splits the interval and ties the continuing melody rather than shortening or retriggering it.
-- Every tied segment preserves the `!N!` guitar string decoration.
+- Imported or legacy physical events that enter during a held melody serialize honestly by splitting the interval and tying the continuing melody; server-generated discretionary fills are rejected before this case can arise.
+- Every tied segment preserves the `!N!` guitar string decoration, including validated explicit ties across an adjacent barline.
 - Identical pitches on different strings are not deduplicated.
 - Concert-pitch ABC and key-signature-aware natural signs are preserved for `clef=treble-8`.
 

@@ -125,17 +125,27 @@ function soundingByString(events: SoundingEvent[], step: number): SoundingEvent[
   return [...byString.values()].sort((left, right) => left.tab.string - right.tab.string);
 }
 
+interface MeasureRenderContinuity {
+  tieStringsAtEnd?: ReadonlySet<GuitarStringNumber>;
+  slurStartSteps?: readonly number[];
+  slurEndSteps?: readonly number[];
+}
+
 function renderSoundingToken(
   event: SoundingEvent,
   segmentEnd: number,
   keyAccidentals: AbcKeyAccidentalMap | undefined,
   includeTabStringForcing: boolean,
+  continuity?: MeasureRenderContinuity,
 ): { token: string; continues: boolean } {
   const pitch = scientificPitchForStringFret(event.tab.string, event.tab.fret);
   const abcPitch = scientificPitchToAbc(pitch, keyAccidentals);
   return {
     token: includeTabStringForcing ? `!${event.tab.string}!${abcPitch}` : abcPitch,
-    continues: event.end > segmentEnd,
+    continues: event.end > segmentEnd || (
+      event.end === segmentEnd
+      && continuity?.tieStringsAtEnd?.has(event.tab.string) === true
+    ),
   };
 }
 
@@ -144,6 +154,7 @@ export function renderTimeSliceMeasureToAbc(
   durationContext: AbcDurationContext,
   keyAccidentals?: AbcKeyAccidentalMap,
   includeTabStringForcing = false,
+  continuity?: MeasureRenderContinuity,
 ): string {
   const stepDurationUnits = durationContext.unitsPerBeat / 4;
   const maxSteps = activeStepCount(measure, stepDurationUnits);
@@ -178,14 +189,76 @@ export function renderTimeSliceMeasureToAbc(
       end,
       keyAccidentals,
       includeTabStringForcing,
+      continuity,
     ));
     const token = tokens.length === 1
       ? `${tokens[0].token}${durationSuffix}${tokens[0].continues ? "-" : ""}`
       : `[${tokens.map(value => `${value.token}${value.continues ? "-" : ""}`).join("")}]${durationSuffix}`;
-    const opens = measure.guitarSlurs?.filter(slur => slur.startStep - 1 === start).length ?? 0;
-    const closes = measure.guitarSlurs?.filter(slur => slur.endStep === end).length ?? 0;
+    const opens = (measure.guitarSlurs?.filter(slur => slur.startStep - 1 === start).length ?? 0)
+      + (continuity?.slurStartSteps?.filter(step => step - 1 === start).length ?? 0);
+    const closes = (measure.guitarSlurs?.filter(slur => slur.endStep === end).length ?? 0)
+      + (continuity?.slurEndSteps?.filter(step => step === end).length ?? 0);
     rendered.push(`${"(".repeat(opens)}${token}${")".repeat(closes)}`);
   }
 
   return rendered.join(" ");
+}
+
+/**
+ * Render ordered measures while preserving only explicit, imported cross-bar
+ * continuities. Equal pitches alone never create a tie or slur.
+ */
+function sourceMelodyTieStringsToNext(
+  measure: TimeSliceMeasure,
+  next: TimeSliceMeasure | undefined,
+  durationContext: AbcDurationContext,
+  keyAccidentals: AbcKeyAccidentalMap | undefined,
+): Set<GuitarStringNumber> {
+  if (!next || !measure.source_abc?.melody || !next.source_abc?.melody) return new Set();
+  const sourceTokens = extractDurationTokensWithTies(measure.source_abc.melody);
+  const targetTokens = extractDurationTokensWithTies(next.source_abc.melody);
+  const source = sourceTokens.at(-1);
+  const target = targetTokens[0];
+  const sourceNote = source?.token.match(/^[_^=]?[A-Ga-g][,']*/)?.[0];
+  const targetNote = target?.token.match(/^[_^=]?[A-Ga-g][,']*/)?.[0];
+  if (!source?.hasTie || !sourceNote || !targetNote) return new Set();
+  if (abcNoteToMidiWithKey(sourceNote, keyAccidentals) !== abcNoteToMidiWithKey(targetNote, keyAccidentals)) {
+    return new Set();
+  }
+
+  const sourceMaxSteps = activeStepCount(measure, durationContext.unitsPerBeat / 4);
+  const sourceEvents = collectSoundingEvents(measure, sourceMaxSteps).filter(event => (
+    event.tab.role === "melody" && event.end === sourceMaxSteps
+  ));
+  const targetEvents = next.grid[0]?.tablature?.filter(tab => tab.role === "melody") ?? [];
+  return new Set(sourceEvents.flatMap(sourceEvent => targetEvents
+    .filter(targetEvent => (
+      targetEvent.string === sourceEvent.tab.string && targetEvent.fret === sourceEvent.tab.fret
+    ))
+    .map(targetEvent => targetEvent.string)));
+}
+
+export function renderTimeSliceMeasuresToAbc(
+  measures: TimeSliceMeasure[],
+  durationContext: AbcDurationContext,
+  keyAccidentals?: AbcKeyAccidentalMap,
+  includeTabStringForcing = false,
+): string[] {
+  return measures.map((measure, index) => {
+    const previous = measures[index - 1];
+    return renderTimeSliceMeasureToAbc(
+      measure,
+      durationContext,
+      keyAccidentals,
+      includeTabStringForcing,
+      {
+        tieStringsAtEnd: new Set([
+          ...(measure.guitarTiesToNext ?? []),
+          ...sourceMelodyTieStringsToNext(measure, measures[index + 1], durationContext, keyAccidentals),
+        ]),
+        slurStartSteps: measure.guitarSlursToNext?.map(slur => slur.startStep),
+        slurEndSteps: previous?.guitarSlursToNext?.map(slur => slur.endStep),
+      },
+    );
+  });
 }

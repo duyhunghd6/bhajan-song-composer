@@ -1,5 +1,4 @@
 import {
-  allowsMelodySustainFill,
   buildFillSelectionBudget,
   normalizeFillPolicy,
 } from "./fill-opportunities";
@@ -54,10 +53,9 @@ export function analyzeFillReservationSlots(input: {
   for (const measure of input.measures) {
     if (measure.pickupDurationUnits) continue;
     for (const step of measure.grid) {
-      if (step.melody.state === "attack") continue;
-      if (step.melody.state === "sustain" && !allowsMelodySustainFill(policy)) continue;
+      if (step.melody.state !== "rest") continue;
       const melodyState = step.melody.state;
-      const score = (melodyState === "rest" ? 60 : 45) + (step.weight === null ? 20 : 5);
+      const score = 60 + (step.weight === null ? 20 : 5);
       slots.push({
         id: `fr-m${measure.measure}-s${step.step}`,
         measure: measure.measure,

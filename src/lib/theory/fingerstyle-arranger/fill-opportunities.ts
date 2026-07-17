@@ -9,7 +9,6 @@ export {
   type FillOpportunityPageOptions,
 } from "./fill-opportunities/codec";
 export {
-  allowsMelodySustainFill,
   buildFillSelectionBudget,
   normalizeFillPolicy,
 } from "./fill-opportunities/policy";

@@ -53,6 +53,8 @@ function formatMeasure(measure: TimeSliceMeasure): string {
     ...(measure.barline === undefined ? [] : [["barline", measure.barline]]),
     ...(measure.visualTablature === undefined ? [] : [["visualTablature", measure.visualTablature]]),
     ...(measure.guitarSlurs === undefined ? [] : [["guitarSlurs", measure.guitarSlurs]]),
+    ...(measure.guitarTiesToNext === undefined ? [] : [["guitarTiesToNext", measure.guitarTiesToNext]]),
+    ...(measure.guitarSlursToNext === undefined ? [] : [["guitarSlursToNext", measure.guitarSlursToNext]]),
     ...(measure.source_abc === undefined ? [] : [["sourceAbc", measure.source_abc]]),
   ];
   const propertyLines = fields.map(([key, value]) => `      ${JSON.stringify(key)}: ${JSON.stringify(value)},`);
@@ -107,12 +109,75 @@ function parseGuitarSlurs(value: unknown, path: string): TimeSliceMeasure["guita
   });
 }
 
+function parseGuitarTieStrings(value: unknown, path: string): TimeSliceMeasure["guitarTiesToNext"] {
+  if (value === undefined) return undefined;
+  const strings = array(value, path).map((item, index) => {
+    const guitarString = integer(item, `${path}[${index}]`, 1);
+    if (guitarString > 6) fail(`${path}[${index}] must be 1 through 6.`);
+    return guitarString as GuitarStringNumber;
+  });
+  if (new Set(strings).size !== strings.length) fail(`${path} contains duplicate strings.`);
+  return strings;
+}
+
+function eventsAtOrThrough(
+  measure: TimeSliceMeasure,
+  stepIndex: number,
+): NonNullable<TimeSliceGridStep["tablature"]>[number][] {
+  return measure.grid.flatMap((step, index) => (step.tablature ?? []).filter(tab => (
+    index <= stepIndex && index + (tab.durationSteps ?? 1) > stepIndex
+  )));
+}
+
+/** Validates normalized Guitar phrase and tie metadata against physical events. */
+export function validateGuitarMeasureContinuity(measures: TimeSliceMeasure[]): void {
+  for (const [measureIndex, measure] of measures.entries()) {
+    const next = measures[measureIndex + 1];
+    const path = `measures[${measureIndex}]`;
+    for (const [slurIndex, slur] of (measure.guitarSlurs ?? []).entries()) {
+      if (slur.startStep > measure.grid.length || slur.endStep > measure.grid.length) {
+        fail(`${path}.guitarSlurs[${slurIndex}] is outside its measure.`);
+      }
+      if (
+        eventsAtOrThrough(measure, slur.startStep - 1).length === 0
+        || eventsAtOrThrough(measure, slur.endStep - 1).length === 0
+      ) {
+        fail(`${path}.guitarSlurs[${slurIndex}] must begin and end on rendered Guitar events.`);
+      }
+    }
+    if (measure.guitarTiesToNext?.length) {
+      if (!next) fail(`${path}.guitarTiesToNext requires an immediately following measure.`);
+      for (const guitarString of measure.guitarTiesToNext) {
+        const source = eventsAtOrThrough(measure, measure.grid.length - 1).find(tab => tab.string === guitarString);
+        const target = next.grid[0]?.tablature?.find(tab => tab.string === guitarString);
+        if (!source || !target || source.fret !== target.fret) {
+          fail(`${path}.guitarTiesToNext string ${guitarString} must join matching physical events at the adjacent barline.`);
+        }
+      }
+    }
+    if (measure.guitarSlursToNext?.length) {
+      if (!next) fail(`${path}.guitarSlursToNext requires an immediately following measure.`);
+      for (const [slurIndex, slur] of measure.guitarSlursToNext.entries()) {
+        if (slur.startStep > measure.grid.length || slur.endStep > next.grid.length) {
+          fail(`${path}.guitarSlursToNext[${slurIndex}] is outside its adjacent measures.`);
+        }
+        if (
+          eventsAtOrThrough(measure, slur.startStep - 1).length === 0
+          || eventsAtOrThrough(next, slur.endStep - 1).length === 0
+        ) {
+          fail(`${path}.guitarSlursToNext[${slurIndex}] must begin and end on rendered Guitar events.`);
+        }
+      }
+    }
+  }
+}
+
 export function parseV3Document(value: Record<string, unknown>): ImportedTimeGridDocument {
   const source = record(value.source, "source"); const rootStyle = parseStyle(value.style, "style"); const rawMeasures = array(value.measures, "measures");
   const overrides = new Map<number, TimeSliceMeasure["style_profile"]>();
   for (const [index, raw] of array(value.styleOverrides ?? [], "styleOverrides").entries()) { const item = record(raw, `styleOverrides[${index}]`); const measureIndex = integer(item.measureIndex, `styleOverrides[${index}].measureIndex`); if (overrides.has(measureIndex)) fail("Duplicate style override."); overrides.set(measureIndex, parseStyle(item.style, `styleOverrides[${index}].style`)); }
   if ([...overrides.keys()].some(index => index >= rawMeasures.length)) fail("Style override is out of range.");
-  return { version: 1, source: { rawAbc: string(source.rawAbc, "source.rawAbc") }, measures: rawMeasures.map((rawMeasure, measureIndex) => {
+  const document: ImportedTimeGridDocument = { version: 1, source: { rawAbc: string(source.rawAbc, "source.rawAbc") }, measures: rawMeasures.map((rawMeasure, measureIndex) => {
     const item = record(rawMeasure, `measures[${measureIndex}]`); const grid = array(item.grid, `measures[${measureIndex}].grid`).map((rawStep, stepIndex) => {
       const step = record(rawStep, `grid[${stepIndex}]`); const melody = record(step.melody, `grid[${stepIndex}].melody`); const state = string(melody.state, "melody.state"); const pitch = nullableString(melody.pitch, "melody.pitch");
       if (!STATES.has(state) || (state === "rest" ? pitch !== null : pitch === null)) fail("Invalid melody state/pitch.");
@@ -120,6 +185,8 @@ export function parseV3Document(value: Record<string, unknown>): ImportedTimeGri
       const tablature = step.tab === undefined ? undefined : array(step.tab, "tab").map((tab, tabIndex) => parseEvent(tab, `tab[${tabIndex}]`)); const strings = new Set<number>(); for (const tab of tablature ?? []) { if (strings.has(tab.string)) fail("Duplicate tablature string."); strings.add(tab.string); }
       return { step: integer(step.step, "step", 1), chord: string(step.chord, "chord"), weight: weight as TimeSliceGridStep["weight"], melody: { pitch, state: state as TimeSliceGridStep["melody"]["state"] }, lyric: step.lyric === undefined ? null : nullableString(step.lyric, "lyric"), ...(tablature === undefined ? {} : { tablature }) };
     });
-    return { measure: integer(item.measure, "measure", 1), lineIndex: integer(item.lineIndex, "lineIndex"), style_profile: overrides.get(measureIndex) ?? rootStyle, ...(optionalNumber(item.pickupDurationUnits, "pickupDurationUnits") === undefined ? {} : { pickupDurationUnits: optionalNumber(item.pickupDurationUnits, "pickupDurationUnits") }), ...(optionalNumber(item.sourceDurationUnits, "sourceDurationUnits") === undefined ? {} : { sourceDurationUnits: optionalNumber(item.sourceDurationUnits, "sourceDurationUnits") }), ...(item.barline === undefined ? {} : { barline: record(item.barline, "barline") as unknown as TimeSliceMeasure["barline"] }), ...(item.visualTablature === undefined ? {} : { visualTablature: string(item.visualTablature, "visualTablature") }), ...(item.guitarSlurs === undefined ? {} : { guitarSlurs: parseGuitarSlurs(item.guitarSlurs, "guitarSlurs") }), ...(item.sourceAbc === undefined ? {} : { source_abc: record(item.sourceAbc, "sourceAbc") as TimeSliceMeasure["source_abc"] }), grid };
+    return { measure: integer(item.measure, "measure", 1), lineIndex: integer(item.lineIndex, "lineIndex"), style_profile: overrides.get(measureIndex) ?? rootStyle, ...(optionalNumber(item.pickupDurationUnits, "pickupDurationUnits") === undefined ? {} : { pickupDurationUnits: optionalNumber(item.pickupDurationUnits, "pickupDurationUnits") }), ...(optionalNumber(item.sourceDurationUnits, "sourceDurationUnits") === undefined ? {} : { sourceDurationUnits: optionalNumber(item.sourceDurationUnits, "sourceDurationUnits") }), ...(item.barline === undefined ? {} : { barline: record(item.barline, "barline") as unknown as TimeSliceMeasure["barline"] }), ...(item.visualTablature === undefined ? {} : { visualTablature: string(item.visualTablature, "visualTablature") }), ...(item.guitarSlurs === undefined ? {} : { guitarSlurs: parseGuitarSlurs(item.guitarSlurs, "guitarSlurs") }), ...(item.guitarTiesToNext === undefined ? {} : { guitarTiesToNext: parseGuitarTieStrings(item.guitarTiesToNext, "guitarTiesToNext") }), ...(item.guitarSlursToNext === undefined ? {} : { guitarSlursToNext: parseGuitarSlurs(item.guitarSlursToNext, "guitarSlursToNext") }), ...(item.sourceAbc === undefined ? {} : { source_abc: record(item.sourceAbc, "sourceAbc") as TimeSliceMeasure["source_abc"] }), grid };
   }) };
+  validateGuitarMeasureContinuity(document.measures);
+  return document;
 }

@@ -37,11 +37,11 @@ This source-identity assertion is distinct from derived-artifact validation:
 - **Guitar projection:** generate forced-string Guitar ABC from the validated TimeGrid and verify its physical strings, frets, attacks, durations, and measure timing against that grid. Generated Guitar ABC is expected to differ from imported source ABC.
 - **Source-faithful comparison projection:** `buildReconstructedGuitarAbc()` applies string forcing to each measure's preserved `source_abc.melody` text. It preserves source ties, slurs, chord-symbol positions, duration spelling, decorations, repeats, and lyrics for diagnostic comparison, but it intentionally omits generated bass and fill events and is not the production arrangement artifact.
 
-A selected physical fill under a sustained Melody (available only in explicit denser profiles) is represented in generated Guitar ABC by an interval split and tied Melody continuation. The renderer must preserve that physical event rather than hiding it to resemble source notation.
+Generated discretionary fills are legal only in source-rest windows at every density. If a legacy or imported physical event overlaps a held Melody, the renderer serializes that physical reality with an interval split and tied continuation rather than hiding it to resemble source notation; server-generated output rejects that overlap before rendering.
 
 ### Forced-string Guitar import
 
-`abc-timegrid-import.ts` imports the supported `V:Guitar` subset into physical TimeGrid events without treating it as a replacement for `source.rawAbc`. It recognizes `!1!`–`!6!` string forcing, notes and bracket chords, rests, explicit durations, quoted chord symbols, trailing event ties, and per-member chord ties. A tie extends only the same adjacent pitch on the same physical string; it never creates a fresh attack or becomes a slur. Guitar parentheses are stored as normalized, one-based inclusive/exclusive `guitarSlurs` boundaries and are regenerated around the corresponding rendered intervals.
+`abc-timegrid-import.ts` imports the supported `V:Guitar` subset into physical TimeGrid events without treating it as a replacement for `source.rawAbc`. It recognizes `!1!`–`!6!` string forcing, notes and bracket chords, rests, explicit durations, quoted chord symbols, trailing event ties, and per-member chord ties. A tie extends only the same adjacent pitch on the same physical string; it never creates a fresh attack or becomes a slur. Explicit ties and matched parentheses may cross exactly one adjacent barline: the origin measure stores `guitarTiesToNext` / `guitarSlursToNext`, while local parentheses remain one-based inclusive/exclusive `guitarSlurs` boundaries. Equal adjacent pitches never infer a tie.
 
 Tuplets, broken rhythm, grace syntax, non-grid durations, malformed ties, unforced Guitar notes, overlapping same-string attacks, and out-of-range positions are not lossless TimeGrid syntax. The importer uses deterministic nearest-step normalization when a physical event can still be represented and emits a diagnostic; it retains the original source unchanged regardless. A document with no forced Guitar strings continues through the Melody diagnostic projection rather than inventing physical string assignments.
 
@@ -93,8 +93,8 @@ The formatter preserves irregular measure and step identities rather than compre
 This is compact without sacrificing authority:
 
 - JSON string decoding restores `rawAbc` exactly, including `CRLF`/`LF`, comments, whitespace, directives, voices, and repeat syntax. Do not Base64 encode it.
-- The codec preserves optional source, pickup, barline, visual-tab, duration, and fill-provenance fields, including the distinction between omitted and empty tablature.
-- The parser rejects unknown format versions; invalid melody-state/pitch combinations, enum values, strings outside 1–6, negative frets, non-positive durations, duplicate strings in one step, and invalid or duplicate style overrides. It does not silently drop invalid tab rows.
+- The codec preserves optional source, pickup, barline, visual-tab, duration, fill-provenance, local Guitar slur, and adjacent-bar Guitar tie/slur fields, including the distinction between omitted and empty tablature.
+- The parser rejects unknown format versions; invalid melody-state/pitch combinations, enum values, strings outside 1–6, negative frets, non-positive durations, duplicate strings in one step, invalid or duplicate style overrides, and dangling or physically mismatched adjacent-bar Guitar continuity. It does not silently drop invalid tab rows.
 - Parsing is interchange validation, not complete music validation: physical MIDI equality, overlapping same-string sustains, skill limits, meter/grid consistency, and source-derived lock validation remain compiler/workflow responsibilities.
 
 Production Fingerstyle persistence deliberately uses its separate envelope:
@@ -349,10 +349,10 @@ The renderer in `src/lib/theory/fingerstyle-arranger/time-slice-abc-renderer.ts`
 5. At each interval, group sounding events by their forced physical string.
 6. Render a rest only when no guitar event sounds.
 7. Add validated, quantized in-measure tie continuation boundaries from immutable `source_abc.melody` when a matching physical Guitar melody event spans them.
-8. Tie an event that continues into the next rendered interval.
+8. Tie an event that continues into the next rendered interval, including an explicit validated `guitarTiesToNext` boundary when ordered adjacent measures are rendered together.
 9. Join measures using stored source barlines and respect active pickup duration.
 
-Source tie boundaries preserve notation segmentation such as `E3- E2` as generated Guitar `!1!e3- !1!e2`; they do not change the canonical physical `durationSteps`. This is separate from `guitarSlurs`, which remain parenthesized phrase metadata. Cross-bar ties remain outside the measure-local renderer contract.
+Source tie boundaries preserve notation segmentation such as `E3- E2` as generated Guitar `!1!e3- !1!e2`; they do not change the canonical physical `durationSteps`. This is separate from parenthesized `guitarSlurs`. The ordered renderer replays only explicit, validated adjacent-bar Guitar tie/slur records; it never manufactures continuity from equal pitches.
 
 For the step-1 bass (two steps) plus melody (four steps) example, rendering must split at step 3. It must preserve one sounding melody event with a tie/continuation, rather than creating a second melody attack merely because the bass ended.
 

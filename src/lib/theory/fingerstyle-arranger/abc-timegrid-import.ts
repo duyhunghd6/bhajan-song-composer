@@ -24,8 +24,16 @@ type PhysicalEvent = {
 };
 
 type TieContinuation = {
-  event: PhysicalEvent;
+  /** Present only while a tie is being merged within the current measure. */
+  event?: PhysicalEvent;
   midi: number;
+};
+
+type OpenSlur = { measureIndex: number; startStep: number };
+
+type GuitarImportState = {
+  ties: Map<GuitarStringNumber, TieContinuation>;
+  slurs: OpenSlur[];
 };
 
 const EPSILON = 1e-6;
@@ -99,11 +107,15 @@ function parseMeasure(
   durationContext: AbcDurationContext,
   diagnostics: AbcTimeGridImportDiagnostic[],
   measure: number,
+  measureIndex: number,
+  state: GuitarImportState,
 ) {
   const events: PhysicalEvent[] = [];
   const slurs: Array<{ startStep: number; endStep: number }> = [];
-  const ties = new Map<GuitarStringNumber, TieContinuation>();
-  const slurStarts: number[] = [];
+  const crossSlurClosures: Array<{ originMeasureIndex: number; startStep: number; endStep: number }> = [];
+  const continuedStrings: GuitarStringNumber[] = [];
+  const ties = new Map(state.ties);
+  const slurStarts = [...state.slurs];
   const stepDurationUnits = durationContext.unitsPerBeat / 4;
   let index = 0;
   let onset = 0;
@@ -172,7 +184,10 @@ function parseMeasure(
       continue;
     }
     if (char === "(") {
-      slurStarts.push(onset);
+      slurStarts.push({
+        measureIndex,
+        startStep: gridPosition(onset, stepDurationUnits, measure, diagnostics, "Slur start") + 1,
+      });
       index++;
       continue;
     }
@@ -181,9 +196,14 @@ function parseMeasure(
       if (start === undefined) {
         diagnostics.push({ measure, message: "Guitar slur closes without an opening parenthesis." });
       } else {
-        const startIndex = gridPosition(start, stepDurationUnits, measure, diagnostics, "Slur start");
-        const endIndex = gridPosition(onset, stepDurationUnits, measure, diagnostics, "Slur end");
-        if (endIndex > startIndex) slurs.push({ startStep: startIndex + 1, endStep: endIndex });
+        const endStep = gridPosition(onset, stepDurationUnits, measure, diagnostics, "Slur end");
+        if (start.measureIndex === measureIndex) {
+          if (endStep >= start.startStep) slurs.push({ startStep: start.startStep, endStep });
+        } else if (start.measureIndex === measureIndex - 1 && endStep > 0) {
+          crossSlurClosures.push({ originMeasureIndex: start.measureIndex, startStep: start.startStep, endStep });
+        } else {
+          diagnostics.push({ measure, message: "Guitar slur may only cross to the immediately following measure." });
+        }
       }
       index++;
       continue;
@@ -244,12 +264,14 @@ function parseMeasure(
       const continuation = ties.get(note.string);
       const continuesPrior = continuation
         && continuation.midi === note.midi
-        && nearlyEqual(continuation.event.onset + continuation.event.duration, onset);
+        && (continuation.event
+          ? nearlyEqual(continuation.event.onset + continuation.event.duration, onset)
+          : nearlyEqual(onset, 0));
 
-      if (continuesPrior) {
+      if (continuesPrior && continuation?.event) {
         continuation.event.duration += duration;
       } else {
-        if (continuation) {
+        if (continuation && !continuesPrior) {
           diagnostics.push({ measure, message: `Tie on string ${note.string} does not continue the same adjacent pitch.` });
         }
         addAttack({
@@ -258,9 +280,10 @@ function parseMeasure(
           string: note.string,
           fret: note.midi - openMidi(note.string),
         });
+        if (continuesPrior) continuedStrings.push(note.string);
       }
 
-      const physicalEvent = continuesPrior
+      const physicalEvent = continuesPrior && continuation?.event
         ? continuation.event
         : events.at(-1)?.string === note.string && nearlyEqual(events.at(-1)?.onset ?? -1, onset)
           ? events.at(-1)
@@ -274,14 +297,19 @@ function parseMeasure(
     onset += duration;
   }
 
-  for (const start of slurStarts) {
-    diagnostics.push({ measure, message: `Guitar slur opened at ${start} ABC units has no closing parenthesis.` });
-  }
-  for (const string of ties.keys()) {
-    diagnostics.push({ measure, message: `Tie on string ${string} crosses a barline and was clipped to this TimeGrid measure.` });
+  const pendingTies = new Map<GuitarStringNumber, TieContinuation>();
+  for (const [string, continuation] of ties) {
+    pendingTies.set(string, { midi: continuation.midi });
   }
 
-  return { events, slurs, durationUnits: onset };
+  return {
+    events,
+    slurs,
+    continuedStrings,
+    crossSlurClosures,
+    durationUnits: onset,
+    state: { ties: pendingTies, slurs: slurStarts },
+  };
 }
 
 /**
@@ -304,11 +332,24 @@ export function importAbcNotationToTimeGrid(abc: string): AbcTimeGridImportResul
     diagnostics.push({ message: `Guitar has ${guitar.length} measures; Melody has ${measures.length}.` });
   }
 
+  let state: GuitarImportState = { ties: new Map(), slurs: [] };
   for (const [index, measure] of measures.entries()) {
     const source = guitar[index];
     if (!source) continue;
-    const parsed = parseMeasure(source, key, durationContext, diagnostics, measure.measure);
+    const parsed = parseMeasure(source, key, durationContext, diagnostics, measure.measure, index, state);
+    state = parsed.state;
     measure.guitarSlurs = parsed.slurs;
+    if (parsed.continuedStrings.length > 0 && index > 0) {
+      measures[index - 1].guitarTiesToNext = parsed.continuedStrings;
+    }
+    for (const closure of parsed.crossSlurClosures) {
+      const origin = measures[closure.originMeasureIndex];
+      if (!origin) continue;
+      origin.guitarSlursToNext = [
+        ...(origin.guitarSlursToNext ?? []),
+        { startStep: closure.startStep, endStep: closure.endStep },
+      ];
+    }
 
     if (!nearlyEqual(parsed.durationUnits / stepDurationUnits, Math.round(parsed.durationUnits / stepDurationUnits))) {
       diagnostics.push({ measure: measure.measure, message: "Guitar measure duration was rounded to the fixed TimeGrid." });
@@ -329,6 +370,13 @@ export function importAbcNotationToTimeGrid(abc: string): AbcTimeGridImportResul
       tab.push({ string: event.string, fret: event.fret, finger: null, role: "imported", durationSteps });
       measure.grid[stepIndex].tablature = tab;
     }
+  }
+
+  for (const string of state.ties.keys()) {
+    diagnostics.push({ message: `Tie on string ${string} has no continuation in the next Guitar measure.` });
+  }
+  for (const slur of state.slurs) {
+    diagnostics.push({ measure: measures[slur.measureIndex]?.measure, message: "Guitar slur has no closing parenthesis." });
   }
 
   return {

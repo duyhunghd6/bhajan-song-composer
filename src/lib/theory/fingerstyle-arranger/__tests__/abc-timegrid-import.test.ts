@@ -7,6 +7,7 @@ import {
   reEmitImportedSourceAbc,
 } from "../abc-timegrid-import";
 import { convertTimeSliceMeasureToAbc } from "../time-slice";
+import { buildGeneratedGuitarAbc } from "../guitar-abc-output";
 import {
   formatImportedTimeGridDocumentCompact,
   parseImportedTimeGridDocumentCompact,
@@ -81,6 +82,37 @@ describe("ABC to TimeGrid Guitar importer", () => {
       getKeyAccidentalsFromAbc(SLURRED_ABC),
       true,
     )).toBe("(!1!e !1!f) z6");
+  });
+
+  it("retains explicit cross-measure ties and slurs without inferring equal pitches", () => {
+    const source = `X:1
+L:1/8
+M:4/4
+K:C
+V:Melody
+V:Guitar clef=treble-8
+[V:Melody] | E8 | E8 |
+[V:Guitar] | (!1!e8- | !1!e8) |`;
+    const result = importAbcNotationToTimeGrid(source);
+    const document = result.document!;
+
+    expect(result.diagnostics).toEqual([]);
+    expect(document.measures[0].guitarTiesToNext).toEqual([1]);
+    expect(document.measures[0].guitarSlursToNext).toEqual([{ startStep: 1, endStep: 16 }]);
+    expect(document.measures[1].grid[0].tablature).toEqual(expect.arrayContaining([
+      expect.objectContaining({ string: 1, fret: 0, durationSteps: 16 }),
+    ]));
+    expect(buildGeneratedGuitarAbc(document.measures, source)).toContain("(!1!e8- | !1!e8)");
+    const restored = parseImportedTimeGridDocumentCompact(
+      formatImportedTimeGridDocumentCompact(document),
+    );
+    expect(restored.measures[0].guitarTiesToNext).toEqual([1]);
+    expect(restored.measures[0].guitarSlursToNext).toEqual([{ startStep: 1, endStep: 16 }]);
+    document.measures[1].lineIndex = 1;
+    expect(buildGeneratedGuitarAbc(document.measures, source)).toContain("| (!1!e8- |\n| !1!e8) |");
+
+    const untied = importAbcNotationToTimeGrid(source.replace("e8-", "e8"));
+    expect(untied.document?.measures[0].guitarTiesToNext).toBeUndefined();
   });
 
   it("retains a normalized document and reports non-grid timing approximations", () => {

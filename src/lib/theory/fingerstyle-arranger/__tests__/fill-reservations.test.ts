@@ -42,17 +42,22 @@ describe("fill reservations", () => {
     expect(validateFillReservationSelection(analysis, parsed.value!).selectedSlotIds).toEqual(["fr-m1-s5"]);
   });
 
-  it("allows explicit dense profiles to reserve held melody slots", () => {
-    const auto = analyzeFillReservationSlots({
-      measures: [makeMeasure()], sourceFingerprint: "source", skillLevel: "advanced", densityMode: "auto",
+  it("keeps dense profiles in source rests while increasing their selection budget", () => {
+    const few = analyzeFillReservationSlots({
+      measures: [makeMeasure()], sourceFingerprint: "source", skillLevel: "beginner", densityMode: "few",
     });
-    const dense = analyzeFillReservationSlots({
+    const normal = analyzeFillReservationSlots({
       measures: [makeMeasure()], sourceFingerprint: "source", skillLevel: "beginner", densityMode: "normal",
     });
+    const many = analyzeFillReservationSlots({
+      measures: [makeMeasure()], sourceFingerprint: "source", skillLevel: "beginner", densityMode: "many",
+    });
 
-    expect(auto.slots.every(slot => slot.melodyState === "rest")).toBe(true);
-    expect(dense.slots).toHaveLength(15);
-    expect(dense.slots.slice(0, 3).every(slot => slot.melodyState === "sustain")).toBe(true);
+    expect(normal.slots).toEqual(few.slots);
+    expect(many.slots).toEqual(few.slots);
+    expect(many.slots.every(slot => slot.melodyState === "rest")).toBe(true);
+    expect(normal.maxSelections).toBeGreaterThan(few.maxSelections);
+    expect(many.maxSelections).toBeGreaterThan(normal.maxSelections);
   });
 
   it("excludes pickup measures", () => {

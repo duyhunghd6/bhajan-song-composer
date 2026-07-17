@@ -127,6 +127,17 @@ describe("compact TimeGrid document codec", () => {
     expect(parseImportedTimeGridDocumentCompact(output).source.rawAbc).toBe(document.source.rawAbc);
   });
 
+  it("rejects dangling cross-measure continuity records", () => {
+    const wire = JSON.parse(formatImportedTimeGridDocumentCompact(DOCUMENT)) as {
+      measures: Array<Record<string, unknown>>;
+    };
+    wire.measures[0].guitarTiesToNext = [1];
+    wire.measures[0].guitarSlursToNext = [{ startStep: 1, endStep: 1 }];
+
+    expect(() => parseImportedTimeGridDocumentCompact(JSON.stringify(wire)))
+      .toThrow(TimeGridDocumentCodecError);
+  });
+
   it.each([
     "not json",
     '{"f":"timegrid-document:v2","a":"X:1","m":[]}',

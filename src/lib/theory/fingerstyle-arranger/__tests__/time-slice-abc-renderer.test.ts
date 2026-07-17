@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { buildAbcDurationContext } from "../../abc-duration";
 import { getKeyAccidentalsFromAbc } from "../../abc-key-signature";
 import { convertTimeSliceMeasureToAbc, type TimeSliceMeasure } from "../time-slice";
+import { renderTimeSliceMeasuresToAbc } from "../time-slice-abc-renderer";
 
 const ABC = `X:1
 L:1/8
@@ -220,6 +221,35 @@ describe("time-slice ABC interval renderer", () => {
 
     expect(rendered).toBe("z3/2 !3!G9/2 !3!G z");
     expect(rendered).not.toContain("!3!G-");
+  });
+
+  it("renders an explicit source-Melody cross-bar tie only for matching physical strings", () => {
+    const source = `X:1\nL:1/8\nM:4/4\nK:Em\n| B8- | B8 |`;
+    const first = {
+      ...sourceRhythmMeasure(),
+      source_abc: { melody: "B8-", lyric: "", beatWeight: "" },
+    };
+    const second = {
+      ...sourceRhythmMeasure(),
+      measure: 2,
+      source_abc: { melody: "B8", lyric: "", beatWeight: "" },
+      grid: sourceRhythmMeasure().grid.map((step, index) => ({
+        ...step,
+        tablature: index === 0
+          ? [{ string: 2 as const, fret: 0, finger: "a" as const, role: "melody" as const, durationSteps: 16 }]
+          : [],
+      })),
+    };
+
+    const [renderedFirst, renderedSecond] = renderTimeSliceMeasuresToAbc(
+      [first, second],
+      buildAbcDurationContext(source),
+      getKeyAccidentalsFromAbc(source),
+      true,
+    );
+
+    expect(renderedFirst).toContain("!2!B-");
+    expect(renderedSecond.startsWith("!2!B8")).toBe(true);
   });
 
   it("preserves explicit fill duration provenance on the source measure", () => {

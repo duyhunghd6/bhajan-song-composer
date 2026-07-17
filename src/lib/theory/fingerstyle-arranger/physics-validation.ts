@@ -29,6 +29,8 @@ export type FingerstylePhysicsIssueCode =
   | `guitar-tab-${GuitarTabValidationIssue["code"]}`
   | "fill-interrupts-melody-sustain"
   | "accompaniment-interrupts-melody-sustain"
+  | "discretionary-attack-during-melody-sustain"
+  | "discretionary-duration-during-melody-sustain"
   | "bass-on-unweighted-step"
   | "fill-density-none-exceeded"
   | "fill-density-few-exceeded";
@@ -87,6 +89,18 @@ export function validateFingerstylePhysicsDetailed(
     const step = grid[stepIndex];
     const tablature = step.tablature ?? [];
     if (tablature.length === 0) continue;
+
+    if (step.melody.state === "sustain") {
+      for (const tab of tablature) {
+        if (tab.role !== "fill" && tab.role !== "harmony") continue;
+        issue(
+          issues,
+          "discretionary-attack-during-melody-sustain",
+          `Step ${step.step}: ${tab.role === "fill" ? "Fill" : "Harmony"} attacks are not allowed while the melody is sustaining.`,
+          { stepIndex, step: step.step, details: { role: tab.role, string: tab.string, fret: tab.fret } },
+        );
+      }
+    }
 
     if (tablature.length > 6) {
       issue(issues, "string-count-exceeded", `Step ${step.step}: Exceeds physical guitar limit of 6 strings. Got ${tablature.length} notes.`, {
@@ -175,6 +189,22 @@ export function validateFingerstylePhysicsDetailed(
       }
       for (let offset = 1; offset < durationSteps; offset++) {
         const soundingStep = grid[stepIndex + offset];
+        if (
+          (tab.role === "fill" || tab.role === "harmony")
+          && soundingStep.melody.state !== "rest"
+        ) {
+          issue(
+            issues,
+            "discretionary-duration-during-melody-sustain",
+            `Step ${step.step}: ${tab.role === "fill" ? "Fill" : "Harmony"} duration reaches active melody at step ${soundingStep.step}.`,
+            {
+              stepIndex,
+              step: step.step,
+              details: { role: tab.role, string: tab.string, durationSteps, protectedStep: soundingStep.step },
+            },
+          );
+          break;
+        }
         const conflictingAttack = soundingStep.tablature?.find(event => event.string === tab.string);
         if (conflictingAttack) {
           issue(issues, "sounding-string-collision", `Step ${step.step}: String ${tab.string} sustains into the attack at step ${soundingStep.step}.`, {

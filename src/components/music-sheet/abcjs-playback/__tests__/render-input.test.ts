@@ -59,6 +59,20 @@ describe("prepareAbcjsRenderInput", () => {
     expect(result).toContain("[!2!d!4!D]/2 [!2!d]");
   });
 
+  it("preserves explicit cross-bar Guitar ties and slurs through render adaptation", () => {
+    const input = `X:1
+L:1/8
+M:4/4
+K:C
+V:Guitar clef=treble-8
+[V:Guitar] | (!1!e8- | !1!e8) |`;
+
+    expect(prepareAbcjsRenderInput({ abcString: input, tablatureEnabled: true }))
+      .toContain("[V:Guitar] | ([!1!e]8- | [!1!e]8) |");
+    expect(prepareAbcjsRenderInput({ abcString: input, tablatureEnabled: false }))
+      .toContain("[V:Guitar] | (e8- | e8) |");
+  });
+
   it("applies render overrides and hides voice names before forcing TAB strings", () => {
     const input = `X:1
 T:Ganesha
