@@ -86,6 +86,15 @@ export interface AbcjsPlaybackSynthOptions {
   chordsOff?: boolean;
 }
 
+export interface AbcjsVisualMarker {
+  id: string;
+  /** Zero-based measure index in the exact ABC string rendered by this controller. */
+  measureIndex: number;
+  /** Position within that measure, from 0 (start) to 1 (end). */
+  startFraction: number;
+  label: string;
+}
+
 export interface AbcjsPlaybackControllerProps {
   abcString: string;
   title?: string;
@@ -106,4 +115,6 @@ export interface AbcjsPlaybackControllerProps {
   showExactRenderAbcCopy?: boolean;
   /** Allow downloading the rendered ABC sheet as a PDF. */
   allowPdfDownload?: boolean;
+  /** Decorative timeline positions overlaid after abcjs lays out the score. */
+  visualMarkers?: AbcjsVisualMarker[];
 }

@@ -281,6 +281,7 @@ describe("fingerstyle measure persistence", () => {
             entries: [{ candidateId: "c1", durationSteps: 4, finger: "i" as const }],
           },
           fillSummary: {} as unknown as FingerstyleFillGenerationSummary,
+          justification: { positions: [], notes: [] },
         },
       ],
       selectedOptionId: "opt1",

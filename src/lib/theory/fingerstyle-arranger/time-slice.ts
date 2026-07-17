@@ -111,25 +111,6 @@ export function getMetricWeight(beat: number, timeSignature: string): "â¬¤" | "â
   return null;
 }
 
-const PITCH_CLASS_TO_SEMITONE: Record<string, number> = {
-  C: 0,
-  "C#": 1,
-  Db: 1,
-  D: 2,
-  "D#": 3,
-  Eb: 3,
-  E: 4,
-  F: 5,
-  "F#": 6,
-  Gb: 6,
-  G: 7,
-  "G#": 8,
-  Ab: 8,
-  A: 9,
-  "A#": 10,
-  Bb: 10,
-  B: 11,
-};
 
 /**
  * Convert an ABC note token to MIDI number, applying key signature accidentals
@@ -181,7 +162,7 @@ export function extractDurationTokensWithTies(abcMeasure: string): TokenWithTie[
   const tokens: TokenWithTie[] = [];
   let match: RegExpExecArray | null;
 
-  const ABC_EVENT_REGEX = /(\[[^\]]+\]|[_^=]?[A-Ga-g][,']*|[zx])([0-9]*(?:\/[0-9]*)?|\/[0-9]*)/g;
+  const ABC_EVENT_REGEX = /(\[[^\]]+\]|[_^=]*[A-Ga-g][,']*|[zx])([0-9]*(?:\/[0-9]*)?|\/[0-9]*)/g;
   ABC_EVENT_REGEX.lastIndex = 0;
 
   while ((match = ABC_EVENT_REGEX.exec(cleanMeasure)) !== null) {
@@ -219,7 +200,7 @@ export function extractMelodyMeasureTimelineWithTies(
 ): TimeSliceMelodyEvent[] {
   const tokens = extractDurationTokensWithTies(abcMeasureStr);
   const tiedPitch = (token: string): number | null => {
-    const note = token.match(/^[_^=]?[A-Ga-g][,']*/)?.[0];
+    const note = token.match(/^[_^=]*[A-Ga-g][,']*/)?.[0];
     return note ? abcNoteToMidiWithKey(note, keyAccidentals) : null;
   };
 
@@ -288,7 +269,7 @@ export function extractChordsFromMeasure(abcMeasure: string): { chord: string; o
   const chords: { chord: string; onsetUnits: number }[] = [];
   let currentOnset = 0;
 
-  const regex = /"([^"]+)"|(\[[^\]]+\]|[_^=]?[A-Ga-g][,']*|[zx])([0-9]*(?:\/[0-9]*)?|\/[0-9]*)/g;
+  const regex = /"([^"]+)"|(\[[^\]]+\]|[_^=]*[A-Ga-g][,']*|[zx])([0-9]*(?:\/[0-9]*)?|\/[0-9]*)/g;
   let match: RegExpExecArray | null;
 
   while ((match = regex.exec(cleanMeasure)) !== null) {

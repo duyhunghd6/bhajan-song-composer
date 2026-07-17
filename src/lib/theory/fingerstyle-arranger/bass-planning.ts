@@ -2,6 +2,8 @@ import { Chord, Note } from "@tonaljs/tonal";
 import { midiForStringFret, parseScientificPitch } from "../guitar-playability";
 import type { SkillLevel } from "./fingerstyle-constraints";
 import { SKILL_LEVEL_CONSTRAINTS } from "./fingerstyle-constraints";
+import { placeFingerstyleFoundationOnTimeGrid } from "./heuristic-time-slice";
+import { validateFingerstylePhysicsDetailed } from "./physics-validation";
 import type { TimeSliceMeasure } from "./time-slice";
 import { melodyDurationSteps } from "./time-slice-abc-renderer";
 
@@ -40,6 +42,15 @@ export interface BassPitchAnalysis {
   sourceFingerprint: string;
   positionSetId: string;
   candidates: BassPitchCandidate[];
+  unavailablePositionIds: string[];
+}
+
+export interface BassFoundationResolution {
+  measures: TimeSliceMeasure[];
+  selected: BassPitchCandidate[];
+  substituted: Array<{ positionId: string; submittedId: string; resolvedId: string }>;
+  omittedPositionIds: string[];
+  errors: string[];
 }
 
 export interface BassPitchSelection {
@@ -145,11 +156,42 @@ function pitchesForTone(tone: string): string[] {
   return [2, 3, 4].map(octave => `${pitchClass}${octave}`);
 }
 
+function validateBassFoundation(input: {
+  measures: TimeSliceMeasure[];
+  candidates: BassPitchCandidate[];
+  skillLevel: SkillLevel;
+  maxMelodyFret: number;
+}): { measures: TimeSliceMeasure[]; errors: string[] } {
+  const materialized = materializeBassFoundation(
+    input.measures,
+    input.candidates,
+    input.skillLevel,
+    input.maxMelodyFret,
+  );
+  const placement = placeFingerstyleFoundationOnTimeGrid(materialized, {
+    skillLevel: input.skillLevel,
+    maxMelodyFret: input.maxMelodyFret,
+  });
+  const errors = placement.unresolvedEventCount > 0
+    ? ["TimeGrid materialization could not place every melody or bass event."]
+    : placement.measures.flatMap(measure => {
+      const validation = validateFingerstylePhysicsDetailed(measure.grid, {
+        fillDensity: "none",
+        skillLevel: input.skillLevel,
+        maxMelodyFret: input.maxMelodyFret,
+      });
+      return validation.valid ? [] : [`Measure ${measure.measure}: ${validation.message}`];
+    });
+  return { measures: placement.measures, errors };
+}
+
 export function analyzeBassPitchCandidates(input: {
   positions: BassPosition[];
   positionSetId: string;
   sourceFingerprint: string;
   skillLevel: SkillLevel;
+  measures?: TimeSliceMeasure[];
+  maxMelodyFret?: number;
 }): BassPitchAnalysis {
   const candidates = input.positions.flatMap(position => {
     const chord = Chord.get(position.chord);
@@ -168,11 +210,24 @@ export function analyzeBassPitchCandidates(input: {
       ...physical,
     }))));
   }).sort((left, right) => right.score - left.score || left.id.localeCompare(right.id));
+  const feasibleCandidates = input.measures && input.maxMelodyFret != null
+    ? candidates.filter(candidate => validateBassFoundation({
+      measures: input.measures!,
+      candidates: [candidate],
+      skillLevel: input.skillLevel,
+      maxMelodyFret: input.maxMelodyFret!,
+    }).errors.length === 0)
+    : candidates;
+  const availablePositionIds = new Set(feasibleCandidates.map(candidate => candidate.positionId));
+  const unavailablePositionIds = input.positions
+    .map(position => position.id)
+    .filter(positionId => !availablePositionIds.has(positionId));
   return {
-    setId: setId("bpc", input.sourceFingerprint, candidates.map(candidate => candidate.id).join("|")),
+    setId: setId("bpc", input.sourceFingerprint, feasibleCandidates.map(candidate => candidate.id).join("|")),
     sourceFingerprint: input.sourceFingerprint,
     positionSetId: input.positionSetId,
-    candidates,
+    candidates: feasibleCandidates,
+    unavailablePositionIds,
   };
 }
 
@@ -182,6 +237,7 @@ export function formatBassPitchCandidates(analysis: BassPitchAnalysis): string {
     `set,${analysis.setId}`,
     `source,${analysis.sourceFingerprint}`,
     `positionSet,${analysis.positionSetId}`,
+    `omittedPositions,${analysis.unavailablePositionIds.join(",") || "none"}`,
     "rows: [C,id,position,pitch,role,score,string,fret]",
     ...analysis.candidates.map(candidate => `C,${candidate.id},${candidate.positionId},${candidate.pitch},${candidate.role},${candidate.score},${candidate.string},${candidate.fret}`),
   ].join("\n");
@@ -213,9 +269,53 @@ export function validateBassPitchSelection(analysis: BassPitchAnalysis, selected
   if (selected.length !== selection.candidateIds.length) errors.push("Bass pitch selection contains an unknown candidate.");
   if (new Set(selection.candidateIds).size !== selection.candidateIds.length) errors.push("Bass pitch selection contains duplicate candidates.");
   const selectedPositions = new Set(selected.map(candidate => candidate.positionId));
-  for (const id of selectedPositionIds) if (!selectedPositions.has(id)) errors.push(`Missing bass pitch selection for ${id}.`);
+  const selectablePositionIds = new Set(analysis.candidates.map(candidate => candidate.positionId));
+  for (const id of selectedPositionIds) {
+    if (selectablePositionIds.has(id) && !selectedPositions.has(id)) errors.push(`Missing bass pitch selection for ${id}.`);
+  }
   if (selectedPositions.size !== selected.length) errors.push("Choose exactly one bass pitch per selected bass position.");
   return { valid: errors.length === 0, errors, selected };
+}
+
+export function resolveBassFoundation(input: {
+  measures: TimeSliceMeasure[];
+  submitted: BassPitchCandidate[];
+  candidates: BassPitchCandidate[];
+  skillLevel: SkillLevel;
+  maxMelodyFret: number;
+}): BassFoundationResolution {
+  let selected = [...input.submitted];
+  const substituted: BassFoundationResolution["substituted"] = [];
+  const omittedPositionIds: string[] = [];
+
+  for (let attempt = 0; attempt < input.submitted.length * 2 + 1; attempt++) {
+    const validation = validateBassFoundation({ ...input, candidates: selected });
+    if (validation.errors.length === 0) {
+      return { measures: validation.measures, selected, substituted, omittedPositionIds, errors: [] };
+    }
+
+    const current = selected.at(-1);
+    if (!current) return { measures: validation.measures, selected, substituted, omittedPositionIds, errors: validation.errors };
+    const alternatives = input.candidates.filter(candidate => (
+      candidate.positionId === current.positionId
+      && candidate.id !== current.id
+      && !selected.some(selectedCandidate => selectedCandidate.id === candidate.id)
+    ));
+    const replacement = alternatives.find(candidate => validateBassFoundation({
+      ...input,
+      candidates: [...selected.slice(0, -1), candidate],
+    }).errors.length === 0);
+    if (replacement) {
+      selected = [...selected.slice(0, -1), replacement];
+      substituted.push({ positionId: current.positionId, submittedId: current.id, resolvedId: replacement.id });
+      continue;
+    }
+    selected = selected.slice(0, -1);
+    omittedPositionIds.push(current.positionId);
+  }
+
+  const validation = validateBassFoundation({ ...input, candidates: selected });
+  return { measures: validation.measures, selected, substituted, omittedPositionIds, errors: validation.errors };
 }
 
 export function materializeBassFoundation(

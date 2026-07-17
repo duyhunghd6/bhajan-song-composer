@@ -185,6 +185,16 @@ export function GuitarFingerstyleStep({
     () => isFingerstyleReady ? groupMeasuresByLine(measures) : [],
     [isFingerstyleReady, measures],
   );
+  // This baseline intentionally never carries the selected option's tablature.
+  // Server-side option reconstruction must compare against it, not the mutable arrangement.
+  const sourceLineGroups = useMemo(() => {
+    if (!isFingerstyleReady) return [];
+    try {
+      return groupMeasuresByLine(compileFreshMeasures(workflowAppliedMusicAbc));
+    } catch {
+      return [];
+    }
+  }, [compileFreshMeasures, isFingerstyleReady, workflowAppliedMusicAbc]);
 
   const claimGeneration = useCallback((lineIndex: number) => {
     const claim = generationCoordinator.claim(lineIndex);
@@ -494,6 +504,7 @@ export function GuitarFingerstyleStep({
             songSlug={slug}
             sourceFingerprint={sourceFingerprint}
             lineIndex={lineMeasures[0]?.lineIndex ?? lineGroupIdx}
+            sourceLineMeasures={sourceLineGroups[lineGroupIdx] ?? lineMeasures}
             lineMeasures={lineMeasures}
             activeAbc={workflowAppliedMusicAbc}
             accompLayerVisibility={accompLayerVisibility}

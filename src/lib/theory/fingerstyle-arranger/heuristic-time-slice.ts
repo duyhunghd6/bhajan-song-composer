@@ -116,7 +116,7 @@ export function placeFingerstyleFoundationOnTimeGrid(
         }
       }
 
-      const bass = tabs.find(tab => tab.role === "bass");
+      const bass = tabs.find(tab => tab.role === "bass" || tab.role === "root" || tab.role === "fifth");
       if (bass) {
         const position = choosePosition(
           midiForStringFret(bass.string, bass.fret),

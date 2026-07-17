@@ -100,6 +100,31 @@ describe("bass planning", () => {
     ]);
   });
 
+  it("filters bass candidates that cannot share the authoritative high melody grip", () => {
+    const measure = makeMeasure();
+    measure.grid[0].chord = "C";
+    measure.grid[0].melody = { pitch: "E5", state: "attack" };
+    const positions = analyzeBassPositions({ measures: [measure], sourceFingerprint: "source", reservedFillSlotIds: [] });
+
+    const pitches = analyzeBassPitchCandidates({
+      positions: positions.positions,
+      positionSetId: positions.setId,
+      sourceFingerprint: "source",
+      skillLevel: "beginner",
+      measures: [measure],
+      maxMelodyFret: 12,
+    });
+
+    expect(pitches.candidates.filter(candidate => candidate.positionId === "bp-m1-s1")).toEqual([]);
+    expect(pitches.unavailablePositionIds).toContain("bp-m1-s1");
+    const validated = validateBassPitchSelection(pitches, ["bp-m1-s1"], {
+      setId: pitches.setId,
+      sourceFingerprint: "source",
+      candidateIds: [],
+    });
+    expect(validated.valid).toBe(true);
+  });
+
   it("clears stale fills while rebuilding the pre-fill foundation", () => {
     const measureFour = { ...makeMeasure(), measure: 4 };
     const measureFive = { ...makeMeasure(), measure: 5 };

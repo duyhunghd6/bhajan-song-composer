@@ -11,15 +11,18 @@ vi.mock("@/components/music-sheet/AbcjsPlaybackController", () => ({
     abcString,
     showExactRenderAbcCopy,
     synthOptions,
+    visualMarkers,
   }: {
     abcString: string;
     showExactRenderAbcCopy?: boolean;
     synthOptions?: { voicesOff?: boolean | number[]; chordsOff?: boolean };
+    visualMarkers?: Array<{ id: string; measureIndex: number; startFraction: number }>;
   }) => (
     <pre
       data-testid="abc-input"
       data-exact-copy={String(showExactRenderAbcCopy)}
       data-synth-options={JSON.stringify(synthOptions)}
+      data-visual-markers={JSON.stringify(visualMarkers)}
     >
       {abcString}
     </pre>
@@ -78,6 +81,7 @@ describe("FingerstyleLineCard", () => {
         songSlug="ganesha"
         sourceFingerprint="test-source"
         lineIndex={0}
+        sourceLineMeasures={[makeFinalMeasure()]}
         lineMeasures={[makeFinalMeasure()]}
         activeAbc={activeAbc}
         accompLayerVisibility={{ Melody: true, Guitar: true, TAB: true }}
@@ -120,8 +124,8 @@ describe("FingerstyleLineCard", () => {
       opportunityAnalysis: {},
       selectedOptionId: "option-1",
       options: [
-        { id: "option-1", ordinal: 1, selection: {}, composition: {}, fillSummary: {} },
-        { id: "option-2", ordinal: 2, selection: {}, composition: {}, fillSummary: {} },
+        { id: "option-1", ordinal: 1, selection: {}, composition: {}, fillSummary: {}, justification: { positions: [], notes: [] } },
+        { id: "option-2", ordinal: 2, selection: {}, composition: {}, fillSummary: {}, justification: { positions: [], notes: [] } },
       ],
     } as unknown as FingerstyleLineGenerationRun;
     const markup = renderToStaticMarkup(
@@ -129,6 +133,7 @@ describe("FingerstyleLineCard", () => {
         songSlug="ganesha"
         sourceFingerprint="test-source"
         lineIndex={0}
+        sourceLineMeasures={[makeFinalMeasure()]}
         lineMeasures={[makeFinalMeasure()]}
         activeAbc={activeAbc}
         accompLayerVisibility={{ Melody: true, Guitar: true, TAB: true }}
@@ -162,8 +167,8 @@ describe("FingerstyleLineCard", () => {
     };
     const markup = renderToStaticMarkup(
       <>
-        <FingerstyleLineCard {...props} generationLock={activeGenerationLock} lineIndex={0} lineMeasures={[makeFinalMeasure()]} />
-        <FingerstyleLineCard {...props} generationLock={idleGenerationLock} lineIndex={1} lineMeasures={[{ ...makeFinalMeasure(), measure: 6, lineIndex: 1 }]} />
+        <FingerstyleLineCard {...props} generationLock={activeGenerationLock} lineIndex={0} sourceLineMeasures={[makeFinalMeasure()]} lineMeasures={[makeFinalMeasure()]} />
+        <FingerstyleLineCard {...props} generationLock={idleGenerationLock} lineIndex={1} sourceLineMeasures={[{ ...makeFinalMeasure(), measure: 6, lineIndex: 1 }]} lineMeasures={[{ ...makeFinalMeasure(), measure: 6, lineIndex: 1 }]} />
       </>,
     );
 

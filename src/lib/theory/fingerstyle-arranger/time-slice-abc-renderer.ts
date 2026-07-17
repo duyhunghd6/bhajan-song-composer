@@ -98,8 +98,8 @@ function sourceMelodyTieBoundaries(
     const token = tokens[index];
     const next = tokens[index + 1];
     onset += token.durationUnits;
-    const note = token.token.match(/^[_^=]?[A-Ga-g][,']*/)?.[0];
-    const nextNote = next.token.match(/^[_^=]?[A-Ga-g][,']*/)?.[0];
+    const note = token.token.match(/^[_^=]*[A-Ga-g][,']*/)?.[0];
+    const nextNote = next.token.match(/^[_^=]*[A-Ga-g][,']*/)?.[0];
     const pitch = note ? abcNoteToMidiWithKey(note, keyAccidentals) : null;
     const nextPitch = nextNote ? abcNoteToMidiWithKey(nextNote, keyAccidentals) : null;
     const rawStep = onset / stepDurationUnits;
@@ -219,12 +219,19 @@ function sourceMelodyTieStringsToNext(
   const targetTokens = extractDurationTokensWithTies(next.source_abc.melody);
   const source = sourceTokens.at(-1);
   const target = targetTokens[0];
-  const sourceNote = source?.token.match(/^[_^=]?[A-Ga-g][,']*/)?.[0];
-  const targetNote = target?.token.match(/^[_^=]?[A-Ga-g][,']*/)?.[0];
+  const sourceNote = source?.token.match(/^[_^=]*[A-Ga-g][,']*/)?.[0];
+  const targetNote = target?.token.match(/^[_^=]*[A-Ga-g][,']*/)?.[0];
   if (!source?.hasTie || !sourceNote || !targetNote) return new Set();
   if (abcNoteToMidiWithKey(sourceNote, keyAccidentals) !== abcNoteToMidiWithKey(targetNote, keyAccidentals)) {
     return new Set();
   }
+
+  // If the next measure's first step is a new melody attack (not sustain),
+  // the guitar tablature must re-attack — the source ABC tie was already
+  // consumed by the TimeGrid parser to merge durations. Do not produce a
+  // cross-measure tie when the grid says "attack".
+  const nextMelodyState = next.grid[0]?.melody?.state;
+  if (nextMelodyState === "attack") return new Set();
 
   const sourceMaxSteps = activeStepCount(measure, durationContext.unitsPerBeat / 4);
   const sourceEvents = collectSoundingEvents(measure, sourceMaxSteps).filter(event => (

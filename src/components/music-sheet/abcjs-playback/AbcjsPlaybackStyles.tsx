@@ -60,6 +60,14 @@ export function AbcjsPlaybackStyles({ resolvedCanvasId }: { resolvedCanvasId: st
         #${resolvedCanvasId} svg g.abcjs-tabNumber text {
           font-size: 12px !important;
         }
+
+        /* Legal discretionary-fill windows; rendered by the playback overlay only. */
+        #${resolvedCanvasId} .abcjs-fill-opportunity-dot {
+          fill: #ef4444;
+          stroke: #fff;
+          stroke-width: 1.5px;
+          filter: drop-shadow(0 0 2px rgba(127, 29, 29, 0.75));
+        }
       `}</style>
   );
 }

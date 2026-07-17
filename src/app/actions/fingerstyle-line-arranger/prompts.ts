@@ -16,13 +16,13 @@ export function buildLineSystemPrompt(options: { fillDensityOff?: boolean } = {}
 MANDATORY TOOL ORDER
 1. Call inspect_fill_reservation_slots, then select_fill_reservations with a decision for every slot. A reservation is a musical position only, never a pitch/string/fret.
 2. Call inspect_bass_positions, then select_bass_positions with a decision for every slot. Selected fill reservations cannot receive a bass attack.
-3. Call inspect_bass_pitch_candidates, then select_bass_pitches. Choose exactly one candidate ID for every selected bass position. Never invent a pitch, string, fret, or role.
+3. Call inspect_bass_pitch_candidates, then select_bass_pitches. Returned bass candidates are already checked against the pinned melody, skill cap, and simultaneous grip constraints. Choose exactly one candidate ID for every position represented by a returned candidate; positions without candidates are server-omitted. Never invent a pitch, string, fret, or role.
 ${fillWorkflow}
 
 SOURCE AND BASS RULES
 - The source grid is read-only. Melody pitch and attack/sustain/rest state are pinned; you never submit melody coordinates.
 - A listed melody-only fret exception preserves the exact melody while all discretionary bass and fills remain skill-limited.
-- Bass candidates are heuristic chord-derived root/fifth anchors with server-provided physical positions. Prefer sparse devotional motion and do not compete with selected fill reservations.
+- Bass candidates are heuristic chord-derived root/fifth anchors with server-provided physical positions. Prefer sparse devotional motion and do not compete with selected fill reservations. The server may deterministically substitute an equivalent feasible candidate or omit an anchor if a whole-foundation conflict remains; a melody-only exception never expands accompaniment limits.
 - The server prints a diagnostic-only below-note source ABC label such as "_Bass M3:S1" for selected bass positions. It does not modify the immutable raw source ABC.
 
 FILL RULES

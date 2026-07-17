@@ -32,6 +32,9 @@ interface FingerstyleLineCardProps {
   songSlug: string;
   sourceFingerprint: string;
   lineIndex: number;
+  /** Immutable TimeGrid source used to generate and safely rebuild fill variants. */
+  sourceLineMeasures: TimeSliceMeasure[];
+  /** Current rendered arrangement, including the selected option's tablature. */
   lineMeasures: TimeSliceMeasure[];
   activeAbc: string;
   accompLayerVisibility: Record<string, boolean>;
@@ -84,6 +87,7 @@ export function FingerstyleLineCard({
   songSlug,
   sourceFingerprint,
   lineIndex,
+  sourceLineMeasures,
   lineMeasures,
   activeAbc,
   accompLayerVisibility,
@@ -227,7 +231,7 @@ export function FingerstyleLineCard({
       const result = await generateAIFingerstyleLine({
         songSlug,
         sourceFingerprint,
-        lineMeasures,
+        lineMeasures: sourceLineMeasures,
         previousLines: buildPreviousContext(),
         activeAbc: workflowAppliedMusicAbc,
         skillLevel: generationSettings.skillLevel,
@@ -262,6 +266,7 @@ export function FingerstyleLineCard({
   }, [
     songSlug,
     sourceFingerprint,
+    sourceLineMeasures,
     lineMeasures,
     buildPreviousContext,
     workflowAppliedMusicAbc,
@@ -284,7 +289,7 @@ export function FingerstyleLineCard({
       const { selectAIFingerstyleLineOption } = await import("@/app/actions/fingerstyle-line-arranger");
       const result = await selectAIFingerstyleLineOption({
         sourceFingerprint,
-        lineMeasures,
+        lineMeasures: sourceLineMeasures,
         activeAbc: workflowAppliedMusicAbc,
         generationRun,
         optionId,
@@ -306,7 +311,7 @@ export function FingerstyleLineCard({
       generationLock.release(generation);
       setIsSelectingOption(false);
     }
-  }, [generationLock, generationRun, lineIndex, lineMeasures, onGenerationRunChange, sourceFingerprint, workflowAppliedMusicAbc]);
+  }, [generationLock, generationRun, lineIndex, sourceLineMeasures, onGenerationRunChange, sourceFingerprint, workflowAppliedMusicAbc]);
 
   const tabEnabled = isAbcLayerVisible(ABC_LAYER_IDS.tab, accompLayerVisibility, false);
   const abcjsRenderInput = useMemo(
@@ -315,6 +320,21 @@ export function FingerstyleLineCard({
       : "",
     [lineAbcResult, tabEnabled],
   );
+  const fillOpportunityMarkers = useMemo(() => {
+    if (!generationRun) return [];
+    const localMeasureIndex = new Map(sourceLineMeasures.map((measure, index) => [measure.measure, index]));
+    return (generationRun.opportunityAnalysis.windows ?? []).flatMap(window => {
+      const measureIndex = localMeasureIndex.get(window.measure);
+      const measure = sourceLineMeasures[measureIndex ?? -1];
+      if (measureIndex === undefined || !measure?.grid.length) return [];
+      return [{
+        id: window.id,
+        measureIndex,
+        startFraction: (window.startStep - 1) / measure.grid.length,
+        label: `Fill opportunity: measure ${window.measure}, steps ${window.startStep}–${window.endStep}`,
+      }];
+    });
+  }, [generationRun, sourceLineMeasures]);
 
   // ── Render ───────────────────────────────────────────────────────────
 
@@ -361,6 +381,40 @@ export function FingerstyleLineCard({
       <p className="mb-4 rounded-xl border border-indigo-200 bg-white/70 px-3 py-2 text-xs text-indigo-900 dark:border-indigo-900/50 dark:bg-indigo-950/30 dark:text-indigo-200">
         Melody attacks and rests stay pinned to the source. AI first reserves fill positions, then plans chord-derived bass positions and pitches, freezes the TimeGrid, and finally composes only post-bass legal fills.
       </p>
+
+      {generationRun?.options.length ? (
+        <div className="mb-4 space-y-2" aria-label="Fill option justifications">
+          {generationRun.options.map(option => (
+            <article key={option.id} className={`rounded-xl border p-3 text-xs ${
+              option.id === generationRun.selectedOptionId
+                ? "border-amber-300 bg-amber-50/70 text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100"
+                : "border-indigo-200 bg-white/70 text-indigo-950 dark:border-indigo-900/60 dark:bg-indigo-950/20 dark:text-indigo-100"
+            }`}>
+              <h4 className="font-bold">Option {option.ordinal} — Why these choices</h4>
+              {option.justification.positions.length > 0 ? (
+                <div className="mt-2 space-y-1">
+                  <div className="font-semibold">Position</div>
+                  {option.justification.positions.map(position => (
+                    <p key={position.windowId}>
+                      M{position.measure}, steps {position.startStep}–{position.endStep} over {position.activeChord}: {position.reason}
+                    </p>
+                  ))}
+                </div>
+              ) : <p className="mt-2">No discretionary fill position was selected; this option keeps the validated bass foundation.</p>}
+              {option.justification.notes.length > 0 && (
+                <div className="mt-2 space-y-1">
+                  <div className="font-semibold">Pitches and durations</div>
+                  {option.justification.notes.map(note => (
+                    <p key={note.candidateId}>
+                      {note.pitch} ({note.harmonicRole}), string {note.string} fret {note.fret}, {note.durationSteps} step{note.durationSteps === 1 ? "" : "s"}, {note.finger}: {note.reason}
+                    </p>
+                  ))}
+                </div>
+              )}
+            </article>
+          ))}
+        </div>
+      ) : null}
 
       {melodyPlayability.exceptions.length > 0 && (
         <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
@@ -488,6 +542,7 @@ export function FingerstyleLineCard({
                 showExactRenderAbcCopy={true}
                 // The generated Guitar voice already carries the melody; avoid a second Melody/chord-track attack.
                 synthOptions={{ voicesOff: [0], chordsOff: true }}
+                visualMarkers={fillOpportunityMarkers}
                 renderOptions={getArrangementRenderOptionsFor(lineAbcResult, COMPOSER_PREVIEW_RENDER_OPTIONS, tabEnabled)}
               />
             </div>

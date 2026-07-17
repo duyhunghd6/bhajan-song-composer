@@ -11,6 +11,7 @@ import type { EnsembleConflictReportEntry } from "@/lib/theory/ensemble-conflict
 import type { FillDensityMode } from "@/lib/theory/fingerstyle-arranger/fill-opportunities";
 import type { SkillLevel } from "@/lib/theory/fingerstyle-arranger/fingerstyle-constraints";
 import { getComposerWorkspaceStorageKey } from "./workspace/storage";
+import { serializeForStorage } from "./workspace/storage-pruning";
 
 export const DEFAULT_HARMONY_LAYER_VISIBILITY: Record<string, boolean> = {
   ChordProgression: true,
@@ -144,10 +145,15 @@ export function useWorkspaceState(slug: string) {
       if (state === DEFAULT_WORKSPACE_STATE) {
         window.localStorage.removeItem(storageKey);
       } else {
-        window.localStorage.setItem(storageKey, JSON.stringify(state));
+        const json = serializeForStorage(state);
+        if (json) {
+          window.localStorage.setItem(storageKey, json);
+        } else {
+          console.warn(`[useWorkspaceState] Could not serialize state for key "${storageKey}" — skipping save.`);
+        }
       }
     } catch (e) {
-      console.error("Failed to save workspace state", e);
+      console.error(`[useWorkspaceState] Failed to save workspace state for key "${storageKey}":`, e);
     }
   }, [state, isHydrated, storageKey]);
 

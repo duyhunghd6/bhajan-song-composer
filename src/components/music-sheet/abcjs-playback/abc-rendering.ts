@@ -1,3 +1,5 @@
+import type { AbcjsVisualMarker } from "./types";
+
 /**
  * Parse the Q: (tempo) field from an ABC notation string.
  * Supports formats like "Q: 1/4=65", "Q:120", "Q: 65".
@@ -313,4 +315,53 @@ export function postProcessChords(container: HTMLDivElement | null) {
     const targetY = bestStaff.y - CHORD_CLEARANCE_PX;
     chord.setAttribute("y", String(targetY));
   }
+}
+
+/**
+ * Draws non-interactive markers after ABCJS has completed its layout. Markers are
+ * display metadata only: they never alter source ABC or interfere with note clicks.
+ */
+export function postProcessVisualMarkers(
+  container: HTMLDivElement | null,
+  markers: readonly AbcjsVisualMarker[] | undefined,
+) {
+  if (!container) return;
+  container.querySelectorAll("g.abcjs-visual-marker-layer").forEach(layer => layer.remove());
+  if (!markers?.length) return;
+
+  const svg = container.querySelector("svg");
+  if (!svg) return;
+  const layer = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  layer.setAttribute("class", "abcjs-visual-marker-layer");
+  layer.setAttribute("pointer-events", "none");
+
+  for (const marker of markers) {
+    // abcjs annotates generated elements with a stable zero-based measure class.
+    // A measure may have multiple elements/voices, so union their SVG bounds.
+    const nodes = Array.from(container.querySelectorAll(`[class~="abcjs-mm${marker.measureIndex}"]`));
+    const bounds = nodes.flatMap(node => {
+      try {
+        const box = (node as SVGGraphicsElement).getBBox();
+        return Number.isFinite(box.x) && Number.isFinite(box.width) ? [box] : [];
+      } catch {
+        return [];
+      }
+    });
+    if (!bounds.length) continue;
+    const left = Math.min(...bounds.map(box => box.x));
+    const right = Math.max(...bounds.map(box => box.x + box.width));
+    const bottom = Math.max(...bounds.map(box => box.y + box.height));
+    const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    circle.setAttribute("class", "abcjs-fill-opportunity-dot");
+    circle.setAttribute("data-fill-opportunity-id", marker.id);
+    circle.setAttribute("cx", String(left + (right - left) * Math.max(0, Math.min(1, marker.startFraction))));
+    circle.setAttribute("cy", String(bottom + 12));
+    circle.setAttribute("r", "4.5");
+    circle.setAttribute("aria-hidden", "true");
+    const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+    title.textContent = marker.label;
+    circle.append(title);
+    layer.append(circle);
+  }
+  svg.append(layer);
 }

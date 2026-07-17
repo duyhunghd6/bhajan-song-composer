@@ -15,7 +15,6 @@ import {
   persistFingerstyleDiagnosticRecords,
   type FingerstyleStoredDiagnosticRecord,
 } from "../fingerstyle-diagnostics";
-import { placeFingerstyleFoundationOnTimeGrid } from "@/lib/theory/fingerstyle-arranger/heuristic-time-slice";
 import {
   analyzeFillOpportunities,
   mergeAcceptedFills,
@@ -52,7 +51,7 @@ import {
   analyzeBassPitchCandidates,
   formatBassPitchCandidates,
   formatBassPositions,
-  materializeBassFoundation,
+  resolveBassFoundation,
   parseBassPitchSelection,
   parseBassPositionSelection,
   validateBassPitchSelection,
@@ -415,6 +414,8 @@ export async function runFingerstyleLineWorkflow(
     }
     logs.push(`\n## ABC ↔ ASCII-GuitarTab Validation\n\n${asciiGuitarTabValidationMessage}`);
     const completedFillSummary = fillSummary("passed");
+    const windowsById = new Map(opportunityAnalysis?.windows.map(window => [window.id, window]) ?? []);
+    const candidatesById = new Map(opportunityAnalysis?.candidates.map(candidate => [candidate.id, candidate]) ?? []);
     const options: FingerstyleLineGenerationOption[] = acceptedVariantProposals.map((variant, index) => ({
       id: variant.id,
       ordinal: index + 1,
@@ -424,6 +425,35 @@ export async function runFingerstyleLineWorkflow(
         ...completedFillSummary,
         selectedWindowCount: variant.selection.decisions.filter(decision => decision.decision === "use").length,
         composedFillCount: variant.composition.entries.length,
+      },
+      justification: {
+        positions: variant.selection.decisions.flatMap(decision => {
+          if (decision.decision !== "use") return [];
+          const window = windowsById.get(decision.windowId);
+          return window ? [{
+            windowId: window.id,
+            measure: window.measure,
+            startStep: window.startStep,
+            endStep: window.endStep,
+            activeChord: window.activeChord,
+            reason: decision.reason,
+          }] : [];
+        }),
+        notes: variant.composition.entries.flatMap(entry => {
+          const candidate = candidatesById.get(entry.candidateId);
+          return candidate ? [{
+            candidateId: candidate.id,
+            measure: candidate.measure,
+            step: candidate.step,
+            pitch: candidate.pitch,
+            harmonicRole: candidate.harmonicRole,
+            string: candidate.string,
+            fret: candidate.fret,
+            durationSteps: entry.durationSteps,
+            finger: entry.finger,
+            reason: `Chosen from the validated ${candidate.harmonicRole} candidate at this rest: ${candidate.conditions.join(", ") || "fits the chord, register, and hand-continuity constraints"}.`,
+          }] : [];
+        }),
       },
     }));
     const generationRun: FingerstyleLineGenerationRun | undefined = frozenFoundation && opportunityAnalysis && options.length > 0
@@ -591,8 +621,25 @@ export async function runFingerstyleLineWorkflow(
           execute: () => {
             if (!bassPositionAnalysis || !acceptedBassPositions) return { valid: false, message: "Select bass positions first." };
             const selected = bassPositionAnalysis.positions.filter(position => acceptedBassPositions.includes(position.id));
-            bassPitchAnalysis = analyzeBassPitchCandidates({ positionSetId: bassPositionAnalysis.setId, positions: selected, sourceFingerprint: input.sourceFingerprint, skillLevel: policy.skillLevel });
-            recordWorkflowEvent("bass-pitches-analyzed", "bass-pitches", "success", `Generated ${bassPitchAnalysis.candidates.length} heuristic chord-derived bass candidate(s).`, bassPitchAnalysis);
+            bassPitchAnalysis = analyzeBassPitchCandidates({
+              positionSetId: bassPositionAnalysis.setId,
+              positions: selected,
+              sourceFingerprint: input.sourceFingerprint,
+              skillLevel: policy.skillLevel,
+              measures: input.lineMeasures,
+              maxMelodyFret: melodyPlayability.melodyMaxFret,
+            });
+            const unavailable = bassPitchAnalysis.unavailablePositionIds;
+            if (unavailable.length) {
+              recordWorkflowEvent(
+                "bass-anchors-omitted",
+                "bass-pitches",
+                "info",
+                `Omitted ${unavailable.length} bass anchor(s) with no playable grip under the pinned melody: ${unavailable.join(", ")}.`,
+                { unavailablePositionIds: unavailable },
+              );
+            }
+            recordWorkflowEvent("bass-pitches-analyzed", "bass-pitches", "success", `Generated ${bassPitchAnalysis.candidates.length} heuristic chord-derived bass candidate(s)${unavailable.length ? `; ${unavailable.length} anchor(s) omitted for physical compatibility` : ""}.`, bassPitchAnalysis);
             return formatBassPitchCandidates(bassPitchAnalysis);
           },
         },
@@ -607,12 +654,15 @@ export async function runFingerstyleLineWorkflow(
               recordWorkflowEvent("bass-pitches-rejected", "bass-pitches", "warning", validated.errors.join(" "), validated.errors);
               return { valid: false, message: validated.errors.join(" ") };
             }
-            const materialized = materializeBassFoundation(input.lineMeasures, validated.selected, policy.skillLevel, melodyPlayability.melodyMaxFret);
-            const placement = placeFingerstyleFoundationOnTimeGrid(materialized, { bpm, skillLevel: policy.skillLevel, maxMelodyFret: melodyPlayability.melodyMaxFret });
-            if (placement.unresolvedEventCount > 0) return { valid: false, message: "TimeGrid materialization could not place every melody or bass event." };
-            const errors = physicalValidationErrors(placement.measures, { ...policy, resolvedDensity: "off" }, melodyPlayability.melodyMaxFret);
-            if (errors.length > 0) return { valid: false, message: errors.join(" ") };
-            frozenFoundation = freezeFoundationDurations(placement.measures);
+            const resolved = resolveBassFoundation({
+              measures: input.lineMeasures,
+              submitted: validated.selected,
+              candidates: bassPitchAnalysis.candidates,
+              skillLevel: policy.skillLevel,
+              maxMelodyFret: melodyPlayability.melodyMaxFret,
+            });
+            if (resolved.errors.length > 0) return { valid: false, message: resolved.errors.join(" ") };
+            frozenFoundation = freezeFoundationDurations(resolved.measures);
             opportunityAnalysis = null;
             nextInspectionCursor = 0;
             acceptedSelection = null;
@@ -620,16 +670,25 @@ export async function runFingerstyleLineWorkflow(
             acceptedCompositionToon = null;
             acceptedFinalMeasures = null;
             fillStageFailureAttempts = 0;
-            recordWorkflowEvent("bass-pitches-accepted", "bass-pitches", "success", `Bass note choices: ${validated.selected.map(candidate => `${candidate.positionId}=${candidate.pitch} (${candidate.role})`).join(", ") || "none"}.`, { selected: validated.selected });
-            recordWorkflowEvent("timegrid-materialized", "timegrid", "success", `Updated and froze canonical TimeGrid with ${validated.selected.length} bass note(s).`, placement.diagnostics);
+            if (resolved.substituted.length || resolved.omittedPositionIds.length) {
+              recordWorkflowEvent(
+                "bass-foundation-resolved",
+                "bass-pitches",
+                "info",
+                `Resolved bass foundation with ${resolved.substituted.length} substitution(s) and ${resolved.omittedPositionIds.length} omission(s).`,
+                { substituted: resolved.substituted, omittedPositionIds: resolved.omittedPositionIds },
+              );
+            }
+            recordWorkflowEvent("bass-pitches-accepted", "bass-pitches", "success", `Bass note choices: ${resolved.selected.map(candidate => `${candidate.positionId}=${candidate.pitch} (${candidate.role})`).join(", ") || "none"}.`, { selected: resolved.selected });
+            recordWorkflowEvent("timegrid-materialized", "timegrid", "success", `Updated and froze canonical TimeGrid with ${resolved.selected.length} bass note(s).`, { substituted: resolved.substituted, omittedPositionIds: resolved.omittedPositionIds });
             if (policy.resolvedDensity === "off") {
               acceptedFinalMeasures = frozenFoundation;
               recordWorkflowEvent("fill-stages-skipped", "fill-analysis", "info", "Fill density is none; skipped opportunity analysis, fill selection, composition, and final LLM submission.");
               const finalization = completeFinalOutput();
               if (!finalization.valid) return finalization;
-              return { valid: true, selected: validated.selected, message: "TimeGrid updated and finalized without discretionary fills." };
+              return { valid: true, selected: resolved.selected, message: "TimeGrid updated and finalized without discretionary fills." };
             }
-            return { valid: true, selected: validated.selected, message: "TimeGrid updated. Inspect post-bass fill opportunities next." };
+            return { valid: true, selected: resolved.selected, message: "TimeGrid updated. Inspect post-bass fill opportunities next." };
           },
           maxInvalidResults: 3,
         },

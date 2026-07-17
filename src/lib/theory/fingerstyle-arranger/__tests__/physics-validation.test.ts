@@ -46,6 +46,22 @@ describe("fingerstyle physical validation policy", () => {
     ]));
   });
 
+  it("keeps the simultaneous fret-span limit when melody has an exception", () => {
+    const highMelodyWithBass = step(1, [
+      { string: 1, fret: 7, finger: "a", role: "melody" },
+      { string: 5, fret: 3, finger: "p", role: "root" },
+    ]);
+    highMelodyWithBass.weight = "⬤";
+    highMelodyWithBass.melody = { pitch: "B4", state: "attack" };
+
+    expect(validateFingerstylePhysicsDetailed([highMelodyWithBass], {
+      skillLevel: "beginner",
+      maxMelodyFret: 7,
+    }).issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "fret-span-exceeded" }),
+    ]));
+  });
+
   it("validates sounding durations rather than only simultaneous attacks", () => {
     const grid = [
       step(1, [{ string: 2, fret: 0, finger: "m", role: "fill", durationSteps: 2 }]),

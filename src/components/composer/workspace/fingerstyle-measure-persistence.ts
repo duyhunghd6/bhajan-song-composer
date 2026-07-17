@@ -135,6 +135,29 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+function foundationMatchesCurrentLine(
+  foundation: TimeSliceMeasure[],
+  line: TimeSliceMeasure[],
+): boolean {
+  return foundation.length === line.length && foundation.every((measure, measureIndex) => {
+    const current = line[measureIndex];
+    return Boolean(current)
+      && measure.measure === current.measure
+      && measure.lineIndex === current.lineIndex
+      && measure.grid.length === current.grid.length
+      && measure.grid.every((step, stepIndex) => {
+        const sourceStep = current.grid[stepIndex];
+        return Boolean(sourceStep)
+          && step.step === sourceStep.step
+          && step.chord === sourceStep.chord
+          && step.weight === sourceStep.weight
+          && step.lyric === sourceStep.lyric
+          && step.melody.pitch === sourceStep.melody.pitch
+          && step.melody.state === sourceStep.melody.state;
+      });
+  });
+}
+
 function isRestorableGenerationRun(value: unknown, sourceFingerprint: string, fresh: TimeSliceMeasure[]): value is FingerstyleLineGenerationRun {
   if (!isRecord(value)) return false;
   const run = value as Partial<FingerstyleLineGenerationRun>;
@@ -153,7 +176,11 @@ function isRestorableGenerationRun(value: unknown, sourceFingerprint: string, fr
     || typeof run.selectedOptionId !== "string" || !run.selectedOptionId
   ) return false;
   const line = fresh.filter(measure => measure.lineIndex === run.lineIndex);
-  if (line.length === 0 || JSON.stringify(line.map(measure => measure.measure)) !== JSON.stringify(run.measureNumbers)) return false;
+  if (
+    line.length === 0
+    || JSON.stringify(line.map(measure => measure.measure)) !== JSON.stringify(run.measureNumbers)
+    || !foundationMatchesCurrentLine(run.foundation, line)
+  ) return false;
 
   const optionIds = new Set<string>();
   let selectedCount = 0;
@@ -162,7 +189,7 @@ function isRestorableGenerationRun(value: unknown, sourceFingerprint: string, fr
     if (optionIds.has(option.id)) return false;
     optionIds.add(option.id);
     if (option.id === run.selectedOptionId) selectedCount += 1;
-    if (!isRecord(option.selection) || !isRecord(option.composition)) return false;
+    if (!isRecord(option.selection) || !isRecord(option.composition) || !isRecord(option.justification)) return false;
     if (
       option.selection.sourceFingerprint !== sourceFingerprint
       || option.composition.sourceFingerprint !== sourceFingerprint
@@ -278,6 +305,7 @@ function pruneFingerstyleLineGenerationRun(
         entries: option.composition.entries,
       },
       fillSummary: option.fillSummary,
+      justification: option.justification,
     })),
     selectedOptionId: run.selectedOptionId,
   };

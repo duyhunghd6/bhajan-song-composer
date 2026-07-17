@@ -235,6 +235,10 @@ describe("time-slice ABC interval renderer", () => {
       source_abc: { melody: "B8", lyric: "", beatWeight: "" },
       grid: sourceRhythmMeasure().grid.map((step, index) => ({
         ...step,
+        // A genuine cross-measure tie means the first step is a sustain, not a new attack.
+        melody: index === 0
+          ? { pitch: "B4", state: "sustain" as const }
+          : step.melody,
         tablature: index === 0
           ? [{ string: 2 as const, fret: 0, finger: "a" as const, role: "melody" as const, durationSteps: 16 }]
           : [],
@@ -295,4 +299,95 @@ describe("time-slice ABC interval renderer", () => {
       true,
     )).toBe("!1!e3- !1!e2 z3");
   });
+
+  it("does NOT produce a cross-measure tie when the next measure's first step is an attack on the same pitch", () => {
+    // Scenario from the bug: M19 ends with B4 sustain on string 1 fret 7,
+    // source_abc has tie (B4-), but M20 grid[0] melody state is "attack".
+    // The guitar must re-attack B4 in M20, not tie from M19.
+    const source = `X:1\nL:1/8\nM:4/4\nK:G\n| B8- | B8 |`;
+    const m19: TimeSliceMeasure = {
+      measure: 19,
+      lineIndex: 0,
+      style_profile: { key: "G", comping_style: "Sparse PIMA", voicing_plan: "Open G" },
+      source_abc: { melody: 'G A2 B- "B7" B4-', lyric: "", beatWeight: "" },
+      grid: Array.from({ length: 16 }, (_, index) => ({
+        step: index + 1,
+        chord: index < 8 ? "Am" : "B7",
+        weight: index === 0 ? "⬤" as const : null,
+        melody: index === 0
+          ? { pitch: "G4", state: "attack" as const }
+          : index < 2
+            ? { pitch: "G4", state: "sustain" as const }
+            : index === 2
+              ? { pitch: "A4", state: "attack" as const }
+              : index < 6
+                ? { pitch: "A4", state: "sustain" as const }
+                : index === 6
+                  ? { pitch: "B4", state: "attack" as const }
+                  : { pitch: "B4", state: "sustain" as const },
+        lyric: null,
+        tablature: index === 0
+          ? [
+              { string: 5 as const, fret: 0, finger: "p" as const, role: "bass" as const, durationSteps: 1 },
+              { string: 1 as const, fret: 3, finger: "a" as const, role: "melody" as const },
+            ]
+          : index === 2
+            ? [{ string: 1 as const, fret: 5, finger: "a" as const, role: "melody" as const }]
+            : index === 6
+              ? [{ string: 1 as const, fret: 7, finger: "a" as const, role: "melody" as const }]
+              : [],
+      })),
+    };
+    const m20: TimeSliceMeasure = {
+      measure: 20,
+      lineIndex: 0,
+      style_profile: { key: "G", comping_style: "Sparse PIMA", voicing_plan: "Open G" },
+      source_abc: { melody: "B4 B2 z B,", lyric: "", beatWeight: "" },
+      grid: Array.from({ length: 16 }, (_, index) => ({
+        step: index + 1,
+        chord: "C",
+        weight: index === 0 ? "⬤" as const : null,
+        melody: index === 0
+          ? { pitch: "B4", state: "attack" as const } // ← new attack, NOT sustain
+          : index < 8
+            ? { pitch: "B4", state: "sustain" as const }
+            : index === 8
+              ? { pitch: "B4", state: "attack" as const }
+              : index < 12
+                ? { pitch: "B4", state: "sustain" as const }
+                : index < 14
+                  ? { pitch: null, state: "rest" as const }
+                  : index === 14
+                    ? { pitch: "B3", state: "attack" as const }
+                    : { pitch: "B3", state: "sustain" as const },
+        lyric: null,
+        tablature: index === 0
+          ? [
+              { string: 4 as const, fret: 5, finger: "p" as const, role: "bass" as const, durationSteps: 1 },
+              { string: 1 as const, fret: 7, finger: "a" as const, role: "melody" as const },
+            ]
+          : index === 8
+            ? [
+                { string: 4 as const, fret: 5, finger: "p" as const, role: "bass" as const, durationSteps: 1 },
+                { string: 1 as const, fret: 7, finger: "a" as const, role: "melody" as const },
+              ]
+            : index === 14
+              ? [{ string: 2 as const, fret: 0, finger: "a" as const, role: "melody" as const }]
+              : [],
+      })),
+    };
+
+    const [renderedM19, renderedM20] = renderTimeSliceMeasuresToAbc(
+      [m19, m20],
+      buildAbcDurationContext(source),
+      getKeyAccidentalsFromAbc(source),
+      true,
+    );
+
+    // M19 must NOT end with a tie on string 1 because M20 is a new attack
+    expect(renderedM19).not.toMatch(/!1!b[^-]*-\s*$/);
+    // M20 must contain a new attack for string 1 (B4 = fret 7)
+    expect(renderedM20).toContain("!1!b");
+  });
 });
+

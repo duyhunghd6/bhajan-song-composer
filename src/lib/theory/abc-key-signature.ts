@@ -118,6 +118,8 @@ const PITCH_CLASS_TO_SEMITONE: Record<string, number> = {
   "D#": 3,
   Eb: 3,
   E: 4,
+  "E#": 5,   // enharmonic of F
+  Fb: 4,     // enharmonic of E
   F: 5,
   "F#": 6,
   Gb: 6,
@@ -128,6 +130,8 @@ const PITCH_CLASS_TO_SEMITONE: Record<string, number> = {
   "A#": 10,
   Bb: 10,
   B: 11,
+  "B#": 0,   // enharmonic of C (octave corrected below)
+  Cb: 11,    // enharmonic of B (octave corrected below)
 };
 
 /**
@@ -146,22 +150,26 @@ export function abcNoteToMidiWithKey(
   note: string,
   keyAccidentals?: AbcKeyAccidentalMap
 ): number | null {
-  const match = note.trim().match(/^([_^=]?)([A-Ga-g])([,']*)/);
+  const match = note.trim().match(/^([_^=]*)([A-Ga-g])([,']*)/);
   if (!match) return null;
 
-  const explicitAccidental = match[1]; // "^", "_", "=", or ""
+  const explicitAccidental = match[1]; // "^^", "^", "__", "_", "=", or ""
   const letter = match[2];
   const octaveMarks = match[3] ?? "";
 
   let accidentalStr = "";
-  if (explicitAccidental === "^") {
+  if (explicitAccidental === "^^") {
+    accidentalStr = "##";
+  } else if (explicitAccidental === "^") {
     accidentalStr = "#";
+  } else if (explicitAccidental === "__") {
+    accidentalStr = "bb";
   } else if (explicitAccidental === "_") {
     accidentalStr = "b";
   } else if (explicitAccidental === "=") {
     // Explicit natural — no accidental, overrides key signature
     accidentalStr = "";
-  } else {
+  } else if (explicitAccidental === "") {
     // No explicit accidental — apply key signature if available
     const keyAcc = keyAccidentals?.get(letter.toUpperCase());
     if (keyAcc === "^") {
@@ -169,6 +177,22 @@ export function abcNoteToMidiWithKey(
     } else if (keyAcc === "_") {
       accidentalStr = "b";
     }
+  }
+
+  // For double accidentals, compute semitone offset from the natural note
+  if (accidentalStr === "##" || accidentalStr === "bb") {
+    const baseSemitone = PITCH_CLASS_TO_SEMITONE[letter.toUpperCase()];
+    if (baseSemitone === undefined) return null;
+    const offset = accidentalStr === "##" ? 2 : -2;
+    let octave = letter === letter.toLowerCase() ? 5 : 4;
+    for (const mark of octaveMarks) {
+      octave += mark === "'" ? 1 : -1;
+    }
+    const rawSemitone = baseSemitone + offset;
+    // Handle wrap-around: C## stays same octave, Cbb drops an octave, etc.
+    const octaveAdjust = rawSemitone >= 12 ? 1 : rawSemitone < 0 ? -1 : 0;
+    const normalizedSemitone = ((rawSemitone % 12) + 12) % 12;
+    return (octave + 1 + octaveAdjust) * 12 + normalizedSemitone;
   }
 
   const pitchClass = `${letter.toUpperCase()}${accidentalStr}`;
@@ -180,7 +204,12 @@ export function abcNoteToMidiWithKey(
     octave += mark === "'" ? 1 : -1;
   }
 
-  return (octave + 1) * 12 + semitone;
+  // B# is enharmonic to C in the next octave; Cb is enharmonic to B in the previous octave
+  let octaveCorrection = 0;
+  if (pitchClass === "B#") octaveCorrection = 1;
+  else if (pitchClass === "Cb") octaveCorrection = -1;
+
+  return (octave + 1 + octaveCorrection) * 12 + semitone;
 }
 
 /**

@@ -98,7 +98,7 @@ function extractBodyMeasures(abcString: string): string[] {
 }
 
 function extractMelodyTimeline(abcString: string): TimelineSymbol[] {
-  const symbolRegex = /([_^=]?[A-Ga-gz][,']*)([0-9]*\/?[0-9]*)/g;
+  const symbolRegex = /([_^=]*[A-Ga-gz][,']*)([0-9]*\/?[0-9]*)/g;
 
   return extractBodyMeasures(abcString).flatMap((measure, measureIndex) => {
     const symbols: TimelineSymbol[] = [];
@@ -118,7 +118,7 @@ function extractMelodyTimeline(abcString: string): TimelineSymbol[] {
 }
 
 function extractLayer2Activity(accompaniment: AccompanimentStage): Layer2ActivityEvent[] {
-  const tokenRegex = /(\[[^\]]+\]|z|[\^_=]?[A-Ga-g][,']*)([0-9]*\/?[0-9]*)/g;
+  const tokenRegex = /(\[[^\]]+\]|z|[\^_=]*[A-Ga-g][,']*)([0-9]*\/?[0-9]*)/g;
 
   return accompaniment.measures.flatMap((measure) => {
     const events: Layer2ActivityEvent[] = [];

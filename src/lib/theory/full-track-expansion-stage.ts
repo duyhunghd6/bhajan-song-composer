@@ -115,7 +115,7 @@ function extractMelodySymbolsByMeasure(abcString: string): MelodySymbol[][] {
     .join(" ");
   const rawMeasures = body.split(/[|\]]/);
   const measures: MelodySymbol[][] = [];
-  const symbolRegex = /([_^=]?[A-Ga-gz][,']*)([0-9]*\/?[0-9]*)/g;
+  const symbolRegex = /([_^=]*[A-Ga-gz][,']*)([0-9]*\/?[0-9]*)/g;
 
   for (const rawMeasure of rawMeasures) {
     const trimmed = rawMeasure.trim().replace(/^[:\s]+|[:\s]+$/g, "");

@@ -13,7 +13,7 @@ import {
   claimPlayback,
   releasePlayback,
 } from "./playback-registry";
-import { postProcessBeats, postProcessChords, parseAbcTempo } from "./abcjs-playback/abc-rendering";
+import { postProcessBeats, postProcessChords, postProcessVisualMarkers, parseAbcTempo } from "./abcjs-playback/abc-rendering";
 import { prepareAbcjsRenderInput, renderPreparedAbc } from "./abcjs-playback/render-input";
 import { AbcjsPlaybackControls } from "./abcjs-playback/AbcjsPlaybackControls";
 import { AbcjsPlaybackStyles } from "./abcjs-playback/AbcjsPlaybackStyles";
@@ -45,6 +45,7 @@ export default function AbcjsPlaybackController({
   hideVoiceNames = false,
   showExactRenderAbcCopy = false,
   allowPdfDownload = true,
+  visualMarkers,
 }: AbcjsPlaybackControllerProps) {
   const generatedId = useId().replace(/:/g, "");
   const resolvedCanvasId = canvasId ?? `music-sheet-canvas-${generatedId}`;
@@ -546,6 +547,7 @@ export default function AbcjsPlaybackController({
           highlightTimingEvent(event);
         },
       });
+      postProcessVisualMarkers(canvas, visualMarkers);
       nextDuration = getSheetDurationSeconds(timingCallbacksRef.current.noteTimings);
       nextMillisecondsPerMeasure = visualObj[0].millisecondsPerMeasure?.(tempo) || 2000;
       // NOTE: Click-to-seek is handled exclusively by the abcjs `clickListener`
@@ -567,7 +569,7 @@ export default function AbcjsPlaybackController({
       stopRenderedPlayback();
       timingCallbacksRef.current = null;
     };
-  }, [abcjsModule, finalAbcString, clearActiveNoteHighlight, handleNoteClick, highlightTimingEvent, loopEndMeasure, loopMode, loopStartMeasure, onPlaybackCursor, renderOptions, setPlaybackState, tempo, useContainerWidth, containerWidth]);
+  }, [abcjsModule, finalAbcString, clearActiveNoteHighlight, handleNoteClick, highlightTimingEvent, loopEndMeasure, loopMode, loopStartMeasure, onPlaybackCursor, renderOptions, setPlaybackState, tempo, useContainerWidth, containerWidth, visualMarkers]);
 
   // Register this instance with the global playback registry for exclusive playback
   useEffect(() => {
