@@ -1,0 +1,115 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.9 [39m[90m/Users/steve/duyhunghd6/bhajan-song-composer[39m
+
+ [32m✓[39m src/lib/theory/__tests__/fingerstyle-arranger.test.ts[2m > [22mGuitar fingerstyle arranger[2m > [22minterleaves chord bass notes with melody notes[32m 6[2mms[22m[39m
+ [32m✓[39m src/lib/theory/__tests__/fingerstyle-arranger.test.ts[2m > [22mGuitar fingerstyle arranger[2m > [22mderives chord-timed fingerstyle bass from workflow-applied chord annotations[32m 2[2mms[22m[39m
+ [32m✓[39m src/lib/theory/__tests__/fingerstyle-arranger.test.ts[2m > [22mGuitar fingerstyle arranger[2m > [22mbuilds inspectable upward construction source layers before guitar reduction[32m 1[2mms[22m[39m
+ [32m✓[39m src/lib/theory/__tests__/fingerstyle-arranger.test.ts[2m > [22mGuitar fingerstyle arranger[2m > [22mcompresses source layers into routed outer voices and weak-beat guide tones[32m 1[2mms[22m[39m
+ [31m×[39m src/lib/theory/__tests__/fingerstyle-arranger.test.ts[2m > [22mGuitar fingerstyle arranger[2m > [22mmaps routed notes onto strict PIMA picking and playable fretting assignments[32m 4[2mms[22m[39m
+[31m   → expected { …(9) } to match object { …(3) }
+(6 matching properties omitted from actual)[39m
+ [32m✓[39m src/lib/theory/__tests__/fingerstyle-arranger.test.ts[2m > [22mGuitar fingerstyle arranger[2m > [22mcan render a Folk/Travis hand map with thumb clock, syncopation, and string slaps[32m 1[2mms[22m[39m
+ [31m×[39m src/lib/theory/__tests__/fingerstyle-arranger.test.ts[2m > [22mGuitar fingerstyle arranger[2m > [22mroutes Beat 1 melody to an available treble open string before declaring fallback[32m 2[2mms[22m[39m
+[31m   → expected { measureIndex: +0, chord: 'Em', …(3) } to match object { …(2) }
+(15 matching properties omitted from actual)[39m
+ [32m✓[39m src/lib/theory/__tests__/fingerstyle-arranger.test.ts[2m > [22mGuitar fingerstyle arranger[2m > [22mproposes open-string transposition fallbacks when high-register Beat 1 pairings exceed the fret span[32m 0[2mms[22m[39m
+ [32m✓[39m src/lib/theory/__tests__/fingerstyle-arranger.test.ts[2m > [22mGuitar fingerstyle arranger[2m > [22msurfaces playability failures and fallback suggestions through the output contract[32m 1[2mms[22m[39m
+ [32m✓[39m src/lib/theory/__tests__/fingerstyle-arranger.test.ts[2m > [22mGuitar fingerstyle arranger[2m > [22mexports a complete fingerstyle output contract for Composer and visual integrations[32m 1[2mms[22m[39m
+ [32m✓[39m src/lib/theory/__tests__/fingerstyle-arranger.test.ts[2m > [22mGuitar fingerstyle arranger[2m > [22memits octave-aware tab events that pass strict one-guitar validation[32m 1[2mms[22m[39m
+ [32m✓[39m src/lib/theory/__tests__/fingerstyle-arranger.test.ts[2m > [22mGuitar fingerstyle arranger[2m > [22mexposes a line-only helper for direct ABC output[32m 0[2mms[22m[39m
+ [32m✓[39m src/lib/theory/__tests__/fingerstyle-arranger.test.ts[2m > [22mGuitar fingerstyle arranger[2m > [22mserializes physical melody pitches in concert pitch with key-aware naturals[32m 0[2mms[22m[39m
+ [32m✓[39m src/lib/theory/__tests__/fingerstyle-arranger.test.ts[2m > [22mGuitar fingerstyle arranger[2m > [22mpreserves rests and rest-only measures in the guitar body timeline[32m 0[2mms[22m[39m
+ [32m✓[39m src/lib/theory/__tests__/fingerstyle-arranger.test.ts[2m > [22mGuitar fingerstyle arranger[2m > [22mextracts only the Melody inline voice for solo fingerstyle input[32m 0[2mms[22m[39m
+ [32m✓[39m src/lib/theory/__tests__/fingerstyle-arranger.test.ts[2m > [22mGuitar fingerstyle arranger[2m > [22muses complete validated workflow tab events as the selected canonical tab mapping[32m 1[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 2 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/lib/theory/__tests__/fingerstyle-arranger.test.ts[2m > [22mGuitar fingerstyle arranger[2m > [22mmaps routed notes onto strict PIMA picking and playable fretting assignments
+[31m[1mAssertionError[22m: expected { …(9) } to match object { …(3) }
+(6 matching properties omitted from actual)[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  {[22m
+[32m-   "frettingAssignmentsPlayable": true,[39m
+[31m+   "frettingAssignmentsPlayable": false,[39m
+[2m    "pickingAssignmentsPlayable": true,[22m
+[2m    "strictPimaPicking": true,[22m
+[2m  }[22m
+
+[36m [2m❯[22m src/lib/theory/__tests__/fingerstyle-arranger.test.ts:[2m165:56[22m[39m
+    [90m163|[39m       }[33m,[39m
+    [90m164|[39m     })[33m;[39m
+    [90m165|[39m     [34mexpect[39m(arrangement[33m.[39mdownwardCompression[33m.[39mvalidation)[33m.[39m[34mtoMatchObject[39m({
+    [90m   |[39m                                                        [31m^[39m
+    [90m166|[39m       frettingAssignmentsPlayable[33m:[39m [35mtrue[39m[33m,[39m
+    [90m167|[39m       pickingAssignmentsPlayable[33m:[39m [35mtrue[39m[33m,[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/lib/theory/__tests__/fingerstyle-arranger.test.ts[2m > [22mGuitar fingerstyle arranger[2m > [22mroutes Beat 1 melody to an available treble open string before declaring fallback
+[31m[1mAssertionError[22m: expected { measureIndex: +0, chord: 'Em', …(3) } to match object { …(2) }
+(15 matching properties omitted from actual)[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  {[22m
+[2m    "beatOnePairing": {[22m
+[32m-     "fretStretch": 0,[39m
+[31m+     "fretStretch": 7,[39m
+[2m      "maxFretStretch": 5,[22m
+[32m-     "valid": true,[39m
+[31m+     "valid": false,[39m
+[2m    },[22m
+[2m    "melodyRoute": [[22m
+[2m      {[22m
+[2m        "beat": 1,[22m
+[31m+       "fret": 7,[39m
+[31m+       "note": "B",[39m
+[31m+       "role": "melody",[39m
+[31m+       "string": 1,[39m
+[31m+     },[39m
+[31m+     {[39m
+[31m+       "beat": 2,[39m
+[2m        "fret": 0,[22m
+[32m-       "note": "B",[39m
+[32m-       "string": 2,[39m
+[31m+       "note": "E",[39m
+[31m+       "role": "melody",[39m
+[31m+       "string": 1,[39m
+[31m+     },[39m
+[31m+     {[39m
+[31m+       "beat": 3,[39m
+[31m+       "fret": 3,[39m
+[31m+       "note": "G",[39m
+[31m+       "role": "melody",[39m
+[31m+       "string": 1,[39m
+[31m+     },[39m
+[31m+     {[39m
+[31m+       "beat": 4,[39m
+[31m+       "fret": 5,[39m
+[31m+       "note": "A",[39m
+[31m+       "role": "melody",[39m
+[31m+       "string": 1,[39m
+[2m      },[22m
+[2m    ],[22m
+[2m  }[22m
+
+[36m [2m❯[22m src/lib/theory/__tests__/fingerstyle-arranger.test.ts:[2m209:62[22m[39m
+    [90m207|[39m     const arrangement = generateFingerstyleArrangement(highStretchAbc,…
+    [90m208|[39m
+    [90m209|[39m     expect(arrangement.downwardCompression.outerVoiceMap[0]).toMatchOb…
+    [90m   |[39m                                                              [31m^[39m
+    [90m210|[39m       melodyRoute: expect.arrayContaining([expect.objectContaining({ b…
+    [90m211|[39m       beatOnePairing: { valid: true, fretStretch: 0, maxFretStretch: 5…
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m2 failed[39m[22m[2m | [22m[1m[32m14 passed[39m[22m[90m (16)[39m
+[2m   Start at [22m 23:37:31
+[2m   Duration [22m 165ms[2m (transform 68ms, setup 0ms, import 84ms, tests 22ms, environment 0ms)[22m
+

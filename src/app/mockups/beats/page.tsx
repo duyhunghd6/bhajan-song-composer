@@ -214,7 +214,7 @@ export default function BeatsMockup() {
     tablature: [
       {
         instrument: "guitar",
-        tuning: ["E,,", "A,,", "D,", "G,", "B,", "E"],
+        tuning: ["E,", "A,", "D", "G", "B", "e"],
       },
     ],
   }), []);

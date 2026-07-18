@@ -7,7 +7,7 @@ M:4/4
 L:1/8
 Q:1/4=120
 K:Em
-|: E2 E2 G2 A2 | B4 B2 A2 | G2 A2 B2 G2 | E8 :|`;
+|: e2 e2 g2 a2 | b4 b2 a2 | g2 a2 b2 g2 | e8 :|`;
 
 describe("fingerstyle Composer integration", () => {
   it("builds a Composer layer, playability inspection, and synchronized visual markers for the selected profile", () => {

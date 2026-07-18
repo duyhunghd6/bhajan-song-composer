@@ -129,7 +129,10 @@ function fretFor(note: string, string: GuitarStringNumber): number {
 }
 
 function isHighRegisterAbcNote(note: string): boolean {
-  return /[a-g]/.test(note);
+  // Guitar uses treble-8, so lowercase [a-g] (written octave 5) is concert octave 4,
+  // which is comfortably played on strings 1, 2, and 3 in lower positions.
+  // True high register notes (concert octave 5+, written octave 6+) have apostrophes.
+  return /[a-g]'/.test(note);
 }
 
 function routeToStrings(note: string, strings: GuitarStringNumber[]): GuitarStringPosition {

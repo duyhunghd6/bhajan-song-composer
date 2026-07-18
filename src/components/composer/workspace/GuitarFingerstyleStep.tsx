@@ -79,12 +79,8 @@ export function GuitarFingerstyleStep({
   const [timeGridJson, setTimeGridJson] = useState("");
   const [timeGridMessage, setTimeGridMessage] = useState<string | null>(null);
   const [generatingLineIndexes, setGeneratingLineIndexes] = useState<Set<number>>(() => new Set());
-  const generationCoordinatorRef = useRef<ReturnType<typeof createFingerstyleLineGenerationCoordinator> | null>(null);
-  if (!generationCoordinatorRef.current) {
-    generationCoordinatorRef.current = createFingerstyleLineGenerationCoordinator();
-  }
+  const [generationCoordinator] = useState(() => createFingerstyleLineGenerationCoordinator());
   const timeGridFileInputRef = useRef<HTMLInputElement>(null);
-  const generationCoordinator = generationCoordinatorRef.current;
   const refreshGeneratingLines = useCallback(() => {
     setGeneratingLineIndexes(new Set(generationCoordinator.activeLineIndexes()));
   }, [generationCoordinator]);

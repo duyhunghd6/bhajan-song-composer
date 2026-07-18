@@ -15,7 +15,7 @@ const guitarRenderOptions = {
   tablature: [{
     instrument: "guitar" as const,
     label: "",
-    tuning: ["E,,", "A,,", "D,", "G,", "B,", "E"],
+    tuning: ["E,", "A,", "D", "G", "B", "e"],
     capo: 0,
     hideTabSymbol: false,
   }],

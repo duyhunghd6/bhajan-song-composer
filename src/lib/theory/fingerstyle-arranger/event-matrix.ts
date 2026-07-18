@@ -241,7 +241,13 @@ function buildBodyMeasure(input: {
       continue;
     }
 
-    const midi = abcNoteToMidi(item.token, input.keyAccidentals);
+    const writtenMidi = abcNoteToMidi(item.token, input.keyAccidentals);
+    // Guitar is a transposing instrument (treble-8): the source melody is written
+    // in standard treble clef, but guitar sounds one octave lower. Subtract 12
+    // so routeMidiToStrings maps to the physical fret that produces the intended
+    // concert pitch. Without this, lowercase 'd' (D5 written, MIDI 74) would
+    // route to string 1 fret 10 instead of the correct D4 at string 2 fret 3.
+    const midi = writtenMidi != null ? writtenMidi - 12 : null;
     const route = routeMidiToStrings(midi ?? midiForStringFret(1, 0), TREBLE_STRINGS, input.profileInput);
     events.push(eventFromRoute({
       sectionKind: "body",
