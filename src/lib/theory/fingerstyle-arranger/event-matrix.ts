@@ -145,8 +145,36 @@ function bassAnchorOffsets(context: AbcDurationContext): number[] {
     .filter((offset, index, offsets) => offset < context.fullMeasureUnits && offsets.indexOf(offset) === index);
 }
 
+/**
+ * Compute weak-beat subdivision offsets for inner voice chord fill events.
+ * These land on the "and" of each beat (halfway between beat onsets),
+ * cycling through chord tones (3rd → 5th → root) to give harmonic color.
+ *
+ * For 4/4 with L:1/8 (unitsPerBeat=2): offsets 1, 3, 5, 7
+ * For 3/4 with L:1/8 (unitsPerBeat=2): offsets 1, 3, 5
+ */
+function chordFillOffsets(context: AbcDurationContext): number[] {
+  const offsets: number[] = [];
+  const halfBeat = context.unitsPerBeat / 2;
+  if (halfBeat < 0.5) return offsets; // too small to subdivide
+
+  for (let beat = 0; beat < context.meter.numerator; beat += 1) {
+    const offset = beat * context.unitsPerBeat + halfBeat;
+    if (offset < context.fullMeasureUnits) offsets.push(offset);
+  }
+  return offsets;
+}
+
+/** Chord tone cycle for inner voice fills: 3rd, 5th, root (repeat). */
+const CHORD_FILL_TONE_CYCLE: { noteIndex: number; role: FingerstyleCanonicalRole }[] = [
+  { noteIndex: 1, role: "third" },   // 3rd — most important guide tone
+  { noteIndex: 2, role: "fifth" },   // 5th — harmonic support
+  { noteIndex: 0, role: "root" },    // root — reinforcement
+];
+
 function pickingFingerFor(role: FingerstyleCanonicalRole, string: GuitarStringNumber, profile: FingerstylePickingProfileId, eventIndex: number): PickingFinger {
-  if (role === "bass" || role === "root" || role === "fifth") return "p";
+  // Thumb for bass-string events (strings 4-6) with bass/root/fifth role
+  if ((role === "bass" || role === "root" || role === "fifth") && string >= 4) return "p";
   if (profile === "folk-travis") return eventIndex % 2 === 0 ? "i" : "m";
   return strictPimaFingerForString(string);
 }
@@ -200,6 +228,7 @@ function buildBodyMeasure(input: {
   const rests: FingerstyleRestSpan[] = [];
   let eventIndex = 0;
 
+  // --- Phase 1: Melody events on treble strings ---
   for (const item of input.timeline.events) {
     if (item.kind === "rest") {
       rests.push({
@@ -230,6 +259,7 @@ function buildBodyMeasure(input: {
     }));
   }
 
+  // --- Phase 2: Bass anchors (root + 5th) on bass strings ---
   for (const [anchorIndex, onsetUnits] of bassAnchorOffsets(input.durationContext).entries()) {
     const note = input.chord.notes[anchorIndex === 0 ? 0 : 2] ?? input.chord.notes[0] ?? input.chord.chordName;
     const route = routePitchClassToStrings(note, BASS_STRINGS, input.profileInput);
@@ -243,6 +273,52 @@ function buildBodyMeasure(input: {
       string: route.string,
       fret: route.fret,
       sourceEventId: `chord-${input.timeline.measureIndex}-${anchorIndex === 0 ? "root" : "fifth"}-${input.chord.chordName}`,
+      durationContext: input.durationContext,
+      pickingProfile: input.pickingProfile,
+      eventIndex: eventIndex++,
+    }));
+  }
+
+  // --- Phase 3: Inner voice chord fills at weak-beat subdivisions ---
+  // Cycle through 3rd → 5th → root of the current chord, placed on treble
+  // strings that are not already used by melody at the same onset.
+  const melodyOnsets = new Set(
+    events.filter((e) => e.role === "melody").map((e) => e.onsetUnits)
+  );
+  const bassOnsets = new Set(
+    events.filter((e) => e.role === "bass" || e.role === "fifth").map((e) => e.onsetUnits)
+  );
+  const fillPositions = chordFillOffsets(input.durationContext);
+
+  for (const [fillIndex, onsetUnits] of fillPositions.entries()) {
+    // Skip if a melody note attacks at this exact onset (preserve melody clarity)
+    if (melodyOnsets.has(onsetUnits)) continue;
+    // Skip if a bass anchor lands here (already occupied)
+    if (bassOnsets.has(onsetUnits)) continue;
+
+    const toneEntry = CHORD_FILL_TONE_CYCLE[fillIndex % CHORD_FILL_TONE_CYCLE.length];
+    const note = input.chord.notes[toneEntry.noteIndex] ?? input.chord.notes[0] ?? input.chord.chordName;
+
+    // Find a treble string not used by melody at this onset
+    const melodyStringsAtOnset = new Set(
+      events
+        .filter((e) => e.role === "melody" && Math.abs(e.onsetUnits - onsetUnits) < 1e-6)
+        .map((e) => e.string)
+    );
+    const availableTrebleStrings = TREBLE_STRINGS.filter((s) => !melodyStringsAtOnset.has(s));
+    const targetStrings = availableTrebleStrings.length > 0 ? availableTrebleStrings : TREBLE_STRINGS;
+    const route = routePitchClassToStrings(note, targetStrings, input.profileInput);
+
+    events.push(eventFromRoute({
+      sectionKind: "body",
+      measureIndex: input.timeline.measureIndex,
+      onsetUnits,
+      durationUnits: input.durationContext.unitsPerBeat / 2,
+      role: toneEntry.role,
+      abcToken: noteNameToAbc(note),
+      string: route.string,
+      fret: route.fret,
+      sourceEventId: `chord-fill-${input.timeline.measureIndex}-${fillIndex}-${toneEntry.role}-${input.chord.chordName}`,
       durationContext: input.durationContext,
       pickingProfile: input.pickingProfile,
       eventIndex: eventIndex++,

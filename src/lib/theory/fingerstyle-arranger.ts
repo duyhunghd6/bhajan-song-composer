@@ -603,7 +603,7 @@ export function generateFingerstyleArrangement(
   const measures = matrix.measures.map((measure): FingerstyleMeasure => ({
     measureIndex: measure.measureIndex,
     chord: measure.chord,
-    bassNotes: measure.events.filter((event) => event.role === "bass" || event.role === "fifth").map((event) => event.abcToken),
+    bassNotes: measure.events.filter((event) => (event.role === "bass" || event.role === "fifth") && event.string >= 4).map((event) => event.abcToken),
     melodyNotes: measure.events.filter((event) => event.role === "melody").map((event) => event.abcToken),
     abc: renderCanonicalMeasureAbc(measure, matrix.durationContext, keyAccidentals),
   }));

@@ -147,7 +147,16 @@ export function useWorkspaceState(slug: string) {
       } else {
         const json = serializeForStorage(state);
         if (json) {
-          window.localStorage.setItem(storageKey, json);
+          try {
+            window.localStorage.setItem(storageKey, json);
+          } catch (quotaError) {
+            // QuotaExceededError: the serialized state is still too large.
+            // Warn and skip rather than crashing the UI.
+            console.warn(
+              `[useWorkspaceState] Storage quota exceeded for "${storageKey}" ` +
+              `(${(json.length * 2 / 1024 / 1024).toFixed(1)} MB). State not saved.`
+            );
+          }
         } else {
           console.warn(`[useWorkspaceState] Could not serialize state for key "${storageKey}" — skipping save.`);
         }

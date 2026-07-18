@@ -352,7 +352,10 @@ export default function AccompanimentWorkflowWizard({
     if (!session || !activeStep) return;
     const next = selectOption(session, activeStep.id, option, activeUserNote, runId);
     onWorkflowChange(next);
-    if (activeStep.id === "guitar-fingerstyle") onGuitarProfileSelected?.(extractProfile(option), option);
+    // Trigger guitar ABC regeneration at ALL guitar branch steps (not just fingerstyle)
+    // so the user gets progressive live preview as they work through Steps 6→9.
+    const isGuitarStep = (ACCOMPANIMENT_WORKFLOW_BRANCH_STEP_IDS.guitar as readonly string[]).includes(activeStep.id);
+    if (isGuitarStep) onGuitarProfileSelected?.(extractProfile(option), option);
     if (activeStep.id === "piano-fills-pedal-validation") onPianoProfileSelected?.(extractProfile(option));
   };
 

@@ -180,10 +180,102 @@ function pruneLevel2(state: WorkspaceState): WorkspaceState {
 }
 
 // ---------------------------------------------------------------------------
+// Level 3 – emergency: strip workflow runs to bare selections
+// ---------------------------------------------------------------------------
+
+/** Keys to keep in option.data — everything else is stripped. */
+const ESSENTIAL_OPTION_DATA_KEYS = new Set([
+  "harmonizedAbc", "chordAnnotatedAbc", "abc", "validatedAbc",
+  "profileId", "compingProfile", "pickingProfile", "style", "profile",
+  "key", "scale", "timeSignature",
+  "chordProgression", "progression",
+  "skipped", "instrument", "skippedStepId",
+]);
+
+function pruneOptionData(data: Record<string, unknown>): Record<string, unknown> {
+  const pruned: Record<string, unknown> = {};
+  for (const key of Object.keys(data)) {
+    if (!ESSENTIAL_OPTION_DATA_KEYS.has(key)) continue;
+    const value = data[key];
+    // Truncate very long ABC strings to 2000 chars (still enough for rehydration)
+    if (typeof value === "string" && value.length > 2000) {
+      pruned[key] = value.slice(0, 2000);
+    } else {
+      pruned[key] = value;
+    }
+  }
+  return pruned;
+}
+
+function pruneLevel3(state: WorkspaceState): WorkspaceState {
+  const result = pruneLevel2(state);
+
+  // Strip workflow runs to only the selected option with pruned data
+  if (result.accompanimentWorkflow) {
+    const steps = { ...result.accompanimentWorkflow.steps } as Record<string, AccompanimentWorkflowStepState>;
+    for (const stepId of Object.keys(steps)) {
+      const stepState = steps[stepId];
+      if (!stepState?.runs?.length) continue;
+
+      // Keep only the active run
+      const activeRun = stepState.activeRunId
+        ? stepState.runs.find((run) => run.id === stepState.activeRunId)
+        : stepState.runs[stepState.runs.length - 1];
+
+      if (!activeRun) {
+        steps[stepId] = { ...stepState, runs: [] };
+        continue;
+      }
+
+      // Keep only the selected option with pruned data
+      const selectedOption = stepState.selectedOptionId
+        ? activeRun.options.find((opt) => opt.id === stepState.selectedOptionId)
+        : null;
+
+      const prunedOptions = selectedOption
+        ? [{
+            ...selectedOption,
+            data: pruneOptionData(selectedOption.data),
+            justification: selectedOption.justification.slice(0, 200),
+            warnings: selectedOption.warnings?.slice(0, 2) ?? [],
+            validationNotes: selectedOption.validationNotes?.slice(0, 2) ?? [],
+          }]
+        : [];
+
+      steps[stepId] = {
+        ...stepState,
+        runs: [{
+          id: activeRun.id,
+          createdAt: activeRun.createdAt,
+          stepId: activeRun.stepId,
+          requestPrompt: "",
+          userNote: activeRun.userNote ?? "",
+          options: prunedOptions,
+        }],
+      };
+    }
+    result.accompanimentWorkflow = {
+      ...result.accompanimentWorkflow,
+      steps: steps as AccompanimentWorkflowSession["steps"],
+    };
+  }
+
+  // Drop generated ABC strings (regenerable from workflow)
+  result.generatedGuitar = null;
+  result.generatedPiano = null;
+  result.generatedAccompaniment = null;
+
+  // Drop applied ensemble layers
+  result.appliedEnsembleLayers = null;
+
+  return result;
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
-const PRUNE_LEVELS = [pruneLevel0, pruneLevel1, pruneLevel2] as const;
+const PRUNE_LEVELS = [pruneLevel0, pruneLevel1, pruneLevel2, pruneLevel3] as const;
 
 /** Maximum size in bytes before we escalate to the next pruning level. */
 const QUOTA_TARGET_BYTES = 4 * 1024 * 1024; // 4 MB – leave headroom below the ~5 MB browser limit
@@ -204,7 +296,8 @@ export function serializeForStorage(state: WorkspaceState): string | null {
     }
   }
 
-  // Last resort: try the most aggressively pruned version anyway
+  // Last resort: most aggressive pruning, accept whatever size
   const lastResort = PRUNE_LEVELS[PRUNE_LEVELS.length - 1](state);
   return JSON.stringify(lastResort);
 }
+
