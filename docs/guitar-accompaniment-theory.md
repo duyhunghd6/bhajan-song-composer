@@ -497,7 +497,112 @@ Quy trình trên được implement qua các workflow steps trong app:
 |------|---------------|------|
 | Shared Steps 1-5 | `ACCOMPANIMENT_WORKFLOW_SHARED_STEP_IDS` | [definition.ts](file:///Users/steve/duyhunghd6/bhajan-song-composer/src/lib/theory/accompaniment-workflow/definition.ts#L3-L9) |
 | Guitar Steps 6-9 | `ACCOMPANIMENT_WORKFLOW_GUITAR_STEP_IDS` | [definition.ts](file:///Users/steve/duyhunghd6/bhajan-song-composer/src/lib/theory/accompaniment-workflow/definition.ts#L11-L16) |
+| Chord-Tone Reference | `buildChordToneReferenceTable`, `validateGuitarVoiceChordTones` | [chord-tone-reference.ts](file:///Users/steve/duyhunghd6/bhajan-song-composer/src/lib/theory/chord-tone-reference.ts) |
 | Guitar Theory | Arrangement Module: Guitar | [ARRANGEMENT01-GUITAR.md](file:///Users/steve/duyhunghd6/bhajan-song-composer/.agents/skills/music-theory-arrangement/ARRANGEMENT01-GUITAR.md) |
 | Music Theory | Comprehensive Theory Foundation | [THEORY.md](file:///Users/steve/duyhunghd6/bhajan-song-composer/.agents/skills/music-theory-arrangement/THEORY.md) |
 | Accompaniment UI | AccompanimentStep Component | [AccompanimentStep.tsx](file:///Users/steve/duyhunghd6/bhajan-song-composer/src/components/composer/workspace/AccompanimentStep.tsx) |
 | Wizard Controller | AccompanimentWorkflowWizard | [AccompanimentWorkflowWizard.tsx](file:///Users/steve/duyhunghd6/bhajan-song-composer/src/components/composer/AccompanimentWorkflowWizard.tsx) |
+
+---
+
+## Phần VI: Hệ Thống Chord-Tone Reference (Bảng Tham Chiếu Nốt Hợp Âm)
+
+> [!NOTE]
+> Phần này mô tả hệ thống tự động tạo bảng tham chiếu chord-tone cho LLM, đảm bảo mọi nốt guitar phải thuộc hợp âm được ghi chú trong melody. Module: [chord-tone-reference.ts](file:///Users/steve/duyhunghd6/bhajan-song-composer/src/lib/theory/chord-tone-reference.ts)
+
+### 1. Vấn đề: LLM tạo nốt sai hợp âm
+
+Khi LLM tạo guitar arpeggio, 3 lỗi hệ thống thường xảy ra:
+
+| Lỗi | Ví dụ | Nguyên nhân |
+|-----|-------|-------------|
+| **Sai accidental** | `^G` (G#) trong hợp âm Em dưới `K:G` | LLM không hiểu key signature ảnh hưởng thế nào đến ABC token |
+| **Pattern đóng băng** | Lặp cùng 1 arpeggio E-G#-B cho tất cả ô nhịp | LLM copy-paste mẫu thay vì thay đổi theo chord |
+| **Bỏ qua chord split** | Am→B7 trong 1 ô nhịp → dùng chỉ Am tones | LLM không nhận ra ô nhịp chia 2 hợp âm |
+
+### 2. Giải pháp: Chord-Tone Reference Table
+
+Hệ thống tự động trích xuất chord symbols từ ABC, phân giải từng chord thành các nốt cụ thể, và map sang ABC tokens dưới key signature hiện tại.
+
+#### 2.1 Luồng xử lý
+
+```mermaid
+flowchart LR
+    A["Source ABC\n(có chord annotations\n\"Em\", \"Am\", \"D\")"] --> B["extractChordSymbolsByMeasure()"]
+    B --> C["resolveChordNotes()\nEm → E, G, B\nD → D, F#, A"]
+    C --> D["noteToAbcToken()\nunder K:G"]
+    D --> E["Chord-Tone\nReference Table\n(prompt text)"]
+    E --> F["Injected vào\nLLM Prompt"]
+```
+
+#### 2.2 Ví dụ output cho Hari Bol (K:G)
+
+```text
+### Chord-Tone Reference Table (K:G)
+
+CHORD-TONE ENFORCEMENT: Every Guitar voice note in every measure MUST be a member
+of the chord annotated in the Melody for that measure.
+
+| Chord | Notes   | ABC Tokens (octave 3-5)        | Key Signature Note                         |
+|:------|:--------|:-------------------------------|:-------------------------------------------|
+| Em    | E, G, B | E,, G,, B,, E, G, B, e, g, b  | all notes are natural in this key          |
+| Am    | A, C, E | A,, C,, E,, A, C, E, a, c, e  | all notes are natural in this key          |
+| D     | D, F#, A| D,, F,, A,, D, F, A, d, f, a  | F# is implied by key signature (no ^ needed) |
+| C     | C, E, G | C,, E,, G,, C, E, G, c, e, g  | all notes are natural in this key          |
+| B7    | B, D#, F#, A | B,, ^D,, F,, A,,…          | D# needs ^ accidental; F# is implied      |
+```
+
+#### 2.3 Quy tắc Key Signature cho ABC token
+
+> [!IMPORTANT]
+> **Quy tắc accidental dưới K:G (1 dấu thăng: F#):**
+>
+> | Nốt thực | ABC token cần viết | Giải thích |
+> |----------|-------------------|------------|
+> | F# | `F` (hoặc `f`) | F đã là F# theo key signature → KHÔNG cần `^` |
+> | F natural | `=F` (hoặc `=f`) | Cần dấu natural `=` vì key sig mặc định sharp F |
+> | G natural | `G` (hoặc `g`) | G là natural trong K:G → KHÔNG CẦN accidental |
+> | G# | `^G` (hoặc `^g`) | Cần `^` vì G không bị sharp bởi key sig |
+>
+> **Lỗi thường gặp:** Viết `^G` khi muốn G natural trong Em → đây là G# = **SAI**
+
+### 3. Validation: Kiểm tra Chord-Tone sau khi LLM tạo output
+
+Hệ thống chạy `validateGuitarVoiceChordTones()` sau khi LLM tạo guitar ABC:
+
+1. Trích xuất `[V:Guitar]` lines từ ABC
+2. Trích xuất chord symbols từ `[V:Melody]` lines cùng ô nhịp
+3. Với mỗi nốt Guitar → chuyển sang pitch class (có xét key signature)
+4. Kiểm tra pitch class có thuộc tập chord tones của ô nhịp đó không
+5. Nếu không → thêm warning (non-blocking) vào option
+
+```text
+Ví dụ warning output:
+  [chord-tone] measure 3: Guitar note "^G" (pitch class 8) is not in chord Em (allowed: 4,7,11)
+```
+
+> [!TIP]
+> Validation hiện tại ở mức **warning** (không blocking). LLM vẫn trả về kết quả nhưng user thấy warning và có thể yêu cầu regenerate. Trong tương lai có thể nâng lên blocking nếu tỷ lệ warning quá cao.
+
+### 4. Vị trí injection trong prompt
+
+Chord-Tone Reference Table được inject vào prompt theo thứ tự:
+
+```text
+Source ABC:
+```abc
+...melody with "Em", "Am", "D" chord annotations...
+```
+
+### Chord-Tone Reference Table (K:G)    ← MỚI: inject ở đây
+...table + per-measure mapping...
+
+### Time-Slice Melodic Grid              ← Đã có sẵn
+...16-step quantized grid...
+
+USER NOTE TO ADD TO PROMPT:
+...
+```
+
+Vị trí này đảm bảo LLM đọc chord tones **ngay trước** khi đọc Time-Slice grid để lên kế hoạch fingerstyle.
+

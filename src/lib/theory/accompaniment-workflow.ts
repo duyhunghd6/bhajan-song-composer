@@ -1,6 +1,7 @@
 import { splitAbcMeasureSegments, splitAbcMeasureSegmentsWithBarlines, type AbcBarlineInfo, joinAbcMeasuresWithBarlines } from "./abc-duration";
 import { normalizeAbcVoiceSyntax } from "./abc-voice-normalization";
 import { resolveProgression } from "./arranger-utils";
+import { buildChordToneReferenceTable, validateGuitarVoiceChordTones } from "./chord-tone-reference";
 import { convertAbcToTimeSliceGrid } from "./fingerstyle-arranger/time-slice";
 import {
   ACCOMPANIMENT_CHORD_INGESTION_STEP_IDS,
@@ -27,6 +28,7 @@ import {
   type AccompanimentWorkflowStepState,
 } from "./accompaniment-workflow/definition";
 export * from "./accompaniment-workflow/definition";
+export { buildChordToneReferenceTable, validateGuitarVoiceChordTones } from "./chord-tone-reference";
 export {
   buildAccompanimentWorkflowToolSchema,
   buildAddStrongBeatIconsToolSchema,
@@ -934,6 +936,18 @@ export function buildAccompanimentWorkflowPrompt(input: {
   const midiInstruction = "\n- Any generated Guitar Classic/Classical Guitar ABC must include `%%MIDI program 24` immediately after the Guitar voice declaration.\n- Only an exact `Guitar Left Hand` target may be retargeted to Harmonium/Reed Organ, and it must use `%%MIDI program 20`; do not change `Guitar LH Accompaniment`, `Guitar Right Hand`, or generic Guitar layers.";
   const staffSystemInstruction = "\n- Multi-voice ABC line grouping requirement: when returning ABC with Melody plus Guitar/Piano/etc., preserve the source Melody visual staff systems/sentences. Emit/validate each staff-system group as Melody line N, then lyric/helper rows for that Melody line, then every instrument's line N for the same measure range before moving to Melody line N+1. Do not write all Melody lines first and all accompaniment lines later when the final ABC contains multiple instruments.";
 
+  let chordToneReferenceStr = "";
+  if (isBranchStep && step.scope === "guitar") {
+    try {
+      const chordToneRef = buildChordToneReferenceTable(effectiveSourceAbc);
+      if (chordToneRef.promptText) {
+        chordToneReferenceStr = `\n\n${chordToneRef.promptText}`;
+      }
+    } catch (e) {
+      console.error("Failed to generate chord-tone reference for prompt:", e);
+    }
+  }
+
   let timeSliceGridStr = "";
   if (isGuitarTabValidationWorkflowStep(input.stepId)) {
     try {
@@ -968,7 +982,7 @@ export function buildAccompanimentWorkflowPrompt(input: {
     }
   }
 
-  return `DEFAULT PROMPT — MUSIC ACCOMPANIMENT WORKFLOW STEP ${step.index}\n\nTask: ${step.label}\n${step.description}\n\nTheory reference to follow:\n${step.theoryReference}\n\nOutput focus:\n${step.outputFocus.map((item) => `- ${item}`).join("\n")}\n\nGlobal hard rules:\n- Return between 1 and 5 distinct options. Always try to provide at least 2 or 3 stylistically contrasting options (e.g. Option 1: sparse/minimal, Option 2: full strums/denser) to give the user creative choice.\n- Every option must include a concise label, summary, justification, warnings, and validation notes.\n- Preserve the source melody ABC exactly unless this step explicitly asks for chord annotations.\n- Respect previously selected workflow decisions.\n- If a choice is musically risky, include a warning instead of hiding the risk.\n- Prefer devotional/bhajan-appropriate support unless the user's note asks otherwise.${midiInstruction}${staffSystemInstruction}${abcDataInstruction}${strongBeatInstruction}${guitarTabInstruction}${guitarFingerstyleInstruction}${sustainRuleInstruction}${lyricChordInstruction}\n\nMetadata:\n${formatMetadata(input.metadata)}\n\nWorkflow setup:\n${formatWorkflowSetup(input.setup)}\n\nPreviously selected workflow context:\n${formatPreviousSelections(input.previousSelections)}\n\nLyric chord annotations:\n${formatLyricChordAnnotations(effectiveSourceAbc)}\n\nSource ABC:\n\`\`\`abc\n${effectiveSourceAbc}\n\`\`\`${timeSliceGridStr}\n\nUSER NOTE TO ADD TO PROMPT:\n${userNote || "(none)"}`;
+  return `DEFAULT PROMPT — MUSIC ACCOMPANIMENT WORKFLOW STEP ${step.index}\n\nTask: ${step.label}\n${step.description}\n\nTheory reference to follow:\n${step.theoryReference}\n\nOutput focus:\n${step.outputFocus.map((item) => `- ${item}`).join("\n")}\n\nGlobal hard rules:\n- Return between 1 and 5 distinct options. Always try to provide at least 2 or 3 stylistically contrasting options (e.g. Option 1: sparse/minimal, Option 2: full strums/denser) to give the user creative choice.\n- Every option must include a concise label, summary, justification, warnings, and validation notes.\n- Preserve the source melody ABC exactly unless this step explicitly asks for chord annotations.\n- Respect previously selected workflow decisions.\n- If a choice is musically risky, include a warning instead of hiding the risk.\n- Prefer devotional/bhajan-appropriate support unless the user's note asks otherwise.${midiInstruction}${staffSystemInstruction}${abcDataInstruction}${strongBeatInstruction}${guitarTabInstruction}${guitarFingerstyleInstruction}${sustainRuleInstruction}${lyricChordInstruction}\n\nMetadata:\n${formatMetadata(input.metadata)}\n\nWorkflow setup:\n${formatWorkflowSetup(input.setup)}\n\nPreviously selected workflow context:\n${formatPreviousSelections(input.previousSelections)}\n\nLyric chord annotations:\n${formatLyricChordAnnotations(effectiveSourceAbc)}\n\nSource ABC:\n\`\`\`abc\n${effectiveSourceAbc}\n\`\`\`${chordToneReferenceStr}${timeSliceGridStr}\n\nUSER NOTE TO ADD TO PROMPT:\n${userNote || "(none)"}`;
 }
 
 export function buildConsolidatedChordIngestionPrompt(input: {

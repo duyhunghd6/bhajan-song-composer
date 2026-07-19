@@ -25,6 +25,7 @@ import {
   normalizeAccompanimentWorkflowSetup,
   normalizeWorkflowOptionDataLineBreaks,
   orderedAccompanimentInstruments,
+  validateGuitarVoiceChordTones,
   type AccompanimentWorkflowLlmLogEntry,
   type AccompanimentWorkflowLlmLogKind,
   type AccompanimentWorkflowLlmLogStatus,
@@ -652,13 +653,38 @@ function normalizeOptions(raw: unknown, sourceAbc: string, stepId?: Accompanimen
       ? normalizeStrongBeatOptionData(data, sourceAbc)
       : data;
 
+    const warnings = stringArray(option.warnings);
+
+    // Warning-level chord-tone validation for Guitar voice ABC
+    if (stepId && isGuitarTabValidationWorkflowStep(stepId)) {
+      for (const key of ABC_OPTION_DATA_KEYS) {
+        const abcValue = normalizedData[key];
+        if (typeof abcValue === "string" && abcValue.includes("[V:Guitar]")) {
+          try {
+            const chordToneResult = validateGuitarVoiceChordTones(abcValue);
+            if (!chordToneResult.valid) {
+              warnings.push(...chordToneResult.issues.map(
+                (issue) => `[chord-tone] ${issue}`
+              ));
+              console.warn(
+                `[Accompaniment][chord-tone][${stepId}] Option ${index + 1} chord-tone issues:`,
+                chordToneResult.issues
+              );
+            }
+          } catch (e) {
+            console.error("[Accompaniment][chord-tone] Validation error:", e);
+          }
+        }
+      }
+    }
+
     return {
       id: normalizeId(option.id, `option-${index + 1}`),
       label: typeof option.label === "string" && option.label.trim() ? option.label.trim() : `Option ${index + 1}`,
       summary: typeof option.summary === "string" ? option.summary : "",
       justification: typeof option.justification === "string" ? option.justification : "",
       data: normalizedData,
-      warnings: stringArray(option.warnings),
+      warnings,
       validationNotes: stringArray(option.validationNotes),
     };
   });
@@ -735,7 +761,7 @@ export async function generateAccompanimentWorkflowStep(
       });
     } else if (isGuitarTabValidationWorkflowStep(input.stepId)) {
       rawResult = await requestOpenAiCompatibleToolLoop({
-        systemPrompt: `${systemPrompt} For guitar tab-bearing steps, call query_guitar_voicings BEFORE fretting any notes. Then call valid_guitar_tab with profileId, voicingProfileId, and concrete octave-bearing string/fret events before calling the final generation tool. Revise and revalidate until valid_guitar_tab reports valid=true for one physical guitar: unique string/source assignment, fretboard range, and one-left-hand reach.`,
+        systemPrompt: `${systemPrompt} For guitar tab-bearing steps, call query_guitar_voicings BEFORE fretting any notes. Then call valid_guitar_tab with profileId, voicingProfileId, and concrete octave-bearing string/fret events before calling the final generation tool. Revise and revalidate until valid_guitar_tab reports valid=true for one physical guitar: unique string/source assignment, fretboard range, and one-left-hand reach. CHORD-TONE ENFORCEMENT: Every arpeggio/comping note must belong to the chord annotated in the Melody for that measure. Consult the Chord-Tone Reference Table in the prompt for exact ABC tokens. Do NOT copy-paste the same arpeggio pattern across different chords. Do NOT use ^G (G#) in Em chords under K:G — G is natural. If a measure has two chords (split measure), use the first chord's tones for the first half and the second chord's tones for the second half.`,
         userPrompt: requestPrompt,
         tools: [buildValidGuitarTabToolSchema(), buildQueryGuitarVoicingsToolSchema(), toolSchema],
         finalToolName: toolName,
