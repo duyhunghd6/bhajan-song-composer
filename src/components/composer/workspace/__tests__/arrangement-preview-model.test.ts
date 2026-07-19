@@ -139,7 +139,7 @@ describe("arrangement preview model", () => {
   it("uses workflow-applied ABC from selected chord progression options", () => {
     const workflow = selectWorkflowStep(
       createAccompanimentWorkflowSession(sampleAbc),
-      "chord-progression",
+      "chord-roles-progression",
       makeOption("progression", { chordAnnotatedAbc: harmonizedAbc })
     );
 
@@ -163,7 +163,7 @@ describe("arrangement preview model", () => {
     });
     const workflow = selectWorkflowStep(
       createAccompanimentWorkflowSession(sampleAbc),
-      "strong-beat-targets",
+      "key-beats",
       makeOption("strong-beats", { strongBeatEmphasis: "all-metric-beats", strongBeatDirectives: [] })
     );
     const complete = buildModel({
@@ -180,14 +180,14 @@ describe("arrangement preview model", () => {
   it("appends workflow annotation to accompaniment ABC when a workflow option is selected", () => {
     const workflow = selectWorkflowStep(
       createAccompanimentWorkflowSession(sampleAbc),
-      "key-scale-cadence",
+      "key-beats",
       makeOption("key-analysis")
     );
 
     const model = buildModel({ workflow });
 
     expect(model.accompaniment.abc).toContain("% --- Human-in-the-loop Accompaniment Workflow Applied ---");
-    expect(model.accompaniment.appliedWorkflowStep?.id).toBe("key-scale-cadence");
+    expect(model.accompaniment.appliedWorkflowStep?.id).toBe("key-beats");
   });
 
   it("derives guitar voice state when a generated guitar layer is visible", () => {
@@ -280,7 +280,7 @@ V:Guitar clef=treble-8 name="Layer 2 Guitar Fingerstyle"
     );
     workflow = selectWorkflowStep(
       workflow,
-      "guitar-fingerstyle",
+      "guitar-fills-validation",
       makeOption("fingerstyle", { pickingProfile: "folk-travis" })
     );
 
@@ -340,7 +340,7 @@ V:Guitar clef=treble-8 name="Layer 2 Guitar Fingerstyle"
     expect(model.accompaniment.appliedWorkflowStep?.id).toBe("djembe-fill-validation");
     expect(model.accompaniment.rawAbc).toContain("V:Djembe");
     expect(model.accompaniment.voiceNames).toContain("Djembe");
-    expect(model.accompaniment.rawAbc).toContain("ABCNotation applied after Step 16: Djembe Fill & Transient Validation");
+    expect(model.accompaniment.rawAbc).toContain("ABCNotation applied after Step 13: Djembe Fill & Transient Validation");
   });
 
   it("derives guitar tablature render options from score order", () => {

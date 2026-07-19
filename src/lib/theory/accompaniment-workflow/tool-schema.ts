@@ -14,40 +14,45 @@ function isGuitarTabValidationWorkflowStep(stepId: AccompanimentWorkflowStepId):
   return (ACCOMPANIMENT_GUITAR_TAB_VALIDATION_STEP_IDS as readonly AccompanimentWorkflowStepId[]).includes(stepId);
 }
 
+/**
+ * Compact guitar tab event schema.
+ * Key map: m=measureIndex, b=beat, n=note, s=string, f=fret, r=role,
+ * sid=sourceEventId, sd=subdivision, gid=simultaneousGroupId.
+ */
 function buildGuitarTabDataProperty() {
   return {
     type: "object",
-    description: "Validated one-physical-guitar tab event data required for string assignment, fretboard range, and left-hand reach checks.",
+    description: "Validated guitar tab data with compact event keys.",
     additionalProperties: false,
     properties: {
       profileId: {
         type: "string",
         enum: ["guitar-classic", "guitar-acoustic", "standard-six-string"],
-        description: "Physical guitar profile used for max-fret range and left-hand validation.",
+        description: "Guitar profile for fret range validation.",
       },
       voicingProfileId: {
         type: "string",
-        description: "Voicing/playability profile such as open-position, barre, fingerstyle-melody-bass, or power-chord.",
+        description: "Voicing profile: open-position, barre, fingerstyle, etc.",
       },
       events: {
         type: "array",
         minItems: 1,
-        description: "Concrete guitar tab events covering every source/body measure. Events sharing measureIndex + beat + subdivision or simultaneousGroupId are simultaneous; each source event must map to one string and each physical string may appear only once per simultaneous group. Final solo fingerstyle plans must include treble-string melody events and bass-string beat-1/internal anchors for every body measure.",
+        description: "Tab events using compact keys: m=measure, b=beat, n=note, s=string(1-6), f=fret, r=role, sid=sourceEventId, sd=subdivision, gid=simultaneousGroupId.",
         items: {
           type: "object",
           additionalProperties: false,
           properties: {
-            measureIndex: { type: "number", description: "Measure index for this tab event." },
-            beat: { type: "number", description: "Beat or subdivision time within the measure." },
-            subdivision: { type: ["string", "number"], description: "Optional subdivision label." },
-            simultaneousGroupId: { type: "string", description: "Optional explicit id for notes that sound together." },
-            sourceEventId: { type: "string", description: "Stable id for the musical source note/event. The same source event must not be assigned to multiple strings in one simultaneous group." },
-            note: { type: "string", description: "Sounding pitch with octave/register, e.g. E2, B3, or F#4." },
-            string: { type: "integer", enum: [1, 2, 3, 4, 5, 6], description: "Guitar string number, 1 high E through 6 low E." },
-            fret: { type: "number", description: "Fret number, 0 for open string and no higher than the selected guitar profile allows." },
-            role: { type: "string", description: "Musical role: melody, bass, root, third, seventh, fill, percussion, etc." },
+            m: { type: "number", description: "Measure index." },
+            b: { type: "number", description: "Beat within measure." },
+            sd: { type: ["string", "number"], description: "Subdivision label." },
+            gid: { type: "string", description: "Simultaneous group id." },
+            sid: { type: "string", description: "Source event id." },
+            n: { type: "string", description: "Pitch, e.g. E2, B3, F#4." },
+            s: { type: "integer", enum: [1, 2, 3, 4, 5, 6], description: "String 1(high E)-6(low E)." },
+            f: { type: "number", description: "Fret number." },
+            r: { type: "string", description: "Role: melody, bass, root, fill, etc." },
           },
-          required: ["measureIndex", "beat", "sourceEventId", "note", "string", "fret", "role"],
+          required: ["m", "b", "sid", "n", "s", "f", "r"],
         },
       },
     },
@@ -55,110 +60,69 @@ function buildGuitarTabDataProperty() {
   };
 }
 
-function buildFingerstyleFormPlanProperty() {
-  const sectionProperty = (description: string) => ({
-    type: "object",
-    description,
-    additionalProperties: true,
-    properties: {
-      measureCount: { type: "number", description: "Planned number of measures for this fingerstyle form section." },
-      source: { type: "string", description: "Musical source material: tonic/dominant arpeggio, first motive, cadence turnaround, etc." },
-      placement: { type: "string", description: "Where this section appears relative to the melody body or phrase boundary." },
-      cadence: { type: "string", description: "Cadence or arrival target for this section." },
-    },
-  });
-
+/** Expand compact tab event keys to full names for downstream consumers. */
+export function expandCompactTabEvent(compact: Record<string, unknown>): Record<string, unknown> {
   return {
-    type: "object",
-    description: "Solo fingerstyle form plan for guitar-only intro, interlude, and outro material.",
-    additionalProperties: false,
-    properties: {
-      intro: sectionProperty("Intro plan before the melody body."),
-      interlude: sectionProperty("Interlude plan at a phrase or cadence boundary."),
-      outro: sectionProperty("Outro plan after the melody body."),
-    },
-    required: ["intro", "interlude", "outro"],
+    measureIndex: compact.m ?? compact.measureIndex,
+    beat: compact.b ?? compact.beat,
+    subdivision: compact.sd ?? compact.subdivision,
+    simultaneousGroupId: compact.gid ?? compact.simultaneousGroupId,
+    sourceEventId: compact.sid ?? compact.sourceEventId,
+    note: compact.n ?? compact.note,
+    string: compact.s ?? compact.string,
+    fret: compact.f ?? compact.fret,
+    role: compact.r ?? compact.role,
   };
 }
 
-function buildGuitarFingerstyleDataProperty() {
-  return {
-    type: "object",
-    description: "Final solo guitar fingerstyle decision. The local arranger generates final ABC from this profile/form plan; the LLM must provide playable, validated tab events covering every source/body measure.",
-    additionalProperties: true,
-    properties: {
-      mode: {
-        type: "string",
-        enum: ["solo-fingerstyle"],
-        description: "Must be solo-fingerstyle: the Guitar voice carries the melody itself.",
-      },
-      carriesMelody: {
-        type: "boolean",
-        description: "Must be true; this fingerstyle part plays the melody, not only accompaniment.",
-      },
-      pickingProfile: {
-        type: "string",
-        enum: ["strict-pima", "folk-travis"],
-        description: "Fingerstyle picking profile for local generation.",
-      },
-      bassStrategy: {
-        type: "string",
-        description: "How roots/fifths/approaches from the selected chord progression become bass events on strings 6/5/4.",
-      },
-      formPlan: buildFingerstyleFormPlanProperty(),
-      guitarTab: buildGuitarTabDataProperty(),
-    },
-    required: ["mode", "carriesMelody", "pickingProfile", "bassStrategy", "formPlan", "guitarTab"],
-  };
+/** Check if tab events use compact keys and need expansion. */
+export function hasCompactTabKeys(event: Record<string, unknown>): boolean {
+  return "m" in event && "b" in event && "s" in event;
 }
 
 function buildWorkflowOptionDataProperty(stepId?: AccompanimentWorkflowStepId) {
-  if (stepId === "guitar-fingerstyle") {
-    return buildGuitarFingerstyleDataProperty();
-  }
-
-  if (isGuitarTabValidationWorkflowStep(stepId ?? "key-scale-cadence")) {
+  if (isGuitarTabValidationWorkflowStep(stepId ?? "key-beats")) {
     return {
       type: "object",
-      description: "Step-specific structured decision data. Must include guitarTab.events and those events must pass the valid_guitar_tab tool before final output.",
+      description: "Step data with guitarTab.events using compact keys (m/b/n/s/f/r).",
       additionalProperties: true,
       properties: {
         guitarTab: buildGuitarTabDataProperty(),
         fillDensity: {
           type: "string",
           enum: ["none", "few", "all"],
-          description: "Choose the fill density for the fingerstyle arrangement: 'none' (only melody/bass anchors), 'few' (sparse 2-4 fills per measure), or 'all' (dense continuous fills)."
+          description: "Fill density for fingerstyle: none, few, or all."
         }
       },
       required: ["guitarTab"],
     };
   }
 
-  if (stepId === "strong-beat-targets") {
+  if (stepId === "key-beats") {
     return {
       type: "object",
-      description: "Step-specific structured decision data. The LLM chooses only the reviewable Strong Beats emphasis; concrete beat positions and ABC lyric beat rows are computed locally.",
-      additionalProperties: false,
+      description: "Key/scale/cadence analysis plus strong-beat emphasis direction.",
+      additionalProperties: true,
       properties: {
         strongBeatEmphasis: {
           type: "string",
           enum: ["all-metric-beats", "primary-strong-beats", "downbeats-only"],
-          description: "Reviewable emphasis direction. The local add_strong_beat_icons algorithm computes concrete strongBeatDirectives and beat-only w: lyric rows from this value.",
+          description: "Strong-beat emphasis direction.",
         },
       },
       required: ["strongBeatEmphasis"],
     };
   }
 
-  if (stepId === "chord-progression") {
+  if (stepId === "chord-roles-progression") {
     return {
       type: "object",
-      description: "Step-specific structured decision data. Must include harmonizedAbc for Music Staff Playback.",
+      description: "Chord-tone roles, progression, and harmonized ABC.",
       additionalProperties: true,
       properties: {
         harmonizedAbc: {
           type: "string",
-          description: "Full source ABC with proposed chord symbols applied. Must be copied exactly from the break_measures_line tool result so it preserves the same Melody music line count and same measures per line as Source ABC."
+          description: "Full ABC with chord symbols applied. Copy from break_measures_line result."
         },
       },
       required: ["harmonizedAbc"],
@@ -168,16 +132,16 @@ function buildWorkflowOptionDataProperty(stepId?: AccompanimentWorkflowStepId) {
   if (stepId === "voice-leading-validation") {
     return {
       type: "object",
-      description: "Step-specific structured decision data. Prefer validatedAbc for the final Music Staff Playback source.",
+      description: "Validated harmonized ABC after voice-leading smoothing.",
       additionalProperties: true,
       properties: {
         validatedAbc: {
           type: "string",
-          description: "Full final chord-annotated ABC after voice-leading validation. Must be copied exactly from the break_measures_line tool result so it preserves the same Melody music line count and same measures per line as Source ABC."
+          description: "Final chord-annotated ABC. Copy from break_measures_line result."
         },
         harmonizedAbc: {
           type: "string",
-          description: "Fallback full final harmonized ABC. Must also be copied exactly from the break_measures_line tool result so Melody line breaks match Source ABC."
+          description: "Fallback harmonized ABC if validatedAbc is not available."
         },
       },
     };
@@ -185,7 +149,7 @@ function buildWorkflowOptionDataProperty(stepId?: AccompanimentWorkflowStepId) {
 
   return {
     type: "object",
-    description: "Step-specific structured decision data. Include profile/style ids when relevant.",
+    description: "Step-specific structured data.",
     additionalProperties: true,
   };
 }
@@ -194,26 +158,28 @@ function buildWorkflowOptionsProperty(description: string, stepId?: Accompanimen
   return {
     type: "array",
     minItems: 1,
-    maxItems: 5,
+    maxItems: 2,
     description,
     items: {
       type: "object",
       additionalProperties: false,
       properties: {
         id: { type: "string", description: "Stable kebab-case option id." },
-        label: { type: "string", description: "Short human-readable option label." },
-        summary: { type: "string", description: "One or two sentence summary." },
-        justification: { type: "string", description: "Music-theory justification for this option." },
+        label: { type: "string", maxLength: 60, description: "Short label (max 60 chars)." },
+        summary: { type: "string", maxLength: 100, description: "One sentence summary (max 100 chars)." },
+        justification: { type: "string", maxLength: 120, description: "Music-theory justification (max 120 chars)." },
         data: buildWorkflowOptionDataProperty(stepId),
         warnings: {
           type: "array",
-          items: { type: "string" },
-          description: "Warnings for risky harmony, playability, register, raga, or ABC validity choices.",
+          maxItems: 2,
+          items: { type: "string", maxLength: 80 },
+          description: "Max 2 concise warnings.",
         },
         validationNotes: {
           type: "array",
-          items: { type: "string" },
-          description: "Notes showing how the option satisfies this step's validation rules.",
+          maxItems: 2,
+          items: { type: "string", maxLength: 80 },
+          description: "Max 2 concise validation notes.",
         },
       },
       required: ["id", "label", "summary", "justification", "data", "warnings", "validationNotes"],
@@ -228,7 +194,7 @@ function buildWorkflowResultGroupProperty(stepId: AccompanimentWorkflowStepId) {
     additionalProperties: false,
     description: `Options for ${step.label}.`,
     properties: {
-      options: buildWorkflowOptionsProperty(`One to five options for ${step.label}.`, stepId),
+      options: buildWorkflowOptionsProperty(`1-2 options for ${step.label}.`, stepId),
     },
     required: ["options"],
   };
@@ -250,7 +216,7 @@ export function buildAddStrongBeatIconsToolSchema() {
     type: "function",
     function: {
       name: "add_strong_beat_icons",
-      description: "Call this during the Strong Beats step before final output. The LLM chooses an emphasis direction only; this local algorithm computes concrete beat directives and an ABC preview using beat-only w: lyric rows. Do not copy abcNotation, annotatedAbc, strongBeatDirectives, measureIndex, or beatTime into the final generate_strong_beat_targets payload. Later ABC rendering inserts the beat lyric rows after the Melody line inside each staff-system/sentence group.",
+      description: "Call during Key & Beats step. LLM chooses emphasis; local algorithm computes beat directives. Do not copy computed fields into the final tool payload.",
       parameters: {
         type: "object",
         additionalProperties: false,
@@ -258,11 +224,11 @@ export function buildAddStrongBeatIconsToolSchema() {
           emphasis: {
             type: "string",
             enum: ["all-metric-beats", "primary-strong-beats", "downbeats-only"],
-            description: "Reviewable emphasis direction. all-metric-beats marks strong, medium, and soft metric beats; primary-strong-beats keeps strong and medium beats; downbeats-only keeps only primary downbeats.",
+            description: "Emphasis direction for strong beats.",
           },
           rationale: {
             type: "string",
-            description: "Short musical reason for this emphasis direction. This guides the option text only; concrete icons are computed locally.",
+            description: "Short reason for this emphasis.",
           },
         },
         required: ["emphasis"],
@@ -276,14 +242,14 @@ export function buildBreakMeasuresLineToolSchema() {
     type: "function",
     function: {
       name: "break_measures_line",
-      description: "Normalize generated ABCNotation so its Melody music body uses the same number of music lines and the same number of measures per line as the source Melody. For multi-voice ABC, the final body must be grouped by staff system: Melody line N, then each instrument line N for the same measure range. Call this before any final workflow tool output that includes harmonizedAbc, validatedAbc, chordAnnotatedAbc, or abc for Music Staff Playback.",
+      description: "Normalize ABC measure-line layout to match Source ABC. Call before final output with harmonizedAbc/validatedAbc.",
       parameters: {
         type: "object",
         additionalProperties: false,
         properties: {
           generatedAbc: {
             type: "string",
-            description: "The full generated ABCNotation that should be regrouped to match the source Melody measure-line pattern.",
+            description: "The ABC to regroup to match source measure-line pattern.",
           },
         },
         required: ["generatedAbc"],
@@ -297,16 +263,15 @@ export function buildConsolidatedChordIngestionToolSchema() {
     type: "function",
     function: {
       name: "generate_consolidated_chord_ingestion",
-      description: "Generate chord role, progression, and voice-leading validation options from chord annotations embedded in ABC lyric lines.",
+      description: "Generate chord roles/progression and voice-leading validation from lyric chord annotations.",
       parameters: {
         type: "object",
         additionalProperties: false,
         properties: {
-          chordToneMapping: buildWorkflowResultGroupProperty("chord-tone-mapping"),
-          chordProgression: buildWorkflowResultGroupProperty("chord-progression"),
+          chordRolesProgression: buildWorkflowResultGroupProperty("chord-roles-progression"),
           voiceLeadingValidation: buildWorkflowResultGroupProperty("voice-leading-validation"),
         },
-        required: ["chordToneMapping", "chordProgression", "voiceLeadingValidation"],
+        required: ["chordRolesProgression", "voiceLeadingValidation"],
       },
     },
   };
@@ -319,12 +284,12 @@ export function buildAccompanimentWorkflowToolSchema(stepId: AccompanimentWorkfl
     type: "function",
     function: {
       name: `generate_${stepId.replaceAll("-", "_")}`,
-      description: `Generate 1-5 human-reviewable options for ${step.label}.`,
+      description: `Generate 1-2 options for ${step.label}.`,
       parameters: {
         type: "object",
         additionalProperties: false,
         properties: {
-          options: buildWorkflowOptionsProperty("One to five options for the user to choose from.", stepId),
+          options: buildWorkflowOptionsProperty("1-2 options for the user to choose from.", stepId),
         },
         required: ["options"],
       },
@@ -337,7 +302,7 @@ export function buildQueryGuitarVoicingsToolSchema() {
     type: "function",
     function: {
       name: "query_guitar_voicings",
-      description: "Retrieve valid guitar voicings for a chord. Use this tool BEFORE trying to fret any notes manually. You are forbidden from inventing fretted notes.",
+      description: "Retrieve valid guitar voicings for a chord. Call BEFORE fretting notes manually.",
       parameters: {
         type: "object",
         additionalProperties: false,

@@ -1,10 +1,8 @@
-export const ACCOMPANIMENT_WORKFLOW_VERSION = 2;
+export const ACCOMPANIMENT_WORKFLOW_VERSION = 3;
 
 export const ACCOMPANIMENT_WORKFLOW_SHARED_STEP_IDS = [
-  "key-scale-cadence",
-  "strong-beat-targets",
-  "chord-tone-mapping",
-  "chord-progression",
+  "key-beats",
+  "chord-roles-progression",
   "voice-leading-validation",
 ] as const;
 
@@ -12,7 +10,6 @@ export const ACCOMPANIMENT_WORKFLOW_GUITAR_STEP_IDS = [
   "guitar-comping-profile",
   "guitar-voicing-bass",
   "guitar-fills-validation",
-  "guitar-fingerstyle",
 ] as const;
 
 export const ACCOMPANIMENT_WORKFLOW_PIANO_STEP_IDS = [
@@ -96,12 +93,10 @@ export const ACCOMPANIMENT_GUITAR_TAB_VALIDATION_STEP_IDS = [
   "guitar-comping-profile",
   "guitar-voicing-bass",
   "guitar-fills-validation",
-  "guitar-fingerstyle",
 ] as const satisfies readonly AccompanimentWorkflowStepId[];
 
 export const ACCOMPANIMENT_CHORD_INGESTION_STEP_IDS = [
-  "chord-tone-mapping",
-  "chord-progression",
+  "chord-roles-progression",
   "voice-leading-validation",
 ] as const satisfies readonly AccompanimentWorkflowStepId[];
 
@@ -156,6 +151,10 @@ export interface AccompanimentWorkflowLlmLogEntry {
   validationMessage?: string;
   payloadPreview?: unknown;
   logPath?: string;
+  /** Wall-clock milliseconds for this LLM request (chat-response / chat-error). */
+  elapsedMs?: number;
+  /** Number of HTTP request attempts (includes retries). */
+  requestAttempts?: number;
 }
 
 export interface AccompanimentWorkflowRunDiagnostics {
@@ -224,107 +223,74 @@ const SHARED_DEPENDENCIES = [...ACCOMPANIMENT_WORKFLOW_SHARED_STEP_IDS] as const
 
 export const ACCOMPANIMENT_WORKFLOW_STEPS: AccompanimentWorkflowStepDefinition[] = [
   {
-    id: "key-scale-cadence",
+    id: "key-beats",
     index: 1,
-    label: "Key, Scale & Cadence Analysis",
-    shortLabel: "Key/Cadence",
+    label: "Key, Scale, Cadence & Strong Beats",
+    shortLabel: "Key & Beats",
     scope: "shared",
-    description: "Analyze K: header, pitch content, scale/raga context, phrase endings, and cadence targets.",
+    description: "Analyze key/scale/raga context, phrase endings, cadence targets, and choose the strong-beat emphasis direction.",
     dependencies: [],
-    outputFocus: ["detected key/scale", "cadence measures", "phrase boundary notes"],
-    theoryReference: "THEORY.md §1, §3, §5, and ARRANGEMENT02-PIANO.md §1.1 cadence parsing.",
+    outputFocus: ["detected key/scale", "cadence measures", "phrase boundary notes", "strong-beat emphasis direction"],
+    theoryReference: "THEORY.md §1, §3, §4, §5, and ARRANGEMENT02-PIANO.md §1.1 cadence parsing.",
   },
   {
-    id: "strong-beat-targets",
+    id: "chord-roles-progression",
     index: 2,
-    label: "Strong-beat Target Notes",
-    shortLabel: "Strong Beats",
+    label: "Chord Roles & Progression",
+    shortLabel: "Chords",
     scope: "shared",
-    description: "Identify structurally strong melody notes per measure, including beat 1 in 3/4 and beats 1/3 in 4/4.",
-    dependencies: ["key-scale-cadence"],
-    outputFocus: ["measure-by-measure strong notes", "metric strength", "passing/neighbor notes to ignore"],
-    theoryReference: "THEORY.md §4 rhythm/meter and §6.4 Steps 2–3.",
-  },
-  {
-    id: "chord-tone-mapping",
-    index: 3,
-    label: "Chord-tone Role Mapping",
-    shortLabel: "Chord Roles",
-    scope: "shared",
-    description: "Map each strong melody note to plausible root, 3rd, 5th, 7th, suspension, or tension roles.",
-    dependencies: ["strong-beat-targets"],
-    outputFocus: ["possible chord functions", "valid tensions/suspensions", "raga or chromatic warnings"],
-    theoryReference: "THEORY.md §2 chords/extensions and §3 functional harmony.",
-  },
-  {
-    id: "chord-progression",
-    index: 4,
-    label: "Chord Progression Selection",
-    shortLabel: "Progression",
-    scope: "shared",
-    description: "Generate chord progression candidates and chord-annotated ABC without changing the melody.",
-    dependencies: ["chord-tone-mapping"],
-    outputFocus: ["progression", "roman numerals", "harmonized ABC", "cadence support"],
-    theoryReference: "THEORY.md §6.4 Steps 4 and 6 plus common bhajan I-IV-V-I guidance.",
+    description: "Map strong melody notes to chord-tone roles, select a chord progression, and produce harmonized ABC.",
+    dependencies: ["key-beats"],
+    outputFocus: ["chord-tone roles", "progression", "roman numerals", "harmonized ABC", "cadence support"],
+    theoryReference: "THEORY.md §2, §3, §6.4 Steps 2–6.",
   },
   {
     id: "voice-leading-validation",
-    index: 5,
+    index: 3,
     label: "Voice-leading & Harmonized ABC Validation",
     shortLabel: "Validate Harmony",
     scope: "shared",
     description: "Smooth chord transitions, preserve the melody exactly, and validate beat counts and pitch alignment.",
-    dependencies: ["chord-progression"],
+    dependencies: ["chord-roles-progression"],
     outputFocus: ["final harmonized ABC", "voice-leading fixes", "validation notes", "bass root map"],
     theoryReference: "THEORY.md §3.3 voice leading, §6.2 validation, and §6.4 Steps 5, 7, 8.",
   },
   {
     id: "guitar-comping-profile",
-    index: 6,
+    index: 4,
     label: "Guitar Comping Profile",
     shortLabel: "Guitar Profile",
     scope: "guitar",
-    description: "Choose the rhythm-guitar profile: MUST include at least one sparse 'fingerpicking/arpeggio' option and at least one dense 'heavy downbeat strumming' option, with a representative one-guitar tab sample.",
+    description: "Choose the rhythm-guitar profile with a representative one-guitar tab sample.",
     dependencies: [...SHARED_DEPENDENCIES],
     outputFocus: ["guitar style", "picking/strumming profile", "melody avoidance strategy", "representative one-guitar validation sample"],
     theoryReference: "ARRANGEMENT01-GUITAR.md §2.1–2.3 and §4 one-guitar validation checklist.",
   },
   {
     id: "guitar-voicing-bass",
-    index: 7,
+    index: 5,
     label: "Guitar Voicing & Bass Plan",
     shortLabel: "Guitar Voicing",
     scope: "guitar",
-    description: "Plan open/barre voicings, guide tones, root/fifth anchors, and walking bass transitions that one guitarist can fret. MUST offer variations matching the comping profiles (e.g. dense full-strum grips vs sparse fingerstyle grips).",
+    description: "Plan open/barre voicings, root/fifth anchors, and walking bass transitions that one guitarist can fret.",
     dependencies: ["guitar-comping-profile"],
     outputFocus: ["voicing map", "bass anchors", "walking bass notes", "fret/register warnings", "one-left-hand validation"],
     theoryReference: "ARRANGEMENT01-GUITAR.md §2.2, §2.4, and §4 validation checklist.",
   },
   {
     id: "guitar-fills-validation",
-    index: 8,
-    label: "Guitar Fills / Intro / Interlude / Outro / Validation",
+    index: 6,
+    label: "Guitar Fills & Validation",
     shortLabel: "Guitar Polish",
     scope: "guitar",
-    description: "Choose fills, intro/interlude/outro behavior, and validate one-physical-guitar playability before final guitar rendering.",
+    description: "Choose fills, intro/interlude/outro behavior, and validate one-physical-guitar playability.",
     dependencies: ["guitar-voicing-bass"],
     outputFocus: ["intro plan", "fill rules", "interlude/outro plan", "final guitar profile id", "one-guitar tab validation"],
     theoryReference: "ARRANGEMENT01-GUITAR.md §4 plus rhythm-guitar support rules.",
   },
   {
-    id: "guitar-fingerstyle",
-    index: 9,
-    label: "Guitar Fingerstyle",
-    shortLabel: "Guitar Fingerstyle",
-    scope: "guitar",
-    description: "Finalize a solo fingerstyle guitar plan that carries the melody while adding chord-derived bass, intro, interlude, outro, and one-physical-guitar validated tablature.",
-    dependencies: ["guitar-fills-validation"],
-    outputFocus: ["solo melody-on-guitar routing", "chord-derived bass and alternating-bass plan", "intro/interlude/outro form plan", "validated melody and bass tab events", "final fingerstyle picking profile id", "one-left-hand feasibility"],
-    theoryReference: "ARRANGEMENT01-GUITAR.md §3 Mode B solo fingerstyle compression and §4 validation checklist.",
-  },
-  {
     id: "piano-comping-bass",
-    index: 10,
+    index: 7,
     label: "Piano Comping + LH Bass Anchoring",
     shortLabel: "Piano Bass",
     scope: "piano",
@@ -335,7 +301,7 @@ export const ACCOMPANIMENT_WORKFLOW_STEPS: AccompanimentWorkflowStepDefinition[]
   },
   {
     id: "piano-rh-voicing",
-    index: 11,
+    index: 8,
     label: "Piano RH Voicing + Voice-leading",
     shortLabel: "Piano RH",
     scope: "piano",
@@ -346,7 +312,7 @@ export const ACCOMPANIMENT_WORKFLOW_STEPS: AccompanimentWorkflowStepDefinition[]
   },
   {
     id: "piano-fills-pedal-validation",
-    index: 12,
+    index: 9,
     label: "Piano Fills / Pedal / Validation",
     shortLabel: "Piano Polish",
     scope: "piano",
@@ -357,7 +323,7 @@ export const ACCOMPANIMENT_WORKFLOW_STEPS: AccompanimentWorkflowStepDefinition[]
   },
   {
     id: "harmonium-drone-register",
-    index: 13,
+    index: 10,
     label: "Harmonium Drone & Register Plan",
     shortLabel: "Harmonium Drone",
     scope: "harmonium",
@@ -368,7 +334,7 @@ export const ACCOMPANIMENT_WORKFLOW_STEPS: AccompanimentWorkflowStepDefinition[]
   },
   {
     id: "harmonium-chord-voicing-validation",
-    index: 14,
+    index: 11,
     label: "Harmonium Chord Voicing & Validation",
     shortLabel: "Harmonium Voice",
     scope: "harmonium",
@@ -379,7 +345,7 @@ export const ACCOMPANIMENT_WORKFLOW_STEPS: AccompanimentWorkflowStepDefinition[]
   },
   {
     id: "djembe-groove-interlock",
-    index: 15,
+    index: 12,
     label: "Djembe Groove Interlock",
     shortLabel: "Djembe Groove",
     scope: "djembe",
@@ -390,7 +356,7 @@ export const ACCOMPANIMENT_WORKFLOW_STEPS: AccompanimentWorkflowStepDefinition[]
   },
   {
     id: "djembe-fill-validation",
-    index: 16,
+    index: 13,
     label: "Djembe Fill & Transient Validation",
     shortLabel: "Djembe Fills",
     scope: "djembe",
@@ -401,7 +367,7 @@ export const ACCOMPANIMENT_WORKFLOW_STEPS: AccompanimentWorkflowStepDefinition[]
   },
   {
     id: "flute-yield-register",
-    index: 17,
+    index: 14,
     label: "Flute Yield & Register Plan",
     shortLabel: "Flute Register",
     scope: "flute",
@@ -412,7 +378,7 @@ export const ACCOMPANIMENT_WORKFLOW_STEPS: AccompanimentWorkflowStepDefinition[]
   },
   {
     id: "flute-breath-fill-validation",
-    index: 18,
+    index: 15,
     label: "Flute Breath, Fill & Validation",
     shortLabel: "Flute Fills",
     scope: "flute",
@@ -423,7 +389,7 @@ export const ACCOMPANIMENT_WORKFLOW_STEPS: AccompanimentWorkflowStepDefinition[]
   },
   {
     id: "violin-bed-register",
-    index: 19,
+    index: 16,
     label: "Violin Bed & Register Plan",
     shortLabel: "Violin Bed",
     scope: "violin",
@@ -434,7 +400,7 @@ export const ACCOMPANIMENT_WORKFLOW_STEPS: AccompanimentWorkflowStepDefinition[]
   },
   {
     id: "violin-expression-validation",
-    index: 20,
+    index: 17,
     label: "Violin Expression & Validation",
     shortLabel: "Violin Polish",
     scope: "violin",

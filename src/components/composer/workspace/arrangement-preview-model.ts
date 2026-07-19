@@ -174,7 +174,7 @@ export function buildArrangementPreviewModel(input: BuildArrangementPreviewModel
     ? input.workflow
     : null;
   const strongBeatsStepComplete = Boolean(
-    activeWorkflow && isAccompanimentWorkflowStepComplete(activeWorkflow, "strong-beat-targets")
+    activeWorkflow && isAccompanimentWorkflowStepComplete(activeWorkflow, "key-beats")
   );
   const harmonyVisibility = normalizeAbcLayerVisibility(input.harmonyLayerVisibility);
   const effectiveLayerVisibility = effectiveAccompanimentLayerVisibility(
@@ -184,7 +184,7 @@ export function buildArrangementPreviewModel(input: BuildArrangementPreviewModel
   const workflowAppliedMusicAbc = getWorkflowAppliedMusicAbc(activeWorkflow, input.activeAbc);
   const workflowAppliedPipeline = generatePipelineSafely(workflowAppliedMusicAbc, pipeline);
   const strongBeatDirectives = activeWorkflow
-    ? (getSelectedWorkflowOption(activeWorkflow, "strong-beat-targets")?.data?.strongBeatDirectives as StrongBeatDirective[] | undefined)
+    ? (getSelectedWorkflowOption(activeWorkflow, "key-beats")?.data?.strongBeatDirectives as StrongBeatDirective[] | undefined)
     : undefined;
   const accompanimentSupportLayers = generateAccompanimentSupportLayers(workflowAppliedMusicAbc, {
     accompaniment: workflowAppliedPipeline?.accompaniment ?? null,

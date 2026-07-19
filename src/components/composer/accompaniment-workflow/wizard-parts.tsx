@@ -53,6 +53,11 @@ function formatPayloadPreview(payload: unknown): string {
   }
 }
 
+function formatElapsedMs(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
+}
+
 export function LlmCallLogPanel({ logs }: { logs: AccompanimentWorkflowLlmLogEntry[] }) {
   const [expanded, setExpanded] = useState(false);
   const recentLogs = [...logs]
@@ -61,12 +66,21 @@ export function LlmCallLogPanel({ logs }: { logs: AccompanimentWorkflowLlmLogEnt
     .reverse();
   const visibleLogs = expanded ? recentLogs : recentLogs.slice(0, 2);
 
+  const totalElapsedMs = logs.reduce((sum, log) => sum + (log.elapsedMs ?? 0), 0);
+  const llmCallCount = logs.filter((log) => log.kind === "chat-response" || log.kind === "chat-error").length;
+
   return (
     <div className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950/50">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs font-bold text-zinc-800 dark:text-zinc-100">LLM Call Log</p>
         <div className="flex items-center gap-2">
           <span className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">{logs.length} event{logs.length === 1 ? "" : "s"}</span>
+          {llmCallCount > 0 && (
+            <span className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
+              · {llmCallCount} LLM call{llmCallCount === 1 ? "" : "s"}
+              {totalElapsedMs > 0 && ` · ${formatElapsedMs(totalElapsedMs)} total`}
+            </span>
+          )}
           {recentLogs.length > 2 && (
             <button
               type="button"
@@ -90,6 +104,22 @@ export function LlmCallLogPanel({ logs }: { logs: AccompanimentWorkflowLlmLogEnt
                 <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${llmLogStatusClass(log.status)}`}>{log.status}</span>
                 <span className="font-semibold text-zinc-700 dark:text-zinc-200">{log.kind}</span>
                 {typeof log.iteration === "number" && <span className="text-zinc-500 dark:text-zinc-400">iteration {log.iteration + 1}</span>}
+                {log.elapsedMs !== undefined && (
+                  <span className={`rounded-md border px-1.5 py-0.5 text-[10px] font-bold tabular-nums ${
+                    log.elapsedMs > 60000
+                      ? "border-rose-200 bg-rose-50 text-rose-600 dark:border-rose-900/70 dark:bg-rose-950/40 dark:text-rose-400"
+                      : log.elapsedMs > 30000
+                        ? "border-amber-200 bg-amber-50 text-amber-600 dark:border-amber-900/70 dark:bg-amber-950/40 dark:text-amber-300"
+                        : "border-zinc-200 bg-zinc-100 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+                  }`}>
+                    {formatElapsedMs(log.elapsedMs)}
+                  </span>
+                )}
+                {log.requestAttempts !== undefined && log.requestAttempts > 1 && (
+                  <span className="rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold text-amber-600 dark:border-amber-900/70 dark:bg-amber-950/40 dark:text-amber-300">
+                    {log.requestAttempts} attempts
+                  </span>
+                )}
                 <span className="text-zinc-400 dark:text-zinc-500">{new Date(log.createdAt).toLocaleTimeString()}</span>
               </div>
               <p className="mt-1 text-zinc-600 dark:text-zinc-300">{log.message}</p>

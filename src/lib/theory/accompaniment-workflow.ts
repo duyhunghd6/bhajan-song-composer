@@ -35,7 +35,9 @@ export {
   buildBreakMeasuresLineToolSchema,
   buildConsolidatedChordIngestionToolSchema,
   buildQueryGuitarVoicingsToolSchema,
+  expandCompactTabEvent,
   getAccompanimentWorkflowLlmToolNames,
+  hasCompactTabKeys,
 } from "./accompaniment-workflow/tool-schema";
 export {
   emptyStepState,
@@ -290,7 +292,7 @@ export function createAccompanimentWorkflowSession(
     version: ACCOMPANIMENT_WORKFLOW_VERSION,
     sourceAbc,
     sourceAbcFingerprint: fingerprintAccompanimentSource(sourceAbc),
-    currentStepId: enabledStepIds[0] ?? "key-scale-cadence",
+    currentStepId: enabledStepIds[0] ?? "key-beats",
     steps: getInitialAccompanimentWorkflowSteps(),
     guitarProfileHint: null,
     pianoProfileHint: null,
@@ -313,7 +315,7 @@ export function applyAccompanimentWorkflowSetupToSession(
   };
   const nextUncompletedStepId = getNextUncompletedWorkflowStepId(updatedSession);
   const currentStepId = nextUncompletedStepId
-    ?? (enabledStepIdSet.has(session.currentStepId) ? session.currentStepId : enabledStepIds[0] ?? "key-scale-cadence");
+    ?? (enabledStepIdSet.has(session.currentStepId) ? session.currentStepId : enabledStepIds[0] ?? "key-beats");
 
   return {
     ...updatedSession,
@@ -456,7 +458,7 @@ export function getWorkflowAppliedMusicAbc(session: AccompanimentWorkflowSession
   if (!session) return fallbackAbc;
 
   const validationOption = getSelectedWorkflowOption(session, "voice-leading-validation");
-  const progressionOption = getSelectedWorkflowOption(session, "chord-progression");
+  const progressionOption = getSelectedWorkflowOption(session, "chord-roles-progression");
   const appliedAbc = optionStringData(validationOption, ["harmonizedAbc", "chordAnnotatedAbc", "abc", "validatedAbc"])
     ?? optionStringData(progressionOption, ["harmonizedAbc", "chordAnnotatedAbc", "abc"]);
 
@@ -877,7 +879,7 @@ export function getAppliedMusicAbcFromSelections(
   fallbackAbc: string
 ): string {
   const validation = previousSelections.find((s) => s.stepId === "voice-leading-validation");
-  const progression = previousSelections.find((s) => s.stepId === "chord-progression");
+  const progression = previousSelections.find((s) => s.stepId === "chord-roles-progression");
 
   const optionString = (selection: AccompanimentWorkflowSelectedContext | undefined, keys: string[]) => {
     if (!selection) return null;
@@ -913,20 +915,18 @@ export function buildAccompanimentWorkflowPrompt(input: {
     : input.sourceAbc;
 
   const lyricChordAnnotations = extractLyricChordAnnotations(effectiveSourceAbc);
-  const abcDataInstruction = input.stepId === "chord-progression"
-    ? "\nStep-specific data requirement: each option.data MUST include harmonizedAbc containing the full source ABC with the proposed chord symbols applied, so the user can immediately hear this progression in Music Staff Playback. Before calling the final generate_chord_progression tool, call the break_measures_line tool with the generated ABCNotation, then copy the returned abc exactly into option.data.harmonizedAbc. The output ABC Melody music body must have the same number of music lines and the same number of measures per line as the Source ABC. If Source ABC has 5 music lines of 4 measures each, harmonizedAbc must do the same."
+  const abcDataInstruction = input.stepId === "chord-roles-progression"
+    ? "\nStep data: option.data MUST include harmonizedAbc with chord symbols applied. Call break_measures_line first, copy returned abc into harmonizedAbc. Melody line count/measure-per-line must match Source ABC."
     : input.stepId === "voice-leading-validation"
-      ? "\nStep-specific data requirement: each option.data MUST include validatedAbc or harmonizedAbc containing the full final chord-annotated ABC after voice-leading validation, so the user can immediately hear it in Music Staff Playback. Before calling the final generate_voice_leading_validation tool, call the break_measures_line tool with the generated ABCNotation, then copy the returned abc exactly into option.data.validatedAbc or option.data.harmonizedAbc. The output ABC Melody music body must have the same number of music lines and the same number of measures per line as the Source ABC. Include a validation note confirming measure line breaks match the Source ABC."
+      ? "\nStep data: option.data MUST include validatedAbc or harmonizedAbc after voice-leading fixes. Call break_measures_line first, copy returned abc into the field. Melody line breaks must match Source ABC."
       : "";
-  const strongBeatInstruction = input.stepId === "strong-beat-targets"
-    ? "\nStrong Beats local algorithm requirement: choose only the review direction/emphasis. Before calling the final generate_strong_beat_targets tool, call add_strong_beat_icons for each distinct emphasis direction you plan to offer so the local algorithm validates the concrete beat positions. Final option.data MUST include only strongBeatEmphasis. Do not include annotatedAbc, abcNotation, strongBeatDirectives, measureIndex, or beatTime in the final payload. Strong beat notation is generated locally as beat-only w: lyric rows, never as inline note annotations, and later inserted after the Melody line inside each staff-system/sentence group."
+  const strongBeatInstruction = input.stepId === "key-beats"
+    ? "\nStrong Beats: choose emphasis direction. Call add_strong_beat_icons for each emphasis direction before the final tool call. Final option.data MUST include strongBeatEmphasis only. Do not include annotatedAbc, strongBeatDirectives, measureIndex, or beatTime."
     : "";
   const guitarTabInstruction = isGuitarTabValidationWorkflowStep(input.stepId)
-    ? `\nOne physical guitar validation requirement: each option must prove it is playable on one physical guitar. Each option.data MUST include guitarTab.profileId, guitarTab.voicingProfileId, and guitarTab.events with measureIndex, beat, note, string, fret, role, and sourceEventId when mapping a source melody/chord event. Use octave/register-bearing note labels such as E2, B3, and F#4. BEFORE trying to fret any notes manually, call query_guitar_voicings(chord, melody_pitch). You are strictly forbidden from inventing fretted notes. You must exclusively use the strings and frets provided by the tool's returned grip. Then, call valid_guitar_tab with the same profileId, voicingProfileId, and events. If valid_guitar_tab reports any issue, revise the tab and call valid_guitar_tab again. Hard physical rules to prove in validation notes: (1) Standard PIMA Rule: The Thumb (p) plays exactly 1 Bass String (usually strings 6, 5, or 4). The fingers (i, m, a) play a tight cluster of up to 3 Treble/Inner Strings to support the melody (unless playing a full strum, in which case assign 'p' to multiple bass/inner strings); (2) simultaneous notes may form a chord across multiple strings, but one physical string may appear only once and one source note/event may be assigned to only one string; (3) every string/fret/note is inside the selected guitar fretboard range; (4) one left hand can fret the simultaneous target positions for the selected profile/voicing. ${input.stepId === "guitar-comping-profile" ? "For Guitar Profile, guitarTab.events may be a representative one-measure pattern sample that proves the chosen comping/picking profile is playable on one guitar." : "For this step, guitarTab.events should represent the concrete voicing, fill, polish, or fingerstyle events being selected."}${input.stepId === "guitar-fills-validation" ? " Each option.data MUST also include fillDensity ('none' for no fills, 'few' for sparse fills, or 'all' for full fills) so the subsequent fingerstyle generator knows how many notes to fill." : ""}`
+    ? `\nGuitar tab validation: option.data MUST include guitarTab with compact event keys (m=measure, b=beat, n=note, s=string, f=fret, r=role, sid=sourceEventId). Call query_guitar_voicings BEFORE fretting notes. Call valid_guitar_tab to validate. Rules: (1) one string per simultaneous group per source event, (2) all frets within profile range, (3) one left hand can fret the position.${input.stepId === "guitar-fills-validation" ? " Include fillDensity (none/few/all)." : ""}`
     : "";
-  const guitarFingerstyleInstruction = input.stepId === "guitar-fingerstyle"
-    ? "\nGuitar Fingerstyle step-specific requirement: finalize a solo guitar fingerstyle plan, not a rhythm-only accompaniment. Each option.data MUST include mode=\"solo-fingerstyle\", carriesMelody=true, pickingProfile (strict-pima or folk-travis), bassStrategy derived from the selected chord progression roots/fifths/approaches, formPlan.intro, formPlan.interlude, and formPlan.outro. The final playable result is one merged physical Guitar matrix covering every source/body measure: treble melody events on strings 1-3 plus bass-string chord anchors on strings 4-6, with beat-1 roots and internal root/fifth/approach bass aligned to the selected chord progression in every body measure. Include tab roles for both melody and bass in the merged final tab events, not only separate analytical Treb/Bass threads. Do not hand-write final ABC in this step; the local arranger will render ABC and GUITAR TAB from the selected profile/form plan."
-    : "";
+  const guitarFingerstyleInstruction = "";
   const lyricChordInstruction = lyricChordAnnotations.length > 0 && isChordIngestionWorkflowStep(input.stepId)
     ? "\n- The source ABC has chord symbols embedded inside the lyric w: lines. Treat those lyric chord symbols as the user-supplied chord progression. Do not invent a different progression; map roles, progression, and validation around these chords."
     : "";
@@ -951,7 +951,7 @@ export function buildAccompanimentWorkflowPrompt(input: {
   let timeSliceGridStr = "";
   if (isGuitarTabValidationWorkflowStep(input.stepId)) {
     try {
-      const progressionSelection = input.previousSelections.find(s => s.stepId === "chord-progression");
+      const progressionSelection = input.previousSelections.find(s => s.stepId === "chord-roles-progression");
       const compingSelection = input.previousSelections.find(s => s.stepId === "guitar-comping-profile");
       const voicingSelection = input.previousSelections.find(s => s.stepId === "guitar-voicing-bass");
 
@@ -982,7 +982,7 @@ export function buildAccompanimentWorkflowPrompt(input: {
     }
   }
 
-  return `DEFAULT PROMPT — MUSIC ACCOMPANIMENT WORKFLOW STEP ${step.index}\n\nTask: ${step.label}\n${step.description}\n\nTheory reference to follow:\n${step.theoryReference}\n\nOutput focus:\n${step.outputFocus.map((item) => `- ${item}`).join("\n")}\n\nGlobal hard rules:\n- Return between 1 and 5 distinct options. Always try to provide at least 2 or 3 stylistically contrasting options (e.g. Option 1: sparse/minimal, Option 2: full strums/denser) to give the user creative choice.\n- Every option must include a concise label, summary, justification, warnings, and validation notes.\n- Preserve the source melody ABC exactly unless this step explicitly asks for chord annotations.\n- Respect previously selected workflow decisions.\n- If a choice is musically risky, include a warning instead of hiding the risk.\n- Prefer devotional/bhajan-appropriate support unless the user's note asks otherwise.${midiInstruction}${staffSystemInstruction}${abcDataInstruction}${strongBeatInstruction}${guitarTabInstruction}${guitarFingerstyleInstruction}${sustainRuleInstruction}${lyricChordInstruction}\n\nMetadata:\n${formatMetadata(input.metadata)}\n\nWorkflow setup:\n${formatWorkflowSetup(input.setup)}\n\nPreviously selected workflow context:\n${formatPreviousSelections(input.previousSelections)}\n\nLyric chord annotations:\n${formatLyricChordAnnotations(effectiveSourceAbc)}\n\nSource ABC:\n\`\`\`abc\n${effectiveSourceAbc}\n\`\`\`${chordToneReferenceStr}${timeSliceGridStr}\n\nUSER NOTE TO ADD TO PROMPT:\n${userNote || "(none)"}`;
+  return `DEFAULT PROMPT — MUSIC ACCOMPANIMENT WORKFLOW STEP ${step.index}\n\nTask: ${step.label}\n${step.description}\n\nTheory: ${step.theoryReference}\n\nOutput focus: ${step.outputFocus.join(", ")}\n\nRules:\n- Return 1-2 options. Keep label<60 chars, summary<100 chars, justification<120 chars, max 2 warnings, max 2 validation notes.\n- Preserve melody ABC exactly unless this step adds chord annotations.\n- Respect previous workflow decisions.\n- Prefer devotional/bhajan support.${midiInstruction}${staffSystemInstruction}${abcDataInstruction}${strongBeatInstruction}${guitarTabInstruction}${guitarFingerstyleInstruction}${sustainRuleInstruction}${lyricChordInstruction}\n\nMetadata:\n${formatMetadata(input.metadata)}\n\nSetup:\n${formatWorkflowSetup(input.setup)}\n\nPrevious context:\n${formatPreviousSelections(input.previousSelections)}\n\nLyric chords:\n${formatLyricChordAnnotations(effectiveSourceAbc)}\n\nSource ABC:\n\`\`\`abc\n${effectiveSourceAbc}\n\`\`\`${chordToneReferenceStr}${timeSliceGridStr}\n\nUSER NOTE:\n${userNote || "(none)"}`;
 }
 
 export function buildConsolidatedChordIngestionPrompt(input: {
@@ -994,5 +994,5 @@ export function buildConsolidatedChordIngestionPrompt(input: {
 }): string {
   const userNote = input.userNote?.trim();
 
-  return `DEFAULT PROMPT — MUSIC ACCOMPANIMENT WORKFLOW CONSOLIDATED CHORD INGESTION\n\nTask: The lyrics contain chord symbols like [Em]Hari Bol, Hari [D]Bol. In one LLM decision, ingest the lyric chord progression and produce reviewable results for these three workflow steps:\n1. Chord-tone Role Mapping\n2. Chord Progression Selection\n3. Voice-leading & Harmonized ABC Validation\n\nHard rules:\n- Use the lyric chord annotations below as the supplied chord progression. Do not invent a replacement progression.\n- Return between 1 and 5 options for each of the three result groups.\n- Chord-tone options explain how strong melody notes function over the supplied chords.\n- Progression options preserve the supplied chord order and provide roman numerals/function labels.\n- Validation options must include option.data.validatedAbc or option.data.harmonizedAbc containing the full source ABC with playable chord symbols applied outside the w: lyric lines, so Music Staff Playback can render the harmony.\n- Before calling generate_consolidated_chord_ingestion, call the break_measures_line tool for every harmonizedAbc or validatedAbc candidate, then copy each returned abc exactly into the final tool payload.\n- The output ABC Melody music body must have the same number of music lines and the same number of measures per line as the Source ABC. If Source ABC has 5 music lines of 4 measures each, returned ABC must do the same.\n- For any multi-voice returned ABC, group by visual staff system: [V:Melody] source line N, then every instrument line N for the same measure range, then move to Melody line N+1.\n- Preserve the source melody ABC exactly except for adding/moving chord annotations into playable ABC chord positions.\n- Include warnings for any lyric chord that conflicts with strong melody tones, raga/scale expectations, cadence support, or measure-line preservation.\n\nMetadata:\n${formatMetadata(input.metadata)}\n\nWorkflow setup:\n${formatWorkflowSetup(input.setup)}\n\nPreviously selected workflow context:\n${formatPreviousSelections(input.previousSelections)}\n\nLyric chord annotations to ingest:\n${formatLyricChordAnnotations(input.sourceAbc)}\n\nSource ABC:\n\`\`\`abc\n${input.sourceAbc}\n\`\`\`\n\nUSER NOTE TO ADD TO PROMPT:\n${userNote || "(none)"}`;
+  return `DEFAULT PROMPT — CONSOLIDATED CHORD INGESTION\n\nTask: Lyric chords detected (e.g. [Em]Hari Bol). Ingest and produce results for:\n1. Chord Roles & Progression (with harmonizedAbc)\n2. Voice-leading & Harmonized ABC Validation (with validatedAbc)\n\nRules:\n- Use lyric chord annotations as the progression. Do not replace them.\n- Return 1-2 options per result group. Keep fields concise (<100 chars each).\n- Chord roles options: map strong notes to chord functions, select progression, include harmonizedAbc.\n- Validation options: include validatedAbc with voice-leading fixes applied.\n- Call break_measures_line before final output. Melody line breaks must match Source ABC.\n- Preserve melody ABC exactly except for chord symbol placement.\n\nMetadata:\n${formatMetadata(input.metadata)}\n\nSetup:\n${formatWorkflowSetup(input.setup)}\n\nPrevious context:\n${formatPreviousSelections(input.previousSelections)}\n\nLyric chords:\n${formatLyricChordAnnotations(input.sourceAbc)}\n\nSource ABC:\n\`\`\`abc\n${input.sourceAbc}\n\`\`\`\n\nUSER NOTE:\n${userNote || "(none)"}`;
 }

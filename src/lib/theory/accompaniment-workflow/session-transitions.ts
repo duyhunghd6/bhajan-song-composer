@@ -129,7 +129,7 @@ export function selectOption(
   return {
     ...selectedWorkflow,
     currentStepId: nextStepId,
-    guitarProfileHint: stepId === "guitar-fingerstyle" ? extractProfile(option) : workflow.guitarProfileHint,
+    guitarProfileHint: stepId === "guitar-fills-validation" ? extractProfile(option) : workflow.guitarProfileHint,
     pianoProfileHint: stepId === "piano-fills-pedal-validation" ? extractProfile(option) : workflow.pianoProfileHint,
   };
 }

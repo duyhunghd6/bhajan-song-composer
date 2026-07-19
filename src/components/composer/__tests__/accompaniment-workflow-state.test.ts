@@ -29,7 +29,7 @@ K:Em
 function makeRun(
   id: string,
   optionIds: string[],
-  stepId: AccompanimentWorkflowStepId = "key-scale-cadence"
+  stepId: AccompanimentWorkflowStepId = "key-beats"
 ): AccompanimentWorkflowRun {
   return {
     id,
@@ -102,24 +102,24 @@ describe("accompaniment workflow wizard state", () => {
     const secondRun = makeRun("run-2", ["option-c", "option-d"]);
 
     const generated = mergeRun(session, firstRun, "first prompt");
-    const selected = selectOption(generated, "key-scale-cadence", firstRun.options[1], "first prompt", firstRun.id);
+    const selected = selectOption(generated, "key-beats", firstRun.options[1], "first prompt", firstRun.id);
     const regenerated = mergeRun(selected, secondRun, "second prompt");
 
-    expect(regenerated.steps["key-scale-cadence"].runs).toHaveLength(2);
-    expect(regenerated.steps["key-scale-cadence"].runs[0].options.map((option) => option.id)).toEqual(["option-a", "option-b"]);
-    expect(regenerated.steps["key-scale-cadence"].runs[1].options.map((option) => option.id)).toEqual(["option-c", "option-d"]);
-    expect(regenerated.steps["key-scale-cadence"].activeRunId).toBe("run-1");
-    expect(regenerated.steps["key-scale-cadence"].selectedOptionId).toBe("option-b");
+    expect(regenerated.steps["key-beats"].runs).toHaveLength(2);
+    expect(regenerated.steps["key-beats"].runs[0].options.map((option) => option.id)).toEqual(["option-a", "option-b"]);
+    expect(regenerated.steps["key-beats"].runs[1].options.map((option) => option.id)).toEqual(["option-c", "option-d"]);
+    expect(regenerated.steps["key-beats"].activeRunId).toBe("run-1");
+    expect(regenerated.steps["key-beats"].selectedOptionId).toBe("option-b");
   });
 
   it("clears only guitar branch work for accompaniment page restore/reset", () => {
     let workflow = createAccompanimentWorkflowSession(sampleAbc);
     const sharedRun = makeRun("shared-run", ["shared-option"], "voice-leading-validation");
-    const guitarRun = makeRun("guitar-run", ["guitar-option"], "guitar-fingerstyle");
+    const guitarRun = makeRun("guitar-run", ["guitar-option"], "guitar-fills-validation");
     const pianoRun = makeRun("piano-run", ["piano-option"], "piano-fills-pedal-validation");
 
     workflow = selectOption(mergeRun(workflow, sharedRun, ""), "voice-leading-validation", sharedRun.options[0], "", sharedRun.id);
-    workflow = selectOption(mergeRun(workflow, guitarRun, ""), "guitar-fingerstyle", guitarRun.options[0], "", guitarRun.id);
+    workflow = selectOption(mergeRun(workflow, guitarRun, ""), "guitar-fills-validation", guitarRun.options[0], "", guitarRun.id);
     workflow = selectOption(mergeRun(workflow, pianoRun, ""), "piano-fills-pedal-validation", pianoRun.options[0], "", pianoRun.id);
     workflow = {
       ...workflow,

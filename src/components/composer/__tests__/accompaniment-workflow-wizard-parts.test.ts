@@ -32,12 +32,12 @@ describe("accompaniment workflow wizard parts", () => {
     const oldOption = makeOption("old-run-option");
     const newOption = makeOption("new-run-option");
 
-    session.steps["strong-beat-targets"] = {
+    session.steps["key-beats"] = {
       runs: [
         {
           id: "old-run",
           createdAt: "2026-07-04T00:00:00.000Z",
-          stepId: "strong-beat-targets",
+          stepId: "key-beats",
           requestPrompt: "old prompt",
           userNote: "",
           options: [oldOption],
@@ -45,7 +45,7 @@ describe("accompaniment workflow wizard parts", () => {
         {
           id: "new-run",
           createdAt: "2026-07-05T00:00:00.000Z",
-          stepId: "strong-beat-targets",
+          stepId: "key-beats",
           requestPrompt: "new prompt",
           userNote: "",
           options: [newOption],
@@ -57,10 +57,10 @@ describe("accompaniment workflow wizard parts", () => {
       promptNote: "",
     };
 
-    const selected = selectOption(session, "strong-beat-targets", oldOption, "", "old-run");
+    const selected = selectOption(session, "key-beats", oldOption, "", "old-run");
 
-    expect(selected.steps["strong-beat-targets"].activeRunId).toBe("old-run");
-    expect(selected.steps["strong-beat-targets"].selectedOptionId).toBe("old-run-option");
-    expect(getSelectedWorkflowOption(selected, "strong-beat-targets")).toEqual(oldOption);
+    expect(selected.steps["key-beats"].activeRunId).toBe("old-run");
+    expect(selected.steps["key-beats"].selectedOptionId).toBe("old-run-option");
+    expect(getSelectedWorkflowOption(selected, "key-beats")).toEqual(oldOption);
   });
 });

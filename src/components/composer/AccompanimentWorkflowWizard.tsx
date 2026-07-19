@@ -186,7 +186,7 @@ export default function AccompanimentWorkflowWizard({
   const [activeStepId, setActiveStepId] = useState<AccompanimentWorkflowStepId>(
     session && filteredSteps.some((s) => s.id === session.currentStepId)
       ? session.currentStepId
-      : filteredSteps[0]?.id ?? "key-scale-cadence"
+      : filteredSteps[0]?.id ?? "key-beats"
   );
   const [userNotes, setUserNotes] = useState<Partial<Record<AccompanimentWorkflowStepId, string>>>({});
   const [savedNoteStepId, setSavedNoteStepId] = useState<AccompanimentWorkflowStepId | null>(null);
@@ -284,7 +284,7 @@ export default function AccompanimentWorkflowWizard({
         const runs = await generateConsolidatedChordIngestionWorkflowSteps({
           sourceAbc,
           metadata,
-          previousSelections: getSelectedWorkflowContext(session, "chord-tone-mapping"),
+          previousSelections: getSelectedWorkflowContext(session, "chord-roles-progression"),
           setup: session.setup,
           userNote: activeUserNote,
         });

@@ -65,10 +65,8 @@ describe("accompaniment workflow session transitions", () => {
     let session = createAccompanimentWorkflowSession(sampleAbc, setup);
 
     expect(enabledStepIds).toEqual([
-      "key-scale-cadence",
-      "strong-beat-targets",
-      "chord-tone-mapping",
-      "chord-progression",
+      "key-beats",
+      "chord-roles-progression",
       "voice-leading-validation",
       "flute-yield-register",
       "flute-breath-fill-validation",
@@ -87,41 +85,41 @@ describe("accompaniment workflow session transitions", () => {
 
   it("keeps a selected option from an older run after regeneration", () => {
     const session = createAccompanimentWorkflowSession(sampleAbc);
-    const firstRun = makeRun("key-scale-cadence", "run-1", ["option-a", "option-b"]);
-    const secondRun = makeRun("key-scale-cadence", "run-2", ["option-c", "option-d"]);
+    const firstRun = makeRun("key-beats", "run-1", ["option-a", "option-b"]);
+    const secondRun = makeRun("key-beats", "run-2", ["option-c", "option-d"]);
 
     const generated = mergeRun(session, firstRun, "first prompt");
-    const selected = selectOption(generated, "key-scale-cadence", firstRun.options[1], "first prompt", firstRun.id);
+    const selected = selectOption(generated, "key-beats", firstRun.options[1], "first prompt", firstRun.id);
     const regenerated = mergeRun(selected, secondRun, "second prompt");
 
-    expect(regenerated.steps["key-scale-cadence"].runs.map((run) => run.id)).toEqual(["run-1", "run-2"]);
-    expect(regenerated.steps["key-scale-cadence"].activeRunId).toBe("run-1");
-    expect(regenerated.steps["key-scale-cadence"].selectedOptionId).toBe("option-b");
-    expect(regenerated.steps["key-scale-cadence"].promptNote).toBe("second prompt");
+    expect(regenerated.steps["key-beats"].runs.map((run) => run.id)).toEqual(["run-1", "run-2"]);
+    expect(regenerated.steps["key-beats"].activeRunId).toBe("run-1");
+    expect(regenerated.steps["key-beats"].selectedOptionId).toBe("option-b");
+    expect(regenerated.steps["key-beats"].promptNote).toBe("second prompt");
   });
 
   it("replaces a run with the same id instead of duplicating it", () => {
     const session = createAccompanimentWorkflowSession(sampleAbc);
-    const firstRun = makeRun("key-scale-cadence", "run-1", ["option-a"]);
-    const replacementRun = makeRun("key-scale-cadence", "run-1", ["option-b"]);
+    const firstRun = makeRun("key-beats", "run-1", ["option-a"]);
+    const replacementRun = makeRun("key-beats", "run-1", ["option-b"]);
 
     const generated = mergeRun(session, firstRun, "first prompt");
     const replaced = mergeRun(generated, replacementRun, "second prompt");
 
-    expect(replaced.steps["key-scale-cadence"].runs).toHaveLength(1);
-    expect(replaced.steps["key-scale-cadence"].runs[0].options.map((option) => option.id)).toEqual(["option-b"]);
+    expect(replaced.steps["key-beats"].runs).toHaveLength(1);
+    expect(replaced.steps["key-beats"].runs[0].options.map((option) => option.id)).toEqual(["option-b"]);
   });
 
   it("merges multiple runs and keeps the first run step as the current step", () => {
     const session = createAccompanimentWorkflowSession(sampleAbc);
     const next = mergeRuns(session, [
-      makeRun("chord-tone-mapping", "roles-run", ["roles"]),
-      makeRun("chord-progression", "progression-run", ["progression"]),
+      makeRun("chord-roles-progression", "roles-run", ["roles"]),
+      makeRun("voice-leading-validation", "validation-run", ["validation"]),
     ], "lyric chords");
 
-    expect(next.currentStepId).toBe("chord-tone-mapping");
-    expect(next.steps["chord-tone-mapping"].runs).toHaveLength(1);
-    expect(next.steps["chord-progression"].runs).toHaveLength(1);
+    expect(next.currentStepId).toBe("chord-roles-progression");
+    expect(next.steps["chord-roles-progression"].runs).toHaveLength(1);
+    expect(next.steps["voice-leading-validation"].runs).toHaveLength(1);
   });
 
   it("selects an option from an older run and advances to the next uncompleted step", () => {
@@ -133,10 +131,10 @@ describe("accompaniment workflow session transitions", () => {
       ...session,
       steps: {
         ...session.steps,
-        "key-scale-cadence": {
+        "key-beats": {
           runs: [
-            { ...makeRun("key-scale-cadence", "old-run", []), options: [oldOption] },
-            { ...makeRun("key-scale-cadence", "new-run", []), options: [newOption] },
+            { ...makeRun("key-beats", "old-run", []), options: [oldOption] },
+            { ...makeRun("key-beats", "new-run", []), options: [newOption] },
           ],
           activeRunId: "new-run",
           selectedOptionId: null,
@@ -146,11 +144,11 @@ describe("accompaniment workflow session transitions", () => {
       },
     };
 
-    const selected = selectOption(generated, "key-scale-cadence", oldOption, "", "old-run");
+    const selected = selectOption(generated, "key-beats", oldOption, "", "old-run");
 
-    expect(selected.steps["key-scale-cadence"].activeRunId).toBe("old-run");
-    expect(selected.steps["key-scale-cadence"].selectedOptionId).toBe("old-run-option");
-    expect(selected.currentStepId).toBe("strong-beat-targets");
+    expect(selected.steps["key-beats"].activeRunId).toBe("old-run");
+    expect(selected.steps["key-beats"].selectedOptionId).toBe("old-run-option");
+    expect(selected.currentStepId).toBe("chord-roles-progression");
   });
 
   it("extracts profile hints from preferred option data fields", () => {
@@ -167,7 +165,7 @@ describe("accompaniment workflow session transitions", () => {
     const guitarOption = makeOption("guitar", { pickingProfile: "folk-travis" });
     const pianoOption = makeOption("piano", { compingProfile: "classical-folk" });
 
-    const withGuitar = selectOption(session, "guitar-fingerstyle", guitarOption, "", "guitar-run");
+    const withGuitar = selectOption(session, "guitar-fills-validation", guitarOption, "", "guitar-run");
     const withPiano = selectOption(withGuitar, "piano-fills-pedal-validation", pianoOption, "", "piano-run");
 
     expect(withGuitar.guitarProfileHint).toBe("folk-travis");
@@ -194,10 +192,10 @@ describe("accompaniment workflow session transitions", () => {
 
   it("detects existing workflow step results", () => {
     const session = createAccompanimentWorkflowSession(sampleAbc);
-    const generated = mergeRun(session, makeRun("key-scale-cadence", "run-1", ["option-a"]), "");
+    const generated = mergeRun(session, makeRun("key-beats", "run-1", ["option-a"]), "");
 
-    expect(hasWorkflowStepResults(null, ["key-scale-cadence"])).toBe(false);
-    expect(hasWorkflowStepResults(session, ["key-scale-cadence"])).toBe(false);
-    expect(hasWorkflowStepResults(generated, ["key-scale-cadence"])).toBe(true);
+    expect(hasWorkflowStepResults(null, ["key-beats"])).toBe(false);
+    expect(hasWorkflowStepResults(session, ["key-beats"])).toBe(false);
+    expect(hasWorkflowStepResults(generated, ["key-beats"])).toBe(true);
   });
 });

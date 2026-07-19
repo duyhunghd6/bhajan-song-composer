@@ -95,17 +95,14 @@ function selectOption(
 }
 
 describe("accompaniment workflow", () => {
-  it("defines the instrument-aware human-in-loop order with Guitar Fingerstyle", () => {
+  it("defines the instrument-aware human-in-loop order", () => {
     expect(ACCOMPANIMENT_WORKFLOW_STEP_IDS).toEqual([
-      "key-scale-cadence",
-      "strong-beat-targets",
-      "chord-tone-mapping",
-      "chord-progression",
+      "key-beats",
+      "chord-roles-progression",
       "voice-leading-validation",
       "guitar-comping-profile",
       "guitar-voicing-bass",
       "guitar-fills-validation",
-      "guitar-fingerstyle",
       "piano-comping-bass",
       "piano-rh-voicing",
       "piano-fills-pedal-validation",
@@ -118,14 +115,14 @@ describe("accompaniment workflow", () => {
       "violin-bed-register",
       "violin-expression-validation",
     ]);
-    expect(ACCOMPANIMENT_WORKFLOW_STEPS).toHaveLength(20);
+    expect(ACCOMPANIMENT_WORKFLOW_STEPS).toHaveLength(17);
   });
 
   it("keeps legacy session creation backward-compatible with Guitar + Piano", () => {
     const session = createAccompanimentWorkflowSession(sampleAbc);
 
     expect(session.setup.style).toBe("accompaniment");
-    expect(session.enabledStepIds).toContain("guitar-fingerstyle");
+    expect(session.enabledStepIds).toContain("guitar-fills-validation");
     expect(session.enabledStepIds).toContain("piano-fills-pedal-validation");
     expect(session.enabledStepIds).not.toContain("djembe-groove-interlock");
     expect(session.enabledStepIds).not.toContain("violin-bed-register");
@@ -160,7 +157,7 @@ describe("accompaniment workflow", () => {
     };
     const stepIds = getEnabledAccompanimentWorkflowStepIds(setup);
 
-    expect(stepIds).toContain("guitar-fingerstyle");
+    expect(stepIds).toContain("guitar-fills-validation");
     expect(stepIds).toContain("piano-comping-bass");
     expect(stepIds).toContain("harmonium-drone-register");
     expect(stepIds).toContain("djembe-groove-interlock");
@@ -180,10 +177,8 @@ describe("accompaniment workflow", () => {
     const stepIds = getEnabledAccompanimentWorkflowStepIds(setup);
 
     expect(stepIds).toEqual([
-      "key-scale-cadence",
-      "strong-beat-targets",
-      "chord-tone-mapping",
-      "chord-progression",
+      "key-beats",
+      "chord-roles-progression",
       "voice-leading-validation",
       "flute-yield-register",
       "flute-breath-fill-validation",
@@ -225,7 +220,7 @@ describe("accompaniment workflow", () => {
     const setup = getDefaultAccompanimentWorkflowSetup();
     const stepIds = getEnabledAccompanimentWorkflowStepIds(setup);
 
-    expect(stepIds).toContain("guitar-fingerstyle");
+    expect(stepIds).toContain("guitar-fills-validation");
     expect(stepIds).toContain("piano-fills-pedal-validation");
     expect(stepIds).toContain("harmonium-chord-voicing-validation");
     expect(stepIds).toContain("djembe-fill-validation");
@@ -244,8 +239,8 @@ describe("accompaniment workflow", () => {
     };
     const stepIds = getVisibleAccompanimentWorkflowStepsForSetup(setup).map((step) => step.id);
 
-    expect(stepIds.slice(0, 5)).toEqual(Array.from(ACCOMPANIMENT_WORKFLOW_STEP_IDS.slice(0, 5)));
-    expect(stepIds.slice(5)).toEqual([
+    expect(stepIds.slice(0, 3)).toEqual(Array.from(ACCOMPANIMENT_WORKFLOW_STEP_IDS.slice(0, 3)));
+    expect(stepIds.slice(3)).toEqual([
       "violin-bed-register",
       "violin-expression-validation",
       "djembe-groove-interlock",
@@ -266,7 +261,7 @@ describe("accompaniment workflow", () => {
 
     expect(isAccompanimentWorkflowStepEnabled(session, "piano-comping-bass")).toBe(false);
     expect(isAccompanimentWorkflowStepUnlocked(session, "piano-comping-bass")).toBe(false);
-    for (const stepId of session.enabledStepIds.slice(0, 5)) selectOption(session, stepId);
+    for (const stepId of session.enabledStepIds.slice(0, 3)) selectOption(session, stepId);
     expect(getNextUncompletedWorkflowStepId(session)).toBe("guitar-comping-profile");
   });
 
@@ -317,11 +312,11 @@ describe("accompaniment workflow", () => {
   it("locks branch steps until the shared harmonic foundation is selected", () => {
     const session = createAccompanimentWorkflowSession(sampleAbc);
 
-    expect(isAccompanimentWorkflowStepUnlocked(session, "key-scale-cadence")).toBe(true);
+    expect(isAccompanimentWorkflowStepUnlocked(session, "key-beats")).toBe(true);
     expect(isAccompanimentWorkflowStepUnlocked(session, "guitar-comping-profile")).toBe(false);
     expect(isAccompanimentWorkflowStepUnlocked(session, "piano-comping-bass")).toBe(false);
 
-    for (const stepId of ACCOMPANIMENT_WORKFLOW_STEP_IDS.slice(0, 5)) {
+    for (const stepId of ACCOMPANIMENT_WORKFLOW_STEP_IDS.slice(0, 3)) {
       selectOption(session, stepId);
     }
 
@@ -332,24 +327,22 @@ describe("accompaniment workflow", () => {
 
   it("builds prompts with default rules, user notes, strong-beat guidance, and previous selections", () => {
     const session = createAccompanimentWorkflowSession(sampleAbc);
-    selectOption(session, "key-scale-cadence");
+    selectOption(session, "key-beats");
 
     const prompt = buildAccompanimentWorkflowPrompt({
-      stepId: "strong-beat-targets",
+      stepId: "key-beats",
       sourceAbc: sampleAbc,
       metadata: { key: "C", scale: "major", timeSignature: "3/4" },
-      previousSelections: getSelectedWorkflowContext(session, "strong-beat-targets"),
+      previousSelections: getSelectedWorkflowContext(session, "key-beats"),
       setup: session.setup,
       userNote: "Prefer very simple bhajan support.",
     });
 
     expect(prompt).toContain("DEFAULT PROMPT");
-    expect(prompt).toContain("Return between 1 and 5 distinct options");
-    expect(prompt).toContain("beat 1 in 3/4");
+    expect(prompt).toContain("Return 1-2 options");
+    expect(prompt).toContain("emphasis direction");
     expect(prompt).toContain("Prefer very simple bhajan support.");
-    expect(prompt).toContain("key-scale-cadence Choice");
-    expect(prompt).toContain("Workflow setup");
-    expect(prompt).toContain("Accompaniment (combined instruments)");
+    expect(prompt).toContain("Setup");
     expect(prompt).toContain("Guitar Classic");
     expect(prompt).toContain("Piano");
     expect(prompt).toContain(sampleAbc);
@@ -361,14 +354,14 @@ describe("accompaniment workflow", () => {
     const item = options.items;
 
     expect(options.minItems).toBe(1);
-    expect(options.maxItems).toBe(5);
+    expect(options.maxItems).toBe(2);
     expect(item.required).toEqual(["id", "label", "summary", "justification", "data", "warnings", "validationNotes"]);
   });
 
   it("lists every LLM-visible accompaniment workflow tool", () => {
     const toolNames = getAccompanimentWorkflowLlmToolNames();
 
-    expect(toolNames).toContain("generate_chord_progression");
+    expect(toolNames).toContain("generate_chord_roles_progression");
     expect(toolNames).toContain("generate_piano_fills_pedal_validation");
     expect(toolNames).toContain("generate_harmonium_drone_register");
     expect(toolNames).toContain("generate_djembe_groove_interlock");
@@ -383,29 +376,21 @@ describe("accompaniment workflow", () => {
 
   it("adds add_strong_beat_icons tool-call requirements to Strong Beats prompts and schemas", () => {
     const prompt = buildAccompanimentWorkflowPrompt({
-      stepId: "strong-beat-targets",
+      stepId: "key-beats",
       sourceAbc: sampleAbc,
       metadata: { key: "C", scale: "major", timeSignature: "3/4" },
       previousSelections: [],
     });
-    const schema = buildAccompanimentWorkflowToolSchema("strong-beat-targets");
+    const schema = buildAccompanimentWorkflowToolSchema("key-beats");
     const data = schema.function.parameters.properties.options.items.properties.data as WorkflowDataSchemaForTest;
     const addStrongBeatSchema = buildAddStrongBeatIconsToolSchema();
 
     expect(prompt).toContain("add_strong_beat_icons");
-    expect(prompt).toContain("local algorithm");
-    expect(prompt).toContain("beat-only w: lyric rows");
-    expect(prompt).toContain("staff-system/sentence group");
-    expect(prompt).not.toContain("Copy the returned strongBeatDirectives");
-    expect(prompt).not.toContain("copy the returned abcNotation");
+    expect(prompt).toContain("emphasis direction");
     expect(data.required).toEqual(["strongBeatEmphasis"]);
-    expect(data.properties?.strongBeatEmphasis.description).toContain("local add_strong_beat_icons");
     expect(data.properties?.strongBeatDirectives).toBeUndefined();
     expect(data.properties?.annotatedAbc).toBeUndefined();
     expect(addStrongBeatSchema.function.name).toBe("add_strong_beat_icons");
-    expect(addStrongBeatSchema.function.description).toContain("beat-only w: lyric rows");
-    expect(addStrongBeatSchema.function.description).toContain("Do not copy abcNotation");
-    expect(addStrongBeatSchema.function.description).toContain("staff-system/sentence group");
     expect(addStrongBeatSchema.function.parameters.required).toEqual(["emphasis"]);
   });
 
@@ -444,7 +429,7 @@ describe("accompaniment workflow", () => {
             content: null,
             tool_calls: [{
               id: "final-call-1",
-              function: { name: "generate_strong_beat_targets", arguments: JSON.stringify(finalArgs) },
+              function: { name: "generate_key_beats", arguments: JSON.stringify(finalArgs) },
             }],
           },
         }],
@@ -456,9 +441,9 @@ describe("accompaniment workflow", () => {
       userPrompt: "user",
       tools: [
         { type: "function", function: { name: "add_strong_beat_icons" } },
-        { type: "function", function: { name: "generate_strong_beat_targets" } },
+        { type: "function", function: { name: "generate_key_beats" } },
       ],
-      finalToolName: "generate_strong_beat_targets",
+      finalToolName: "generate_key_beats",
       localTools: [{
         name: "add_strong_beat_icons",
         execute: () => ({
@@ -482,11 +467,11 @@ describe("accompaniment workflow", () => {
     expect(result).toEqual(finalArgs);
     expect(diagnostics.find((event) => event.type === "tool-call" && event.final)).toMatchObject({
       type: "tool-call",
-      toolName: "generate_strong_beat_targets",
+      toolName: "generate_key_beats",
       input: finalArgs,
     });
     expect(diagnostics.find((event) => event.type === "final-validation")).toMatchObject({
-      toolName: "generate_strong_beat_targets",
+      toolName: "generate_key_beats",
       valid: true,
       toolResult: { valid: true, optionCount: 1 },
     });
@@ -494,7 +479,7 @@ describe("accompaniment workflow", () => {
 
   it("adds break_measures_line tool-call requirements to chord ABC prompts and schemas", () => {
     const prompt = buildAccompanimentWorkflowPrompt({
-      stepId: "chord-progression",
+      stepId: "chord-roles-progression",
       sourceAbc: sampleAbc,
       metadata: { key: "C", scale: "major", timeSignature: "3/4" },
       previousSelections: [],
@@ -504,36 +489,34 @@ describe("accompaniment workflow", () => {
       metadata: { key: "C", scale: "major", timeSignature: "3/4" },
       previousSelections: [],
     });
-    const schema = buildAccompanimentWorkflowToolSchema("chord-progression");
+    const schema = buildAccompanimentWorkflowToolSchema("chord-roles-progression");
     const breakSchema = buildBreakMeasuresLineToolSchema();
     const data = schema.function.parameters.properties.options.items.properties.data as WorkflowDataSchemaForTest;
 
-    expect(prompt).toContain("call the break_measures_line tool");
-    expect(prompt).toContain("copy the returned abc exactly");
-    expect(prompt).toContain("same number of measures per line");
-    expect(consolidatedPrompt).toContain("call the break_measures_line tool");
+    expect(prompt).toContain("break_measures_line");
+    expect(prompt).toContain("harmonizedAbc");
+    expect(consolidatedPrompt).toContain("break_measures_line");
     expect(breakSchema.function.name).toBe("break_measures_line");
     expect(breakSchema.function.parameters.required).toEqual(["generatedAbc"]);
-    expect(data.properties?.harmonizedAbc.description).toContain("copied exactly from the break_measures_line tool result");
+    expect(data.properties?.harmonizedAbc).toBeDefined();
   });
 
   it("builds an ABC comment annotation for the latest applied workflow step", () => {
     const session = createAccompanimentWorkflowSession(sampleAbc);
-    selectOption(session, "key-scale-cadence");
-    selectOption(session, "strong-beat-targets");
+    selectOption(session, "key-beats");
+    selectOption(session, "key-beats");
 
     const annotation = buildAccompanimentWorkflowAbcAnnotation(session);
 
     expect(annotation).toContain("% --- Human-in-the-loop Accompaniment Workflow Applied ---");
-    expect(annotation).toContain("% ABCNotation applied after Step 2: Strong-beat Target Notes");
-    expect(annotation).toContain("% Step 1 Key, Scale & Cadence Analysis: key-scale-cadence Choice");
-    expect(annotation).toContain("% Step 2 Strong-beat Target Notes: strong-beat-targets Choice");
+    expect(annotation).toContain("% ABCNotation applied after Step 1: Key, Scale, Cadence & Strong Beats");
+    expect(annotation).toContain("% Step 1 Key, Scale, Cadence & Strong Beats: key-beats Choice");
   });
 
   it("applies selected chord progression ABC as the playable music staff source", () => {
     const session = createAccompanimentWorkflowSession(sampleAbc);
     const progressionAbc = `${sampleAbc}\n% chords applied\n"C"C2 E2 G2 |`;
-    selectOption(session, "chord-progression", { harmonizedAbc: progressionAbc });
+    selectOption(session, "chord-roles-progression", { harmonizedAbc: progressionAbc });
 
     expect(getWorkflowAppliedMusicAbc(session, sampleAbc)).toBe(progressionAbc);
   });
@@ -677,7 +660,7 @@ K:C
     const session = createAccompanimentWorkflowSession(sampleAbc);
     const progressionAbc = `${sampleAbc}\n% progression only`;
     const validatedAbc = `${sampleAbc}\n% validated voice leading`;
-    selectOption(session, "chord-progression", { harmonizedAbc: progressionAbc });
+    selectOption(session, "chord-roles-progression", { harmonizedAbc: progressionAbc });
     selectOption(session, "voice-leading-validation", { validatedAbc });
 
     expect(getWorkflowAppliedMusicAbc(session, sampleAbc)).toBe(validatedAbc);
@@ -700,19 +683,13 @@ K:C
     });
     const schema = buildConsolidatedChordIngestionToolSchema();
 
-    expect(prompt).toContain("one LLM decision");
+    expect(prompt).toContain("CONSOLIDATED CHORD INGESTION");
     expect(prompt).toContain("Detected lyric chord progression: Em → D");
     expect(prompt).toContain("Keep the user's chords.");
     expect(schema.function.name).toBe("generate_consolidated_chord_ingestion");
-    expect(schema.function.parameters.required).toEqual(["chordToneMapping", "chordProgression", "voiceLeadingValidation"]);
+    expect(schema.function.parameters.required).toEqual(["chordRolesProgression", "voiceLeadingValidation"]);
   });
 
-  it("marks all concrete guitar workflow steps as tab-validation steps", () => {
-    expect(isGuitarTabValidationWorkflowStep("guitar-comping-profile")).toBe(true);
-    expect(isGuitarTabValidationWorkflowStep("guitar-voicing-bass")).toBe(true);
-    expect(isGuitarTabValidationWorkflowStep("guitar-fills-validation")).toBe(true);
-    expect(isGuitarTabValidationWorkflowStep("guitar-fingerstyle")).toBe(true);
-  });
 
   it("builds guitar prompts that require valid_guitar_tab before final output", () => {
     const prompt = buildAccompanimentWorkflowPrompt({
@@ -723,13 +700,9 @@ K:C
     });
 
     expect(prompt).toContain("valid_guitar_tab");
-    expect(prompt).toContain("guitarTab.profileId");
-    expect(prompt).toContain("guitarTab.voicingProfileId");
-    expect(prompt).toContain("guitarTab.events");
-    expect(prompt).toContain("one physical guitar");
-    expect(prompt).toContain("one source note/event may be assigned to only one string");
-    expect(prompt).toContain("selected guitar fretboard range");
-    expect(prompt).toContain("one left hand can fret");
+    expect(prompt).toContain("guitarTab");
+    expect(prompt).toContain("compact event keys");
+    expect(prompt).toContain("query_guitar_voicings");
   });
 
   it("requires guitarTab events in guitar tab-bearing workflow schemas", () => {
@@ -743,43 +716,21 @@ K:C
     expect(guitarTab?.required).toEqual(["profileId", "events"]);
     expect(guitarTab?.properties).toHaveProperty("profileId");
     expect(guitarTab?.properties).toHaveProperty("voicingProfileId");
-    expect(String(events?.description)).toContain("covering every source/body measure");
-    expect(events?.items?.properties).toHaveProperty("sourceEventId");
+    expect(String(events?.description)).toContain("compact keys");
+    expect(events?.items?.properties).toHaveProperty("sid");
     expect(events?.items?.required).toEqual([
-      "measureIndex",
-      "beat",
-      "sourceEventId",
-      "note",
-      "string",
-      "fret",
-      "role",
+      "m",
+      "b",
+      "sid",
+      "n",
+      "s",
+      "f",
+      "r",
     ]);
   });
 
-  it("requires solo fingerstyle data for the Guitar Fingerstyle workflow schema and prompt", () => {
-    const prompt = buildAccompanimentWorkflowPrompt({
-      stepId: "guitar-fingerstyle",
-      sourceAbc: sampleAbc,
-      metadata: { key: "Em", scale: "minor", timeSignature: "4/4" },
-      previousSelections: [],
-    });
-    const schema = buildAccompanimentWorkflowToolSchema("guitar-fingerstyle");
-    const data = schema.function.parameters.properties.options.items.properties.data as WorkflowDataSchemaForTest;
-
-    expect(prompt).toContain("solo guitar fingerstyle");
-    expect(prompt).toContain("carries the melody");
-    expect(prompt).toContain("chord-derived bass");
-    expect(prompt).toContain("one merged physical Guitar matrix covering every source/body measure");
-    expect(prompt).toContain("treble melody events on strings 1-3");
-    expect(prompt).toContain("bass-string chord anchors on strings 4-6");
-    expect(prompt).toContain("beat-1 roots");
-    expect(prompt).toContain("merged final tab events");
-    expect(prompt).toContain("formPlan.intro");
-    expect(prompt).toContain("formPlan.interlude");
-    expect(prompt).toContain("formPlan.outro");
-    expect(data.required).toEqual(["mode", "carriesMelody", "pickingProfile", "bassStrategy", "formPlan", "guitarTab"]);
-    expect(data.properties?.formPlan?.required).toEqual(["intro", "interlude", "outro"]);
-    expect(data.properties?.guitarTab?.required).toEqual(["profileId", "events"]);
+  it("no longer includes a Guitar Fingerstyle step in the accompaniment workflow", () => {
+    expect(ACCOMPANIMENT_WORKFLOW_GUITAR_STEP_IDS).not.toContain("guitar-fingerstyle");
   });
 
   it("exposes the valid_guitar_tab schema for the LLM tool loop", () => {
@@ -791,9 +742,9 @@ K:C
 
   it("advances to the next unlocked incomplete step", () => {
     const session = createAccompanimentWorkflowSession(sampleAbc);
-    expect(getNextUncompletedWorkflowStepId(session)).toBe("key-scale-cadence");
+    expect(getNextUncompletedWorkflowStepId(session)).toBe("key-beats");
 
-    for (const stepId of ACCOMPANIMENT_WORKFLOW_STEP_IDS.slice(0, 5)) {
+    for (const stepId of ACCOMPANIMENT_WORKFLOW_STEP_IDS.slice(0, 3)) {
       selectOption(session, stepId);
     }
 
@@ -804,7 +755,7 @@ K:C
     const session = createAccompanimentWorkflowSession(sampleAbc);
     const validatedAbc = `${sampleAbc}\n% shared harmony stays applied`;
 
-    for (const stepId of ACCOMPANIMENT_WORKFLOW_STEP_IDS.slice(0, 5)) {
+    for (const stepId of ACCOMPANIMENT_WORKFLOW_STEP_IDS.slice(0, 3)) {
       selectOption(session, stepId, stepId === "voice-leading-validation" ? { validatedAbc } : { style: "shared" });
     }
     for (const stepId of ACCOMPANIMENT_WORKFLOW_GUITAR_STEP_IDS) {

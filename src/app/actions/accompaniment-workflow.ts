@@ -56,8 +56,7 @@ interface RawWorkflowStepResult {
 }
 
 interface RawConsolidatedChordIngestionResult {
-  chordToneMapping?: RawWorkflowStepResult;
-  chordProgression?: RawWorkflowStepResult;
+  chordRolesProgression?: RawWorkflowStepResult;
   voiceLeadingValidation?: RawWorkflowStepResult;
 }
 
@@ -122,11 +121,11 @@ function diagnosticStatus(event: ToolDiagnosticEvent): AccompanimentWorkflowLlmL
 function diagnosticMessage(event: ToolDiagnosticEvent): string {
   switch (event.type) {
     case "chat-request":
-      return `LLM call started with ${event.messageCount} message${event.messageCount === 1 ? "" : "s"} and ${event.toolNames.length} exposed tool${event.toolNames.length === 1 ? "" : "s"}.`;
+      return `LLM call started with ${event.messageCount} message${event.messageCount === 1 ? "" : "s"} and ${event.toolNames.length} exposed tool${event.toolNames.length === 1 ? "" : "s"}. Timeout: ${((event.requestTimeoutMs ?? 90000) / 1000).toFixed(0)}s, max attempts: ${event.maxRequestAttempts ?? 2}.`;
     case "chat-response":
       return event.toolCallNames.length > 0
-        ? `LLM call succeeded and requested ${event.toolCallNames.join(", ")}.`
-        : "LLM call succeeded but returned no tool calls.";
+        ? `LLM call succeeded in ${event.elapsedMs !== undefined ? `${(event.elapsedMs / 1000).toFixed(1)}s` : "?"}${event.requestAttempts !== undefined && event.requestAttempts > 1 ? ` (${event.requestAttempts} attempts)` : ""} and requested ${event.toolCallNames.join(", ")}.`
+        : `LLM call succeeded in ${event.elapsedMs !== undefined ? `${(event.elapsedMs / 1000).toFixed(1)}s` : "?"} but returned no tool calls.`;
     case "chat-error":
       return event.status ? `LLM call failed with HTTP ${event.status}: ${event.message}` : `LLM call failed: ${event.message}`;
     case "tool-call":
@@ -208,20 +207,24 @@ function llmLogEntryFromDiagnostic(input: {
     validationMessage: event.type === "final-validation" ? event.message : event.type === "loop-exhausted" ? event.lastValidationMessage : undefined,
     payloadPreview: diagnosticPayloadPreview(event),
     logPath: state.logPath,
+    elapsedMs: "elapsedMs" in event ? event.elapsedMs : undefined,
+    requestAttempts: "requestAttempts" in event ? event.requestAttempts : undefined,
   };
 }
 
 function logDiagnosticToConsole(entry: AccompanimentWorkflowLlmLogEntry): void {
+  const elapsed = entry.elapsedMs !== undefined ? ` (${(entry.elapsedMs / 1000).toFixed(1)}s)` : "";
+  const attempts = entry.requestAttempts !== undefined && entry.requestAttempts > 1 ? ` [${entry.requestAttempts} attempts]` : "";
   const prefix = `[Accompaniment LLM][${entry.stepId}][${entry.status}]`;
   if (entry.status === "failed") {
-    console.warn(prefix, entry.message);
+    console.warn(prefix, entry.message + elapsed + attempts);
     return;
   }
   if (entry.status === "warning") {
-    console.warn(prefix, entry.message);
+    console.warn(prefix, entry.message + elapsed + attempts);
     return;
   }
-  console.info(prefix, entry.message);
+  console.info(prefix, entry.message + elapsed + attempts);
 }
 
 function makeDiagnosticRecorder(input: {
@@ -438,13 +441,10 @@ function validateGuitarWorkflowResult(raw: unknown, input: GenerateAccompaniment
       continue;
     }
 
-    if (input.stepId === "guitar-fingerstyle") {
-      validateGuitarFingerstyleOption(optionId, option, events, messages, sourceMeasures);
-    }
 
     const validation = validateGuitarTab(events, {
       ...guitarTabValidationOptionsFromOption(option, input),
-      requireSourceEventIds: input.stepId === "guitar-fingerstyle",
+      requireSourceEventIds: false,
     });
     validations.push({ optionId, validation });
     if (!validation.valid) {
@@ -543,7 +543,7 @@ function validateStrongBeatWorkflowResult(input: {
   };
 }
 
-const ABC_WORKFLOW_STEP_IDS = new Set<AccompanimentWorkflowStepId>(["chord-progression", "voice-leading-validation"]);
+const ABC_WORKFLOW_STEP_IDS = new Set<AccompanimentWorkflowStepId>(["chord-roles-progression", "voice-leading-validation"]);
 const ABC_OPTION_DATA_KEYS = ["harmonizedAbc", "validatedAbc", "chordAnnotatedAbc", "abc"] as const;
 
 function optionData(option: Partial<AccompanimentWorkflowOption>): Record<string, unknown> | null {
@@ -639,7 +639,7 @@ function normalizeStrongBeatOptionData(data: Record<string, unknown>, sourceAbc:
 
 function normalizeOptions(raw: unknown, sourceAbc: string, stepId?: AccompanimentWorkflowStepId): AccompanimentWorkflowOption[] {
   const result = raw as RawWorkflowStepResult;
-  const options = Array.isArray(result.options) ? result.options.slice(0, 5) : [];
+  const options = Array.isArray(result.options) ? result.options.slice(0, 2) : [];
 
   if (options.length === 0) {
     throw new Error("LLM returned no workflow options");
@@ -649,7 +649,7 @@ function normalizeOptions(raw: unknown, sourceAbc: string, stepId?: Accompanimen
     const data = option.data && typeof option.data === "object" && !Array.isArray(option.data)
       ? normalizeWorkflowOptionDataLineBreaks(option.data, sourceAbc)
       : {};
-    const normalizedData = stepId === "strong-beat-targets"
+    const normalizedData = stepId === "key-beats"
       ? normalizeStrongBeatOptionData(data, sourceAbc)
       : data;
 
@@ -737,11 +737,11 @@ export async function generateAccompanimentWorkflowStep(
     });
     let rawResult: unknown;
 
-    if (input.stepId === "strong-beat-targets") {
+    if (input.stepId === "key-beats") {
       let strongBeatToolCalled = false;
       const strongBeatResults: StrongBeatIconGenerationResult[] = [];
       rawResult = await requestOpenAiCompatibleToolLoop({
-        systemPrompt: `${systemPrompt} For the Strong Beats step, the model chooses an emphasis direction only. Call add_strong_beat_icons before the final generation tool for each distinct emphasis you will offer so the local algorithm computes and validates concrete beat positions. The final generate_strong_beat_targets payload must include only option.data.strongBeatEmphasis; do not include abcNotation, annotatedAbc, strongBeatDirectives, measureIndex, or beatTime.`,
+        systemPrompt: `${systemPrompt} For the Key & Beats step, choose emphasis direction. Call add_strong_beat_icons for each emphasis before the final tool. Final payload must include only strongBeatEmphasis.`,
         userPrompt: requestPrompt,
         tools: [buildAddStrongBeatIconsToolSchema(), toolSchema],
         finalToolName: toolName,
@@ -761,7 +761,7 @@ export async function generateAccompanimentWorkflowStep(
       });
     } else if (isGuitarTabValidationWorkflowStep(input.stepId)) {
       rawResult = await requestOpenAiCompatibleToolLoop({
-        systemPrompt: `${systemPrompt} For guitar tab-bearing steps, call query_guitar_voicings BEFORE fretting any notes. Then call valid_guitar_tab with profileId, voicingProfileId, and concrete octave-bearing string/fret events before calling the final generation tool. Revise and revalidate until valid_guitar_tab reports valid=true for one physical guitar: unique string/source assignment, fretboard range, and one-left-hand reach. CHORD-TONE ENFORCEMENT: Every arpeggio/comping note must belong to the chord annotated in the Melody for that measure. Consult the Chord-Tone Reference Table in the prompt for exact ABC tokens. Do NOT copy-paste the same arpeggio pattern across different chords. Do NOT use ^G (G#) in Em chords under K:G — G is natural. If a measure has two chords (split measure), use the first chord's tones for the first half and the second chord's tones for the second half.`,
+        systemPrompt: `${systemPrompt} For guitar tab steps, call query_guitar_voicings BEFORE fretting notes. Call valid_guitar_tab to validate. Use compact tab keys (m/b/n/s/f/r/sid). Ensure unique string/source assignment and one-left-hand reach. Chord-tone enforcement: arpeggio notes must belong to the measure's chord.`,
         userPrompt: requestPrompt,
         tools: [buildValidGuitarTabToolSchema(), buildQueryGuitarVoicingsToolSchema(), toolSchema],
         finalToolName: toolName,
@@ -861,7 +861,7 @@ export async function generateConsolidatedChordIngestionWorkflowSteps(
     });
     let breakToolCalled = false;
     const rawResult = await requestOpenAiCompatibleToolLoop({
-      systemPrompt: "You are an expert music theory arranger for Indian devotional/bhajan music. You ingest user-provided lyric chord symbols as authoritative harmony and return three human-reviewable workflow decisions from one tool call. Call break_measures_line with generated ABC before calling generate_consolidated_chord_ingestion, then copy the returned abc exactly into playable ABC fields.",
+      systemPrompt: "You are an expert bhajan music arranger. Ingest lyric chord annotations and return chord roles/progression and voice-leading validation in one tool call. Call break_measures_line before the final tool.",
       userPrompt: requestPrompt,
       tools: [buildBreakMeasuresLineToolSchema(), buildConsolidatedChordIngestionToolSchema()],
       finalToolName: "generate_consolidated_chord_ingestion",
@@ -869,7 +869,7 @@ export async function generateConsolidatedChordIngestionWorkflowSteps(
       validateFinalResult: (args) => {
         const result = args as RawConsolidatedChordIngestionResult;
         const progression = validateWorkflowAbcLineBreaks({
-          raw: result.chordProgression,
+          raw: result.chordRolesProgression,
           sourceAbc: input.sourceAbc,
           requireBreakToolCall: true,
           breakToolCalled,
@@ -890,7 +890,7 @@ export async function generateConsolidatedChordIngestionWorkflowSteps(
           toolResult: {
             valid,
             issues: [progression.message, voiceLeading.message].filter(Boolean),
-            chordProgression: progression.toolResult,
+            chordRolesProgression: progression.toolResult,
             voiceLeadingValidation: voiceLeading.toolResult,
           },
         };
@@ -904,19 +904,11 @@ export async function generateConsolidatedChordIngestionWorkflowSteps(
 
     return [
       makeRun({
-        stepId: "chord-tone-mapping",
+        stepId: "chord-roles-progression",
         requestPrompt,
         userNote: input.userNote,
-        options: normalizeOptions(result.chordToneMapping, input.sourceAbc),
-        rawResult: result.chordToneMapping,
-        diagnostics,
-      }),
-      makeRun({
-        stepId: "chord-progression",
-        requestPrompt,
-        userNote: input.userNote,
-        options: normalizeOptions(result.chordProgression, input.sourceAbc),
-        rawResult: result.chordProgression,
+        options: normalizeOptions(result.chordRolesProgression, input.sourceAbc),
+        rawResult: result.chordRolesProgression,
         diagnostics,
       }),
       makeRun({
