@@ -115,11 +115,11 @@ describe("accompaniment workflow wizard state", () => {
   it("clears only guitar branch work for accompaniment page restore/reset", () => {
     let workflow = createAccompanimentWorkflowSession(sampleAbc);
     const sharedRun = makeRun("shared-run", ["shared-option"], "voice-leading-validation");
-    const guitarRun = makeRun("guitar-run", ["guitar-option"], "guitar-fills-validation");
+    const guitarRun = makeRun("guitar-run", ["guitar-option"], "guitar-comping-profile");
     const pianoRun = makeRun("piano-run", ["piano-option"], "piano-fills-pedal-validation");
 
     workflow = selectOption(mergeRun(workflow, sharedRun, ""), "voice-leading-validation", sharedRun.options[0], "", sharedRun.id);
-    workflow = selectOption(mergeRun(workflow, guitarRun, ""), "guitar-fills-validation", guitarRun.options[0], "", guitarRun.id);
+    workflow = selectOption(mergeRun(workflow, guitarRun, ""), "guitar-comping-profile", guitarRun.options[0], "", guitarRun.id);
     workflow = selectOption(mergeRun(workflow, pianoRun, ""), "piano-fills-pedal-validation", pianoRun.options[0], "", pianoRun.id);
     workflow = {
       ...workflow,

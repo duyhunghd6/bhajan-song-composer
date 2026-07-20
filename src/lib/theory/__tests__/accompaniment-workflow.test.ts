@@ -29,7 +29,7 @@ import {
   hasLyricChordAnnotations,
   isAccompanimentWorkflowStepEnabled,
   isAccompanimentWorkflowStepUnlocked,
-  isGuitarTabValidationWorkflowStep,
+  normalizeAccompanimentWorkflowSession,
   normalizeAccompanimentWorkflowSetup,
   normalizeWorkflowOptionDataLineBreaks,
   type AccompanimentWorkflowOption,
@@ -102,7 +102,6 @@ describe("accompaniment workflow", () => {
       "voice-leading-validation",
       "guitar-comping-profile",
       "guitar-voicing-bass",
-      "guitar-fills-validation",
       "piano-comping-bass",
       "piano-rh-voicing",
       "piano-fills-pedal-validation",
@@ -115,14 +114,15 @@ describe("accompaniment workflow", () => {
       "violin-bed-register",
       "violin-expression-validation",
     ]);
-    expect(ACCOMPANIMENT_WORKFLOW_STEPS).toHaveLength(17);
+    expect(ACCOMPANIMENT_WORKFLOW_STEPS).toHaveLength(16);
+    expect(ACCOMPANIMENT_WORKFLOW_STEPS.map((step) => step.index)).toEqual(Array.from({ length: 16 }, (_, index) => index + 1));
   });
 
   it("keeps legacy session creation backward-compatible with Guitar + Piano", () => {
     const session = createAccompanimentWorkflowSession(sampleAbc);
 
     expect(session.setup.style).toBe("accompaniment");
-    expect(session.enabledStepIds).toContain("guitar-fills-validation");
+    expect(session.enabledStepIds).toContain("guitar-voicing-bass");
     expect(session.enabledStepIds).toContain("piano-fills-pedal-validation");
     expect(session.enabledStepIds).not.toContain("djembe-groove-interlock");
     expect(session.enabledStepIds).not.toContain("violin-bed-register");
@@ -157,7 +157,7 @@ describe("accompaniment workflow", () => {
     };
     const stepIds = getEnabledAccompanimentWorkflowStepIds(setup);
 
-    expect(stepIds).toContain("guitar-fills-validation");
+    expect(stepIds).toContain("guitar-voicing-bass");
     expect(stepIds).toContain("piano-comping-bass");
     expect(stepIds).toContain("harmonium-drone-register");
     expect(stepIds).toContain("djembe-groove-interlock");
@@ -220,7 +220,7 @@ describe("accompaniment workflow", () => {
     const setup = getDefaultAccompanimentWorkflowSetup();
     const stepIds = getEnabledAccompanimentWorkflowStepIds(setup);
 
-    expect(stepIds).toContain("guitar-fills-validation");
+    expect(stepIds).toContain("guitar-voicing-bass");
     expect(stepIds).toContain("piano-fills-pedal-validation");
     expect(stepIds).toContain("harmonium-chord-voicing-validation");
     expect(stepIds).toContain("djembe-fill-validation");
@@ -691,9 +691,39 @@ K:C
   });
 
 
+  it("normalizes legacy sessions that still point at Guitar Polish", () => {
+    const session = createAccompanimentWorkflowSession(sampleAbc);
+    for (const stepId of ACCOMPANIMENT_WORKFLOW_STEP_IDS.slice(0, 5)) {
+      selectOption(session, stepId);
+    }
+    const legacy = {
+      ...session,
+      version: 3,
+      currentStepId: "guitar-fills-validation",
+      enabledStepIds: [...session.enabledStepIds, "guitar-fills-validation"],
+      steps: {
+        ...session.steps,
+        "guitar-fills-validation": {
+          runs: [],
+          activeRunId: null,
+          selectedOptionId: null,
+          selectedAt: null,
+          promptNote: "legacy",
+        },
+      },
+    };
+
+    const normalized = normalizeAccompanimentWorkflowSession(legacy);
+
+    expect(normalized?.version).toBe(4);
+    expect(normalized?.enabledStepIds).not.toContain("guitar-fills-validation");
+    expect(normalized?.steps).not.toHaveProperty("guitar-fills-validation");
+    expect(normalized?.currentStepId).toBe("piano-comping-bass");
+  });
+
   it("builds guitar prompts that require valid_guitar_tab before final output", () => {
     const prompt = buildAccompanimentWorkflowPrompt({
-      stepId: "guitar-fills-validation",
+      stepId: "guitar-voicing-bass",
       sourceAbc: sampleAbc,
       metadata: { key: "Em", scale: "minor", timeSignature: "4/4" },
       previousSelections: [],
@@ -703,6 +733,7 @@ K:C
     expect(prompt).toContain("guitarTab");
     expect(prompt).toContain("compact event keys");
     expect(prompt).toContain("query_guitar_voicings");
+    expect(prompt).not.toContain("fillDensity");
   });
 
   it("requires guitarTab events in guitar tab-bearing workflow schemas", () => {
@@ -710,6 +741,7 @@ K:C
     const data = schema.function.parameters.properties.options.items.properties.data as WorkflowDataSchemaForTest;
 
     expect(data.required).toEqual(["guitarTab"]);
+    expect(data.properties).not.toHaveProperty("fillDensity");
     const guitarTab = data.properties?.guitarTab;
     const events = guitarTab?.properties?.events;
 
@@ -729,7 +761,12 @@ K:C
     ]);
   });
 
-  it("no longer includes a Guitar Fingerstyle step in the accompaniment workflow", () => {
+  it("keeps only profile and voicing in the accompaniment Guitar branch", () => {
+    expect(ACCOMPANIMENT_WORKFLOW_GUITAR_STEP_IDS).toEqual([
+      "guitar-comping-profile",
+      "guitar-voicing-bass",
+    ]);
+    expect(ACCOMPANIMENT_WORKFLOW_STEP_IDS).not.toContain("guitar-fills-validation");
     expect(ACCOMPANIMENT_WORKFLOW_GUITAR_STEP_IDS).not.toContain("guitar-fingerstyle");
   });
 

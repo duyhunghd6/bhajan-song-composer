@@ -163,30 +163,26 @@ Before small-step generation, capture the setup defined in `src/lib/theory/accom
 - New workflows default to combined `accompaniment` with all seven instruments enabled; legacy restored sessions without setup normalize to Guitar Classic + Piano combined accompaniment.
 
 Use the small workflow steps defined in `src/lib/theory/accompaniment-workflow/definition.ts`:
-2. `key-scale-cadence` — analyze key, scale/raga context, phrase endings, and cadence targets.
-3. `strong-beat-targets` — identify structurally strong melody notes.
-4. `chord-tone-mapping` — map strong notes to chord-tone roles, suspensions, or tensions.
-5. `chord-progression` — generate chord progression candidates and chord-annotated ABC.
-6. `voice-leading-validation` — smooth transitions and validate harmonized ABC.
-7. `guitar-comping-profile` — choose guitar comping/picking profile.
-8. `guitar-voicing-bass` — plan guitar voicings, bass anchors, and walking motion.
-9. `guitar-fills-validation` — validate guitar fills and tablature playability.
-10. `guitar-fingerstyle` — generate solo guitar fingerstyle that carries the melody, adds chord-derived bass, and plans intro/interlude/outro form sections.
-11. `piano-comping-bass` — choose piano comping profile and left-hand/bass foundation.
-12. `piano-rh-voicing` — plan right-hand guide tones and voice-leading.
-13. `piano-fills-pedal-validation` — validate gap fills, sustain pedal automation, and piano playability.
-14. `harmonium-drone-register` — choose devotional harmonium drone tones, register, sustain density, and melody-yield behavior.
-15. `harmonium-chord-voicing-validation` — validate harmonium chord voicings, root-fifth anchors, and collision-safe sustained support.
-16. `djembe-groove-interlock` — choose Djembe groove profile and interlock Bass/Tone/Slap strokes with accompaniment transients.
-17. `djembe-fill-validation` — validate Djembe fill policy, backbeat/slap behavior, and transient conflict limits.
-18. `flute-yield-register` — choose Flute role, register, and melody-yield behavior.
-19. `flute-breath-fill-validation` — validate Flute breath intervals, playable gap fills, slurs, and rest policy.
-20. `violin-bed-register` — choose Violin harmonic bed, counterline, drone-pad strategy, and register relationship.
-21. `violin-expression-validation` — validate Violin bow expression, vibrato/swell, double-stop policy, and melody-safe support.
+1. `key-beats` — analyze key/scale/raga context, phrase endings, cadence targets, and strong-beat emphasis.
+2. `chord-roles-progression` — map strong melody notes to chord roles and produce harmonized ABC.
+3. `voice-leading-validation` — smooth transitions and validate harmonized ABC.
+4. `guitar-comping-profile` — choose guitar comping/picking profile.
+5. `guitar-voicing-bass` — plan guitar voicings, bass anchors, and walking motion.
+6. `piano-comping-bass` — choose piano comping profile and left-hand/bass foundation.
+7. `piano-rh-voicing` — plan right-hand guide tones and voice-leading.
+8. `piano-fills-pedal-validation` — validate gap fills, sustain pedal automation, and piano playability.
+9. `harmonium-drone-register` — choose devotional harmonium drone tones, register, sustain density, and melody-yield behavior.
+10. `harmonium-chord-voicing-validation` — validate harmonium chord voicings, root-fifth anchors, and collision-safe sustained support.
+11. `djembe-groove-interlock` — choose Djembe groove profile and interlock Bass/Tone/Slap strokes with accompaniment transients.
+12. `djembe-fill-validation` — validate Djembe fill policy, backbeat/slap behavior, and transient conflict limits.
+13. `flute-yield-register` — choose Flute role, register, and melody-yield behavior.
+14. `flute-breath-fill-validation` — validate Flute breath intervals, playable gap fills, slurs, and rest policy.
+15. `violin-bed-register` — choose Violin harmonic bed, counterline, drone-pad strategy, and register relationship.
+16. `violin-expression-validation` — validate Violin bow expression, vibrato/swell, double-stop policy, and melody-safe support.
 
 Dynamic step gating:
 
-- Shared steps 1–6 are always enabled.
+- Shared steps 1–3 are always enabled.
 - `solo-fingerstyle` enables shared steps plus branch steps for exactly the instruments the user enabled in the ordered setup. If Guitar Classic/Acoustic is enabled, use the Guitar Fingerstyle branch; if Djembe, Flute, Violin, Piano, or Harmonium are enabled, use those enabled instrument branches too. Disabled instrument branches must not appear, block completion, or be required before the accompaniment result is applied.
 - Combined `accompaniment` enables branch steps only for enabled instruments in the ordered stack.
 - The planned step grid must react whenever an instrument checkbox changes, including after a workflow has started: newly checked instruments add their branch steps, unchecked instruments remove their branch steps and must not block completion.
@@ -200,7 +196,7 @@ Important accompaniment rules:
 - Guitar tab validation steps must provide concrete tab events with measure, beat, note, string, fret, and role.
 - Guitar Fingerstyle must be a solo guitar plan: the Guitar voice carries the melody itself, adds bass from chord progression roots/fifths/approaches, exposes intro/interlude/outro section metadata, and renders GUITAR TAB.
 - Line-level Guitar Fingerstyle generation is staged: non-fill foundation → skill-aware deterministic TimeGrid placement and freeze → exhaustive paginated fill opportunities → LLM use/skip selection → LLM candidate/duration composition → deterministic server merge/final validation. Quoted section/form annotations are not harmonic TimeGrid chords. Fills are discretionary: after bounded fill-stage retries, return the validated bass foundation with a non-fatal fills-unavailable notice rather than discarding it. Do not let the LLM replace the source grid or run mutating placement after opportunity scoring.
-- Fingerstyle skill defaults to beginner; density defaults to auto (beginner→few, intermediate→normal, advanced→many). Preserve their independence. Density increases selection budgets among legal source-rest windows only: discretionary fills and harmony must never attack or remain sounding during a Melody attack or sustain. Skill fret ceilings constrain discretionary accompaniment and fills; if an authoritative melody attack is physically playable only above that ceiling, preserve its exact pitch with a labelled melody-only exception rather than transposing it or relaxing the rest of the line.
+- Fingerstyle skill defaults to beginner; density defaults to auto (beginner→few, intermediate→normal, advanced→many). Preserve their independence. Fill density belongs to Guitar Fingerstyle generation settings, not the accompaniment workflow. Density increases selection budgets among legal source-rest windows only: discretionary fills and harmony must never attack or remain sounding during a Melody attack or sustain. Skill fret ceilings constrain discretionary accompaniment and fills; if an authoritative melody attack is physically playable only above that ceiling, preserve its exact pitch with a labelled melody-only exception rather than transposing it or relaxing the rest of the line.
 - Piano output should expose pedal automation, key highlights, fingering metadata, and physical validation where available.
 - Djembe, Flute, and Violin accompaniment branches may render support ABC layers directly on the accompaniment page once their validation/polish branch step is selected.
 - Keep generated ABC previewable with `AbcjsPlaybackController`.

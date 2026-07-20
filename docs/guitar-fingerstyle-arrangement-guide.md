@@ -19,7 +19,7 @@ Source ABC provides melody, inline chord symbols, lyrics, optional beat-weight m
 - melody `pitch` and `state`: `attack`, `sustain`, or `rest`;
 - lyric syllable, melisma marker, or skip marker;
 - pickup and repeat/barline metadata;
-- key, comping profile, voicing plan, and legacy fill-density context.
+- key, comping profile, voicing plan, and optional imported fill-density compatibility metadata.
 
 The editable arrangement layer is the independent `tablature` attack-event array on each grid step. Its events carry physical string/fret coordinates, right-hand finger, role, and optional explicit `durationSteps`; they can be `bass`, `root`, `fifth`, `harmony`, or `fill`, alongside physically realized locked `melody` attacks. An edit must never alter the source melody pitch, attack timing, grid structure, or contextual fields.
 
@@ -64,7 +64,7 @@ The canonical limits come from `SKILL_LEVEL_CONSTRAINTS` in `fingerstyle-arrange
 
 ### Fill density
 
-The UI exposes `auto`, `few`, `normal`, and `many`.
+The Guitar Fingerstyle page is the authoritative owner of fill density; it is no longer supplied by an accompaniment workflow step. The UI exposes `auto`, `few`, `normal`, and `many`.
 
 - `auto`: beginner → few, intermediate → normal, advanced → many;
 - `few`: restrained use of the best source-rest/phrase-gap windows;

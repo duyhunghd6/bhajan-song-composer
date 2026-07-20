@@ -92,11 +92,9 @@ export function GuitarFingerstyleStep({
     const workflow = ws.accompanimentWorkflow;
     const compingOpt = workflow ? getSelectedWorkflowOption(workflow, "guitar-comping-profile") : undefined;
     const voicingOpt = workflow ? getSelectedWorkflowOption(workflow, "guitar-voicing-bass") : undefined;
-    const fillsOpt = workflow ? getSelectedWorkflowOption(workflow, "guitar-fills-validation") : undefined;
     return {
       comping_style: compingOpt ? (compingOpt.data?.compingProfile as string) || compingOpt.label : undefined,
       voicing_plan: voicingOpt ? (voicingOpt.data?.voicingPlan as string) || voicingOpt.label : undefined,
-      fill_density: fillsOpt ? (fillsOpt.data?.fillDensity as string) || undefined : undefined,
     };
   }, [ws.accompanimentWorkflow]);
   const compileFreshMeasures = useCallback((rawAbc: string) => (
@@ -121,8 +119,8 @@ export function GuitarFingerstyleStep({
           maxMelodyFret: melodyPlayability.melodyMaxFret,
         },
       );
-      invalidateLineGenerations();
       // eslint-disable-next-line react-hooks/set-state-in-effect -- restore is intentionally gated on both local-storage hydration phases.
+      invalidateLineGenerations();
       setMeasures(restoredMeasures);
       setLineGenerationRunsByLine(restoreFingerstyleGenerationRuns(
         localStorage.getItem(fingerstyleStorageKey),

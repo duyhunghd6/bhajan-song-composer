@@ -30,12 +30,12 @@ NODE
 For the human-in-the-loop accompaniment workflow:
 
 1. Open `/compose/new-bhajan-arrangement/accompaniment`.
-2. Click `Start 12-step Workflow`.
-3. Confirm the 12 step cards appear with shared steps first, Guitar branch, then Piano branch.
+2. Start the workflow.
+3. Confirm the cards match the setup-derived instrument plan: three shared steps first, then only the enabled instrument branches. The Guitar branch must contain `Guitar Profile` and `Guitar Voicing` only.
 4. Add a user note and open `Default prompt preview`; confirm the prompt includes default rules, metadata, source ABC, and the user note.
 5. Click `Generate / Regenerate Options`; LLM calls can take 60–90s.
-6. Select a generated option; confirm step 1 shows selected and step 2 unlocks.
-7. Reload; confirm the stored run and selection persist through localStorage.
+6. Select a generated option; confirm the current card shows selected and the next enabled card unlocks.
+7. Reload; confirm the stored run and selection persist through localStorage. A version-3 session whose current step was `guitar-fills-validation` must restore on a valid remaining step.
 
 ## Known gotchas
 

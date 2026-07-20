@@ -268,7 +268,7 @@ Hard rules:
 
 Before outputting any guitar arrangement:
 
-Concrete tab events must use the app/tool schema below whenever Guitar Profile, Guitar Voicing, Guitar Polish, or Guitar Fingerstyle validates a comping sample, voicing, fill, intro, interlude, outro, or final fingerstyle output:
+Concrete tab events must use the app/tool schema below whenever the Guitar workflow or Guitar Fingerstyle pipeline validates a comping sample, voicing, fill, intro, interlude, outro, or final fingerstyle output. The Accompaniment workflow now contains only Guitar Profile and Guitar Voicing; fill density is owned by Guitar Fingerstyle settings.
 
 ```ts
 type GuitarTabEvent = {

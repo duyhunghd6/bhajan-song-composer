@@ -4,7 +4,11 @@ import type { AccompanimentOption } from "@/lib/theory/accompaniment-candidates"
 import type { PianoAccompaniment } from "@/lib/theory/piano-accompaniment";
 import type { FingerstyleComposerIntegration } from "./fingerstyle-integration";
 import type { TheoryAssistantLayerProposal } from "./theory-assistant-layer";
-import type { AccompanimentWorkflowSession, AccompanimentWorkflowSetup } from "@/lib/theory/accompaniment-workflow";
+import {
+  normalizeAccompanimentWorkflowSession,
+  type AccompanimentWorkflowSession,
+  type AccompanimentWorkflowSetup,
+} from "@/lib/theory/accompaniment-workflow";
 import type { EnsembleWorkflowSession } from "@/lib/theory/ensemble-workflow";
 import type { EnsembleExpansionValidation } from "@/lib/theory/ensemble-output-contract";
 import type { EnsembleConflictReportEntry } from "@/lib/theory/ensemble-conflicts";
@@ -119,10 +123,13 @@ export function useWorkspaceState(slug: string) {
       const saved = window.localStorage.getItem(storageKey);
       if (saved) {
         const parsed = JSON.parse(saved);
+        const restoredWorkflow = normalizeAccompanimentWorkflowSession(parsed.accompanimentWorkflow);
         // eslint-disable-next-line react-hooks/set-state-in-effect -- workspace state must hydrate from localStorage after mount to avoid SSR/localStorage mismatches.
         setState({
           ...DEFAULT_WORKSPACE_STATE,
           ...parsed,
+          accompanimentWorkflow: restoredWorkflow,
+          accompanimentWorkflowSetup: restoredWorkflow?.setup ?? parsed.accompanimentWorkflowSetup ?? null,
           fingerstyleGenerationSettings: {
             ...DEFAULT_FINGERSTYLE_GENERATION_SETTINGS,
             ...(parsed.fingerstyleGenerationSettings ?? {}),

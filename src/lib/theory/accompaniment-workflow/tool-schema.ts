@@ -88,11 +88,6 @@ function buildWorkflowOptionDataProperty(stepId?: AccompanimentWorkflowStepId) {
       additionalProperties: true,
       properties: {
         guitarTab: buildGuitarTabDataProperty(),
-        fillDensity: {
-          type: "string",
-          enum: ["none", "few", "all"],
-          description: "Fill density for fingerstyle: none, few, or all."
-        }
       },
       required: ["guitarTab"],
     };

@@ -160,15 +160,17 @@ describe("accompaniment workflow session transitions", () => {
     expect(extractProfile(makeOption("fallback", {}))).toBe("fallback");
   });
 
-  it("sets guitar and piano profile hints when selecting final branch options", () => {
+  it("sets guitar and piano profile hints when selecting branch profile options", () => {
     const session = createAccompanimentWorkflowSession(sampleAbc);
     const guitarOption = makeOption("guitar", { pickingProfile: "folk-travis" });
     const pianoOption = makeOption("piano", { compingProfile: "classical-folk" });
 
-    const withGuitar = selectOption(session, "guitar-fills-validation", guitarOption, "", "guitar-run");
-    const withPiano = selectOption(withGuitar, "piano-fills-pedal-validation", pianoOption, "", "piano-run");
+    const withGuitar = selectOption(session, "guitar-comping-profile", guitarOption, "", "guitar-run");
+    const withVoicing = selectOption(withGuitar, "guitar-voicing-bass", makeOption("voicing", { profileId: "standard-six-string" }), "", "voicing-run");
+    const withPiano = selectOption(withVoicing, "piano-fills-pedal-validation", pianoOption, "", "piano-run");
 
     expect(withGuitar.guitarProfileHint).toBe("folk-travis");
+    expect(withVoicing.guitarProfileHint).toBe("folk-travis");
     expect(withPiano.guitarProfileHint).toBe("folk-travis");
     expect(withPiano.pianoProfileHint).toBe("classical-folk");
   });

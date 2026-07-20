@@ -135,32 +135,29 @@ flowchart TD
     A["🎵 Input: Melody ABC + Chord Progression + Key Em + 4/4"] --> B
 
     subgraph "GIAI ĐOẠN 1: Chuẩn Bị Harmonic (Shared Steps)"
-        B["Step 1: Key/Scale/Cadence Analysis"]
-        B --> C["Step 2: Strong-Beat Target Notes"]
-        C --> D["Step 3: Chord-Tone Role Mapping"]
-        D --> E["Step 4: Chord Progression Selection"]
-        E --> F["Step 5: Voice-Leading Validation"]
+        B["Step 1: Key, Cadence & Strong Beats"]
+        B --> C["Step 2: Chord Roles & Progression"]
+        C --> D["Step 3: Voice-Leading Validation"]
     end
 
-    F --> G
+    D --> G
 
     subgraph "GIAI ĐOẠN 2: Guitar Branch (Guitar-specific Steps)"
-        G["Step 6: Guitar Comping Profile"]
-        G --> H["Step 7: Guitar Voicing & Bass Plan"]
-        H --> I["Step 8: Guitar Fills / Intro / Outro / Validation"]
-        I --> J["Step 9: Guitar Fingerstyle (nếu Solo)"]
+        G["Step 4: Guitar Comping Profile"]
+        G --> H["Step 5: Guitar Voicing & Bass Plan"]
     end
 
+    H --> J["Guitar Fingerstyle generation (tuỳ chọn, tách khỏi wizard)"]
     J --> K["✅ Final Guitar ABC + TAB Output"]
 ```
 
-### GIAI ĐOẠN 1: Chuẩn Bị Harmonic Foundation (5 Shared Steps)
+### GIAI ĐOẠN 1: Chuẩn Bị Harmonic Foundation (3 Shared Steps)
 
 Đây là 5 bước **chung cho tất cả nhạc cụ**, phải hoàn thành trước khi bắt đầu bất kỳ nhạc cụ nào:
 
 ---
 
-#### Step 1: Key, Scale & Cadence Analysis (`key-scale-cadence`)
+#### Step 1: Key, Scale, Cadence & Strong Beats (`key-beats`)
 
 **Mục tiêu:** Xác nhận key, scale, và các điểm cadence.
 
@@ -184,7 +181,7 @@ Với Hari Bol:
 
 ---
 
-#### Step 2: Strong-Beat Target Notes (`strong-beat-targets`)
+##### 1.2 Strong-Beat Target Notes
 
 **Mục tiêu:** Xác định nốt giai điệu quan trọng ở beat mạnh.
 
@@ -203,7 +200,7 @@ Ví dụ phân tích 1 ô nhịp giai điệu Hari Bol (giả định):
 
 ---
 
-#### Step 3: Chord-Tone Role Mapping (`chord-tone-mapping`)
+#### Step 2: Chord Roles & Progression (`chord-roles-progression`)
 
 **Mục tiêu:** Map mỗi nốt giai điệu ở beat mạnh → vai trò trong hợp âm.
 
@@ -218,7 +215,7 @@ Ví dụ phân tích 1 ô nhịp giai điệu Hari Bol (giả định):
 
 ---
 
-#### Step 4: Chord Progression Selection (`chord-progression`)
+##### 2.2 Chord Progression Selection
 
 **Mục tiêu:** Chọn chord progression phù hợp cho bài bhajan.
 
@@ -236,7 +233,7 @@ Các ứng viên phổ biến cho bhajan Em:
 
 ---
 
-#### Step 5: Voice-Leading Validation (`voice-leading-validation`)
+#### Step 3: Voice-Leading Validation (`voice-leading-validation`)
 
 **Mục tiêu:** Kiểm tra và điều chỉnh voice leading giữa các hợp âm.
 
@@ -263,13 +260,13 @@ Chuyển D → Em:
 
 ---
 
-### GIAI ĐOẠN 2: Guitar Branch (4 Guitar-specific Steps)
+### GIAI ĐOẠN 2: Guitar Branch (2 Guitar-specific Steps)
 
 Sau khi đã có harmonic foundation, bắt đầu quy trình **chỉ dành cho Guitar**:
 
 ---
 
-#### Step 6: Guitar Comping Profile (`guitar-comping-profile`)
+#### Step 4: Guitar Comping Profile (`guitar-comping-profile`)
 
 **Mục tiêu:** Chọn kiểu đệm guitar phù hợp.
 
@@ -316,11 +313,11 @@ M:4/4
 
 ---
 
-#### Step 7: Guitar Voicing & Bass Plan (`guitar-voicing-bass`)
+#### Step 5: Guitar Voicing & Bass Plan (`guitar-voicing-bass`)
 
 **Mục tiêu:** Lên kế hoạch voicing cụ thể và bass line cho từng hợp âm.
 
-##### 7.1 Open Voicing Map (Standard Tuning, Em)
+##### 5.1 Open Voicing Map (Standard Tuning, Em)
 
 | Hợp âm | Voicing (dây 6→1) | Fret | Bass Root | Bass 5th |
 |--------|-------------------|------|-----------|----------|
@@ -331,7 +328,7 @@ M:4/4
 | **C** | x-3-2-0-1-0 | Open | C₃ (dây 5, fret 3) | G₃ (dây 3, fret 0) |
 | **Bm** | x-2-4-4-3-2 | Barre | B₂ (dây 5, fret 2) | F#₃ (dây 4, fret 4) |
 
-##### 7.2 Bass Plan (Alternating Bass + Walking Bass Transitions)
+##### 5.2 Bass Plan (Alternating Bass + Walking Bass Transitions)
 
 ```text
 Ô nhịp:   |   Em              |   Am              |   D               |   Em              |
@@ -347,7 +344,7 @@ Giải thích:
     • D→Em:  B₂ (approach from below to E... hoặc D#₂ chromatic)
 ```
 
-##### 7.3 Guide Tone Strategy
+##### 5.3 Guide Tone Strategy
 
 > **Guide tones** = quãng 3 và quãng 7 của mỗi hợp âm. Đây là các nốt xác định "tính chất" hợp âm (major hay minor).
 
@@ -361,11 +358,11 @@ Giải thích:
 
 ---
 
-#### Step 8: Guitar Fills / Intro / Interlude / Outro / Validation (`guitar-fills-validation`)
+### Guitar Fingerstyle Generation (tách khỏi Accompaniment Wizard)
 
-**Mục tiêu:** Thêm fills, intro, outro, và validate playability.
+Fill density, intro/interlude/outro và final physical validation thuộc pipeline Guitar Fingerstyle độc lập, không còn là một workflow card trong Accompaniment.
 
-##### 8.1 Fill Policy (Nốt chêm)
+##### Fill Policy (Nốt chêm)
 
 | Khi nào fill | Cách fill | Ví dụ |
 |-------------|----------|-------|
@@ -376,7 +373,7 @@ Giải thích:
 > [!CAUTION]
 > **KHÔNG BAO GIỜ fill khi melody đang hát!** Guitar phải **yield** (nhường) khi giai điệu đang active. Fills chỉ xuất hiện ở khoảng trống.
 
-##### 8.2 Intro Plan
+##### Intro Plan
 
 ```text
 Intro (1-2 ô nhịp trước khi ca sĩ vào):
@@ -384,7 +381,7 @@ Intro (1-2 ô nhịp trước khi ca sĩ vào):
   Ô 2: Em → D transition — E₂, G₃, B₃, D₄ → A₃ → F#₃ (dẫn vào bài)
 ```
 
-##### 8.3 Outro Plan
+##### Outro Plan
 
 ```text
 Outro (1-2 ô nhịp sau khi ca sĩ kết thúc):
@@ -392,7 +389,7 @@ Outro (1-2 ô nhịp sau khi ca sĩ kết thúc):
   Nốt cuối: E₂ + E₄ (pinch) — tonic octave, kết bài
 ```
 
-##### 8.4 Physical Playability Validation
+##### Physical Playability Validation
 
 | Kiểm tra | Quy tắc | Kết quả |
 |---------|---------|---------|
@@ -404,10 +401,10 @@ Outro (1-2 ô nhịp sau khi ca sĩ kết thúc):
 
 ---
 
-#### Step 9: Guitar Fingerstyle (chỉ nếu Solo mode) (`guitar-fingerstyle`)
+#### Solo Guitar Compression (chỉ nếu Solo mode)
 
 > [!NOTE]
-> Step này chỉ áp dụng khi chọn **Solo/Fingerstyle** mode — guitar tự mang giai điệu, bass, và hợp âm trên cùng 1 cây đàn. Nếu đệm hát (accompaniment), dừng ở Step 8.
+> Phần này chỉ áp dụng khi chọn **Solo/Fingerstyle** mode — guitar tự mang giai điệu, bass, và hợp âm trên cùng 1 cây đàn. Với đệm hát, Accompaniment Wizard kết thúc Guitar branch sau `guitar-voicing-bass`.
 
 Nếu chọn Fingerstyle, áp dụng **Downward Compression Algorithm**:
 
@@ -473,18 +470,15 @@ Beat 4: B₃ (5th)
 ## Phần IV: Tóm Tắt Quy Trình (Checklist)
 
 ```text
-□ 1. Xác nhận Key, Scale, Cadence (Em, E natural minor)
-□ 2. Phân tích Strong-Beat notes trong melody
-□ 3. Map melody notes → chord tone roles
-□ 4. Chọn Chord Progression (Em-Am-D-Em)
-□ 5. Validate Voice Leading giữa các hợp âm
+□ 1. Xác nhận Key, Scale, Cadence và Strong-Beat notes
+□ 2. Map melody notes → chord roles và chọn progression
+□ 3. Validate Voice Leading giữa các hợp âm
   ────── Xong Shared Steps ──────
-□ 6. Chọn Guitar Comping Profile (Arpeggio / Strum)
-□ 7. Lên Voicing Map + Bass Plan (open voicing, alternating bass)
-□ 8. Thêm Fills, Intro, Outro + Validate playability
-□ 9. [Nếu Solo] Nén Fingerstyle (Melody + Bass + Chords trên 1 guitar)
-  ────── Xong Guitar Branch ──────
-□ 10. Output: Final Guitar ABC + TAB
+□ 4. Chọn Guitar Comping Profile (Arpeggio / Strum)
+□ 5. Lên Voicing Map + Bass Plan (open voicing, alternating bass)
+  ────── Xong Accompaniment Guitar Branch ──────
+□ [Tuỳ chọn] Trong Guitar Fingerstyle: chọn Fill density, tạo intro/outro và validate playability
+□ Output: Final Guitar ABC + TAB
 ```
 
 ---
@@ -495,11 +489,11 @@ Quy trình trên được implement qua các workflow steps trong app:
 
 | Step | Code Reference | File |
 |------|---------------|------|
-| Shared Steps 1-5 | `ACCOMPANIMENT_WORKFLOW_SHARED_STEP_IDS` | [definition.ts](file:///Users/steve/duyhunghd6/bhajan-song-composer/src/lib/theory/accompaniment-workflow/definition.ts#L3-L9) |
-| Guitar Steps 6-9 | `ACCOMPANIMENT_WORKFLOW_GUITAR_STEP_IDS` | [definition.ts](file:///Users/steve/duyhunghd6/bhajan-song-composer/src/lib/theory/accompaniment-workflow/definition.ts#L11-L16) |
+| Shared Steps 1-3 | `ACCOMPANIMENT_WORKFLOW_SHARED_STEP_IDS` | [definition.ts](file:///Users/steve/duyhunghd6/bhajan-song-composer/src/lib/theory/accompaniment-workflow/definition.ts#L3-L7) |
+| Guitar Steps 4-5 | `ACCOMPANIMENT_WORKFLOW_GUITAR_STEP_IDS` | [definition.ts](file:///Users/steve/duyhunghd6/bhajan-song-composer/src/lib/theory/accompaniment-workflow/definition.ts#L9-L13) |
 | Chord-Tone Reference | `buildChordToneReferenceTable`, `validateGuitarVoiceChordTones` | [chord-tone-reference.ts](file:///Users/steve/duyhunghd6/bhajan-song-composer/src/lib/theory/chord-tone-reference.ts) |
-| Guitar Theory | Arrangement Module: Guitar | [ARRANGEMENT01-GUITAR.md](file:///Users/steve/duyhunghd6/bhajan-song-composer/.agents/skills/music-theory-arrangement/ARRANGEMENT01-GUITAR.md) |
-| Music Theory | Comprehensive Theory Foundation | [THEORY.md](file:///Users/steve/duyhunghd6/bhajan-song-composer/.agents/skills/music-theory-arrangement/THEORY.md) |
+| Guitar Theory | Arrangement Module: Guitar | [ARRANGEMENT01-GUITAR.md](file:///Users/steve/duyhunghd6/bhajan-song-composer/.claude/skills/music-theory-arrangement/ARRANGEMENT01-GUITAR.md) |
+| Music Theory | Comprehensive Theory Foundation | [THEORY.md](file:///Users/steve/duyhunghd6/bhajan-song-composer/.claude/skills/music-theory-arrangement/THEORY.md) |
 | Accompaniment UI | AccompanimentStep Component | [AccompanimentStep.tsx](file:///Users/steve/duyhunghd6/bhajan-song-composer/src/components/composer/workspace/AccompanimentStep.tsx) |
 | Wizard Controller | AccompanimentWorkflowWizard | [AccompanimentWorkflowWizard.tsx](file:///Users/steve/duyhunghd6/bhajan-song-composer/src/components/composer/AccompanimentWorkflowWizard.tsx) |
 

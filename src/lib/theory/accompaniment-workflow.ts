@@ -301,6 +301,72 @@ export function createAccompanimentWorkflowSession(
   };
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function normalizePersistedStepState(value: unknown): AccompanimentWorkflowStepState | null {
+  if (!isRecord(value) || !Array.isArray(value.runs)) return null;
+
+  const runs = value.runs.filter((run): run is AccompanimentWorkflowRun => (
+    isRecord(run)
+    && typeof run.id === "string"
+    && typeof run.stepId === "string"
+    && Array.isArray(run.options)
+  ));
+
+  return {
+    runs,
+    activeRunId: typeof value.activeRunId === "string" ? value.activeRunId : null,
+    selectedOptionId: typeof value.selectedOptionId === "string" ? value.selectedOptionId : null,
+    selectedAt: typeof value.selectedAt === "string" ? value.selectedAt : null,
+    promptNote: typeof value.promptNote === "string" ? value.promptNote : "",
+  };
+}
+
+export function normalizeAccompanimentWorkflowSession(value: unknown): AccompanimentWorkflowSession | null {
+  if (!isRecord(value) || typeof value.sourceAbc !== "string") return null;
+
+  const setupInput = isRecord(value.setup)
+    ? value.setup as Partial<AccompanimentWorkflowSetup>
+    : getLegacyAccompanimentWorkflowSetup();
+  const setup = normalizeAccompanimentWorkflowSetup(setupInput);
+  const enabledStepIds = getEnabledAccompanimentWorkflowStepIds(setup);
+  const rawSteps = isRecord(value.steps) ? value.steps : {};
+  const steps = getInitialAccompanimentWorkflowSteps();
+
+  for (const stepId of ACCOMPANIMENT_WORKFLOW_STEP_IDS) {
+    const restored = normalizePersistedStepState(rawSteps[stepId]);
+    if (restored) steps[stepId] = restored;
+  }
+
+  const normalized: AccompanimentWorkflowSession = {
+    version: ACCOMPANIMENT_WORKFLOW_VERSION,
+    sourceAbc: value.sourceAbc,
+    sourceAbcFingerprint: typeof value.sourceAbcFingerprint === "string"
+      ? value.sourceAbcFingerprint
+      : fingerprintAccompanimentSource(value.sourceAbc),
+    currentStepId: enabledStepIds[0] ?? "key-beats",
+    steps,
+    guitarProfileHint: typeof value.guitarProfileHint === "string" ? value.guitarProfileHint : null,
+    pianoProfileHint: typeof value.pianoProfileHint === "string" ? value.pianoProfileHint : null,
+    setup,
+    enabledStepIds,
+  };
+  const persistedCurrentStepId = typeof value.currentStepId === "string"
+    && enabledStepIds.some((stepId) => stepId === value.currentStepId)
+      ? value.currentStepId as AccompanimentWorkflowStepId
+      : null;
+
+  return {
+    ...normalized,
+    currentStepId: persistedCurrentStepId
+      ?? getNextUncompletedWorkflowStepId(normalized)
+      ?? enabledStepIds[0]
+      ?? "key-beats",
+  };
+}
+
 export function applyAccompanimentWorkflowSetupToSession(
   session: AccompanimentWorkflowSession,
   setupInput: Partial<AccompanimentWorkflowSetup>
@@ -924,7 +990,7 @@ export function buildAccompanimentWorkflowPrompt(input: {
     ? "\nStrong Beats: choose emphasis direction. Call add_strong_beat_icons for each emphasis direction before the final tool call. Final option.data MUST include strongBeatEmphasis only. Do not include annotatedAbc, strongBeatDirectives, measureIndex, or beatTime."
     : "";
   const guitarTabInstruction = isGuitarTabValidationWorkflowStep(input.stepId)
-    ? `\nGuitar tab validation: option.data MUST include guitarTab with compact event keys (m=measure, b=beat, n=note, s=string, f=fret, r=role, sid=sourceEventId). Call query_guitar_voicings BEFORE fretting notes. Call valid_guitar_tab to validate. Rules: (1) one string per simultaneous group per source event, (2) all frets within profile range, (3) one left hand can fret the position.${input.stepId === "guitar-fills-validation" ? " Include fillDensity (none/few/all)." : ""}`
+    ? "\nGuitar tab validation: option.data MUST include guitarTab with compact event keys (m=measure, b=beat, n=note, s=string, f=fret, r=role, sid=sourceEventId). Call query_guitar_voicings BEFORE fretting notes. Call valid_guitar_tab to validate. Rules: (1) one string per simultaneous group per source event, (2) all frets within profile range, (3) one left hand can fret the position."
     : "";
   const guitarFingerstyleInstruction = "";
   const lyricChordInstruction = lyricChordAnnotations.length > 0 && isChordIngestionWorkflowStep(input.stepId)

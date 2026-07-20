@@ -280,7 +280,7 @@ V:Guitar clef=treble-8 name="Layer 2 Guitar Fingerstyle"
     );
     workflow = selectWorkflowStep(
       workflow,
-      "guitar-fills-validation",
+      "guitar-comping-profile",
       makeOption("fingerstyle", { pickingProfile: "folk-travis" })
     );
 
@@ -340,7 +340,7 @@ V:Guitar clef=treble-8 name="Layer 2 Guitar Fingerstyle"
     expect(model.accompaniment.appliedWorkflowStep?.id).toBe("djembe-fill-validation");
     expect(model.accompaniment.rawAbc).toContain("V:Djembe");
     expect(model.accompaniment.voiceNames).toContain("Djembe");
-    expect(model.accompaniment.rawAbc).toContain("ABCNotation applied after Step 13: Djembe Fill & Transient Validation");
+    expect(model.accompaniment.rawAbc).toContain("ABCNotation applied after Step 12: Djembe Fill & Transient Validation");
   });
 
   it("derives guitar tablature render options from score order", () => {
