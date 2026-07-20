@@ -48,12 +48,12 @@ export interface ToolLoopContextBudget {
 }
 
 export const FINGERSTYLE_TOOL_LOOP_CONTEXT_BUDGET: Required<ToolLoopContextBudget> = {
-  maxPromptBytes: 96_000,
-  maxToolSchemaBytes: 48_000,
-  maxMessages: 80,
-  maxTranscriptBytes: 220_000,
-  maxToolCallsPerTurn: 6,
-  maxToolResultBytes: 64_000,
+  maxPromptBytes: 256_000,
+  maxToolSchemaBytes: 128_000,
+  maxMessages: 120,
+  maxTranscriptBytes: 512_000,
+  maxToolCallsPerTurn: 10,
+  maxToolResultBytes: 128_000,
 };
 
 export interface ToolLoopValidationResult {
@@ -171,7 +171,7 @@ async function requestChatCompletion(input: {
 }): Promise<ToolCallMessage> {
   const config = await readAiConfig();
   const startedAtMs = Date.now();
-  const requestTimeoutMs = input.requestTimeoutMs ?? 90_000;
+  const requestTimeoutMs = input.requestTimeoutMs ?? 180_000;
   const maxRequestAttempts = input.maxRequestAttempts ?? 2;
   await emitDiagnostic(input.onDiagnostic, {
     type: "chat-request",

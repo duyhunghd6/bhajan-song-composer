@@ -18,7 +18,11 @@ import {
   buildConsolidatedChordIngestionPrompt,
   buildConsolidatedChordIngestionToolSchema,
   buildQueryGuitarVoicingsToolSchema,
+  convertGuitarClassicEventsToAbc,
   extractLyricChordAnnotations,
+  GUITAR_CLASSIC_COMPING_PROFILES,
+  isGuitarClassicCompingProfileId,
+  realizeGuitarClassicAccompaniment,
   getAbcMeasureLinePattern,
   getAccompanimentWorkflowLlmToolNames,
   isGuitarTabValidationWorkflowStep,
@@ -126,7 +130,7 @@ function diagnosticStatus(event: ToolDiagnosticEvent): AccompanimentWorkflowLlmL
 function diagnosticMessage(event: ToolDiagnosticEvent): string {
   switch (event.type) {
     case "chat-request":
-      return `LLM call started with ${event.messageCount} message${event.messageCount === 1 ? "" : "s"} and ${event.toolNames.length} exposed tool${event.toolNames.length === 1 ? "" : "s"}. Timeout: ${((event.requestTimeoutMs ?? 90000) / 1000).toFixed(0)}s, max attempts: ${event.maxRequestAttempts ?? 2}.`;
+      return `LLM call started with ${event.messageCount} message${event.messageCount === 1 ? "" : "s"} and ${event.toolNames.length} exposed tool${event.toolNames.length === 1 ? "" : "s"}. Timeout: ${((event.requestTimeoutMs ?? 180000) / 1000).toFixed(0)}s, max attempts: ${event.maxRequestAttempts ?? 2}.`;
     case "chat-response":
       return event.toolCallNames.length > 0
         ? `LLM call succeeded in ${event.elapsedMs !== undefined ? `${(event.elapsedMs / 1000).toFixed(1)}s` : "?"}${event.requestAttempts !== undefined && event.requestAttempts > 1 ? ` (${event.requestAttempts} attempts)` : ""} and requested ${event.toolCallNames.join(", ")}.`
@@ -297,6 +301,73 @@ function guitarTabEventsFromOption(option: Partial<AccompanimentWorkflowOption>)
   return Array.isArray(events) ? normalizeGuitarTabEvents(events) as unknown as GuitarTabEvent[] : null;
 }
 
+function guitarClassicCompingProfileFromSelection(selection: AccompanimentWorkflowSelectedContext | undefined) {
+  const data = selection?.data;
+  const guitarTab = data?.guitarTab;
+  const guitarTabData = guitarTab && typeof guitarTab === "object" && !Array.isArray(guitarTab)
+    ? guitarTab as Record<string, unknown>
+    : null;
+  const profileId = guitarTabData?.compingProfileId ?? data?.compingProfileId;
+  return isGuitarClassicCompingProfileId(profileId) ? profileId : null;
+}
+
+function buildGuitarClassicAbcNotationRun(
+  input: GenerateAccompanimentWorkflowStepInput
+): AccompanimentWorkflowRun {
+  const voicingSelection = input.previousSelections.find((selection) => selection.stepId === "guitar-voicing-bass");
+  const profileSelection = input.previousSelections.find((selection) => selection.stepId === "guitar-comping-profile");
+  const anchorEvents = voicingSelection
+    ? guitarTabEventsFromOption({ data: voicingSelection.data })
+    : null;
+  if (!anchorEvents?.length) {
+    throw new Error("Select a Guitar Voicing option with concrete guitarTab.events before building Guitar Classic ABCNotation.");
+  }
+
+  const compingProfileId = guitarClassicCompingProfileFromSelection(profileSelection)
+    ?? guitarClassicCompingProfileFromSelection(voicingSelection);
+  if (!compingProfileId) {
+    throw new Error("Select a Guitar Profile with a supported arpeggio, pinch, or bhajan strum technique before building Guitar Classic ABCNotation.");
+  }
+
+  const realization = realizeGuitarClassicAccompaniment({
+    sourceAbc: input.sourceAbc,
+    compingProfileId,
+    anchorEvents,
+  });
+  if (realization.errors.length > 0) {
+    throw new Error(realization.errors.join(" "));
+  }
+
+  const conversion = convertGuitarClassicEventsToAbc(input.sourceAbc, realization.events);
+  if (!conversion.abc) {
+    throw new Error(conversion.errors.join(" ") || "The realized Guitar Classic accompaniment cannot be converted to ABCNotation.");
+  }
+
+  return makeRun({
+    stepId: "guitar-classic-abc-notation",
+    requestPrompt: "Deterministically realize the selected Guitar Profile and Guitar Voicing anchors as a measure-aligned standard-notation support voice.",
+    userNote: input.userNote,
+    options: [{
+      id: "guitar-classic-support-abc",
+      label: "Guitar Classic Support Music Sheet",
+      summary: `${GUITAR_CLASSIC_COMPING_PROFILES[compingProfileId].label} realized ${conversion.renderedEventCount} chord-support events from ${realization.sourceAnchorCount} selected anchors across ${conversion.measureCount} source measures.`,
+      justification: "The selected Guitar Profile supplies the rhythmic technique while the selected Guitar Voicing anchors determine the fretboard context; Step 6 deterministically materializes the complete chord texture.",
+      data: {
+        guitarClassicAbc: conversion.abc,
+        compingProfileId,
+        sourceAnchorCount: realization.sourceAnchorCount,
+        realizedAttackCount: realization.realizedAttackCount,
+        renderedEventCount: conversion.renderedEventCount,
+        measureCount: conversion.measureCount,
+        sourceStepId: "guitar-voicing-bass",
+      },
+      warnings: [],
+      validationNotes: ["Standard notation support voice created from the selected Guitar Profile; Guitar TAB remains exclusive to the dedicated Fingerstyle route."],
+    }],
+    rawResult: { deterministic: true, realization, conversion },
+  });
+}
+
 function stringValue(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
@@ -338,6 +409,7 @@ function guitarTabValidationOptionsFromOption(
       : previousGuitarProfile ?? profileFromSetup(input.setup),
     voicingProfile: stringValue(optionVoicing) ?? stringValue(input.previousSelections.find((selection) => selection.stepId === "guitar-comping-profile")?.data.voicingProfileId),
     requireScientificPitch: true,
+    requireRenderableTiming: true,
   };
 }
 
@@ -347,6 +419,7 @@ function guitarTabValidationOptionsFromToolArgs(args: unknown, input: GenerateAc
     guitarProfile: isGuitarValidationProfileId(record.profileId) ? record.profileId : profileFromSetup(input.setup),
     voicingProfile: stringValue(record.voicingProfileId),
     requireScientificPitch: true,
+    requireRenderableTiming: true,
   };
 }
 
@@ -368,6 +441,16 @@ function validateGuitarWorkflowResult(raw: unknown, input: GenerateAccompaniment
       continue;
     }
 
+    const generatedProfile = guitarTabObjectFromData(optionData(option))?.compingProfileId;
+    if (!isGuitarClassicCompingProfileId(generatedProfile)) {
+      messages.push(`${optionId} is missing a supported data.guitarTab.compingProfileId.`);
+    }
+    const selectedProfile = guitarClassicCompingProfileFromSelection(
+      input.previousSelections.find((selection) => selection.stepId === "guitar-comping-profile")
+    );
+    if (input.stepId === "guitar-voicing-bass" && selectedProfile && generatedProfile !== selectedProfile) {
+      messages.push(`${optionId} must retain the selected Guitar Profile ${selectedProfile}.`);
+    }
 
     const validation = validateGuitarTab(events, {
       ...guitarTabValidationOptionsFromOption(option, input),
@@ -729,6 +812,10 @@ export async function generateAccompanimentWorkflowStep(
   input: GenerateAccompanimentWorkflowStepInput
 ): Promise<AccompanimentWorkflowRun> {
   try {
+    if (input.stepId === "guitar-classic-abc-notation") {
+      return buildGuitarClassicAbcNotationRun(input);
+    }
+
     const requestPrompt = buildAccompanimentWorkflowPrompt(input);
     const toolSchema = buildAccompanimentWorkflowToolSchema(input.stepId);
     const toolName = toolNameForStep(input.stepId);
@@ -765,7 +852,7 @@ export async function generateAccompanimentWorkflowStep(
       });
     } else if (isGuitarTabValidationWorkflowStep(input.stepId)) {
       rawResult = await requestOpenAiCompatibleToolLoop({
-        systemPrompt: `${systemPrompt} For guitar tab steps, call query_guitar_voicings BEFORE fretting notes. Call valid_guitar_tab to validate. Use compact tab keys (m/b/n/s/f/r/sid). Ensure unique string/source assignment and one-left-hand reach. Chord-tone enforcement: arpeggio notes must belong to the measure's chord.`,
+        systemPrompt: `${systemPrompt} For guitar tab steps, call query_guitar_voicings BEFORE fretting notes. Call valid_guitar_tab to validate. Use compact timed tab keys (m/t/d/b/n/s/f/r/sid) and include data.guitarTab.compingProfileId. Step 4 selects devotional-pima-arpeggio, devotional-pinch-arpeggio, or bhajan-strum; Step 5 must retain that exact selection. Ensure unique string/source assignment and one-left-hand reach. Root/fifth anchors are inputs to Step 6 realization, not the complete accompaniment texture.`,
         userPrompt: requestPrompt,
         tools: [buildValidGuitarTabToolSchema(), buildQueryGuitarVoicingsToolSchema(), toolSchema],
         finalToolName: toolName,
