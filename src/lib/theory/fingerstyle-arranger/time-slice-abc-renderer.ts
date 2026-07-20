@@ -11,14 +11,28 @@ interface SoundingEvent {
   tab: NonNullable<TimeSliceGridStep["tablature"]>[number];
 }
 
+/**
+ * Convert a scientific pitch string (e.g. "E2", "G#4") to an ABC note token.
+ *
+ * @param treble8Shift  When true, shift the written ABC note up one octave.
+ *   Guitar voices use `clef=treble-8`; ABCJS internally applies
+ *   `clefTranspose = -12` to the *written* ABC pitch before computing frets
+ *   against the un-transposed tuning `stringPitches`. By writing one octave
+ *   above concert pitch, the -12 transpose arrives at the correct sounding
+ *   pitch and produces the intended fret number.
+ *
+ *   Example: concert E2 (string 6 fret 0) → written ABC `E` (E3 written,
+ *   MIDI 52). ABCJS subtracts 12 → MIDI 40, fret = 40 - 40 = 0. ✓
+ */
 export function scientificPitchToAbc(
   scientificPitch: string,
   keyAccidentals?: AbcKeyAccidentalMap,
+  treble8Shift = false,
 ): string {
   const match = scientificPitch.match(/^([A-G])([#b]?)(-?\d+)$/);
   if (!match) return scientificPitch;
   const [, letter, accidental, octaveText] = match;
-  const octave = Number.parseInt(octaveText, 10);
+  const octave = Number.parseInt(octaveText, 10) + (treble8Shift ? 1 : 0);
   const keyAccidental = keyAccidentals?.get(letter);
   const abcAccidental = accidental === "#"
     ? keyAccidental === "^" ? "" : "^"
@@ -139,7 +153,9 @@ function renderSoundingToken(
   continuity?: MeasureRenderContinuity,
 ): { token: string; continues: boolean } {
   const pitch = scientificPitchForStringFret(event.tab.string, event.tab.fret);
-  const abcPitch = scientificPitchToAbc(pitch, keyAccidentals);
+  // When rendering for Guitar tablature (includeTabStringForcing), write notes
+  // one octave above concert pitch to compensate for ABCJS's clefTranspose = -12.
+  const abcPitch = scientificPitchToAbc(pitch, keyAccidentals, includeTabStringForcing);
   return {
     token: includeTabStringForcing ? `!${event.tab.string}!${abcPitch}` : abcPitch,
     continues: event.end > segmentEnd || (

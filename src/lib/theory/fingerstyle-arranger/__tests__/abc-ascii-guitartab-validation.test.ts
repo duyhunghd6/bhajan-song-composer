@@ -128,7 +128,7 @@ describe("ABC ↔ ASCII-GuitarTab validation", () => {
   });
 
   it("reports a wrong fret and an unexpected attack", () => {
-    const result = validate("[!6!E,!1!e]2 !3!c2 z4");
+    const result = validate("[!6!E!1!e']2 !3!c'2 z4");
     expect(result.valid).toBe(false);
     expect(result.mismatches.some(issue => issue.kind === "fret-mismatch")).toBe(true);
   });
@@ -172,7 +172,7 @@ describe("ABC ↔ ASCII-GuitarTab validation", () => {
 
   it("merges a genuine tied continuation into one event", () => {
     const measure = singleLongFillMeasure();
-    const result = validate("!3!G/2- !3!G/2 z7", measure);
+    const result = validate("!3!g/2- !3!g/2 z7", measure);
 
     expect(result.valid).toBe(true);
     expect(result.expectedEventCount).toBe(1);
@@ -180,20 +180,20 @@ describe("ABC ↔ ASCII-GuitarTab validation", () => {
   });
 
   it("rejects missing string forcing instead of auto-assigning a string", () => {
-    const result = validate("[E,e]2 !3!B2 z4");
+    const result = validate("[E,e]2 !3!b2 z4");
 
     expect(result.valid).toBe(false);
     expect(result.mismatches.some(issue => issue.kind === "parse-error" && issue.message.includes("missing a !N!"))).toBe(true);
   });
 
   it("keeps quoted chord symbols separate from note chords", () => {
-    const result = validate('"Em"[!1!e!6!E,-]/2 !6!E,3/2 !3!B z5');
+    const result = validate('"Em"[!1!e\'!6!E-]/2 !6!E3/2 !3!b z5');
     expect(result.valid).toBe(true);
     expect(result.mismatchCount).toBe(0);
   });
 
   it("formats a bounded human-readable diagnostic", () => {
-    const result = validate("[!6!E,!1!e]2 !3!B2 z4");
+    const result = validate("[!6!E!1!e']2 !3!b2 z4");
     const formatted = formatAbcAsciiGuitarTabValidation(result);
 
     expect(formatted).toContain("measures=1");

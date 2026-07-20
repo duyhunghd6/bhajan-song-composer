@@ -20,7 +20,7 @@ K:Em
 V:Melody
 V:Guitar clef=treble-8
 [V:Melody] | "Em" E E3- E2 z B, |
-[V:Guitar] | [!1!e!6!E,] [!1!e]3/2- [!1!e-!3!G]/2 [!1!e]3 [!3!G]/2 z/2 [!2!B] |`;
+[V:Guitar] | [!1!e'!6!E] [!1!e']3/2- [!1!e'-!3!g]/2 [!1!e']3 [!3!g]/2 z/2 [!2!b] |`;
 
 const SLURRED_ABC = `X:1
 L:1/8
@@ -29,7 +29,7 @@ K:Em
 V:Melody
 V:Guitar clef=treble-8
 [V:Melody] | E2 F2 z4 |
-[V:Guitar] | (!1!e !1!f) z6 |`;
+[V:Guitar] | (!1!e' !1!f') z6 |`;
 
 describe("ABC to TimeGrid Guitar importer", () => {
   it("preserves source bytes while retaining per-string chord-member tie continuity", () => {
@@ -64,7 +64,7 @@ describe("ABC to TimeGrid Guitar importer", () => {
       buildAbcDurationContext(ABC),
       getKeyAccidentalsFromAbc(ABC),
       true,
-    )).toBe("[!1!e!6!E,] !1!e3/2- [!1!e-!3!G]/2 !1!e3 !3!G/2 z/2 !2!B");
+    )).toBe("[!1!e'!6!E] !1!e'3/2- [!1!e'-!3!g]/2 !1!e'3 !3!g/2 z/2 !2!b");
   });
 
   it("persists normalized Guitar slurs through TimeGrid JSON and rendering", () => {
@@ -81,7 +81,7 @@ describe("ABC to TimeGrid Guitar importer", () => {
       buildAbcDurationContext(SLURRED_ABC),
       getKeyAccidentalsFromAbc(SLURRED_ABC),
       true,
-    )).toBe("(!1!e !1!f) z6");
+    )).toBe("(!1!e' !1!f') z6");
   });
 
   it("retains explicit cross-measure ties and slurs without inferring equal pitches", () => {
@@ -92,7 +92,7 @@ K:C
 V:Melody
 V:Guitar clef=treble-8
 [V:Melody] | E8 | E8 |
-[V:Guitar] | (!1!e8- | !1!e8) |`;
+[V:Guitar] | (!1!e'8- | !1!e'8) |`;
     const result = importAbcNotationToTimeGrid(source);
     const document = result.document!;
 
@@ -102,21 +102,21 @@ V:Guitar clef=treble-8
     expect(document.measures[1].grid[0].tablature).toEqual(expect.arrayContaining([
       expect.objectContaining({ string: 1, fret: 0, durationSteps: 16 }),
     ]));
-    expect(buildGeneratedGuitarAbc(document.measures, source)).toContain("(!1!e8- | !1!e8)");
+    expect(buildGeneratedGuitarAbc(document.measures, source)).toContain("(!1!e'8- | !1!e'8)");
     const restored = parseImportedTimeGridDocumentCompact(
       formatImportedTimeGridDocumentCompact(document),
     );
     expect(restored.measures[0].guitarTiesToNext).toEqual([1]);
     expect(restored.measures[0].guitarSlursToNext).toEqual([{ startStep: 1, endStep: 16 }]);
     document.measures[1].lineIndex = 1;
-    expect(buildGeneratedGuitarAbc(document.measures, source)).toContain("| (!1!e8- |\n| !1!e8) |");
+    expect(buildGeneratedGuitarAbc(document.measures, source)).toContain("| (!1!e'8- |\n| !1!e'8) |");
 
-    const untied = importAbcNotationToTimeGrid(source.replace("e8-", "e8"));
+    const untied = importAbcNotationToTimeGrid(source.replace("e'8-", "e'8"));
     expect(untied.document?.measures[0].guitarTiesToNext).toBeUndefined();
   });
 
   it("retains a normalized document and reports non-grid timing approximations", () => {
-    const result = importAbcNotationToTimeGrid(ABC.replace("[!1!e!6!E,]", "[!1!e!6!E,]2/3"));
+    const result = importAbcNotationToTimeGrid(ABC.replace("[!1!e'!6!E]", "[!1!e'!6!E]2/3"));
 
     expect(result.valid).toBe(true);
     expect(result.document).toBeDefined();

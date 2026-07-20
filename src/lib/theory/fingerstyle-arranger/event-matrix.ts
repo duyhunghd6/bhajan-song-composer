@@ -347,18 +347,22 @@ function buildBodyMeasure(input: {
  *    getStringDecoration() to bypass its default lowest-fret auto-assignment algorithm.
  * 2. Duplicate Pitches: Because string forcing bypasses auto-assignment, it is valid to
  *    output the same concert pitch on multiple strings simultaneously. We do not deduplicate.
- * 3. Octave Convention: We output concert-pitch ABC tokens for the treble-8 clef.
- *    ABCJS internally applies a clefTranspose = -12 to the note before computing the fret
- *    against its un-transposed tuning stringPitches.
+ * 3. Octave Convention: We write ABC tokens one octave above concert pitch for the
+ *    treble-8 clef. ABCJS internally applies clefTranspose = -12 to the written ABC
+ *    pitch before computing the fret against its un-transposed tuning stringPitches,
+ *    arriving at the correct sounding pitch and fret number.
  */
 function tokenForEvent(event: FingerstyleCanonicalEvent, keyAccidentals?: AbcKeyAccidentalMap): string {
+  // Pass treble8Shift = true when the event targets a guitar string, because
+  // the Guitar voice uses clef=treble-8 and ABCJS subtracts 12 from written pitch.
+  const hasStringAssignment = event.string !== undefined && event.string !== null;
   const baseToken = event.string !== undefined && event.fret !== undefined
-    ? scientificPitchToAbc(scientificPitchForStringFret(event.string, event.fret), keyAccidentals)
+    ? scientificPitchToAbc(scientificPitchForStringFret(event.string, event.fret), keyAccidentals, hasStringAssignment)
     : event.role === "melody"
       ? event.abcToken
       : noteNameToAbc(event.note.replace(/-?\d+$/, ""), event.role === "bass" || event.role === "fifth" ? "," : "");
 
-  if (event.string !== undefined && event.string !== null) {
+  if (hasStringAssignment) {
     return `!${event.string}!${baseToken}`;
   }
   return baseToken;

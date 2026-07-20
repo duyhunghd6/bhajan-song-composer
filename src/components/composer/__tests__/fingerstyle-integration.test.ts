@@ -29,8 +29,8 @@ describe("fingerstyle Composer integration", () => {
     expect(integration.composerLayer.abc).toContain('V:Guitar clef=treble-8 name="Layer 2 Guitar Fingerstyle"');
     expect(integration.composerLayer.abc).toContain("%%MIDI program 24");
     // With chord fills, the ABC is denser; verify key markers
-    expect(integration.composerLayer.abc).toContain("!6!E,");
-    expect(integration.composerLayer.abc).toContain("!5!B,");
+    expect(integration.composerLayer.abc).toContain("!6!E");
+    expect(integration.composerLayer.abc).toContain("!5!B");
     expect(integration.arrangement.outputContract.artifacts.formPlan.sections.map((section) => section.kind)).toEqual([
       "intro",
       "body",

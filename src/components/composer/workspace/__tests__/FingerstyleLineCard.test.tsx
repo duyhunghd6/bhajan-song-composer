@@ -94,8 +94,8 @@ describe("FingerstyleLineCard", () => {
     );
 
     expect(markup).toContain("[V:Guitar]");
-    expect(markup).toContain("!2!B!3!G-!6!E,-");
-    expect(markup).toContain("!3!B!6!E,");
+    expect(markup).toContain("!2!b!3!g-!6!E-");
+    expect(markup).toContain("!3!b!6!E");
     expect(markup).toContain('data-exact-copy="true"');
     expect(markup).toContain('data-synth-options="{&quot;voicesOff&quot;:[0],&quot;chordsOff&quot;:true}"');
     expect(markup).toContain("Copy ABCJS ABC");

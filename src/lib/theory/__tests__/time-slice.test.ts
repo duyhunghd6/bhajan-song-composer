@@ -256,7 +256,7 @@ w: ⬤ * ● *`;
       const measure = measureWithTablature([{ string: 1, fret: 0, finger: "a", role: "harmony", durationSteps: 16 }]);
 
       expect(convertTimeSliceMeasureToAbc(measure, context, keyAccidentals, false)).toBe("e8");
-      expect(convertTimeSliceMeasureToAbc(measure, context, keyAccidentals, true)).toBe("!1!e8");
+      expect(convertTimeSliceMeasureToAbc(measure, context, keyAccidentals, true)).toBe("!1!e'8");
     });
 
     it("preserves duplicate pitches assigned to different strings", () => {
@@ -265,13 +265,13 @@ w: ⬤ * ● *`;
         { string: 4, fret: 0, finger: "i", role: "harmony", durationSteps: 16 },
       ]);
 
-      expect(convertTimeSliceMeasureToAbc(measure, context, keyAccidentals, true)).toBe("[!4!D!5!D]8");
+      expect(convertTimeSliceMeasureToAbc(measure, context, keyAccidentals, true)).toBe("[!4!d!5!d]8");
     });
 
     it("emits an explicit natural when the key signature sharpens the note", () => {
       const measure = measureWithTablature([{ string: 1, fret: 1, finger: "a", role: "harmony", durationSteps: 16 }]);
 
-      expect(convertTimeSliceMeasureToAbc(measure, context, keyAccidentals, true)).toBe("!1!=f8");
+      expect(convertTimeSliceMeasureToAbc(measure, context, keyAccidentals, true)).toBe("!1!=f'8");
     });
 
     it("preserves the exact Ganesha final-measure string assignments", () => {
@@ -306,7 +306,7 @@ w: ⬤ * ● *`;
         "[BG-E,-]/2 [G-E,-]/2 [e-GE,-] [eG-E,-] [B-GE,-]4 [BBE,]",
       );
       expect(convertTimeSliceMeasureToAbc(measure, context, keyAccidentals, true)).toBe(
-        "[!2!B!3!G-!6!E,-]/2 [!3!G-!6!E,-]/2 [!2!e-!3!G!6!E,-] [!2!e!3!G-!6!E,-] [!2!B-!3!G!6!E,-]4 [!2!B!3!B!6!E,]",
+        "[!2!b!3!g-!6!E-]/2 [!3!g-!6!E-]/2 [!2!e'-!3!g!6!E-] [!2!e'!3!g-!6!E-] [!2!b-!3!g!6!E-]4 [!2!b!3!b!6!E]",
       );
     });
 

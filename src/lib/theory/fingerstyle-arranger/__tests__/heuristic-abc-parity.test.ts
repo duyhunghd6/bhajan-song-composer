@@ -39,9 +39,9 @@ describe("heuristic physical tab parity", () => {
       true,
     );
 
-    expect(abc).toContain("!1!e");
-    expect(abc).toContain("!4!D");
-    expect(abc).toContain("!6!E,");
+    expect(abc).toContain("!1!e'");
+    expect(abc).toContain("!4!d");
+    expect(abc).toContain("!6!E");
     expect(renderAsciiGuitarTab(measure.grid)).toContain("e|-0");
     expect(events.map(event => [event.step, event.string, event.fret])).toEqual([
       [1, 6, 0],

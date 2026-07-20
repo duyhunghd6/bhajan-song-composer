@@ -83,7 +83,7 @@ describe("ASCII-GuitarTab conversion", () => {
         fret: tab.fret,
       })),
     ));
-    const extendedAbc = result.forcedGuitarBody.replace("!6!E,]/2", "!6!E,]");
+    const extendedAbc = result.forcedGuitarBody.replace("!6!E]/2", "!6!E]");
     const validation = validateGuitarAbcAgainstAsciiGuitarTab({
       abc: extendedAbc,
       measures: result.measures,

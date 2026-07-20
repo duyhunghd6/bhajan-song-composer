@@ -16,9 +16,9 @@ describe("Guitar fingerstyle arranger", () => {
       melodyNotes: ["e", "e", "g", "a"],
     });
     // abc now includes inner voice chord fills (3rd, 5th, root) at weak-beat subdivisions
-    expect(arrangement.measures[0].abc).toContain("!6!E,");
-    expect(arrangement.measures[0].abc).toContain("!5!B,");
-    expect(arrangement.measures[0].abc).toContain("!1!e");
+    expect(arrangement.measures[0].abc).toContain("!6!E");
+    expect(arrangement.measures[0].abc).toContain("!5!B");
+    expect(arrangement.measures[0].abc).toContain("!1!e'");
     expect(arrangement.measures[0].abc).toContain("!1!g");
     expect(arrangement.abc).toContain('V:Guitar clef=treble-8 name="Layer 2 Guitar Fingerstyle"\n%%MIDI program 24');
     expect(arrangement.abc).toContain("% @fingerstyle-section intro");
@@ -44,8 +44,8 @@ K:Em
       expect.objectContaining({ measureIndex: 3, chord: "B7", bassNotes: ["B,", "^F,"], melodyNotes: ["e"] }),
     ]));
     // abc now includes chord fill events — verify bass anchors and melody still present
-    expect(arrangement.measures[3].abc).toContain("!5!B,");
-    expect(arrangement.measures[3].abc).toContain("!1!e");
+    expect(arrangement.measures[3].abc).toContain("!5!B");
+    expect(arrangement.measures[3].abc).toContain("!1!e'");
 
     expect(arrangement.downwardCompression.outerVoiceMap).toEqual(expect.arrayContaining([
       expect.objectContaining({
@@ -369,8 +369,8 @@ K:C
 
     expect(line.startsWith('V:Guitar clef=treble-8 name="Layer 2 Guitar Fingerstyle"')).toBe(true);
     // With chord fills, the pattern is denser; verify key markers are present
-    expect(line).toContain("!6!E,");
-    expect(line).toContain("!5!B,");
+    expect(line).toContain("!6!E");
+    expect(line).toContain("!5!B");
     expect(line).toContain("% @fingerstyle-section body");
   });
 
@@ -384,7 +384,7 @@ K:Em
     const arrangement = generateFingerstyleArrangement(abc, ["Em"]);
 
     // B4 written → B3 concert → string 2 fret 0; =f is F5 written → F4 concert  
-    expect(arrangement.measures[0].abc).toContain("!2!B");
+    expect(arrangement.measures[0].abc).toContain("!2!b");
     expect(arrangement.measures[0].abc).toContain("=f");
     expect(arrangement.measures[0].abc).not.toContain("!2!B,");
   });
@@ -401,9 +401,9 @@ K:Em
     expect(arrangement.measures).toHaveLength(2);
     expect(arrangement.measures[0].melodyNotes).toEqual([]);
     // With chord fills, bass anchors are still present; abc is denser
-    expect(arrangement.measures[1].abc).toContain("!6!E,");
-    expect(arrangement.measures[1].abc).toContain("!5!B,");
-    expect(arrangement.measures[1].abc).toContain("!1!e");
+    expect(arrangement.measures[1].abc).toContain("!6!E");
+    expect(arrangement.measures[1].abc).toContain("!5!B");
+    expect(arrangement.measures[1].abc).toContain("!1!e'");
   });
 
   it("extracts only the Melody inline voice for solo fingerstyle input", () => {

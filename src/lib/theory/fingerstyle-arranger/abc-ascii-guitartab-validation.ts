@@ -111,10 +111,15 @@ function parseNote(text: string, cursor: { index: number }, keyAccidentals?: Abc
   cursor.index += 1;
   while (text[cursor.index] === "," || text[cursor.index] === "'") cursor.index += 1;
   const token = `${accidental}${text.slice(noteStart + accidental.length, cursor.index)}`;
-  // Guitar voices use treble-8: ABC's written pitch is one octave above
-  // the sounding pitch used for standard-tuning fret calculation.
+  // Guitar voices use clef=treble-8: notes are written one octave above
+  // concert pitch so ABCJS's internal clefTranspose = -12 arrives at the
+  // correct sounding pitch for fret calculation.
+  // Our `abcNoteToMidiWithKey` parser returns MIDI values 12 semitones
+  // above ABCJS's `noteToMidi` (different ABC-to-MIDI baseline).
+  // Combined: subtract 24 (12 parser offset + 12 treble-8 shift) to get
+  // the concert pitch used for standard-tuning fret calculation.
   const writtenMidi = abcNoteToMidiWithKey(token, keyAccidentals);
-  const midi = writtenMidi === null ? null : writtenMidi - 12;
+  const midi = writtenMidi === null ? null : writtenMidi - 24;
   return { string, midi, fret: null, tied: false };
 }
 

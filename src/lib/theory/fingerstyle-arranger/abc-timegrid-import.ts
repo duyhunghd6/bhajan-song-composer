@@ -146,7 +146,10 @@ function parseMeasure(
       if (string === null) diagnostics.push({ measure, message: "Guitar notes must use !1! through !6! string forcing." });
       return null;
     }
-    return { string, midi: midi - 12, tied: false };
+    // Guitar voice uses clef=treble-8: notes are written one octave above
+    // concert pitch. Our `abcNoteToMidiWithKey` also returns values 12 above
+    // ABCJS's noteToMidi. Combined: subtract 24 to get concert MIDI.
+    return { string, midi: midi - 24, tied: false };
   };
 
   const addAttack = (event: PhysicalEvent) => {
