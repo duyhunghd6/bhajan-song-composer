@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import type { HarmonizationOption } from "@/lib/theory/harmonization-candidates";
 import type { AccompanimentOption } from "@/lib/theory/accompaniment-candidates";
-import type { PianoAccompaniment } from "@/lib/theory/piano-accompaniment";
 import type { FingerstyleComposerIntegration } from "./fingerstyle-integration";
 import type { TheoryAssistantLayerProposal } from "./theory-assistant-layer";
 import {
@@ -65,16 +64,11 @@ export interface WorkspaceState {
   acceptedHarmony: TheoryAssistantLayerProposal | null;
   aiAccompanimentSuggestions: AccompanimentOption[];
   selectedAccompanimentIndex: number | null;
-  pianoAccompanimentData: PianoAccompaniment | null;
   guitarAccompanimentData: FingerstyleComposerIntegration | null;
   generatedAccompaniment: string | null;
-  // Separate Guitar / Piano AI generation
   aiGuitarSuggestions: AccompanimentOption[];
-  aiPianoSuggestions: AccompanimentOption[];
   selectedGuitarIndex: number | null;
-  selectedPianoIndex: number | null;
   generatedGuitar: string | null;
-  generatedPiano: string | null;
   accompanimentWorkflowSetup: AccompanimentWorkflowSetup | null;
   accompanimentWorkflow: AccompanimentWorkflowSession | null;
   ensembleWorkflow: EnsembleWorkflowSession | null;
@@ -91,16 +85,11 @@ export const DEFAULT_WORKSPACE_STATE: WorkspaceState = {
   acceptedHarmony: null,
   aiAccompanimentSuggestions: [],
   selectedAccompanimentIndex: null,
-  pianoAccompanimentData: null,
   guitarAccompanimentData: null,
   generatedAccompaniment: null,
-  // Separate Guitar / Piano AI generation
   aiGuitarSuggestions: [],
-  aiPianoSuggestions: [],
   selectedGuitarIndex: null,
-  selectedPianoIndex: null,
   generatedGuitar: null,
-  generatedPiano: null,
   accompanimentWorkflowSetup: null,
   accompanimentWorkflow: null,
   ensembleWorkflow: null,
@@ -124,10 +113,11 @@ export function useWorkspaceState(slug: string) {
       if (saved) {
         const parsed = JSON.parse(saved);
         const restoredWorkflow = normalizeAccompanimentWorkflowSession(parsed.accompanimentWorkflow);
+        const { pianoAccompanimentData: _pianoData, aiPianoSuggestions: _pianoSuggestions, selectedPianoIndex: _selectedPiano, generatedPiano: _generatedPiano, ...supportedWorkspace } = parsed;
         // eslint-disable-next-line react-hooks/set-state-in-effect -- workspace state must hydrate from localStorage after mount to avoid SSR/localStorage mismatches.
         setState({
           ...DEFAULT_WORKSPACE_STATE,
-          ...parsed,
+          ...supportedWorkspace,
           accompanimentWorkflow: restoredWorkflow,
           accompanimentWorkflowSetup: restoredWorkflow?.setup ?? parsed.accompanimentWorkflowSetup ?? null,
           fingerstyleGenerationSettings: {

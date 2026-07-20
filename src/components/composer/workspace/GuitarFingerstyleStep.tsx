@@ -4,7 +4,6 @@ import AbcjsPlaybackController from "@/components/music-sheet/AbcjsPlaybackContr
 import { prepareAbcjsRenderInput } from "@/components/music-sheet/abcjs-playback/render-input";
 import type { ArrangementPipelineResult } from "@/lib/theory/arrangement-pipeline";
 import type { WorkspaceState } from "../useWorkspaceState";
-import type { AccompanimentPreviewModel } from "./arrangement-preview-model";
 import { convertAbcToTimeSliceGrid, groupMeasuresByLine, type TimeSliceMeasure } from "@/lib/theory/fingerstyle-arranger/time-slice";
 import { FingerstyleLineCard } from "./FingerstyleLineCard";
 import {
@@ -13,7 +12,7 @@ import {
 } from "./fingerstyle-line-measures";
 import { COMPOSER_PREVIEW_RENDER_OPTIONS } from "./preview";
 import { LayerVisibilityControls } from "./LayerVisibilityControls";
-import { applyAbcLayerVisibility, applyAbcLayerVolumes, isAbcLayerVisible, ABC_LAYER_IDS, cleanAbcForExport } from "@/lib/theory/abc-layer-visibility";
+import { applyAbcLayerVisibility, applyAbcLayerVolumes, extractAbcLayerVisibilityItems, isAbcLayerVisible, ABC_LAYER_IDS, cleanAbcForExport } from "@/lib/theory/abc-layer-visibility";
 import { getArrangementRenderOptionsFor, buildArrangementSynthOptions } from "./arrangement-preview-model";
 import { buildAccompanimentAbc } from "@/lib/theory/accompaniment-abc";
 import { fingerprintAccompanimentSource, getSelectedWorkflowOption } from "@/lib/theory/accompaniment-workflow";
@@ -43,7 +42,6 @@ interface GuitarFingerstyleStepProps {
   isWorkspaceHydrated: boolean;
   pipeline: ArrangementPipelineResult | null;
   workflowAppliedMusicAbc: string;
-  accompanimentPreview: AccompanimentPreviewModel;
   accompLayerVisibility: Record<string, boolean>;
   setAccompLayerVisibility: Dispatch<SetStateAction<Record<string, boolean>>>;
   accompLayerVolumes: Record<string, number>;
@@ -60,7 +58,6 @@ export function GuitarFingerstyleStep({
   hasMounted,
   isWorkspaceHydrated,
   workflowAppliedMusicAbc,
-  accompanimentPreview,
   accompLayerVisibility,
   setAccompLayerVisibility,
   accompLayerVolumes,
@@ -246,7 +243,7 @@ export function GuitarFingerstyleStep({
 
   const masterAbcWithoutTab = useMemo(() => {
     if (!isFingerstyleReady) return "";
-    const baseInputAbc = accompanimentPreview.rawAbc || activeAbc;
+    const baseInputAbc = workflowAppliedMusicAbc;
     if (measures.length > 0) {
       try {
         const generatedGuitar = buildGeneratedGuitarAbc(measures, workflowAppliedMusicAbc);
@@ -274,8 +271,6 @@ export function GuitarFingerstyleStep({
   }, [
     accompLayerVisibility,
     accompLayerVolumes,
-    accompanimentPreview.rawAbc,
-    activeAbc,
     isFingerstyleReady,
     measures,
     workflowAppliedMusicAbc,
@@ -283,6 +278,10 @@ export function GuitarFingerstyleStep({
 
   const masterTabEnabled = isAbcLayerVisible(ABC_LAYER_IDS.tab, accompLayerVisibility, false);
   const masterAbc = masterAbcWithoutTab;
+  const masterLayerVisibilityItems = useMemo(
+    () => extractAbcLayerVisibilityItems(masterAbc, { tabEnabled: true }),
+    [masterAbc],
+  );
   const masterAbcjsRenderInput = useMemo(
     () => prepareAbcjsRenderInput({ abcString: masterAbc, tablatureEnabled: masterTabEnabled }),
     [masterAbc, masterTabEnabled],
@@ -359,6 +358,21 @@ export function GuitarFingerstyleStep({
       setTimeGridMessage("Unable to read the selected TimeGrid JSON file.");
     }
   }, [applyTimeGridDocument]);
+
+  if (!workflowAppliedMusicAbc.trim()) {
+    return (
+      <div className="space-y-4">
+        <section className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
+          <h2 className="font-bold">Harmony validation required</h2>
+          <p className="mt-1 leading-5">Select an option in Harmony step 3, Validate Harmony, before creating a Guitar Fingerstyle TimeGrid.</p>
+        </section>
+        <section className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950/50">
+          <h3 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-100">Original melody reference</h3>
+          <AbcjsPlaybackController abcString={activeAbc} title="Original Melody Reference" canvasId="composer-fingerstyle-prerequisite" renderOptions={COMPOSER_PREVIEW_RENDER_OPTIONS} />
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -444,7 +458,7 @@ export function GuitarFingerstyleStep({
         <section className="mb-4">
           <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 mb-2 font-sans">Layer Visibility</h2>
           <LayerVisibilityControls
-            items={accompanimentPreview.layerVisibilityItems}
+            items={masterLayerVisibilityItems}
             visibility={accompLayerVisibility}
             onVisibilityChange={setAccompLayerVisibility}
             volumes={accompLayerVolumes}

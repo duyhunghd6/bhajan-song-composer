@@ -1,9 +1,14 @@
 import abcjs from "abcjs";
 import { z } from "zod";
 import { getDiatonicChords } from "./chords";
-import { analyzeMelody, normalizeAbcNote, parseAbcHeader } from "./melody-analyzer";
+import { normalizeAbcNote, parseAbcHeader } from "./melody-analyzer";
 import { parseRootAndMode } from "./harmonizer";
-import { isAbcChordSymbol, normalizeAbcChordSymbol } from "./abc-chord-symbol";
+import { normalizeAbcChordSymbol } from "./abc-chord-symbol";
+import {
+  assignActiveChordsToMelodyNotes,
+  extractInlineChordEventsByMelodyMeasure,
+} from "./fingerstyle-arranger/melody-chord-timeline";
+import { buildAbcDurationContext } from "./abc-duration";
 
 export const HARMONIZATION_CANDIDATE_STYLES = [
   "simple-devotional",
@@ -256,21 +261,8 @@ export function validateAbcParseability(abc: string): string[] {
 }
 
 export function extractChordSymbolsByMeasure(abc: string): string[][] {
-  const body = abc
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line && !line.startsWith("%") && !/^[A-Za-z]:/.test(line))
-    .join(" ");
-
-  return body.split(/[|\]]/).map((measure) => {
-    const chords: string[] = [];
-    const chordRegex = /"([^"]+)"/g;
-    let match: RegExpExecArray | null;
-    while ((match = chordRegex.exec(measure)) !== null) {
-      if (isAbcChordSymbol(match[1])) chords.push(match[1].trim());
-    }
-    return chords;
-  }).filter((measureChords) => measureChords.length > 0);
+  return extractInlineChordEventsByMelodyMeasure(abc)
+    .map((events) => events.map((event) => event.chord));
 }
 
 function transpose(root: string, semitones: number): string {
@@ -312,35 +304,38 @@ function parseChordTones(chordName: string, metadata: HarmonizeMetadata): string
 
 export function validateStrongBeatSupport(option: HarmonizationOption, sourceAbc: string, metadata: HarmonizeMetadata): string[] {
   const warnings: string[] = [];
-  const analysis = analyzeMelody(sourceAbc);
-  const chordsByMeasure = extractChordSymbolsByMeasure(option.harmonizedAbc);
+  const inlineChordCount = extractChordSymbolsByMeasure(option.harmonizedAbc)
+    .reduce((count, measure) => count + measure.length, 0);
 
-  if (chordsByMeasure.length === 0) {
+  if (inlineChordCount === 0) {
     return ["candidate has no chord symbols to validate against strong beats"];
   }
 
+  const meter = buildAbcDurationContext(sourceAbc).meter;
+  const isStrongBeat = (beat: number) => Math.abs(beat - 1) < 0.001
+    || (meter.numerator === 4 && meter.denominator === 4 && Math.abs(beat - 3) < 0.001);
+  const strongBeatAssignments = assignActiveChordsToMelodyNotes(option.harmonizedAbc, option.progression)
+    .filter((assignment) => isStrongBeat(assignment.beat));
   let supportedStrongBeatCount = 0;
 
-  for (const measure of analysis.measures) {
-    const chordName = chordsByMeasure[measure.measureIndex]?.[0] ?? option.progression[measure.measureIndex];
-    if (!chordName) {
-      warnings.push(`measure ${measure.measureIndex + 1} has no chord for strong-beat validation`);
+  for (const assignment of strongBeatAssignments) {
+    const location = `measure ${assignment.measureIndex + 1} beat ${assignment.beat}`;
+    if (!assignment.chord) {
+      warnings.push(`${location} strong-beat note ${assignment.token} has no active chord`);
       continue;
     }
 
-    const chordTones = parseChordTones(chordName, metadata);
+    const chordTones = parseChordTones(assignment.chord, metadata);
     if (chordTones.length === 0) {
-      warnings.push(`measure ${measure.measureIndex + 1} chord ${chordName} could not be analyzed`);
+      warnings.push(`${location} chord ${assignment.chord} could not be analyzed`);
       continue;
     }
 
-    for (const note of measure.strongBeatNotes) {
-      const normalized = normalizeAbcNote(note);
-      if (chordTones.includes(normalized)) {
-        supportedStrongBeatCount += 1;
-      } else {
-        warnings.push(`measure ${measure.measureIndex + 1} strong-beat note ${note} is not in chord ${chordName}`);
-      }
+    const normalized = normalizeAbcNote(assignment.token);
+    if (chordTones.includes(normalized)) {
+      supportedStrongBeatCount += 1;
+    } else {
+      warnings.push(`${location} strong-beat note ${assignment.token} is not in chord ${assignment.chord}`);
     }
   }
 
@@ -444,7 +439,7 @@ export function validateHarmonizationOptions(result: HarmonizeResult, sourceAbc:
     progressionKeys.add(progressionKey);
 
     const chordsByMeasure = extractChordSymbolsByMeasure(option.harmonizedAbc);
-    if (chordsByMeasure.length === 0) issues.push(`${prefix} contains no inline chord symbols`);
+    if (chordsByMeasure.flat().length === 0) issues.push(`${prefix} contains no inline chord symbols`);
 
     issues.push(...validateAbcParseability(option.harmonizedAbc).map((issue) => `${prefix}: ${issue}`));
     issues.push(...validateMelodyPreserved(sourceAbc, option.harmonizedAbc).map((issue) => `${prefix}: ${issue}`));

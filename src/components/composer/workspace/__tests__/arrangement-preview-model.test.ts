@@ -39,24 +39,12 @@ K:C
 V:Guitar clef=treble
 [V:Guitar] C2 G2 E2 G2 | C2 G2 E2 G2 |`;
 
-const pianoAbc = `X:1
-T:Piano Layer
-M:4/4
-L:1/8
-K:C
-V:Piano clef=treble
-[V:Piano] E2 G2 C2 G2 | E2 G2 C2 G2 |`;
-
 const djembeOnlySetup = {
   style: "solo-fingerstyle" as const,
   instruments: [
     { id: "guitar-classic" as const, enabled: false, order: 0 },
-    { id: "guitar-acoustic" as const, enabled: false, order: 1 },
-    { id: "piano" as const, enabled: false, order: 2 },
-    { id: "indian-harmonium" as const, enabled: false, order: 3 },
-    { id: "flute" as const, enabled: false, order: 4 },
-    { id: "djembe" as const, enabled: true, order: 5 },
-    { id: "violin" as const, enabled: false, order: 6 },
+    { id: "indian-harmonium" as const, enabled: false, order: 1 },
+    { id: "djembe" as const, enabled: true, order: 2 },
   ],
 };
 
@@ -93,12 +81,16 @@ function selectWorkflowStep(
 }
 
 function buildModel(overrides: Partial<Parameters<typeof buildArrangementPreviewModel>[0]> = {}) {
+  const validatedWorkflow = selectWorkflowStep(
+    createAccompanimentWorkflowSession(sampleAbc),
+    "voice-leading-validation",
+    makeOption("validated-harmony", { validatedAbc: sampleAbc }),
+  );
   return buildArrangementPreviewModel({
     activeAbc: sampleAbc,
-    workflow: null,
+    workflow: validatedWorkflow,
     generatedAccompaniment: null,
     generatedGuitar: null,
-    generatedPiano: null,
     harmonyLayerVisibility: { melody: true, harmony: true },
     harmonyLayerVolumes: { Melody: 100, ChordProgression: 100 },
     accompanimentLayerVisibility: {
@@ -155,6 +147,32 @@ describe("arrangement preview model", () => {
       "Melody",
       "TAB",
     ]);
+  });
+
+  it("builds accompaniment from the selected validated Harmony output, never a progression fallback", () => {
+    const progressionAbc = sampleAbc.replace("T:Preview Model Sample", "T:Progression Only");
+    const validatedAbc = sampleAbc.replace("T:Preview Model Sample", "T:Validated Only");
+    let workflow = createAccompanimentWorkflowSession(sampleAbc);
+    workflow = selectWorkflowStep(
+      workflow,
+      "chord-roles-progression",
+      makeOption("progression", { harmonizedAbc: progressionAbc }),
+    );
+    workflow = selectWorkflowStep(
+      workflow,
+      "voice-leading-validation",
+      makeOption("validation", { harmonizedAbc: progressionAbc, validatedAbc }),
+    );
+
+    const model = buildModel({
+      workflow,
+      generatedAccompaniment: `V:Harmonium\n| C8 |`,
+    });
+
+    expect(model.harmonyValidationAbc).toBe(validatedAbc);
+    expect(model.accompaniment.rawAbc).toContain("T:Validated Only");
+    expect(model.accompaniment.rawAbc).not.toContain("T:Progression Only");
+    expect(model.accompaniment.rawAbc).toContain("V:Harmonium");
   });
 
   it("gates strong-beat layer visibility until the workflow step is complete", () => {
@@ -240,8 +258,14 @@ V:Guitar clef=treble-8 name="Layer 2 Guitar Fingerstyle"
   });
 
   it("applies Melody singer program and per-layer volume directives to preview ABC", () => {
+    const workflow = selectWorkflowStep(
+      createAccompanimentWorkflowSession(harmonizedAbc),
+      "voice-leading-validation",
+      makeOption("validated-harmony", { validatedAbc: harmonizedAbc }),
+    );
     const model = buildModel({
       activeAbc: harmonizedAbc,
+      workflow,
       generatedGuitar: guitarAbc,
       harmonyLayerVolumes: { Melody: 50, ChordProgression: 25 },
       accompanimentLayerVolumes: { Melody: 50, Guitar: 75, ChordProgression: 25 },
@@ -271,7 +295,7 @@ V:Guitar clef=treble-8 name="Layer 2 Guitar Fingerstyle"
     expect(model.accompaniment.guitarTabEnabled).toBe(false);
   });
 
-  it("removes guitar ABC after guitar branch reset while preserving harmony and piano", () => {
+  it("removes guitar ABC after guitar branch reset while preserving harmony", () => {
     let workflow = createAccompanimentWorkflowSession(sampleAbc);
     workflow = selectWorkflowStep(
       workflow,
@@ -287,7 +311,6 @@ V:Guitar clef=treble-8 name="Layer 2 Guitar Fingerstyle"
     const beforeReset = buildModel({
       workflow,
       generatedGuitar: guitarAbc,
-      generatedPiano: pianoAbc,
       accompanimentLayerVisibility: {
         __melody__: true,
         __strong_beats__: false,
@@ -302,7 +325,6 @@ V:Guitar clef=treble-8 name="Layer 2 Guitar Fingerstyle"
     const afterReset = buildModel({
       workflow: clearedWorkflow,
       generatedGuitar: null,
-      generatedPiano: pianoAbc,
       accompanimentLayerVisibility: {
         __melody__: true,
         __strong_beats__: false,
@@ -317,13 +339,17 @@ V:Guitar clef=treble-8 name="Layer 2 Guitar Fingerstyle"
 
     expect(afterReset.workflowAppliedMusicAbc).toBe(harmonizedAbc);
     expect(afterReset.accompaniment.abc).not.toContain("V:Guitar");
-    expect(afterReset.accompaniment.abc).toContain("V:Piano");
     expect(afterReset.accompaniment.guitarTabEnabled).toBe(false);
     expect(afterReset.accompaniment.appliedWorkflowStep?.id).toBe("voice-leading-validation");
   });
 
   it("applies Djembe support ABC after the Djembe branch completes in a Djembe-only solo setup", () => {
     let workflow = createAccompanimentWorkflowSession(sampleAbc, djembeOnlySetup);
+    workflow = selectWorkflowStep(
+      workflow,
+      "voice-leading-validation",
+      makeOption("validated-harmony", { validatedAbc: sampleAbc })
+    );
     workflow = selectWorkflowStep(
       workflow,
       "djembe-groove-interlock",
@@ -340,7 +366,7 @@ V:Guitar clef=treble-8 name="Layer 2 Guitar Fingerstyle"
     expect(model.accompaniment.appliedWorkflowStep?.id).toBe("djembe-fill-validation");
     expect(model.accompaniment.rawAbc).toContain("V:Djembe");
     expect(model.accompaniment.voiceNames).toContain("Djembe");
-    expect(model.accompaniment.rawAbc).toContain("ABCNotation applied after Step 12: Djembe Fill & Transient Validation");
+    expect(model.accompaniment.rawAbc).toContain("ABCNotation applied after Step 9: Djembe Fill & Transient Validation");
   });
 
   it("derives guitar tablature render options from score order", () => {

@@ -38,6 +38,7 @@ export {
   expandCompactTabEvent,
   getAccompanimentWorkflowLlmToolNames,
   hasCompactTabKeys,
+  normalizeGuitarTabEvents,
 } from "./accompaniment-workflow/tool-schema";
 export {
   emptyStepState,
@@ -56,15 +57,11 @@ const LYRIC_CHORD_STRIP_PATTERN = /\[[^\]]+\]/g;
 
 const DEFAULT_INSTRUMENT_ORDER: AccompanimentInstrumentId[] = [
   "guitar-classic",
-  "guitar-acoustic",
-  "piano",
   "indian-harmonium",
-  "flute",
   "djembe",
-  "violin",
 ];
 
-const LEGACY_ENABLED_INSTRUMENTS = new Set<AccompanimentInstrumentId>(["guitar-classic", "piano"]);
+const LEGACY_ENABLED_INSTRUMENTS = new Set<AccompanimentInstrumentId>(DEFAULT_INSTRUMENT_ORDER);
 const NEW_WORKFLOW_ENABLED_INSTRUMENTS = new Set<AccompanimentInstrumentId>(DEFAULT_INSTRUMENT_ORDER);
 
 function makeSetup(enabled: Set<AccompanimentInstrumentId>, style: AccompanimentWorkflowSetup["style"]): AccompanimentWorkflowSetup {
@@ -88,11 +85,8 @@ export function getLegacyAccompanimentWorkflowSetup(): AccompanimentWorkflowSetu
 }
 
 function instrumentScope(id: AccompanimentInstrumentId): Exclude<AccompanimentWorkflowScope, "shared"> {
-  if (id === "piano") return "piano";
   if (id === "indian-harmonium") return "harmonium";
   if (id === "djembe") return "djembe";
-  if (id === "flute") return "flute";
-  if (id === "violin") return "violin";
   return "guitar";
 }
 
@@ -116,10 +110,7 @@ export function defaultInstrumentRoleNote(id: AccompanimentInstrumentId, order: 
       : "middle comping/support lane";
 
   if (id === "djembe") return `${altitude}; Bass (Dum) supports low transients, Tone/Slap support upper rhythmic color.`;
-  if (id === "flute") return `${altitude}; breathe between melody phrases and yield while vocals are active.`;
-  if (id === "violin") return `${altitude}; sustain harmonic beds, counterlines, or drone pads while yielding to the melody.`;
   if (id === "indian-harmonium") return `${altitude}; sustain devotional drones, root-fifth anchors, and soft chordal support.`;
-  if (id === "piano") return `${altitude}; split LH foundation and RH guide-tone/response duties.`;
   return `${altitude}; arpeggiate/stagger notes and avoid block-chord clutter.`;
 }
 
@@ -295,7 +286,6 @@ export function createAccompanimentWorkflowSession(
     currentStepId: enabledStepIds[0] ?? "key-beats",
     steps: getInitialAccompanimentWorkflowSteps(),
     guitarProfileHint: null,
-    pianoProfileHint: null,
     setup,
     enabledStepIds,
   };
@@ -349,7 +339,6 @@ export function normalizeAccompanimentWorkflowSession(value: unknown): Accompani
     currentStepId: enabledStepIds[0] ?? "key-beats",
     steps,
     guitarProfileHint: typeof value.guitarProfileHint === "string" ? value.guitarProfileHint : null,
-    pianoProfileHint: typeof value.pianoProfileHint === "string" ? value.pianoProfileHint : null,
     setup,
     enabledStepIds,
   };
@@ -388,9 +377,6 @@ export function applyAccompanimentWorkflowSetupToSession(
     currentStepId,
     guitarProfileHint: enabledStepIds.some((stepId) => ACCOMPANIMENT_WORKFLOW_BRANCH_STEP_IDS.guitar.includes(stepId))
       ? updatedSession.guitarProfileHint
-      : null,
-    pianoProfileHint: enabledStepIds.some((stepId) => ACCOMPANIMENT_WORKFLOW_BRANCH_STEP_IDS.piano.includes(stepId))
-      ? updatedSession.pianoProfileHint
       : null,
   };
 }
@@ -520,12 +506,17 @@ function optionStringData(option: AccompanimentWorkflowOption | null, keys: stri
   return null;
 }
 
+export function getHarmonyValidationAbc(session: AccompanimentWorkflowSession | null): string | null {
+  if (!session) return null;
+  const validationOption = getSelectedWorkflowOption(session, "voice-leading-validation");
+  return optionStringData(validationOption, ["validatedAbc", "harmonizedAbc", "chordAnnotatedAbc", "abc"]);
+}
+
 export function getWorkflowAppliedMusicAbc(session: AccompanimentWorkflowSession | null, fallbackAbc: string): string {
   if (!session) return fallbackAbc;
 
-  const validationOption = getSelectedWorkflowOption(session, "voice-leading-validation");
   const progressionOption = getSelectedWorkflowOption(session, "chord-roles-progression");
-  const appliedAbc = optionStringData(validationOption, ["harmonizedAbc", "chordAnnotatedAbc", "abc", "validatedAbc"])
+  const appliedAbc = getHarmonyValidationAbc(session)
     ?? optionStringData(progressionOption, ["harmonizedAbc", "chordAnnotatedAbc", "abc"]);
 
   return appliedAbc ?? fallbackAbc;
@@ -956,7 +947,7 @@ export function getAppliedMusicAbcFromSelections(
     return null;
   };
 
-  const appliedAbc = optionString(validation, ["harmonizedAbc", "chordAnnotatedAbc", "abc", "validatedAbc"])
+  const appliedAbc = optionString(validation, ["validatedAbc", "harmonizedAbc", "chordAnnotatedAbc", "abc"])
     ?? optionString(progression, ["harmonizedAbc", "chordAnnotatedAbc", "abc"]);
 
   return appliedAbc ?? fallbackAbc;
@@ -982,9 +973,9 @@ export function buildAccompanimentWorkflowPrompt(input: {
 
   const lyricChordAnnotations = extractLyricChordAnnotations(effectiveSourceAbc);
   const abcDataInstruction = input.stepId === "chord-roles-progression"
-    ? "\nStep data: option.data MUST include harmonizedAbc with chord symbols applied. Call break_measures_line first, copy returned abc into harmonizedAbc. Melody line count/measure-per-line must match Source ABC."
+    ? "\nStep data: option.data MUST include harmonizedAbc with chord symbols applied. Inline ABC chord quotes are temporal events: put each one immediately before the note/rest where its harmony begins, and let it persist until the next chord quote. Call break_measures_line first, copy returned abc into harmonizedAbc. Melody line count/measure-per-line must match Source ABC."
     : input.stepId === "voice-leading-validation"
-      ? "\nStep data: option.data MUST include validatedAbc or harmonizedAbc after voice-leading fixes. Call break_measures_line first, copy returned abc into the field. Melody line breaks must match Source ABC."
+      ? "\nStep data: option.data MUST include validatedAbc or harmonizedAbc after voice-leading fixes. Inline ABC chord quotes are temporal events: put each one immediately before the note/rest where its harmony begins, and let it persist until the next chord quote. Call break_measures_line first, copy returned abc into the field. Melody line breaks must match Source ABC."
       : "";
   const strongBeatInstruction = input.stepId === "key-beats"
     ? "\nStrong Beats: choose emphasis direction. Call add_strong_beat_icons for each emphasis direction before the final tool call. Final option.data MUST include strongBeatEmphasis only. Do not include annotatedAbc, strongBeatDirectives, measureIndex, or beatTime."
@@ -1000,7 +991,7 @@ export function buildAccompanimentWorkflowPrompt(input: {
     ? "\n- The Sustain Rule: If a step has \"state\": \"sustain\" in the Time-Slice grid, the vocal melody is currently ringing out on a specific string. When you add fingerpicking/comping filler notes on empty steps, you are strictly forbidden from placing a note on the exact same string that holds the sustaining melody (treble string 1, 2, or 3)."
     : "";
   const midiInstruction = "\n- Any generated Guitar Classic/Classical Guitar ABC must include `%%MIDI program 24` immediately after the Guitar voice declaration.\n- Only an exact `Guitar Left Hand` target may be retargeted to Harmonium/Reed Organ, and it must use `%%MIDI program 20`; do not change `Guitar LH Accompaniment`, `Guitar Right Hand`, or generic Guitar layers.";
-  const staffSystemInstruction = "\n- Multi-voice ABC line grouping requirement: when returning ABC with Melody plus Guitar/Piano/etc., preserve the source Melody visual staff systems/sentences. Emit/validate each staff-system group as Melody line N, then lyric/helper rows for that Melody line, then every instrument's line N for the same measure range before moving to Melody line N+1. Do not write all Melody lines first and all accompaniment lines later when the final ABC contains multiple instruments.";
+  const staffSystemInstruction = "\n- Multi-voice ABC line grouping requirement: when returning ABC with Melody plus Guitar, Harmonium, or Djembe, preserve the source Melody visual staff systems. Emit/validate each staff-system group as Melody line N, then lyric/helper rows for that Melody line, then every instrument's line N for the same measure range before moving to Melody line N+1. Do not write all Melody lines first and all accompaniment lines later when the final ABC contains multiple instruments.";
 
   let chordToneReferenceStr = "";
   if (isBranchStep && step.scope === "guitar") {
@@ -1060,5 +1051,5 @@ export function buildConsolidatedChordIngestionPrompt(input: {
 }): string {
   const userNote = input.userNote?.trim();
 
-  return `DEFAULT PROMPT — CONSOLIDATED CHORD INGESTION\n\nTask: Lyric chords detected (e.g. [Em]Hari Bol). Ingest and produce results for:\n1. Chord Roles & Progression (with harmonizedAbc)\n2. Voice-leading & Harmonized ABC Validation (with validatedAbc)\n\nRules:\n- Use lyric chord annotations as the progression. Do not replace them.\n- Return 1-2 options per result group. Keep fields concise (<100 chars each).\n- Chord roles options: map strong notes to chord functions, select progression, include harmonizedAbc.\n- Validation options: include validatedAbc with voice-leading fixes applied.\n- Call break_measures_line before final output. Melody line breaks must match Source ABC.\n- Preserve melody ABC exactly except for chord symbol placement.\n\nMetadata:\n${formatMetadata(input.metadata)}\n\nSetup:\n${formatWorkflowSetup(input.setup)}\n\nPrevious context:\n${formatPreviousSelections(input.previousSelections)}\n\nLyric chords:\n${formatLyricChordAnnotations(input.sourceAbc)}\n\nSource ABC:\n\`\`\`abc\n${input.sourceAbc}\n\`\`\`\n\nUSER NOTE:\n${userNote || "(none)"}`;
+  return `DEFAULT PROMPT — CONSOLIDATED CHORD INGESTION\n\nTask: Lyric chords detected (e.g. [Em]Hari Bol). Ingest and produce results for:\n1. Chord Roles & Progression (with harmonizedAbc)\n2. Voice-leading & Harmonized ABC Validation (with validatedAbc)\n\nRules:\n- Use lyric chord annotations as the progression. Do not replace them.\n- Return 1-2 options per result group. Keep fields concise (<100 chars each).\n- Chord roles options: map strong notes to chord functions, select a source-measure-aligned progression summary, and include harmonizedAbc.\n- Validation options: include validatedAbc with voice-leading fixes applied.\n- Inline ABC chord quotes are temporal events: place each immediately before the note/rest where its harmony begins; it remains active until the next inline chord quote.\n- Call break_measures_line before final output. Melody line breaks must match Source ABC.\n- Preserve melody ABC exactly except for chord symbol placement.\n\nMetadata:\n${formatMetadata(input.metadata)}\n\nSetup:\n${formatWorkflowSetup(input.setup)}\n\nPrevious context:\n${formatPreviousSelections(input.previousSelections)}\n\nLyric chords:\n${formatLyricChordAnnotations(input.sourceAbc)}\n\nSource ABC:\n\`\`\`abc\n${input.sourceAbc}\n\`\`\`\n\nUSER NOTE:\n${userNote || "(none)"}`;
 }

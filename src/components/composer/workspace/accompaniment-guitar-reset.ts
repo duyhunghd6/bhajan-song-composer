@@ -6,6 +6,7 @@ import {
 import type { WorkspaceState } from "../useWorkspaceState";
 
 const hasItems = (value: unknown[] | null | undefined) => Boolean(value && value.length > 0);
+const ALL_BRANCH_STEP_IDS = Object.values(ACCOMPANIMENT_WORKFLOW_BRANCH_STEP_IDS).flat();
 
 export function hasAccompanimentGuitarBranchWork(state: WorkspaceState): boolean {
   return Boolean(
@@ -22,6 +23,29 @@ export function hasAccompanimentGuitarBranchWork(state: WorkspaceState): boolean
     state.stagedEnsembleLayers ||
     state.appliedEnsembleLayers
   );
+}
+
+export function buildHarmonyValidationBranchResetState(state: WorkspaceState): Partial<WorkspaceState> {
+  const clearedWorkflow = state.accompanimentWorkflow
+    ? {
+        ...clearAccompanimentWorkflowStepResults(state.accompanimentWorkflow, ALL_BRANCH_STEP_IDS),
+        guitarProfileHint: null,
+      }
+    : null;
+
+  return {
+    aiAccompanimentSuggestions: [],
+    selectedAccompanimentIndex: null,
+    generatedAccompaniment: null,
+    guitarAccompanimentData: null,
+    generatedGuitar: null,
+    aiGuitarSuggestions: [],
+    selectedGuitarIndex: null,
+    accompanimentWorkflow: clearedWorkflow,
+    ensembleWorkflow: null,
+    stagedEnsembleLayers: null,
+    appliedEnsembleLayers: null,
+  };
 }
 
 export function buildAccompanimentGuitarBranchResetState(state: WorkspaceState): Partial<WorkspaceState> {

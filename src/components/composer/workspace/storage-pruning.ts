@@ -113,12 +113,6 @@ function pruneLevel1(state: WorkspaceState): WorkspaceState {
     result.selectedGuitarIndex = item ? 0 : null;
   }
 
-  if (result.aiPianoSuggestions.length > 1 && result.selectedPianoIndex != null) {
-    const item = result.aiPianoSuggestions[result.selectedPianoIndex];
-    result.aiPianoSuggestions = item ? [item] : [];
-    result.selectedPianoIndex = item ? 0 : null;
-  }
-
   if (result.aiAccompanimentSuggestions.length > 1 && result.selectedAccompanimentIndex != null) {
     const item = result.aiAccompanimentSuggestions[result.selectedAccompanimentIndex];
     result.aiAccompanimentSuggestions = item ? [item] : [];
@@ -159,11 +153,6 @@ function pruneLevel2(state: WorkspaceState): WorkspaceState {
   // Drop full arrangement (regenerable from workflow data)
   if (result.guitarAccompanimentData) {
     result.guitarAccompanimentData = null;
-  }
-
-  // Drop full piano accompaniment (regenerable)
-  if (result.pianoAccompanimentData) {
-    result.pianoAccompanimentData = null;
   }
 
   // Drop ensemble workflow (regenerable from accompaniment)
@@ -262,7 +251,6 @@ function pruneLevel3(state: WorkspaceState): WorkspaceState {
 
   // Drop generated ABC strings (regenerable from workflow)
   result.generatedGuitar = null;
-  result.generatedPiano = null;
   result.generatedAccompaniment = null;
 
   // Drop applied ensemble layers

@@ -168,7 +168,6 @@ export interface BuildAccompanimentAbcOptions {
   baseAbc: string;
   generatedAccompaniment?: string | null;
   generatedGuitar?: string | null;
-  generatedPiano?: string | null;
   extraVoiceSources?: Array<string | null | undefined>;
   layerVisibility?: Record<string, boolean>;
   strongBeatDirectives?: StrongBeatDirective[];
@@ -285,11 +284,8 @@ function getFriendlyVoiceName(voiceId: string): string {
   const normalized = voiceId.toLowerCase();
   if (normalized === "melody") return "Melody";
   if (normalized.includes("guitar")) return "Guitar";
-  if (normalized.includes("piano") || normalized === "accompaniment") return "Piano";
   if (normalized === "harmonium") return "Indian Harmonium";
   if (normalized === "djembe") return "Djembe";
-  if (normalized === "flute") return "Flute";
-  if (normalized === "violin") return "Violin";
   return voiceId;
 }
 
@@ -621,11 +617,10 @@ export function getLayerVoiceNames(...sources: Array<string | null | undefined>)
 export function getAccompanimentVoiceNames(
   generatedAccompaniment?: string | null,
   generatedGuitar?: string | null,
-  generatedPiano?: string | null,
   extraVoiceSources: Array<string | null | undefined> = [],
   baseAbc?: string | null
 ): string[] {
-  return getLayerVoiceNames(baseAbc, generatedAccompaniment, generatedGuitar, generatedPiano, ...extraVoiceSources);
+  return getLayerVoiceNames(baseAbc, generatedAccompaniment, generatedGuitar, ...extraVoiceSources);
 }
 
 
@@ -633,7 +628,6 @@ export function buildAccompanimentAbc({
   baseAbc,
   generatedAccompaniment,
   generatedGuitar,
-  generatedPiano,
   extraVoiceSources = [],
   layerVisibility = {},
   strongBeatDirectives,
@@ -689,7 +683,6 @@ export function buildAccompanimentAbc({
   const allSources = [
     generatedAccompaniment,
     generatedGuitar,
-    generatedPiano,
     ...extraVoiceSources,
     ...otherBaseBlocks
   ].filter(Boolean) as string[];

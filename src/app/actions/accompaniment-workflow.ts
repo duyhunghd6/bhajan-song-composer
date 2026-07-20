@@ -23,6 +23,7 @@ import {
   getAccompanimentWorkflowLlmToolNames,
   isGuitarTabValidationWorkflowStep,
   normalizeAccompanimentWorkflowSetup,
+  normalizeGuitarTabEvents,
   normalizeWorkflowOptionDataLineBreaks,
   orderedAccompanimentInstruments,
   validateGuitarVoiceChordTones,
@@ -43,6 +44,11 @@ import {
 } from "@/lib/theory/abc-beat-annotations";
 import { query_guitar_voicings } from "@/lib/theory/guitar-voicings";
 import { extractMelodyMeasureTimeline } from "@/lib/theory/arranger-utils";
+import { buildAbcDurationContext } from "@/lib/theory/abc-duration";
+import {
+  assignActiveChordsToMelodyNotes,
+  extractInlineChordEventsByMelodyMeasure,
+} from "@/lib/theory/fingerstyle-arranger/melody-chord-timeline";
 import {
   buildValidGuitarTabToolSchema,
   validateGuitarTab,
@@ -289,15 +295,15 @@ function guitarTabEventsFromOption(option: Partial<AccompanimentWorkflowOption>)
   const guitarTab = (data as { guitarTab?: unknown }).guitarTab;
   if (!guitarTab || typeof guitarTab !== "object" || Array.isArray(guitarTab)) return null;
   const events = (guitarTab as { events?: unknown }).events;
-  return Array.isArray(events) ? events as GuitarTabEvent[] : null;
+  return Array.isArray(events) ? normalizeGuitarTabEvents(events) as unknown as GuitarTabEvent[] : null;
 }
 
 function stringValue(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
-function isGuitarValidationProfileId(value: unknown): value is "guitar-classic" | "guitar-acoustic" | "standard-six-string" {
-  return value === "guitar-classic" || value === "guitar-acoustic" || value === "standard-six-string";
+function isGuitarValidationProfileId(value: unknown): value is "guitar-classic" | "standard-six-string" {
+  return value === "guitar-classic" || value === "standard-six-string";
 }
 
 function guitarTabObjectFromData(data: Record<string, unknown> | null): Record<string, unknown> | null {
@@ -310,11 +316,9 @@ function guitarTabObjectFromData(data: Record<string, unknown> | null): Record<s
 function profileFromSetup(setupInput?: Partial<AccompanimentWorkflowSetup> | null): GuitarTabValidationOptions["guitarProfile"] {
   const setup = normalizeAccompanimentWorkflowSetup(setupInput);
   const guitar = orderedAccompanimentInstruments(setup).find((instrument) =>
-    instrument.enabled && (instrument.id === "guitar-classic" || instrument.id === "guitar-acoustic")
+    instrument.enabled && instrument.id === "guitar-classic"
   );
-  if (guitar?.id === "guitar-classic") return "guitar-classic";
-  if (guitar?.id === "guitar-acoustic") return "guitar-acoustic";
-  return "standard-six-string";
+  return guitar ? "guitar-classic" : "standard-six-string";
 }
 
 function guitarTabValidationOptionsFromOption(
@@ -552,6 +556,29 @@ function optionData(option: Partial<AccompanimentWorkflowOption>): Record<string
   return data as Record<string, unknown>;
 }
 
+function playableAbcFromData(data: Record<string, unknown>): string | null {
+  for (const key of ABC_OPTION_DATA_KEYS) {
+    const value = data[key];
+    if (typeof value === "string" && value.trim()) return value;
+  }
+  return null;
+}
+
+function isStrongMetricBeat(beat: number, meter: { numerator: number; denominator: number }): boolean {
+  if (Math.abs(beat - 1) < 0.001) return true;
+  return meter.numerator === 4 && meter.denominator === 4 && Math.abs(beat - 3) < 0.001;
+}
+
+function deriveNoteChordAssignments(data: Record<string, unknown>): Record<string, unknown> {
+  const abc = playableAbcFromData(data);
+  const normalized = { ...data };
+  delete normalized.noteChordAssignments;
+
+  return abc
+    ? { ...normalized, noteChordAssignments: assignActiveChordsToMelodyNotes(abc) }
+    : normalized;
+}
+
 function validateWorkflowAbcLineBreaks(input: {
   raw: unknown;
   sourceAbc: string;
@@ -602,6 +629,42 @@ function validateWorkflowAbcLineBreaks(input: {
   };
 }
 
+function validateHarmonyTimeline(raw: unknown): ToolLoopValidationResult {
+  const result = raw as RawWorkflowStepResult;
+  const options = Array.isArray(result.options) ? result.options.slice(0, 5) : [];
+  const messages: string[] = [];
+
+  for (const [index, option] of options.entries()) {
+    const optionId = normalizeId(option.id, `option-${index + 1}`);
+    const data = optionData(option);
+    if (!data) continue;
+
+    for (const key of ABC_OPTION_DATA_KEYS) {
+      const abc = data[key];
+      if (typeof abc !== "string" || !abc.trim()) continue;
+
+      if (extractInlineChordEventsByMelodyMeasure(abc).flat().length === 0) {
+        messages.push(`${optionId}.${key} has no valid inline chord events.`);
+        continue;
+      }
+
+      const meter = buildAbcDurationContext(abc).meter;
+      for (const assignment of assignActiveChordsToMelodyNotes(abc)) {
+        if (!isStrongMetricBeat(assignment.beat, meter) || assignment.chord) continue;
+        messages.push(
+          `${optionId}.${key} measure ${assignment.measureIndex + 1} beat ${assignment.beat} note ${assignment.token} has no active chord.`,
+        );
+      }
+    }
+  }
+
+  return {
+    valid: messages.length === 0,
+    message: messages.join("\n"),
+    toolResult: { valid: messages.length === 0, issues: messages },
+  };
+}
+
 function makeBreakMeasuresLineLocalTool(sourceAbc: string, onCalled?: () => void) {
   return {
     name: "break_measures_line",
@@ -617,6 +680,20 @@ function makeBreakMeasuresLineLocalTool(sourceAbc: string, onCalled?: () => void
         measureLinePattern: getAbcMeasureLinePattern(abc),
         expectedMeasureLinePattern: getAbcMeasureLinePattern(sourceAbc),
       };
+    },
+  };
+}
+
+function normalizeGuitarTabOptionData(data: Record<string, unknown>): Record<string, unknown> {
+  const guitarTab = data.guitarTab;
+  if (!guitarTab || typeof guitarTab !== "object" || Array.isArray(guitarTab)) return data;
+  const events = (guitarTab as Record<string, unknown>).events;
+  if (!Array.isArray(events)) return data;
+  return {
+    ...data,
+    guitarTab: {
+      ...(guitarTab as Record<string, unknown>),
+      events: normalizeGuitarTabEvents(events),
     },
   };
 }
@@ -651,7 +728,11 @@ function normalizeOptions(raw: unknown, sourceAbc: string, stepId?: Accompanimen
       : {};
     const normalizedData = stepId === "key-beats"
       ? normalizeStrongBeatOptionData(data, sourceAbc)
-      : data;
+      : stepId && ABC_WORKFLOW_STEP_IDS.has(stepId)
+        ? deriveNoteChordAssignments(data)
+        : stepId && isGuitarTabValidationWorkflowStep(stepId)
+          ? normalizeGuitarTabOptionData(data)
+          : data;
 
     const warnings = stringArray(option.warnings);
 
@@ -771,7 +852,7 @@ export async function generateAccompanimentWorkflowStep(
             execute: (args) => {
               const events = (args as { events?: unknown }).events;
               return validateGuitarTab(
-                Array.isArray(events) ? events as GuitarTabEvent[] : [],
+                normalizeGuitarTabEvents(events) as unknown as GuitarTabEvent[],
                 guitarTabValidationOptionsFromToolArgs(args, input)
               );
             },
@@ -798,13 +879,25 @@ export async function generateAccompanimentWorkflowStep(
         tools: [buildBreakMeasuresLineToolSchema(), toolSchema],
         finalToolName: toolName,
         localTools: [makeBreakMeasuresLineLocalTool(input.sourceAbc, () => { breakToolCalled = true; })],
-        validateFinalResult: (args) => validateWorkflowAbcLineBreaks({
-          raw: args,
-          sourceAbc: input.sourceAbc,
-          requireBreakToolCall: true,
-          breakToolCalled,
-          requireAbcField: true,
-        }),
+        validateFinalResult: (args) => {
+          const lineBreakValidation = validateWorkflowAbcLineBreaks({
+            raw: args,
+            sourceAbc: input.sourceAbc,
+            requireBreakToolCall: true,
+            breakToolCalled,
+            requireAbcField: true,
+          });
+          const harmonyTimelineValidation = validateHarmonyTimeline(args);
+          const issues = [lineBreakValidation.message, harmonyTimelineValidation.message].filter(Boolean);
+          return {
+            valid: lineBreakValidation.valid && harmonyTimelineValidation.valid,
+            message: issues.join("\n"),
+            toolResult: {
+              lineBreakValidation: lineBreakValidation.toolResult,
+              harmonyTimelineValidation: harmonyTimelineValidation.toolResult,
+            },
+          };
+        },
         temperature: 0.25,
         maxIterations: MAX_TOOL_LOOP_ITERATIONS,
         maxValidationAttempts: MAX_VALIDATION_REPAIR_ATTEMPTS,
@@ -882,16 +975,25 @@ export async function generateConsolidatedChordIngestionWorkflowSteps(
           breakToolCalled,
           requireAbcField: true,
         });
-        const valid = progression.valid && voiceLeading.valid;
-        const message = [progression.message, voiceLeading.message].filter(Boolean).join("\n");
+        const progressionTimeline = validateHarmonyTimeline(result.chordRolesProgression);
+        const voiceLeadingTimeline = validateHarmonyTimeline(result.voiceLeadingValidation);
+        const valid = progression.valid && voiceLeading.valid && progressionTimeline.valid && voiceLeadingTimeline.valid;
+        const issues = [
+          progression.message,
+          voiceLeading.message,
+          progressionTimeline.message,
+          voiceLeadingTimeline.message,
+        ].filter(Boolean);
         return {
           valid,
-          message,
+          message: issues.join("\n"),
           toolResult: {
             valid,
-            issues: [progression.message, voiceLeading.message].filter(Boolean),
+            issues,
             chordRolesProgression: progression.toolResult,
             voiceLeadingValidation: voiceLeading.toolResult,
+            chordRolesTimeline: progressionTimeline.toolResult,
+            voiceLeadingTimeline: voiceLeadingTimeline.toolResult,
           },
         };
       },
@@ -907,7 +1009,7 @@ export async function generateConsolidatedChordIngestionWorkflowSteps(
         stepId: "chord-roles-progression",
         requestPrompt,
         userNote: input.userNote,
-        options: normalizeOptions(result.chordRolesProgression, input.sourceAbc),
+        options: normalizeOptions(result.chordRolesProgression, input.sourceAbc, "chord-roles-progression"),
         rawResult: result.chordRolesProgression,
         diagnostics,
       }),
@@ -915,7 +1017,7 @@ export async function generateConsolidatedChordIngestionWorkflowSteps(
         stepId: "voice-leading-validation",
         requestPrompt,
         userNote: input.userNote,
-        options: normalizeOptions(result.voiceLeadingValidation, input.sourceAbc),
+        options: normalizeOptions(result.voiceLeadingValidation, input.sourceAbc, "voice-leading-validation"),
         rawResult: result.voiceLeadingValidation,
         diagnostics,
       }),

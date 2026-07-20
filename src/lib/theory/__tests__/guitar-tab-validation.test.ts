@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { normalizeGuitarTabEvents } from "../accompaniment-workflow/tool-schema";
 import {
   buildValidGuitarTabToolSchema,
   validateGuitarFretboardRange,
@@ -21,6 +22,17 @@ function event(overrides: Partial<GuitarTabEvent>): GuitarTabEvent {
 }
 
 describe("guitar tab validation", () => {
+  it("expands compact LLM tab events while preserving open-string fret zero and legacy events", () => {
+    const [compact, legacy] = normalizeGuitarTabEvents([
+      { m: 0, b: 1, sid: "m0-b1-bass", n: "E2", s: 6, f: 0, r: "bass" },
+      { measureIndex: 0, beat: 2, sourceEventId: "m0-b2", note: "B2", string: 5, fret: 2, role: "fifth" },
+    ]);
+
+    expect(compact).toMatchObject({ measureIndex: 0, beat: 1, sourceEventId: "m0-b1-bass", note: "E2", string: 6, fret: 0, role: "bass" });
+    expect(legacy).toMatchObject({ measureIndex: 0, beat: 2, sourceEventId: "m0-b2", note: "B2", string: 5, fret: 2, role: "fifth" });
+    expect(validateGuitarTab([compact, legacy] as unknown as GuitarTabEvent[]).valid).toBe(true);
+  });
+
   it("rejects simultaneous notes assigned to the same physical string", () => {
     const result = validateGuitarTab([
       event({ note: "E2", string: 6, fret: 0, role: "bass" }),
@@ -169,14 +181,15 @@ describe("guitar tab validation", () => {
     expect(schema.function.description).toContain("one physical guitar");
     expect(schema.function.parameters.properties).toHaveProperty("profileId");
     expect(schema.function.parameters.properties).toHaveProperty("voicingProfileId");
-    expect(schema.function.parameters.properties.events.items.properties).toHaveProperty("sourceEventId");
+    expect(schema.function.parameters.properties.events.items.properties).toHaveProperty("sid");
     expect(schema.function.parameters.properties.events.items.required).toEqual([
-      "measureIndex",
-      "beat",
-      "note",
-      "string",
-      "fret",
-      "role",
+      "m",
+      "b",
+      "sid",
+      "n",
+      "s",
+      "f",
+      "r",
     ]);
   });
 });

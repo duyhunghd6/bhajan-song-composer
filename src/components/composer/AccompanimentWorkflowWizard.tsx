@@ -25,7 +25,6 @@ import {
   normalizeAccompanimentWorkflowSetup,
   selectOption,
   skipWorkflowSteps,
-  extractProfile,
   emptyStepState,
   type AccompanimentWorkflowLlmLogEntry,
   type AccompanimentWorkflowMetadata,
@@ -50,23 +49,20 @@ type BranchScope = Exclude<AccompanimentWorkflowScope, "shared">;
 interface AccompanimentWorkflowWizardProps {
   mode?: "harmony" | "accompaniment" | "guitar";
   sourceAbc: string;
+  branchSourceAbc?: string | null;
   metadata: AccompanimentWorkflowMetadata;
   workflow: AccompanimentWorkflowSession | null;
   workflowSetup: AccompanimentWorkflowSetup | null;
   onWorkflowChange: (workflow: AccompanimentWorkflowSession | null) => void;
   onWorkflowSetupChange: (setup: AccompanimentWorkflowSetup) => void;
   onGuitarProfileSelected?: (profile: string | null, option?: AccompanimentWorkflowOption) => void;
-  onPianoProfileSelected?: (profile: string | null) => void;
   onReset?: () => void;
 }
 
 const BRANCH_LABELS: Record<BranchScope, string> = {
   guitar: "Guitar",
-  piano: "Piano",
   harmonium: "Harmonium",
   djembe: "Djembe",
-  flute: "Flute",
-  violin: "Violin",
 };
 
 interface WorkflowStepGridProps {
@@ -150,17 +146,19 @@ function enabledBranchScopes(session: AccompanimentWorkflowSession): BranchScope
 export default function AccompanimentWorkflowWizard({
   mode = "accompaniment",
   sourceAbc,
+  branchSourceAbc,
   metadata,
   workflow,
   workflowSetup,
   onWorkflowChange,
   onWorkflowSetupChange,
   onGuitarProfileSelected,
-  onPianoProfileSelected,
   onReset,
 }: AccompanimentWorkflowWizardProps) {
   const sourceCurrent = isAccompanimentWorkflowSourceCurrent(workflow, sourceAbc);
   const session = useMemo(() => workflow && sourceCurrent ? workflow : null, [workflow, sourceCurrent]);
+  const branchWorkflowSourceAbc = mode === "accompaniment" ? branchSourceAbc : sourceAbc;
+  const effectivePromptSourceAbc = branchWorkflowSourceAbc ?? sourceAbc;
   const editableSetup = useMemo(
     () => workflowSetup || session?.setup
       ? normalizeAccompanimentWorkflowSetup(workflowSetup ?? session?.setup)
@@ -196,11 +194,11 @@ export default function AccompanimentWorkflowWizard({
   const activeStep = filteredSteps.find((step) => step.id === activeStepId) ?? filteredSteps[0];
   const activeStepState = activeStep && session ? session.steps[activeStep.id] ?? emptyStepState() : emptyStepState();
   const activeUserNote = activeStep ? userNotes[activeStep.id] ?? activeStepState.promptNote : "";
-  const lyricChordAnnotations = useMemo(() => extractLyricChordAnnotations(sourceAbc), [sourceAbc]);
+  const lyricChordAnnotations = useMemo(() => extractLyricChordAnnotations(effectivePromptSourceAbc), [effectivePromptSourceAbc]);
   const canConsolidateChordIngestion = Boolean(activeStep && lyricChordAnnotations.length > 0 && isChordIngestionWorkflowStep(activeStep.id));
   const promptPreview = activeStep ? buildAccompanimentWorkflowPrompt({
     stepId: activeStep.id,
-    sourceAbc,
+    sourceAbc: effectivePromptSourceAbc,
     metadata,
     previousSelections: session ? getSelectedWorkflowContext(session, activeStep.id) : [],
     setup: session?.setup ?? editableSetup,
@@ -229,7 +227,6 @@ export default function AccompanimentWorkflowWizard({
     onWorkflowChange(next);
     setActiveStepId(next.currentStepId);
     onGuitarProfileSelected?.(null);
-    onPianoProfileSelected?.(null);
     setUserNotes({});
     setSavedNoteStepId(null);
     setGeneratingStepId(null);
@@ -247,7 +244,6 @@ export default function AccompanimentWorkflowWizard({
     onWorkflowChange(next);
     setActiveStepId(next.currentStepId);
     if (!next.guitarProfileHint) onGuitarProfileSelected?.(null);
-    if (!next.pianoProfileHint) onPianoProfileSelected?.(null);
     setError(null);
   };
 
@@ -282,7 +278,7 @@ export default function AccompanimentWorkflowWizard({
     try {
       if (canConsolidateChordIngestion) {
         const runs = await generateConsolidatedChordIngestionWorkflowSteps({
-          sourceAbc,
+          sourceAbc: effectivePromptSourceAbc,
           metadata,
           previousSelections: getSelectedWorkflowContext(session, "chord-roles-progression"),
           setup: session.setup,
@@ -295,7 +291,7 @@ export default function AccompanimentWorkflowWizard({
 
       const run = await generateAccompanimentWorkflowStep({
         stepId,
-        sourceAbc,
+        sourceAbc: effectivePromptSourceAbc,
         metadata,
         previousSelections: getSelectedWorkflowContext(session, stepId),
         setup: session.setup,
@@ -322,7 +318,6 @@ export default function AccompanimentWorkflowWizard({
 
   const clearProfilesForScope = (scope: BranchScope) => {
     if (scope === "guitar") onGuitarProfileSelected?.(null);
-    if (scope === "piano") onPianoProfileSelected?.(null);
   };
 
   const handleSkipBranch = (scope: BranchScope) => {
@@ -340,7 +335,6 @@ export default function AccompanimentWorkflowWizard({
     const next = {
       ...clearedWorkflow,
       guitarProfileHint: scope === "guitar" ? null : clearedWorkflow.guitarProfileHint,
-      pianoProfileHint: scope === "piano" ? null : clearedWorkflow.pianoProfileHint,
     };
     onWorkflowChange(next);
     setActiveStepId(next.currentStepId);
@@ -355,8 +349,16 @@ export default function AccompanimentWorkflowWizard({
     // Regenerate the Guitar preview progressively across every Guitar branch selection.
     const isGuitarStep = (ACCOMPANIMENT_WORKFLOW_BRANCH_STEP_IDS.guitar as readonly string[]).includes(activeStep.id);
     if (isGuitarStep) onGuitarProfileSelected?.(next.guitarProfileHint, option);
-    if (activeStep.id === "piano-fills-pedal-validation") onPianoProfileSelected?.(extractProfile(option));
   };
+
+  if (mode === "accompaniment" && !branchSourceAbc) {
+    return (
+      <section className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
+        <h3 className="font-bold">Harmony validation required</h3>
+        <p className="mt-1 leading-5">Select an option in Harmony step 3, Validate Harmony, before generating accompaniment branches.</p>
+      </section>
+    );
+  }
 
   if (!session) {
     return (

@@ -27,7 +27,7 @@ function buildGuitarTabDataProperty() {
     properties: {
       profileId: {
         type: "string",
-        enum: ["guitar-classic", "guitar-acoustic", "standard-six-string"],
+        enum: ["guitar-classic", "standard-six-string"],
         description: "Guitar profile for fret range validation.",
       },
       voicingProfileId: {
@@ -75,6 +75,14 @@ export function expandCompactTabEvent(compact: Record<string, unknown>): Record<
   };
 }
 
+/** Convert LLM wire events to the canonical validator/domain shape. */
+export function normalizeGuitarTabEvents(events: unknown): Record<string, unknown>[] {
+  if (!Array.isArray(events)) return [];
+  return events
+    .filter((event): event is Record<string, unknown> => Boolean(event && typeof event === "object" && !Array.isArray(event)))
+    .map(expandCompactTabEvent);
+}
+
 /** Check if tab events use compact keys and need expansion. */
 export function hasCompactTabKeys(event: Record<string, unknown>): boolean {
   return "m" in event && "b" in event && "s" in event;
@@ -117,7 +125,11 @@ function buildWorkflowOptionDataProperty(stepId?: AccompanimentWorkflowStepId) {
       properties: {
         harmonizedAbc: {
           type: "string",
-          description: "Full ABC with chord symbols applied. Copy from break_measures_line result."
+          description: "Full ABC with chord symbols applied. Copy from break_measures_line result. Inline chord quotes begin exactly at the note/rest where the harmony changes."
+        },
+        noteChordAssignments: {
+          type: "array",
+          description: "Server-derived note-to-active-chord timeline. Do not provide this field; it is rebuilt from harmonizedAbc."
         },
       },
       required: ["harmonizedAbc"],
@@ -137,6 +149,10 @@ function buildWorkflowOptionDataProperty(stepId?: AccompanimentWorkflowStepId) {
         harmonizedAbc: {
           type: "string",
           description: "Fallback harmonized ABC if validatedAbc is not available."
+        },
+        noteChordAssignments: {
+          type: "array",
+          description: "Server-derived note-to-active-chord timeline. Do not provide this field; it is rebuilt from the playable ABC."
         },
       },
     };

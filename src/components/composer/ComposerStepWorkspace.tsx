@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useTransition, type SetStateAction } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition, type SetStateAction } from "react";
 import {
   DEFAULT_ACCOMPANIMENT_LAYER_VISIBILITY,
   DEFAULT_HARMONY_LAYER_VISIBILITY,
@@ -8,7 +8,6 @@ import {
   useWorkspaceState,
 } from "./useWorkspaceState";
 import AbcjsPlaybackController from "@/components/music-sheet/AbcjsPlaybackController";
-import PianoPedalIndicator from "@/components/instruments/PianoPedalIndicator";
 import AbcEditor, { DEFAULT_ABC } from "./AbcEditor";
 import { saveAbcToDisk } from "@/app/actions/save-abc-to-disk";
 import type { ComposerStepId } from "./composer-steps";
@@ -16,6 +15,7 @@ import { AccompanimentStep } from "./workspace/AccompanimentStep";
 import { GuitarFingerstyleStep } from "./workspace/GuitarFingerstyleStep";
 import {
   buildAccompanimentGuitarBranchResetState,
+  buildHarmonyValidationBranchResetState,
   hasAccompanimentGuitarBranchWork,
 } from "./workspace/accompaniment-guitar-reset";
 import { buildArrangementPreviewModel } from "./workspace/arrangement-preview-model";
@@ -52,6 +52,7 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
   const [layerVolumes, setLayerVolumes] = useState<Record<string, number>>(DEFAULT_LAYER_VOLUMES);
   const [copyStatus, setCopyStatus] = useState("Copy Markdown");
   const [isPending, startTransition] = useTransition();
+  const previousHarmonyValidationAbc = useRef<string | null | undefined>(undefined);
 
   const accompLayerVisibility = ws.accompanimentLayerVisibility ?? DEFAULT_ACCOMPANIMENT_LAYER_VISIBILITY;
   const accompLayerVolumes = ws.accompanimentLayerVolumes ?? DEFAULT_LAYER_VOLUMES;
@@ -93,7 +94,6 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
     workflow: ws.accompanimentWorkflow,
     generatedAccompaniment: ws.generatedAccompaniment,
     generatedGuitar: ws.generatedGuitar,
-    generatedPiano: ws.generatedPiano,
     harmonyLayerVisibility: layerVisibility,
     harmonyLayerVolumes: layerVolumes,
     accompanimentLayerVisibility: accompLayerVisibility,
@@ -103,14 +103,30 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
     ws.accompanimentWorkflow,
     ws.generatedAccompaniment,
     ws.generatedGuitar,
-    ws.generatedPiano,
     layerVisibility,
     layerVolumes,
     accompLayerVisibility,
     accompLayerVolumes,
   ]);
 
-  const { pipeline, activeWorkflow, workflowAppliedMusicAbc } = previewModel;
+  const { pipeline, activeWorkflow, workflowAppliedMusicAbc, harmonyValidationAbc } = previewModel;
+
+  useEffect(() => {
+    if (!isWorkspaceHydrated) return;
+    if (previousHarmonyValidationAbc.current === undefined) {
+      previousHarmonyValidationAbc.current = harmonyValidationAbc;
+      return;
+    }
+    if (previousHarmonyValidationAbc.current === harmonyValidationAbc) return;
+
+    previousHarmonyValidationAbc.current = harmonyValidationAbc;
+    updateState(buildHarmonyValidationBranchResetState(ws));
+    try {
+      window.localStorage.removeItem(getComposerFingerstyleMeasuresStorageKey(slug));
+    } catch (error) {
+      console.error("Failed to clear stale fingerstyle measures", error);
+    }
+  }, [harmonyValidationAbc, isWorkspaceHydrated, slug, updateState, ws]);
 
   const handleRestoreHarmony = useCallback(() => {
     const originalMelodyAbc = initialMelodyAbc ?? DEFAULT_ABC;
@@ -180,6 +196,7 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
     return (
       <AccompanimentStep
         activeAbc={activeAbc}
+        branchSourceAbc={harmonyValidationAbc}
         hasMounted={hasMounted}
         pipeline={pipeline}
         workflowAppliedMusicAbc={workflowAppliedMusicAbc}
@@ -205,8 +222,7 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
         hasMounted={hasMounted}
         isWorkspaceHydrated={isWorkspaceHydrated}
         pipeline={pipeline}
-        workflowAppliedMusicAbc={workflowAppliedMusicAbc}
-        accompanimentPreview={previewModel.accompaniment}
+        workflowAppliedMusicAbc={harmonyValidationAbc ?? ""}
         accompLayerVisibility={accompLayerVisibility}
         setAccompLayerVisibility={setAccompLayerVisibility}
         accompLayerVolumes={accompLayerVolumes}
@@ -268,7 +284,7 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
       )}
       preview={(
         <>
-          {(ws.generatedAccompaniment || ws.generatedGuitar || ws.generatedPiano || activeWorkflow) && (
+          {(ws.generatedAccompaniment || ws.generatedGuitar || activeWorkflow) && (
             <section className="mb-4 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950/60">
               <h2 className="mb-2 text-sm font-bold text-zinc-900 dark:text-zinc-100 font-sans">Layer Visibility</h2>
               <div className="flex flex-wrap gap-3">
@@ -277,11 +293,9 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
                   const friendlyName = voiceName
                     .replace(/([A-Z])/g, " $1")
                     .replace(/^\s/, "")
-                    .replace("Piano", "🎹 Piano")
                     .replace("Guitar", "🎸 Guitar")
-                    .replace("Djembe", "🪘 Djembe")
-                    .replace("Flute", "🪈 Flute")
-                    .replace("Violin", "🎻 Violin");
+                    .replace("Harmonium", "🪗 Harmonium")
+                    .replace("Djembe", "🪘 Djembe");
                   return (
                     <label key={voiceName} className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-zinc-800 dark:text-zinc-200 font-sans">
                       <input
@@ -300,19 +314,6 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
               </div>
             </section>
           )}
-          <section className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950/60">
-            <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 font-sans font-sans">Playback Simulation: Test Full Audio & Sync</h2>
-            <div className="mt-3 flex flex-wrap items-center gap-3">
-              <button type="button" className="rounded-xl bg-amber-500 px-4 py-2 text-sm font-bold text-white font-sans">Play All Layers</button>
-              <PianoPedalIndicator
-                title="Sustain Pedal Indicator"
-                pedalAutomation={{
-                  controller: { midiControlChange: 64, downValue: 127, upValue: 0 },
-                  events: [{ measureIndex: 0, beat: 1, chord: "Em", type: "pedal-down", value: 127 }],
-                }}
-              />
-            </div>
-          </section>
           <div className="flex items-center justify-between gap-3">
             <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 font-sans">Review Music Staff Playback</h3>
             <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 font-sans">

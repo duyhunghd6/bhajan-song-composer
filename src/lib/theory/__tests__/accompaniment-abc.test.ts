@@ -612,9 +612,9 @@ K:Em
     expect(result.abc).not.toContain("(Melody)");
   });
 
-  it("promotes first visible instrument when Melody is unchecked with multiple instruments", () => {
+  it("promotes Guitar when Melody is unchecked", () => {
     const melodyAbc = `X:1
-T:Multi Instrument Promotion Test
+T:Guitar Promotion Test
 M:4/4
 L:1/8
 K:Em
@@ -623,36 +623,14 @@ w: Ha-ri Bol _ |`;
     const guitarAbc = `V:Guitar clef=treble-8
 %%MIDI program 24
 | E,2 B,2 E2 G2 |`;
-    const pianoAbc = `V:Piano clef=treble name="Piano"
-%%MIDI program 0
-| E2 G2 B2 E2 |`;
-
     const result = buildAccompanimentAbc({
       baseAbc: melodyAbc,
       generatedGuitar: guitarAbc,
-      generatedPiano: pianoAbc,
-      layerVisibility: {
-        Melody: false,
-        Guitar: true,
-        Piano: true,
-        Lyrics: true,
-        __melody__: false,
-        __chords__: true,
-      },
+      layerVisibility: { Melody: false, Guitar: true, Lyrics: true, __melody__: false, __chords__: true },
     });
 
-    // Guitar is the first visible instrument and should be promoted
-    expect(result.abc).toContain("%%score (Guitar) (Piano)");
+    expect(result.abc).toContain("%%score (Guitar)");
     expect(result.abc).not.toContain("(Melody)");
-    expect(result.abc).not.toContain("V:Melody");
-
-    // Lyrics should appear after Guitar, not after Piano
-    const lines = result.abc.split("\n");
-    const guitarLine = lines.findIndex(l => l.startsWith("[V:Guitar]"));
-    const lyricLine = lines.findIndex(l => l.startsWith("w: Ha-ri"));
-    const pianoLine = lines.findIndex(l => l.startsWith("[V:Piano]"));
-    expect(lyricLine).toBeGreaterThan(guitarLine);
-    expect(lyricLine).toBeLessThan(pianoLine);
   });
   it("merges dual V:Melody blocks when the first block has only MIDI directives and the second has music", () => {
     // This pattern is common in .abc song files: the first V:Melody sets voice options and

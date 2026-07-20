@@ -560,7 +560,7 @@ export default function AbcjsPlaybackController({
         timingCallbacksRef.current = null;
       };
     } catch (err) {
-      console.error("Error rendering ABC notation:", err);
+      console.warn("Error rendering ABC notation:", err);
       renderErrorMessage = "ABC notation could not be rendered. Check the header and note syntax.";
       flushRenderState();
     }

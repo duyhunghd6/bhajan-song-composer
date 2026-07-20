@@ -130,7 +130,6 @@ export function selectOption(
     ...selectedWorkflow,
     currentStepId: nextStepId,
     guitarProfileHint: stepId === "guitar-comping-profile" ? extractProfile(option) : workflow.guitarProfileHint,
-    pianoProfileHint: stepId === "piano-fills-pedal-validation" ? extractProfile(option) : workflow.pianoProfileHint,
   };
 }
 
@@ -196,7 +195,6 @@ export function skipWorkflowSteps(
     ...next,
     currentStepId: getNextUncompletedWorkflowStepId(next) ?? next.currentStepId,
     guitarProfileHint: instrumentLabel === "Guitar" ? null : next.guitarProfileHint,
-    pianoProfileHint: instrumentLabel === "Piano" ? null : next.pianoProfileHint,
   };
 }
 

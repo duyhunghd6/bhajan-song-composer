@@ -32,6 +32,8 @@ The Composer UI owns React state, persistence hooks, and user interaction. It de
 
 The accompaniment workflow is intentionally a single-page wizard under the existing dynamic route `/compose/[slug]/[step]`; `/compose/hari-bol/accompaniment` is handled by `step=accompaniment`, not by a dedicated route folder. Internal accompaniment substeps live in persisted workflow state rather than route segments.
 
+The downstream source graph is directed: Melody feeds Harmony Steps 1–3; the selected Step 3 `voice-leading-validation` ABC then independently feeds Accompaniment and Guitar Fingerstyle. Accompaniment output is never a Fingerstyle source. Until Step 3 has a selected ABC, both downstream routes show the original melody as read-only reference and keep branch generation unavailable.
+
 ### Music sheet / ABCJS playback
 
 Music notation playback lives under `src/components/music-sheet/`.
@@ -67,9 +69,9 @@ Music-theory logic lives under `src/lib/theory/`.
 - `src/app/actions/fingerstyle-line-arranger.ts` remains the public Server Action; its local `fingerstyle-line-arranger/` directory enforces fill-position reservation → bass position → chord-derived bass candidate → TimeGrid materialization/freeze → post-bass physical fill composition → server merge → ASCII/Guitar ABC exact-reference order. When bounded discretionary-fill retries fail, it returns the already validated bass foundation with a non-fatal fills-unavailable notice.
 - `fingerstyle-arranger/types.ts` contains the exported fingerstyle source-layer, playability, section metadata, validation-compatible guitar tab events, artifact, and output contract types. Diagnostic data remains outside these stable musical artifact contracts.
 - `accompaniment-workflow.ts` remains the public accompaniment workflow interface. It owns setup normalization, legacy setup fallback, ordered-instrument role hints, enabled-step planning, and versioned restoration that drops obsolete workflow-step state. Solo/Fingerstyle and combined Accompaniment planning both enable branch steps only for checked instrument scopes in stack order; active sessions can be re-planned from setup checkbox changes so disabled instruments do not appear or block completion.
-- `accompaniment-workflow/definition.ts` contains workflow ids, setup types, instrument branch scopes, constants, and step definitions for shared, Guitar, Piano, Harmonium, Djembe, Flute, and Violin branches. The accompaniment Guitar branch owns only comping-profile and voicing/bass decisions; fill density remains an independent Guitar Fingerstyle generation setting.
+- `accompaniment-workflow/definition.ts` contains workflow ids, setup types, instrument branch scopes, constants, and step definitions for shared, Guitar Classic, Harmonium, and Djembe branches. The Guitar branch owns only comping-profile and voicing/bass decisions; fill density remains an independent Guitar Fingerstyle generation setting.
 - `accompaniment-workflow/session-transitions.ts` contains pure workflow session transitions for merging generated runs, selecting options, skipping branch steps, extracting profile hints, and detecting existing step results.
-- `accompaniment-workflow/support-layers.ts` adapts completed Djembe, Flute, and Violin accompaniment workflow decisions into playable ABC support layers for the accompaniment page preview, including solo non-guitar support workflows whose enabled branch is one of those instruments.
+- `accompaniment-workflow/support-layers.ts` adapts completed Djembe workflow decisions into a playable Djembe support layer for the accompaniment page preview.
 - `accompaniment-workflow/tool-schema.ts` contains structured LLM tool schemas for accompaniment workflow generation.
 - `ensemble-workflow.ts` remains the public ensemble workflow interface.
 - `ensemble-workflow/definition.ts` contains ensemble workflow ids, types, default generation plan, and step definitions.

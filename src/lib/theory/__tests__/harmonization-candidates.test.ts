@@ -156,7 +156,39 @@ describe("harmonization candidate validation", () => {
       metadata,
     );
 
-    expect(warnings.some((warning) => warning.includes("strong-beat note E is not in chord F"))).toBe(true);
+    expect(warnings.some((warning) => warning.includes("strong-beat note E2 is not in chord F"))).toBe(true);
+  });
+
+  it("validates beat-three notes against a mid-measure chord change", () => {
+    const localSource = `X:1
+T:Mid-measure chord
+M:4/4
+L:1/4
+K:C
+[V:Melody] C D B A |`;
+    const localMetadata: HarmonizeMetadata = { key: "C", scale: "major", timeSignature: "4/4" };
+    const baseOption: HarmonizationOption = {
+      id: "mid-measure",
+      label: "Mid-measure",
+      style: "mid-measure",
+      progression: ["C"],
+      romanNumerals: ["I"],
+      explanation: "Tests an exact harmonic onset.",
+      harmonizedAbc: `${localSource.replace("C D B A", '"C"C D "G"B A')}`,
+      confidence: 1,
+      warnings: [],
+      validationNotes: [],
+      progression_name: "Mid-measure",
+      abc: "",
+    };
+
+    expect(validateStrongBeatSupport(baseOption, localSource, localMetadata)).toEqual([]);
+
+    const warnings = validateStrongBeatSupport({
+      ...baseOption,
+      harmonizedAbc: baseOption.harmonizedAbc.replace('"G"B', '"F"B'),
+    }, localSource, localMetadata);
+    expect(warnings).toContain("measure 1 beat 3 strong-beat note B is not in chord F");
   });
 
   it("validates abcjs parseability", () => {

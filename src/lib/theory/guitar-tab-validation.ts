@@ -444,7 +444,7 @@ export function buildValidGuitarTabToolSchema() {
           },
           profileId: {
             type: "string",
-            enum: ["guitar-classic", "guitar-acoustic", "standard-six-string"],
+            enum: ["guitar-classic", "standard-six-string"],
             description: "Physical guitar profile used for fret range and left-hand validation.",
           },
           voicingProfileId: {
@@ -453,12 +453,15 @@ export function buildValidGuitarTabToolSchema() {
           },
           events: {
             type: "array",
-            description: "Concrete guitar tab events to validate. Events that share measureIndex + beat + subdivision or simultaneousGroupId are treated as simultaneous; each event must use one string and octave-bearing note labels.",
+            description: "Compact guitar tab events: m=measure, b=beat, sid=source id, n=pitch, s=string, f=fret, r=role. Events sharing m + b + sd or gid are simultaneous.",
             items: {
               type: "object",
               additionalProperties: false,
-              properties: buildGuitarTabEventSchemaProperties(),
-              required: ["measureIndex", "beat", "note", "string", "fret", "role"],
+              properties: {
+                m: { type: "number" }, b: { type: "number" }, sd: { type: ["string", "number"] }, gid: { type: "string" }, sid: { type: "string" },
+                n: { type: "string" }, s: { type: "integer", enum: [1, 2, 3, 4, 5, 6] }, f: { type: "number" }, r: { type: "string" },
+              },
+              required: ["m", "b", "sid", "n", "s", "f", "r"],
             },
           },
         },

@@ -94,7 +94,6 @@ export default function PracticeViewer({ initialAbc, metadata }: PracticeViewerP
     workflow: ws.accompanimentWorkflow,
     generatedAccompaniment: ws.generatedAccompaniment,
     generatedGuitar: ws.generatedGuitar,
-    generatedPiano: ws.generatedPiano,
     harmonyLayerVisibility: DEFAULT_HARMONY_LAYER_VISIBILITY,
     harmonyLayerVolumes: DEFAULT_LAYER_VOLUMES,
     accompanimentLayerVisibility: layerVisibility,
@@ -104,7 +103,6 @@ export default function PracticeViewer({ initialAbc, metadata }: PracticeViewerP
     ws.accompanimentWorkflow,
     ws.generatedAccompaniment,
     ws.generatedGuitar,
-    ws.generatedPiano,
     layerVisibility,
     layerVolumes,
   ]);

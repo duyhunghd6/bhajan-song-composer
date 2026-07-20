@@ -12,6 +12,7 @@ import {
 import { buildAccompanimentAbc } from "@/lib/theory/accompaniment-abc";
 import {
   buildAccompanimentWorkflowAbcAnnotation,
+  getHarmonyValidationAbc,
   getLatestSelectedWorkflowStep,
   getSelectedWorkflowOption,
   getWorkflowAppliedMusicAbc,
@@ -56,6 +57,7 @@ export interface ArrangementPreviewModel {
   pipeline: ArrangementPipelineResult | null;
   activeWorkflow: AccompanimentWorkflowSession | null;
   workflowAppliedMusicAbc: string;
+  harmonyValidationAbc: string | null;
   harmony: HarmonyPreviewModel;
   accompaniment: AccompanimentPreviewModel;
   getRenderOptionsFor: (abc: string, baseOptions: ComposerPreviewRenderOptions) => Record<string, unknown>;
@@ -66,7 +68,6 @@ export interface BuildArrangementPreviewModelInput {
   workflow: AccompanimentWorkflowSession | null;
   generatedAccompaniment: string | null;
   generatedGuitar: string | null;
-  generatedPiano: string | null;
   harmonyLayerVisibility: HarmonyLayerVisibility;
   harmonyLayerVolumes: Record<string, number>;
   accompanimentLayerVisibility: AccompanimentLayerVisibility;
@@ -182,24 +183,23 @@ export function buildArrangementPreviewModel(input: BuildArrangementPreviewModel
     strongBeatsStepComplete
   );
   const workflowAppliedMusicAbc = getWorkflowAppliedMusicAbc(activeWorkflow, input.activeAbc);
-  const workflowAppliedPipeline = generatePipelineSafely(workflowAppliedMusicAbc, pipeline);
+  const harmonyValidationAbc = getHarmonyValidationAbc(activeWorkflow);
+  const branchSourceAbc = harmonyValidationAbc ?? input.activeAbc;
+  const workflowAppliedPipeline = generatePipelineSafely(branchSourceAbc, pipeline);
   const strongBeatDirectives = activeWorkflow
     ? (getSelectedWorkflowOption(activeWorkflow, "key-beats")?.data?.strongBeatDirectives as StrongBeatDirective[] | undefined)
     : undefined;
-  const accompanimentSupportLayers = generateAccompanimentSupportLayers(workflowAppliedMusicAbc, {
-    accompaniment: workflowAppliedPipeline?.accompaniment ?? null,
-    workflow: activeWorkflow,
-  });
-  const accompanimentSupportSources = [
-    accompanimentSupportLayers.djembe,
-    accompanimentSupportLayers.flute,
-    accompanimentSupportLayers.violin,
-  ];
+  const accompanimentSupportLayers = harmonyValidationAbc
+    ? generateAccompanimentSupportLayers(branchSourceAbc, {
+      accompaniment: workflowAppliedPipeline?.accompaniment ?? null,
+      workflow: activeWorkflow,
+    })
+    : { djembe: null };
+  const accompanimentSupportSources = [accompanimentSupportLayers.djembe];
   const accompanimentBuild = buildAccompanimentAbc({
-    baseAbc: workflowAppliedMusicAbc,
-    generatedAccompaniment: input.generatedAccompaniment,
-    generatedGuitar: input.generatedGuitar,
-    generatedPiano: input.generatedPiano,
+    baseAbc: branchSourceAbc,
+    generatedAccompaniment: harmonyValidationAbc ? input.generatedAccompaniment : null,
+    generatedGuitar: harmonyValidationAbc ? input.generatedGuitar : null,
     extraVoiceSources: accompanimentSupportSources,
     layerVisibility: {
       __melody__: true,
@@ -231,6 +231,7 @@ export function buildArrangementPreviewModel(input: BuildArrangementPreviewModel
     pipeline,
     activeWorkflow,
     workflowAppliedMusicAbc,
+    harmonyValidationAbc,
     harmony: {
       abc: applyAbcLayerVisibility(rawHarmonyAbc, harmonyVisibility),
       rawAbc: rawHarmonyAbc,

@@ -112,6 +112,50 @@ V:Guitar clef=treble-8 name="Fingerstyle Tablature"
 [V:Guitar] | [BGE,] e G B4 B |`);
   });
 
+  it("removes inert closed grace groups before Guitar TAB preparation without touching valid graces or repeats", () => {
+    const input = `X:1
+T:Ganesha Guitar Profile
+M:4/4
+L:1/8
+K:Em
+V:Melody name="Melody"
+V:Guitar clef=treble-8 name="Guitar"
+[V:Melody] |: E {} F { } G {~} A {z} B {a} c {/g} d {^f} e |[1 B4 :|[2 E4 |
+[V:Guitar] |: !1!e {} !2!f { } !3!g {~} !1!a {z} !2!B {a} !1!c {/g} !2!d {^f} !1!e |[1 !2!B4 :|[2 !1!e4 |`;
+
+    const tabResult = prepareAbcjsRenderInput({ abcString: input, tablatureEnabled: true });
+    const staffResult = prepareAbcjsRenderInput({ abcString: input, tablatureEnabled: false });
+
+    for (const inertGrace of ["{}", "{ }", "{~}", "{z}"]) {
+      expect(tabResult).not.toContain(inertGrace);
+      expect(staffResult).not.toContain(inertGrace);
+    }
+    for (const validGrace of ["{a}", "{/g}", "{^f}"]) {
+      expect(tabResult).toContain(validGrace);
+      expect(staffResult).toContain(validGrace);
+    }
+    expect(tabResult).toContain("|:");
+    expect(tabResult).toContain("|[1");
+    expect(tabResult).toContain(":|[2");
+    expect(tabResult).toContain("[!1!e]");
+    expect(staffResult).toContain("|: e");
+    expect(staffResult).toContain("|[1 B4 :|[2 e4 |");
+  });
+
+  it("leaves quoted, commented, and unclosed braces for their original ABC contexts", () => {
+    const input = `X:1
+T:Ganesha {~}
+M:4/4
+L:1/8
+K:Em
+[V:Melody] "{~}"E {c % {~}`;
+
+    const result = prepareAbcjsRenderInput({ abcString: input });
+
+    expect(result).toContain('T:Ganesha {~}');
+    expect(result).toContain('"{~}"E {c % {~}');
+  });
+
   it("passes the prepared Ganesha ABC unchanged to the abcjs render boundary", () => {
     const renderAbc = vi.fn(() => []);
     const options = { tablature: [{ instrument: "guitar" }] };

@@ -1,8 +1,6 @@
 import { type Dispatch, type SetStateAction } from "react";
 import AbcjsPlaybackController from "@/components/music-sheet/AbcjsPlaybackController";
 import type { ArrangementPipelineResult } from "@/lib/theory/arrangement-pipeline";
-import { generatePianoAccompaniment } from "@/lib/theory/piano-accompaniment";
-import type { PianoCompingProfileId } from "@/lib/theory/piano-comping-profiles";
 import type { WorkspaceState } from "../useWorkspaceState";
 import type { AccompanimentPreviewModel, ComposerPreviewRenderOptions } from "./arrangement-preview-model";
 import { LayerVisibilityControls } from "./LayerVisibilityControls";
@@ -16,6 +14,7 @@ import {
 
 interface AccompanimentStepProps {
   activeAbc: string;
+  branchSourceAbc: string | null;
   hasMounted: boolean;
   pipeline: ArrangementPipelineResult | null;
   workflowAppliedMusicAbc: string;
@@ -33,6 +32,7 @@ interface AccompanimentStepProps {
 
 export function AccompanimentStep({
   activeAbc,
+  branchSourceAbc,
   hasMounted,
   pipeline,
   workflowAppliedMusicAbc,
@@ -79,9 +79,21 @@ export function AccompanimentStep({
                 </div>
 
 
+                {!branchSourceAbc && (
+                  <section className="mb-4 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900/60">
+                    <h3 className="mb-2 text-sm font-semibold text-zinc-900 dark:text-zinc-100">Original melody reference</h3>
+                    <AbcjsPlaybackController
+                      abcString={activeAbc}
+                      title="Original Melody Reference"
+                      canvasId="composer-accompaniment-prerequisite"
+                      renderOptions={ACCOMPANIMENT_PREVIEW_RENDER_OPTIONS}
+                    />
+                  </section>
+                )}
                 <AccompanimentWorkflowWizard
                   mode="accompaniment"
                   sourceAbc={activeAbc}
+                  branchSourceAbc={branchSourceAbc}
                   metadata={{
                     key: pipeline?.harmonization.key ?? "Unknown",
                     scale: pipeline?.harmonization.scale ?? "Unknown",
@@ -116,27 +128,6 @@ export function AccompanimentStep({
                     });
                     updateState({ generatedGuitar: integration.composerLayer.abc, guitarAccompanimentData: integration });
                     setAccompLayerVisibility((prev) => ({ ...prev, TAB: true }));
-                  }}
-                  onPianoProfileSelected={(profile) => {
-                    if (profile === null) {
-                      updateState({
-                        generatedPiano: null,
-                        pianoAccompanimentData: null,
-                        selectedPianoIndex: null,
-                        aiPianoSuggestions: [],
-                        ensembleWorkflow: null,
-                        stagedEnsembleLayers: null,
-                        appliedEnsembleLayers: null,
-                      });
-                      return;
-                    }
-
-                    const pianoStyles: PianoCompingProfileId[] = ["pop-ballad", "rock-rnb", "classical-folk"];
-                    const compingProfile = pianoStyles.includes(profile as PianoCompingProfileId)
-                      ? profile as PianoCompingProfileId
-                      : "pop-ballad";
-                    const accompaniment = generatePianoAccompaniment(workflowAppliedMusicAbc, { compingProfile });
-                    updateState({ generatedPiano: accompaniment.abc, pianoAccompanimentData: accompaniment });
                   }}
                 />
               </section>
@@ -187,7 +178,7 @@ export function AccompanimentStep({
           )}
         />
 
-        {ws.generatedAccompaniment && !ws.pianoAccompanimentData && !ws.guitarAccompanimentData && (
+        {ws.generatedAccompaniment && !ws.guitarAccompanimentData && (
           <section className="w-full rounded-2xl border border-amber-200 bg-amber-50 p-6 dark:border-amber-900/70 dark:bg-amber-950/30">
             <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">Playability Validation Report</h2>
             <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">⚠️ Max span exceeded in m.4. Converted to arpeggio when required.</p>

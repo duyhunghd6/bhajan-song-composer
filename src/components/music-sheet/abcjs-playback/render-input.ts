@@ -13,6 +13,58 @@ interface PrepareAbcjsRenderInputOptions {
   tablatureEnabled?: boolean;
 }
 
+function isMusicLine(line: string): boolean {
+  const trimmed = line.trimStart();
+  return !trimmed.startsWith("%") && !/^[A-Z]:/.test(trimmed) && !trimmed.startsWith("w:");
+}
+
+function containsGracePitch(content: string): boolean {
+  return /\/?[_^=]{0,2}[A-Ga-g][,']*/.test(content);
+}
+
+/**
+ * ABCJS tablature assumes every closed grace group produced at least one grace
+ * note. Discard inert groups such as `{}` and `{~}` at the render boundary,
+ * while leaving valid and incomplete source notation untouched for abcjs to
+ * report normally.
+ */
+function stripInertGraceGroups(line: string): string {
+  if (!isMusicLine(line) || !line.includes("{")) return line;
+
+  let result = "";
+  let inQuote = false;
+
+  for (let index = 0; index < line.length; index += 1) {
+    const character = line[index];
+    if (character === '"') {
+      inQuote = !inQuote;
+      result += character;
+      continue;
+    }
+    if (!inQuote && character === "%") {
+      result += line.slice(index);
+      break;
+    }
+    if (!inQuote && character === "{") {
+      const closingIndex = line.indexOf("}", index + 1);
+      if (closingIndex !== -1) {
+        const content = line.slice(index + 1, closingIndex);
+        if (!containsGracePitch(content)) {
+          index = closingIndex;
+          continue;
+        }
+      }
+    }
+    result += character;
+  }
+
+  return result;
+}
+
+function sanitizeInertGraceGroupsForAbcjs(abc: string): string {
+  return abc.split("\n").map(stripInertGraceGroups).join("\n");
+}
+
 /**
  * Build the exact ABC string passed to the abcjs render boundary.
  */
@@ -43,6 +95,8 @@ export function prepareAbcjsRenderInput({
       })
       .join("\n");
   }
+
+  result = sanitizeInertGraceGroupsForAbcjs(result);
 
   return tablatureEnabled
     ? prepareGuitarStringForcingForAbcjs(ensureGuitarStringForcing(result))

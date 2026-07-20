@@ -156,7 +156,7 @@ describe("time-slice ABC interval renderer", () => {
       true,
     );
 
-    expect(rendered).toBe("!1!e/2 z7/2");
+    expect(rendered).toBe("!1!e'/2 z7/2");
   });
 
   it("splits and ties a held melody around a fill without shortening or retriggering it", () => {
@@ -167,9 +167,9 @@ describe("time-slice ABC interval renderer", () => {
       true,
     );
 
-    expect(rendered).toBe("!1!e- [!1!e!3!G] z2");
-    expect(rendered).toContain("!1!e-");
-    expect(rendered).toContain("[!1!e!3!G]");
+    expect(rendered).toBe("!1!e'- [!1!e'!3!g] z2");
+    expect(rendered).toContain("!1!e'-");
+    expect(rendered).toContain("[!1!e'!3!g]");
   });
 
   it("keeps source melody rhythm when bass starts with a melody attack", () => {
@@ -180,8 +180,8 @@ describe("time-slice ABC interval renderer", () => {
       true,
     );
 
-    expect(rendered).toBe("!1!e !1!e2 !1!f [!1!g!6!E,] !1!f !1!e !2!B");
-    expect(rendered).not.toContain("[!1!g!6!E,]/2 !1!g/2");
+    expect(rendered).toBe("!1!e' !1!e'2 !1!f' [!1!g'!6!E] !1!f' !1!e' !2!b");
+    expect(rendered).not.toContain("[!1!g'!6!E]/2 !1!g'/2");
   });
 
   it("honors an explicit melody duration before source sustain fallback", () => {
@@ -194,8 +194,8 @@ describe("time-slice ABC interval renderer", () => {
       true,
     );
 
-    expect(rendered).toContain("!1!e/2");
-    expect(rendered).not.toContain("!1!e-");
+    expect(rendered).toContain("!1!e'/2");
+    expect(rendered).not.toContain("!1!e'-");
   });
 
   it("renders durationless non-melody attacks for one step", () => {
@@ -206,9 +206,9 @@ describe("time-slice ABC interval renderer", () => {
       true,
     );
 
-    expect(rendered).toBe("!6!E,/2 z/2 !1!e/2 z/2 !6!F,/2 z3/2");
-    expect(rendered).not.toContain("!6!E,-");
-    expect(rendered).not.toContain("[!1!e!6!E,]");
+    expect(rendered).toBe("!6!E/2 z/2 !1!e'/2 z/2 !6!F/2 z3/2");
+    expect(rendered).not.toContain("!6!E-");
+    expect(rendered).not.toContain("[!1!e'!6!E]");
   });
 
   it("renders adjacent equal-pitch fills as separate untied attacks", () => {
@@ -219,8 +219,8 @@ describe("time-slice ABC interval renderer", () => {
       true,
     );
 
-    expect(rendered).toBe("z3/2 !3!G9/2 !3!G z");
-    expect(rendered).not.toContain("!3!G-");
+    expect(rendered).toBe("z3/2 !3!g9/2 !3!g z");
+    expect(rendered).not.toContain("!3!g-");
   });
 
   it("renders an explicit source-Melody cross-bar tie only for matching physical strings", () => {
@@ -252,8 +252,8 @@ describe("time-slice ABC interval renderer", () => {
       true,
     );
 
-    expect(renderedFirst).toContain("!2!B-");
-    expect(renderedSecond.startsWith("!2!B8")).toBe(true);
+    expect(renderedFirst).toContain("!2!b-");
+    expect(renderedSecond.startsWith("!2!b8")).toBe(true);
   });
 
   it("preserves explicit fill duration provenance on the source measure", () => {
@@ -297,7 +297,7 @@ describe("time-slice ABC interval renderer", () => {
       buildAbcDurationContext(ABC),
       getKeyAccidentalsFromAbc(ABC),
       true,
-    )).toBe("!1!e3- !1!e2 z3");
+    )).toBe("!1!e'3- !1!e'2 z3");
   });
 
   it("does NOT produce a cross-measure tie when the next measure's first step is an attack on the same pitch", () => {

@@ -53,7 +53,7 @@ export const FINGERSTYLE_TOOL_LOOP_CONTEXT_BUDGET: Required<ToolLoopContextBudge
   maxMessages: 80,
   maxTranscriptBytes: 220_000,
   maxToolCallsPerTurn: 6,
-  maxToolResultBytes: 28_000,
+  maxToolResultBytes: 64_000,
 };
 
 export interface ToolLoopValidationResult {
