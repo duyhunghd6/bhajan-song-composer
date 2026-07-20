@@ -94,6 +94,8 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
     workflow: ws.accompanimentWorkflow,
     generatedAccompaniment: ws.generatedAccompaniment,
     generatedGuitar: ws.generatedGuitar,
+    generatedGuitarOrigin: ws.generatedGuitarOrigin,
+    previewPurpose: step === "accompaniment" ? "accompaniment" : "final",
     harmonyLayerVisibility: layerVisibility,
     harmonyLayerVolumes: layerVolumes,
     accompanimentLayerVisibility: accompLayerVisibility,
@@ -103,6 +105,8 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
     ws.accompanimentWorkflow,
     ws.generatedAccompaniment,
     ws.generatedGuitar,
+    ws.generatedGuitarOrigin,
+    step,
     layerVisibility,
     layerVolumes,
     accompLayerVisibility,
@@ -145,11 +149,6 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
 
   const handleResetGuitarBranchWork = useCallback(() => {
     updateState(buildAccompanimentGuitarBranchResetState(ws));
-    try {
-      window.localStorage.removeItem(getComposerFingerstyleMeasuresStorageKey(slug));
-    } catch (e) {
-      console.error("Failed to clear saved fingerstyle measures", e);
-    }
     setAccompLayerVisibility((current) => ({
       ...current,
       TAB: false,

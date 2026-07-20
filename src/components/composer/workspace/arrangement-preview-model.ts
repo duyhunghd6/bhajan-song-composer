@@ -25,6 +25,7 @@ import { generateAccompanimentSupportLayers } from "@/lib/theory/accompaniment-w
 import { generateArrangementPipeline, type ArrangementPipelineResult } from "@/lib/theory/arrangement-pipeline";
 import type { StrongBeatDirective } from "@/lib/theory/abc-beat-annotations";
 import { normalizeAbcVoiceId } from "@/lib/theory/abc-voice-normalization";
+import type { GeneratedGuitarOrigin } from "../useWorkspaceState";
 import type { ACCOMPANIMENT_PREVIEW_RENDER_OPTIONS, COMPOSER_PREVIEW_RENDER_OPTIONS } from "./preview";
 
 export type HarmonyLayerVisibility = Record<string, boolean>;
@@ -68,6 +69,8 @@ export interface BuildArrangementPreviewModelInput {
   workflow: AccompanimentWorkflowSession | null;
   generatedAccompaniment: string | null;
   generatedGuitar: string | null;
+  generatedGuitarOrigin: GeneratedGuitarOrigin;
+  previewPurpose: "accompaniment" | "final";
   harmonyLayerVisibility: HarmonyLayerVisibility;
   harmonyLayerVolumes: Record<string, number>;
   accompanimentLayerVisibility: AccompanimentLayerVisibility;
@@ -184,6 +187,12 @@ export function buildArrangementPreviewModel(input: BuildArrangementPreviewModel
   );
   const workflowAppliedMusicAbc = getWorkflowAppliedMusicAbc(activeWorkflow, input.activeAbc);
   const harmonyValidationAbc = getHarmonyValidationAbc(activeWorkflow);
+  const harmonyStepComplete = Boolean(
+    activeWorkflow && isAccompanimentWorkflowStepComplete(activeWorkflow, "voice-leading-validation")
+  );
+  const harmonyDisplayAbc = harmonyStepComplete && harmonyValidationAbc
+    ? harmonyValidationAbc
+    : input.activeAbc;
   const branchSourceAbc = harmonyValidationAbc ?? input.activeAbc;
   const workflowAppliedPipeline = generatePipelineSafely(branchSourceAbc, pipeline);
   const strongBeatDirectives = activeWorkflow
@@ -196,10 +205,13 @@ export function buildArrangementPreviewModel(input: BuildArrangementPreviewModel
     })
     : { djembe: null };
   const accompanimentSupportSources = [accompanimentSupportLayers.djembe];
+  const eligibleGeneratedGuitar = input.previewPurpose === "accompaniment"
+    ? input.generatedGuitarOrigin === "accompaniment-workflow" ? input.generatedGuitar : null
+    : input.generatedGuitar;
   const accompanimentBuild = buildAccompanimentAbc({
     baseAbc: branchSourceAbc,
     generatedAccompaniment: harmonyValidationAbc ? input.generatedAccompaniment : null,
-    generatedGuitar: harmonyValidationAbc ? input.generatedGuitar : null,
+    generatedGuitar: harmonyValidationAbc ? eligibleGeneratedGuitar : null,
     extraVoiceSources: accompanimentSupportSources,
     layerVisibility: {
       __melody__: true,
@@ -218,7 +230,7 @@ export function buildArrangementPreviewModel(input: BuildArrangementPreviewModel
   const guitarTabEnabled = Boolean(
     hasGuitarVoice && isAbcLayerVisible(ABC_LAYER_IDS.tab, effectiveLayerVisibility, false)
   );
-  const rawHarmonyAbc = applyAbcLayerVolumes(workflowAppliedMusicAbc, input.harmonyLayerVolumes);
+  const rawHarmonyAbc = applyAbcLayerVolumes(harmonyDisplayAbc, input.harmonyLayerVolumes);
   const harmonyLayerVisibilityItems = extractAbcLayerVisibilityItems(rawHarmonyAbc, {
     tabEnabled: getVisibleAbcVoiceIds(rawHarmonyAbc, harmonyVisibility).includes("Guitar"),
   });
@@ -237,9 +249,7 @@ export function buildArrangementPreviewModel(input: BuildArrangementPreviewModel
       rawAbc: rawHarmonyAbc,
       layerVisibilityItems: harmonyLayerVisibilityItems,
       synthOptions: buildArrangementSynthOptions(harmonyVisibility),
-      harmonyStepComplete: Boolean(
-        activeWorkflow && isAccompanimentWorkflowStepComplete(activeWorkflow, "voice-leading-validation")
-      ),
+      harmonyStepComplete,
     },
     accompaniment: {
       abc: applyAbcLayerVisibility(rawAccompanimentAbc, effectiveLayerVisibility),

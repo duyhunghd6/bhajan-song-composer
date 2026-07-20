@@ -39,6 +39,7 @@ export function buildHarmonyValidationBranchResetState(state: WorkspaceState): P
     generatedAccompaniment: null,
     guitarAccompanimentData: null,
     generatedGuitar: null,
+    generatedGuitarOrigin: null,
     aiGuitarSuggestions: [],
     selectedGuitarIndex: null,
     accompanimentWorkflow: clearedWorkflow,
@@ -62,6 +63,7 @@ export function buildAccompanimentGuitarBranchResetState(state: WorkspaceState):
   return {
     guitarAccompanimentData: null,
     generatedGuitar: null,
+    generatedGuitarOrigin: null,
     aiGuitarSuggestions: [],
     selectedGuitarIndex: null,
     accompanimentWorkflow: clearedWorkflow,

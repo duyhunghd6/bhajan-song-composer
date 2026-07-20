@@ -9,6 +9,7 @@ import AccompanimentWorkflowWizard from "../AccompanimentWorkflowWizard";
 import type { AccompanimentWorkflowOption } from "@/lib/theory/accompaniment-workflow";
 import {
   ACCOMPANIMENT_PREVIEW_RENDER_OPTIONS,
+  COMPOSER_STAFF_PLAYBACK_PROPS,
   ComposerNotationPreviewLayout,
 } from "./preview";
 
@@ -108,6 +109,7 @@ export function AccompanimentStep({
                     if (profile === null) {
                       updateState({
                         generatedGuitar: null,
+                        generatedGuitarOrigin: null,
                         guitarAccompanimentData: null,
                         selectedGuitarIndex: null,
                         aiGuitarSuggestions: [],
@@ -126,7 +128,11 @@ export function AccompanimentStep({
                       pickingProfile,
                       workflowOptionData: option?.data,
                     });
-                    updateState({ generatedGuitar: integration.composerLayer.abc, guitarAccompanimentData: integration });
+                    updateState({
+                      generatedGuitar: integration.composerLayer.abc,
+                      generatedGuitarOrigin: "accompaniment-workflow",
+                      guitarAccompanimentData: integration,
+                    });
                     setAccompLayerVisibility((prev) => ({ ...prev, TAB: true }));
                   }}
                 />
@@ -158,8 +164,7 @@ export function AccompanimentStep({
                 abcString={accompanimentAbc}
                 title={appliedWorkflowStep ? `Resulting ABC Staff Preview: Step ${appliedWorkflowStep.label}` : "Accompaniment Music Sheet"}
                 canvasId="composer-accompaniment-preview"
-                minWidthClassName="min-w-[520px]"
-                sheetViewportClassName="max-h-[min(76vh,860px)] overflow-auto p-4"
+                {...COMPOSER_STAFF_PLAYBACK_PROPS}
                 renderOptions={getRenderOptionsFor(accompanimentAbc, ACCOMPANIMENT_PREVIEW_RENDER_OPTIONS)}
               />
               {appliedWorkflowStep && (

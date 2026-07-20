@@ -658,7 +658,7 @@ export default function AbcjsPlaybackController({
               onClick={handleCopyExactRenderAbc}
               className="rounded bg-zinc-800 px-2 py-1 text-[10px] font-semibold text-zinc-300 transition hover:text-white"
             >
-              {exactRenderCopyStatus === "copied" ? "Copied exact render ABC" : "Copy exact render ABC"}
+              {exactRenderCopyStatus === "copied" ? "Copied ABCJS ABC" : "Copy ABCJS ABC"}
             </button>
           )}
         </div>

@@ -251,6 +251,7 @@ function pruneLevel3(state: WorkspaceState): WorkspaceState {
 
   // Drop generated ABC strings (regenerable from workflow)
   result.generatedGuitar = null;
+  result.generatedGuitarOrigin = null;
   result.generatedAccompaniment = null;
 
   // Drop applied ensemble layers

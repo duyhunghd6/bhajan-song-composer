@@ -91,6 +91,8 @@ function buildModel(overrides: Partial<Parameters<typeof buildArrangementPreview
     workflow: validatedWorkflow,
     generatedAccompaniment: null,
     generatedGuitar: null,
+    generatedGuitarOrigin: overrides.generatedGuitar ? "accompaniment-workflow" : null,
+    previewPurpose: "accompaniment",
     harmonyLayerVisibility: { melody: true, harmony: true },
     harmonyLayerVolumes: { Melody: 100, ChordProgression: 100 },
     accompanimentLayerVisibility: {
@@ -128,7 +130,7 @@ describe("arrangement preview model", () => {
     expect(model.harmony.abc).not.toContain("C2 D2");
   });
 
-  it("uses workflow-applied ABC from selected chord progression options", () => {
+  it("keeps Harmony on the source melody until validation completes", () => {
     const workflow = selectWorkflowStep(
       createAccompanimentWorkflowSession(sampleAbc),
       "chord-roles-progression",
@@ -139,8 +141,9 @@ describe("arrangement preview model", () => {
 
     expect(model.activeWorkflow).toBe(workflow);
     expect(model.workflowAppliedMusicAbc).toBe(harmonizedAbc);
-    expect(model.harmony.rawAbc).toContain("%%MIDI program 52");
-    expect(model.harmony.rawAbc).toContain(harmonizedAbc.split("\n").at(-1));
+    expect(model.harmony.harmonyStepComplete).toBe(false);
+    expect(model.harmony.rawAbc).toContain(sampleAbc.split("\n").at(-1));
+    expect(model.harmony.rawAbc).not.toContain('"C"C2');
     expect(model.harmony.layerVisibilityItems.map((item) => item.id)).toEqual([
       "ChordProgression",
       "Lyrics",
@@ -170,6 +173,9 @@ describe("arrangement preview model", () => {
     });
 
     expect(model.harmonyValidationAbc).toBe(validatedAbc);
+    expect(model.harmony.harmonyStepComplete).toBe(true);
+    expect(model.harmony.rawAbc).toContain("T:Validated Only");
+    expect(model.harmony.rawAbc).not.toContain("T:Progression Only");
     expect(model.accompaniment.rawAbc).toContain("T:Validated Only");
     expect(model.accompaniment.rawAbc).not.toContain("T:Progression Only");
     expect(model.accompaniment.rawAbc).toContain("V:Harmonium");
@@ -227,7 +233,19 @@ describe("arrangement preview model", () => {
     expect(model.accompaniment.guitarTabEnabled).toBe(true);
   });
 
-  it("keeps fingerstyle guitar as one tab-enabled voice grouped under each Melody staff system", () => {
+  it("excludes legacy unowned guitar ABC from Accompaniment", () => {
+    const model = buildModel({
+      generatedGuitar: guitarAbc,
+      generatedGuitarOrigin: null,
+      accompanimentLayerVisibility: { __melody__: true, __guitar_tab__: true },
+    });
+
+    expect(model.accompaniment.rawAbc).not.toContain("V:Guitar");
+    expect(model.accompaniment.hasGuitarVoice).toBe(false);
+    expect(model.accompaniment.guitarTabEnabled).toBe(false);
+  });
+
+  it("excludes Fingerstyle guitar from Accompaniment while preserving it for final previews", () => {
     const fingerstyleGuitarAbc = `X:1
 T:Fingerstyle Layer
 M:4/4
@@ -237,9 +255,20 @@ V:Guitar clef=treble-8 name="Layer 2 Guitar Fingerstyle"
 %%MIDI program 24
 % @fingerstyle-section body
 | [C,C]2 D2 [G,E]2 F2 | [G,G]4 [D,G]4 |`;
-
-    const model = buildModel({
+    const accompanimentModel = buildModel({
       generatedGuitar: fingerstyleGuitarAbc,
+      generatedGuitarOrigin: "fingerstyle-timegrid",
+      accompanimentLayerVisibility: {
+        __melody__: true,
+        __strong_beats__: false,
+        __chords__: false,
+        __guitar_tab__: true,
+      },
+    });
+    const finalModel = buildModel({
+      generatedGuitar: fingerstyleGuitarAbc,
+      generatedGuitarOrigin: "fingerstyle-timegrid",
+      previewPurpose: "final",
       accompanimentLayerVisibility: {
         __melody__: true,
         __strong_beats__: false,
@@ -248,13 +277,15 @@ V:Guitar clef=treble-8 name="Layer 2 Guitar Fingerstyle"
       },
     });
 
-    expect(model.accompaniment.rawAbc).toContain('V:Guitar clef=treble-8 name="Guitar" stem=down');
-    expect(model.accompaniment.rawAbc).toContain("% Staff system 1: Melody and visible instruments share this measure range.");
-    expect(model.accompaniment.rawAbc).toContain("[V:Melody] | C2 D2 E2 F2 | G4 G4 |");
-    expect(model.accompaniment.rawAbc).toContain("[V:Guitar] | [C,C]2 D2 [G,E]2 F2 | [G,G]4 [D,G]4 |");
-    expect(model.accompaniment.voiceNames).toContain("Guitar");
-    expect(model.accompaniment.visibleVoiceNames).toContain("Guitar");
-    expect(model.accompaniment.guitarTabEnabled).toBe(true);
+    expect(accompanimentModel.accompaniment.rawAbc).not.toContain("V:Guitar");
+    expect(accompanimentModel.accompaniment.hasGuitarVoice).toBe(false);
+    expect(accompanimentModel.accompaniment.guitarTabEnabled).toBe(false);
+
+    expect(finalModel.accompaniment.rawAbc).toContain('V:Guitar clef=treble-8 name="Guitar" stem=down');
+    expect(finalModel.accompaniment.rawAbc).toContain("% Staff system 1: Melody and visible instruments share this measure range.");
+    expect(finalModel.accompaniment.rawAbc).toContain("[V:Guitar] | [C,C]2 D2 [G,E]2 F2 | [G,G]4 [D,G]4 |");
+    expect(finalModel.accompaniment.visibleVoiceNames).toContain("Guitar");
+    expect(finalModel.accompaniment.guitarTabEnabled).toBe(true);
   });
 
   it("applies Melody singer program and per-layer volume directives to preview ABC", () => {
@@ -318,6 +349,22 @@ V:Guitar clef=treble-8 name="Layer 2 Guitar Fingerstyle"
         __guitar_tab__: true,
       },
     });
+    const stepFiveWorkflow = selectWorkflowStep(
+      workflow,
+      "guitar-voicing-bass",
+      makeOption("voiced-fingerstyle", { voicingPlan: "open-position" })
+    );
+    const stepFiveGuitarAbc = guitarAbc.replace("C2 G2 E2 G2 | C2 G2 E2 G2", "D2 A2 F2 A2 | D2 A2 F2 A2");
+    const stepFiveResult = buildModel({
+      workflow: stepFiveWorkflow,
+      generatedGuitar: stepFiveGuitarAbc,
+      accompanimentLayerVisibility: {
+        __melody__: true,
+        __strong_beats__: false,
+        __chords__: false,
+        __guitar_tab__: true,
+      },
+    });
     const clearedWorkflow = clearAccompanimentWorkflowStepResults(
       workflow,
       ACCOMPANIMENT_WORKFLOW_BRANCH_STEP_IDS.guitar
@@ -334,8 +381,12 @@ V:Guitar clef=treble-8 name="Layer 2 Guitar Fingerstyle"
     });
 
     expect(beforeReset.workflowAppliedMusicAbc).toBe(harmonizedAbc);
+    expect(beforeReset.accompaniment.appliedWorkflowStep?.id).toBe("guitar-comping-profile");
     expect(beforeReset.accompaniment.abc).toContain("V:Guitar");
     expect(beforeReset.accompaniment.guitarTabEnabled).toBe(true);
+
+    expect(stepFiveResult.accompaniment.appliedWorkflowStep?.id).toBe("guitar-voicing-bass");
+    expect(stepFiveResult.accompaniment.rawAbc).toContain("[V:Guitar] | D2 A2 F2 A2 | D2 A2 F2 A2 |");
 
     expect(afterReset.workflowAppliedMusicAbc).toBe(harmonizedAbc);
     expect(afterReset.accompaniment.abc).not.toContain("V:Guitar");

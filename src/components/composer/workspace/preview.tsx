@@ -28,9 +28,16 @@ export const ACCOMPANIMENT_PREVIEW_RENDER_OPTIONS = {
   paddingright: 16,
 };
 
+export const COMPOSER_STAFF_PLAYBACK_PROPS = {
+  minWidthClassName: "min-w-[520px]",
+  sheetViewportClassName: "max-h-[800px] overflow-auto",
+  useContainerWidth: true,
+  hideVoiceNames: true,
+  showExactRenderAbcCopy: true,
+};
+
 export const COMPOSER_PREVIEW_PROPS = {
-  minWidthClassName: "min-w-[520px] max-w-[760px]",
-  sheetViewportClassName: "max-h-[min(72vh,780px)] overflow-auto p-4",
+  ...COMPOSER_STAFF_PLAYBACK_PROPS,
   renderOptions: COMPOSER_PREVIEW_RENDER_OPTIONS,
 };
 

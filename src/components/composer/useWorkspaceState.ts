@@ -58,6 +58,8 @@ export const DEFAULT_FINGERSTYLE_GENERATION_SETTINGS: FingerstyleGenerationSetti
   densityMode: "auto",
 };
 
+export type GeneratedGuitarOrigin = "accompaniment-workflow" | "fingerstyle-timegrid" | null;
+
 export interface WorkspaceState {
   aiSuggestions: HarmonizationOption[];
   selectedCandidateId: string | null;
@@ -69,6 +71,7 @@ export interface WorkspaceState {
   aiGuitarSuggestions: AccompanimentOption[];
   selectedGuitarIndex: number | null;
   generatedGuitar: string | null;
+  generatedGuitarOrigin: GeneratedGuitarOrigin;
   accompanimentWorkflowSetup: AccompanimentWorkflowSetup | null;
   accompanimentWorkflow: AccompanimentWorkflowSession | null;
   ensembleWorkflow: EnsembleWorkflowSession | null;
@@ -90,6 +93,7 @@ export const DEFAULT_WORKSPACE_STATE: WorkspaceState = {
   aiGuitarSuggestions: [],
   selectedGuitarIndex: null,
   generatedGuitar: null,
+  generatedGuitarOrigin: null,
   accompanimentWorkflowSetup: null,
   accompanimentWorkflow: null,
   ensembleWorkflow: null,

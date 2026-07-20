@@ -154,7 +154,9 @@ export function GuitarFingerstyleStep({
         serializeFingerstyleMeasures(measures, sourceFingerprint, lineGenerationRunsByLine),
       );
       const generatedGuitar = buildGeneratedGuitarAbc(measures, workflowAppliedMusicAbc);
-      if (ws.generatedGuitar !== generatedGuitar) updateState({ generatedGuitar });
+      if (ws.generatedGuitar !== generatedGuitar || ws.generatedGuitarOrigin !== "fingerstyle-timegrid") {
+        updateState({ generatedGuitar, generatedGuitarOrigin: "fingerstyle-timegrid" });
+      }
     } catch (e) {
       console.error("Failed to sync generated guitar to workspace state", e);
     }
@@ -167,6 +169,7 @@ export function GuitarFingerstyleStep({
     updateState,
     workflowAppliedMusicAbc,
     ws.generatedGuitar,
+    ws.generatedGuitarOrigin,
   ]);
 
   const isFingerstyleReady = restoredSourceFingerprint === sourceFingerprint;

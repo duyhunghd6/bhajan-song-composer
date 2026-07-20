@@ -45,6 +45,7 @@ describe("accompaniment workspace state", () => {
       accompanimentWorkflow: workflow,
       accompanimentWorkflowSetup: workflow.setup,
       generatedGuitar: "guitar abc",
+      generatedGuitarOrigin: "accompaniment-workflow",
       guitarAccompanimentData: null,
       aiGuitarSuggestions: [],
       selectedGuitarIndex: null,
@@ -56,6 +57,7 @@ describe("accompaniment workspace state", () => {
     expect(hasAccompanimentGuitarBranchWork(state)).toBe(true);
     const reset = buildAccompanimentGuitarBranchResetState(state);
     expect(reset.generatedGuitar).toBeNull();
+    expect(reset.generatedGuitarOrigin).toBeNull();
     expect(reset.accompanimentWorkflow?.guitarProfileHint).toBeNull();
   });
 });
