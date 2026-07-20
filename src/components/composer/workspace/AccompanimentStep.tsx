@@ -4,9 +4,7 @@ import type { ArrangementPipelineResult } from "@/lib/theory/arrangement-pipelin
 import type { WorkspaceState } from "../useWorkspaceState";
 import type { AccompanimentPreviewModel, ComposerPreviewRenderOptions } from "./arrangement-preview-model";
 import { LayerVisibilityControls } from "./LayerVisibilityControls";
-import { buildFingerstyleComposerIntegration, type FingerstyleComposerProfileId } from "../fingerstyle-integration";
 import AccompanimentWorkflowWizard from "../AccompanimentWorkflowWizard";
-import type { AccompanimentWorkflowOption } from "@/lib/theory/accompaniment-workflow";
 import {
   ACCOMPANIMENT_PREVIEW_RENDER_OPTIONS,
   COMPOSER_STAFF_PLAYBACK_PROPS,
@@ -16,9 +14,7 @@ import {
 interface AccompanimentStepProps {
   activeAbc: string;
   branchSourceAbc: string | null;
-  hasMounted: boolean;
   pipeline: ArrangementPipelineResult | null;
-  workflowAppliedMusicAbc: string;
   accompanimentPreview: AccompanimentPreviewModel;
   accompLayerVisibility: Record<string, boolean>;
   setAccompLayerVisibility: Dispatch<SetStateAction<Record<string, boolean>>>;
@@ -27,16 +23,12 @@ interface AccompanimentStepProps {
   getRenderOptionsFor: (abc: string, baseOptions: ComposerPreviewRenderOptions) => Record<string, unknown>;
   ws: WorkspaceState;
   updateState: (updates: Partial<WorkspaceState>) => void;
-  canResetGuitarBranchWork: boolean;
-  onResetGuitarBranchWork: () => void;
 }
 
 export function AccompanimentStep({
   activeAbc,
   branchSourceAbc,
-  hasMounted,
   pipeline,
-  workflowAppliedMusicAbc,
   accompanimentPreview,
   accompLayerVisibility,
   setAccompLayerVisibility,
@@ -45,8 +37,6 @@ export function AccompanimentStep({
   getRenderOptionsFor,
   ws,
   updateState,
-  canResetGuitarBranchWork,
-  onResetGuitarBranchWork,
 }: AccompanimentStepProps) {
     const {
       abc: accompanimentAbc,
@@ -62,23 +52,7 @@ export function AccompanimentStep({
           source={(
             <>
               <section className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950/60">
-                <div className="flex items-center justify-between gap-2 mb-4">
-                  <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">AI Accompaniment Generation</h2>
-                  <div className="flex items-center gap-1.5">
-                    {hasMounted && canResetGuitarBranchWork && (
-                      <button
-                        type="button"
-                        onClick={onResetGuitarBranchWork}
-                        title="Clear Guitar Branch Work"
-                        className="inline-flex items-center gap-1 rounded-lg border border-rose-400/30 bg-rose-500/10 px-2.5 py-1.5 text-xs font-bold text-rose-600 transition hover:bg-rose-500/20 dark:text-rose-400"
-                      >
-                        <span className="text-sm">↺</span>
-                        <span className="hidden sm:inline">Restore</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-
+                <h2 className="mb-4 text-lg font-bold text-zinc-900 dark:text-zinc-100">AI Accompaniment Generation</h2>
 
                 {!branchSourceAbc && (
                   <section className="mb-4 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900/60">
@@ -104,37 +78,6 @@ export function AccompanimentStep({
                   workflowSetup={ws.accompanimentWorkflowSetup}
                   onWorkflowChange={(accompanimentWorkflow) => updateState({ accompanimentWorkflow })}
                   onWorkflowSetupChange={(accompanimentWorkflowSetup) => updateState({ accompanimentWorkflowSetup })}
-                  onReset={onResetGuitarBranchWork}
-                  onGuitarProfileSelected={(profile, option?: AccompanimentWorkflowOption) => {
-                    if (profile === null) {
-                      updateState({
-                        generatedGuitar: null,
-                        generatedGuitarOrigin: null,
-                        guitarAccompanimentData: null,
-                        selectedGuitarIndex: null,
-                        aiGuitarSuggestions: [],
-                        ensembleWorkflow: null,
-                        stagedEnsembleLayers: null,
-                        appliedEnsembleLayers: null,
-                      });
-                      return;
-                    }
-
-                    const guitarProfiles: FingerstyleComposerProfileId[] = ["strict-pima", "folk-travis"];
-                    const pickingProfile = guitarProfiles.includes(profile as FingerstyleComposerProfileId)
-                      ? profile as FingerstyleComposerProfileId
-                      : "strict-pima";
-                    const integration = buildFingerstyleComposerIntegration(workflowAppliedMusicAbc, undefined, {
-                      pickingProfile,
-                      workflowOptionData: option?.data,
-                    });
-                    updateState({
-                      generatedGuitar: integration.composerLayer.abc,
-                      generatedGuitarOrigin: "accompaniment-workflow",
-                      guitarAccompanimentData: integration,
-                    });
-                    setAccompLayerVisibility((prev) => ({ ...prev, TAB: true }));
-                  }}
                 />
               </section>
             </>

@@ -2,13 +2,11 @@ import { useMemo, useState } from "react";
 
 import {
   ACCOMPANIMENT_INSTRUMENT_LABELS,
-  ACCOMPANIMENT_STYLE_LABELS,
   defaultInstrumentRoleNote,
   getEnabledAccompanimentWorkflowStepIds,
   normalizeAccompanimentWorkflowSetup,
   orderedAccompanimentInstruments,
   type AccompanimentInstrumentId,
-  type AccompanimentStyleId,
   type AccompanimentWorkflowSetup,
 } from "@/lib/theory/accompaniment-workflow";
 
@@ -31,7 +29,6 @@ function moveItem<T>(items: T[], fromIndex: number, toIndex: number): T[] {
 function setupFingerprint(setup: AccompanimentWorkflowSetup): string {
   const normalized = normalizeAccompanimentWorkflowSetup(setup);
   return JSON.stringify({
-    style: normalized.style,
     instruments: orderedAccompanimentInstruments(normalized).map((instrument) => ({
       id: instrument.id,
       enabled: instrument.enabled,
@@ -67,10 +64,6 @@ export default function WorkflowSetupPanel({
     sessionSetup && setupFingerprint(sessionSetup) !== setupFingerprint(normalizedSetup)
   );
 
-  const updateStyle = (style: AccompanimentStyleId) => {
-    onSetupChange({ ...normalizedSetup, style });
-  };
-
   const updateInstrumentEnabled = (id: AccompanimentInstrumentId) => {
     onSetupChange({
       ...normalizedSetup,
@@ -96,22 +89,6 @@ export default function WorkflowSetupPanel({
         <span className="rounded-full border border-amber-300 bg-white px-3 py-1 text-[11px] font-bold text-amber-700 dark:border-amber-800 dark:bg-zinc-950 dark:text-amber-300">
           {enabledStepCount} enabled workflow steps
         </span>
-      </div>
-
-      <div className="grid gap-2 sm:grid-cols-2">
-        {(["solo-fingerstyle", "accompaniment"] as const).map((style) => (
-          <button
-            key={style}
-            type="button"
-            disabled={disabled}
-            onClick={() => updateStyle(style)}
-            className={`rounded-xl border py-2 px-3 text-left transition disabled:cursor-not-allowed disabled:opacity-60 ${normalizedSetup.style === style
-              ? "border-amber-400 bg-white shadow-sm dark:bg-amber-950/40"
-              : "border-zinc-200 bg-white/70 hover:border-amber-300 dark:border-zinc-800 dark:bg-zinc-950/50"}`}
-          >
-            <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100">{ACCOMPANIMENT_STYLE_LABELS[style]}</p>
-          </button>
-        ))}
       </div>
 
       <ol className="space-y-1.5">

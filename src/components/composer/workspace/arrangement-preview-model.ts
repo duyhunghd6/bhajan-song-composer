@@ -206,7 +206,7 @@ export function buildArrangementPreviewModel(input: BuildArrangementPreviewModel
     : { djembe: null };
   const accompanimentSupportSources = [accompanimentSupportLayers.djembe];
   const eligibleGeneratedGuitar = input.previewPurpose === "accompaniment"
-    ? input.generatedGuitarOrigin === "accompaniment-workflow" ? input.generatedGuitar : null
+    ? null
     : input.generatedGuitar;
   const accompanimentBuild = buildAccompanimentAbc({
     baseAbc: branchSourceAbc,

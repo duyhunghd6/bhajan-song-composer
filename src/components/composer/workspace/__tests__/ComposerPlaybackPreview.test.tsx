@@ -92,9 +92,7 @@ describe("Composer result staff playback", () => {
       <AccompanimentStep
         activeAbc={staffAbc}
         branchSourceAbc={staffAbc}
-        hasMounted={false}
         pipeline={null}
-        workflowAppliedMusicAbc={staffAbc}
         accompanimentPreview={{
           abc: staffAbc,
           rawAbc: `${staffAbc}\n%%MIDI program 25`,
@@ -109,8 +107,6 @@ describe("Composer result staff playback", () => {
         getRenderOptionsFor={getRenderOptionsFor}
         ws={{} as never}
         updateState={noop}
-        canResetGuitarBranchWork={false}
-        onResetGuitarBranchWork={noop}
       />,
     );
 

@@ -47,6 +47,16 @@ describe("accompaniment workflow", () => {
     expect(getVisibleAccompanimentWorkflowSteps(createAccompanimentWorkflowSession(sampleAbc, setup))).toHaveLength(9);
   });
 
+  it("normalizes persisted Solo/Fingerstyle setup to combined accompaniment", () => {
+    const setup = normalizeAccompanimentWorkflowSetup({
+      style: "solo-fingerstyle",
+      instruments: [{ id: "djembe", enabled: true, order: 0 }],
+    } as never);
+
+    expect(setup.style).toBe("accompaniment");
+    expect(setup.instruments.find((instrument) => instrument.id === "djembe")?.enabled).toBe(true);
+  });
+
   it("drops removed instruments and steps while restoring persisted sessions", () => {
     const restored = normalizeAccompanimentWorkflowSession({
       version: 4,

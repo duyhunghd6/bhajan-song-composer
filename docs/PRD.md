@@ -87,7 +87,7 @@ This arrangement pipeline is a core product workflow: **Melody → Harmonization
 ### Multi-Layer Fingerstyle Arrangement Engine
 <!-- beads-id: prd-bsc-s33 -->
 
-The **Multi-Layer Fingerstyle Arrangement Engine** is a major AI Theory Assistant feature that converts musical data across two complementary phases:
+The **Multi-Layer Fingerstyle Arrangement Engine** is a major AI Theory Assistant feature implemented on the dedicated `/compose/:slug/guitar-fingerstyle` route. It independently consumes the selected Harmony Step 3 (`voice-leading-validation`) ABC; `/compose/:slug/accompaniment` output is not an input. It converts musical data across two complementary phases:
 
 1. **Upward Construction**: Build a full multi-track arrangement from a baseline melody.
 2. **Downward Compression / Reduction**: Compress the multi-track arrangement — melody, accompaniment, bass, rhythm, and percussion — into a single physically playable solo fingerstyle guitar matrix without exceeding human anatomical constraints.

@@ -113,7 +113,7 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
     accompLayerVolumes,
   ]);
 
-  const { pipeline, activeWorkflow, workflowAppliedMusicAbc, harmonyValidationAbc } = previewModel;
+  const { pipeline, activeWorkflow, harmonyValidationAbc } = previewModel;
 
   useEffect(() => {
     if (!isWorkspaceHydrated) return;
@@ -196,9 +196,7 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
       <AccompanimentStep
         activeAbc={activeAbc}
         branchSourceAbc={harmonyValidationAbc}
-        hasMounted={hasMounted}
         pipeline={pipeline}
-        workflowAppliedMusicAbc={workflowAppliedMusicAbc}
         accompanimentPreview={previewModel.accompaniment}
         accompLayerVisibility={accompLayerVisibility}
         setAccompLayerVisibility={setAccompLayerVisibility}
@@ -207,8 +205,6 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
         getRenderOptionsFor={getRenderOptionsFor}
         ws={ws}
         updateState={updateState}
-        canResetGuitarBranchWork={hasGuitarBranchWork}
-        onResetGuitarBranchWork={handleResetGuitarBranchWork}
       />
     );
   }

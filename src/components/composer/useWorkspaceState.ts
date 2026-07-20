@@ -58,7 +58,7 @@ export const DEFAULT_FINGERSTYLE_GENERATION_SETTINGS: FingerstyleGenerationSetti
   densityMode: "auto",
 };
 
-export type GeneratedGuitarOrigin = "accompaniment-workflow" | "fingerstyle-timegrid" | null;
+export type GeneratedGuitarOrigin = "fingerstyle-timegrid" | null;
 
 export interface WorkspaceState {
   aiSuggestions: HarmonizationOption[];
@@ -118,10 +118,14 @@ export function useWorkspaceState(slug: string) {
         const parsed = JSON.parse(saved);
         const restoredWorkflow = normalizeAccompanimentWorkflowSession(parsed.accompanimentWorkflow);
         const { pianoAccompanimentData: _pianoData, aiPianoSuggestions: _pianoSuggestions, selectedPianoIndex: _selectedPiano, generatedPiano: _generatedPiano, ...supportedWorkspace } = parsed;
+        const isDedicatedFingerstyle = parsed.generatedGuitarOrigin === "fingerstyle-timegrid";
         // eslint-disable-next-line react-hooks/set-state-in-effect -- workspace state must hydrate from localStorage after mount to avoid SSR/localStorage mismatches.
         setState({
           ...DEFAULT_WORKSPACE_STATE,
           ...supportedWorkspace,
+          generatedGuitar: isDedicatedFingerstyle ? parsed.generatedGuitar ?? null : null,
+          generatedGuitarOrigin: isDedicatedFingerstyle ? "fingerstyle-timegrid" : null,
+          guitarAccompanimentData: null,
           accompanimentWorkflow: restoredWorkflow,
           accompanimentWorkflowSetup: restoredWorkflow?.setup ?? parsed.accompanimentWorkflowSetup ?? null,
           fingerstyleGenerationSettings: {

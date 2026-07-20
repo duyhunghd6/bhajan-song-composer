@@ -31,7 +31,7 @@ function run(stepId: (typeof ACCOMPANIMENT_WORKFLOW_GUITAR_STEP_IDS)[number]): A
 }
 
 describe("accompaniment workspace state", () => {
-  it("resets only Guitar branch artifacts", () => {
+  it("resets dedicated Guitar Fingerstyle artifacts and Guitar branch decisions", () => {
     let workflow = createAccompanimentWorkflowSession(abc);
     for (const stepId of ["key-beats", "chord-roles-progression", "voice-leading-validation"] as const) {
       const sharedRun = { ...run("guitar-comping-profile"), id: stepId, stepId } as AccompanimentWorkflowRun;
@@ -45,7 +45,7 @@ describe("accompaniment workspace state", () => {
       accompanimentWorkflow: workflow,
       accompanimentWorkflowSetup: workflow.setup,
       generatedGuitar: "guitar abc",
-      generatedGuitarOrigin: "accompaniment-workflow",
+      generatedGuitarOrigin: "fingerstyle-timegrid",
       guitarAccompanimentData: null,
       aiGuitarSuggestions: [],
       selectedGuitarIndex: null,

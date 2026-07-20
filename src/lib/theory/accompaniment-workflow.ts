@@ -7,7 +7,6 @@ import {
   ACCOMPANIMENT_CHORD_INGESTION_STEP_IDS,
   ACCOMPANIMENT_GUITAR_TAB_VALIDATION_STEP_IDS,
   ACCOMPANIMENT_INSTRUMENT_LABELS,
-  ACCOMPANIMENT_STYLE_LABELS,
   ACCOMPANIMENT_WORKFLOW_BRANCH_STEP_IDS,
   ACCOMPANIMENT_WORKFLOW_SHARED_STEP_IDS,
   ACCOMPANIMENT_WORKFLOW_STEPS,
@@ -91,7 +90,7 @@ function instrumentScope(id: AccompanimentInstrumentId): Exclude<AccompanimentWo
 }
 
 function isAccompanimentStyleId(value: unknown): value is AccompanimentWorkflowSetup["style"] {
-  return value === "solo-fingerstyle" || value === "accompaniment";
+  return value === "accompaniment";
 }
 
 function isAccompanimentInstrumentId(value: unknown): value is AccompanimentInstrumentId {
@@ -138,6 +137,7 @@ export function normalizeAccompanimentWorkflowSetup(setup?: Partial<Accompanimen
   });
 
   return {
+    // Legacy Solo/Fingerstyle setup values now use the combined accompaniment workflow.
     style: isAccompanimentStyleId(setup.style) ? setup.style : "accompaniment",
     instruments: normalized
       .sort((a, b) => a.order - b.order)
@@ -568,20 +568,13 @@ function formatWorkflowSetup(setupInput?: Partial<AccompanimentWorkflowSetup> | 
   const setup = normalizeAccompanimentWorkflowSetup(setupInput ?? getLegacyAccompanimentWorkflowSetup());
   const enabled = orderedAccompanimentInstruments(setup).filter((instrument) => instrument.enabled);
   const disabled = orderedAccompanimentInstruments(setup).filter((instrument) => !instrument.enabled);
-  const lines = [
-    `- Style: ${ACCOMPANIMENT_STYLE_LABELS[setup.style]}`,
+  return [
     `- Enabled instrument order: ${enabled.length ? enabled.map((instrument) => ACCOMPANIMENT_INSTRUMENT_LABELS[instrument.id]).join(" → ") : "none selected"}`,
     "- Role hints:",
     ...enabled.map((instrument, index) => `  ${index + 1}. ${ACCOMPANIMENT_INSTRUMENT_LABELS[instrument.id]} — ${instrument.roleNote ?? defaultInstrumentRoleNote(instrument.id, instrument.order, setup.instruments.length)}`),
     disabled.length ? `- Disabled/skipped instruments: ${disabled.map((instrument) => ACCOMPANIMENT_INSTRUMENT_LABELS[instrument.id]).join(", ")}` : "- Disabled/skipped instruments: none",
-  ];
-  if (setup.style === "solo-fingerstyle") {
-    const enabledLabels = enabled.map((instrument) => ACCOMPANIMENT_INSTRUMENT_LABELS[instrument.id]);
-    lines.push(`- Solo/Fingerstyle rule: generate only the enabled instrument branches${enabledLabels.length ? ` (${enabledLabels.join(", ")})` : ""}; do not propose or wait for disabled instrument branches. Guitar branches must carry the melody as fingerstyle when a guitar is enabled.`);
-  } else {
-    lines.push("- Combined accompaniment rule: respect the ordered stack; lower instruments carry foundation/bass duties, upper instruments carry treble fills or transient color while yielding to melody.");
-  }
-  return lines.join("\n");
+    "- Combined accompaniment rule: respect the ordered stack; lower instruments carry foundation/bass duties, upper instruments carry treble fills or transient color while yielding to melody.",
+  ].join("\n");
 }
 
 function formatPreviousSelections(previousSelections: AccompanimentWorkflowSelectedContext[]): string {

@@ -43,7 +43,6 @@ import {
   type StrongBeatIconGenerationResult,
 } from "@/lib/theory/abc-beat-annotations";
 import { query_guitar_voicings } from "@/lib/theory/guitar-voicings";
-import { extractMelodyMeasureTimeline } from "@/lib/theory/arranger-utils";
 import { buildAbcDurationContext } from "@/lib/theory/abc-duration";
 import {
   assignActiveChordsToMelodyNotes,
@@ -351,77 +350,6 @@ function guitarTabValidationOptionsFromToolArgs(args: unknown, input: GenerateAc
   };
 }
 
-function hasObjectProperty(value: unknown, key: string): boolean {
-  return Boolean(value && typeof value === "object" && !Array.isArray(value) && key in value);
-}
-
-function validateGuitarFingerstyleOption(optionId: string, option: Partial<AccompanimentWorkflowOption>, events: GuitarTabEvent[], messages: string[], sourceMeasures: Array<{ measureIndex: number; hasMelody: boolean }>): void {
-  const data = optionData(option);
-  if (!data) {
-    messages.push(`${optionId} is missing fingerstyle option data.`);
-    return;
-  }
-
-  if (data.mode !== "solo-fingerstyle") {
-    messages.push(`${optionId} must set data.mode to "solo-fingerstyle".`);
-  }
-  if (data.carriesMelody !== true) {
-    messages.push(`${optionId} must set data.carriesMelody=true because Guitar Fingerstyle plays the melody itself.`);
-  }
-  if (data.pickingProfile !== "strict-pima" && data.pickingProfile !== "folk-travis") {
-    messages.push(`${optionId} must choose data.pickingProfile as strict-pima or folk-travis.`);
-  }
-  if (typeof data.bassStrategy !== "string" || data.bassStrategy.trim().length === 0) {
-    messages.push(`${optionId} must describe a chord-derived data.bassStrategy.`);
-  }
-
-  const formPlan = data.formPlan;
-  for (const section of ["intro", "interlude", "outro"]) {
-    if (!hasObjectProperty(formPlan, section)) {
-      messages.push(`${optionId} is missing data.formPlan.${section}.`);
-    }
-  }
-
-  const melodyEvents = events.filter((event) => event.role.toLowerCase() === "melody");
-  const bassEvents = events.filter((event) => event.role.toLowerCase() === "bass");
-  if (melodyEvents.length === 0) {
-    messages.push(`${optionId} guitarTab.events must include melody role events.`);
-  }
-  if (bassEvents.length === 0) {
-    messages.push(`${optionId} guitarTab.events must include bass role events.`);
-  }
-  if (melodyEvents.some((event) => event.string < 1 || event.string > 3)) {
-    messages.push(`${optionId} melody role events must be routed to treble strings 1-3 for solo fingerstyle.`);
-  }
-  if (bassEvents.some((event) => event.string < 4 || event.string > 6)) {
-    messages.push(`${optionId} bass role events must be routed to bass strings 4-6 for chord-derived fingerstyle anchors.`);
-  }
-
-  const representedMeasures = new Set(events.map((event) => event.measureIndex));
-  const expectedMeasureIndexes = new Set(sourceMeasures.map((measure) => measure.measureIndex));
-  for (const event of events) {
-    if (!expectedMeasureIndexes.has(event.measureIndex)) {
-      messages.push(`${optionId} measure ${event.measureIndex} is outside the source/body measure range.`);
-    }
-  }
-  for (const { measureIndex, hasMelody } of sourceMeasures) {
-    if (!representedMeasures.has(measureIndex)) {
-      messages.push(`${optionId} measure ${measureIndex} is missing full-song Guitar Fingerstyle tab coverage.`);
-      continue;
-    }
-    if (hasMelody && !melodyEvents.some((event) => event.measureIndex === measureIndex)) {
-      messages.push(`${optionId} measure ${measureIndex} must include melody role tab events because solo fingerstyle carries the melody.`);
-    }
-    const measureBassEvents = bassEvents.filter((event) => event.measureIndex === measureIndex);
-    if (!measureBassEvents.some((event) => Math.abs(event.beat - 1) < 0.001)) {
-      messages.push(`${optionId} measure ${measureIndex} must include a bass anchor on beat 1 aligned to the selected chord progression.`);
-    }
-    if (!measureBassEvents.some((event) => event.beat > 1)) {
-      messages.push(`${optionId} measure ${measureIndex} must include an internal root/fifth/approach bass anchor after beat 1.`);
-    }
-  }
-}
-
 function validateGuitarWorkflowResult(raw: unknown, input: GenerateAccompanimentWorkflowStepInput): ToolLoopValidationResult {
   const result = raw as RawWorkflowStepResult;
   const options = Array.isArray(result.options) ? result.options.slice(0, 5) : [];
@@ -431,11 +359,6 @@ function validateGuitarWorkflowResult(raw: unknown, input: GenerateAccompaniment
   if (options.length === 0) {
     return { valid: false, message: "Final guitar workflow output contained no options." };
   }
-
-  const sourceMeasures = extractMelodyMeasureTimeline(input.sourceAbc).map((measure) => ({
-    measureIndex: measure.measureIndex,
-    hasMelody: measure.events.some((event) => event.kind === "note"),
-  }));
 
   for (const [index, option] of options.entries()) {
     const optionId = normalizeId(option.id, `option-${index + 1}`);

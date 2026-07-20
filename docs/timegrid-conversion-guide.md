@@ -4,12 +4,14 @@ This guide defines the editable representation for solo fingerstyle guitar arran
 
 ## 1. Authority and data flow
 
+The meter-aware TimeGrid belongs exclusively to `/compose/:slug/guitar-fingerstyle`. It is compiled from the selected Harmony Step 3 (`voice-leading-validation`) ABC, not from `/compose/:slug/accompaniment` output. The accompaniment workflow may independently plan Guitar Classic comping and voicings, but it never owns, replaces, or serializes the TimeGrid.
+
 Use a meter-aware **Fingerstyle TimeGrid** as the canonical editable and persisted arrangement document:
 
 ```text
-source ABC
+selected voice-leading-validation ABC
   → compile source melody and context into TimeGrid
-  → add, move, resize, or remove validated guitar accompaniment events
+  → add, move, resize, or remove validated fingerstyle guitar support events
   → persist TimeGrid JSON
   → deterministically generate Guitar ABC notation
   → deterministically generate ASCII-GuitarTab

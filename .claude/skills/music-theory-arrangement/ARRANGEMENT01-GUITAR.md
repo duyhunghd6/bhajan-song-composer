@@ -24,14 +24,11 @@ K:G
 
 ---
 
-## 2. Setup-driven Mode Selection
+## 2. Application Ownership Boundary
 
-The `/compose/:slug/accompaniment` setup chooses whether guitar participates as a combined accompaniment branch or as the terminal `solo-fingerstyle` route.
+`/compose/:slug/accompaniment` owns combined accompaniment planning only. Its Guitar Classic branch ends with `guitar-comping-profile` and `guitar-voicing-bass`; use the stack order and role notes to decide whether Guitar Classic emphasizes foundation/bass arpeggios, middle comping, or restrained treble support.
 
-- In `solo-fingerstyle`, enable the Guitar branch only. The final `guitar-fingerstyle` step must carry the melody on one physical Guitar voice, add chord-derived bass from roots/fifths/approach notes, expose intro/interlude/outro section metadata, and render GUITAR TAB.
-- In combined `accompaniment`, Guitar Classic and Guitar Acoustic share the Guitar branch initially. Use setup order and role notes to decide whether the guitar emphasizes foundation/bass arpeggios, middle comping, or treble fills.
-- Do not combine Solo/Fingerstyle compression with Piano/Harmonium/Djembe/Flute branches in the same workflow run unless the user explicitly asks for separate outputs.
-- If both Guitar Classic and Guitar Acoustic are enabled, avoid duplicate generic `V:Guitar` responsibilities; treat the setup as one guitar branch until unique voice policies are implemented.
+`/compose/:slug/guitar-fingerstyle` exclusively owns solo compression: one physical Guitar voice carries melody, chord-derived bass, and allowed support events; it also owns TimeGrid generation, skill/fill-density settings, physical validation, generated Guitar ABC, and GUITAR TAB. Both routes independently consume the selected Harmony Step 3 (`voice-leading-validation`) ABC. Accompaniment output never becomes a Guitar Fingerstyle input.
 
 ---
 
@@ -113,7 +110,7 @@ The guitar bass (strings 6, 5, 4) must follow these rules:
 
 ### 3.1 Overview: The Two-Phase Pipeline
 
-Solo fingerstyle is a **compression** problem: take a full multi-track arrangement (melody + chords + bass + rhythm) and compress it into what 4 fretting fingers + 5 picking-hand digits can execute on 6 strings.
+Solo fingerstyle is a **compression** problem: derive melody, chord, bass, and restrained rhythmic support that 4 fretting fingers + 5 picking-hand digits can execute on 6 strings. In this application, the operational TimeGrid contract is owned by `/compose/:slug/guitar-fingerstyle`; see `docs/guitar-fingerstyle-arrangement-guide.md` and `docs/timegrid-conversion-guide.md`.
 
 ```
 Phase 1: Upward Construction    →  Build the full arrangement (melody, chords, bass, rhythm)
@@ -122,14 +119,14 @@ Phase 2: Downward Compression   →  Reduce to a playable solo guitar matrix
 
 ### 3.2 Phase 1: Upward Construction
 
-This phase creates the full arrangement context before compression. It reuses the core Arrangement Pipeline:
+The production dedicated route derives its locked context directly from the selected `voice-leading-validation` ABC: melody, chords, meter, key, phrase boundaries, and lyric facts. Any full multi-layer construction diagram is analytical theory only; `/compose/:slug/accompaniment` output is never a production input to Guitar Fingerstyle.
 
-| Layer | Content | Source |
-| ----- | ------- | ------ |
-| **Layer 1: Melody** | The source ABC melody — the central logic stream | Input |
-| **Harmonization** | Chord progression anchored to the melody | THEORY.md §6.4 |
-| **Layer 2: Accompaniment** | Harmonic + rhythmic support (chords, arpeggios) | This module §2 |
-| **Layer 3: Rhythm** | Bass foundation + rhythmic groove | Kick/bass sync, backbeat |
+| Source fact | Role in dedicated Guitar Fingerstyle |
+| ----------- | ------------------------------------ |
+| **Melody** | Locked source pitch, timing, sustain, and phrase context |
+| **Validated harmonization** | Chord progression and cadence context from Harmony Step 3 |
+| **TimeGrid foundation** | Deterministic physical melody and chord-derived bass placement |
+| **Legal fill opportunities** | Bounded source-rest/phrase-gap support candidates |
 
 ### 3.3 Phase 2: Downward Compression Algorithm
 
@@ -268,7 +265,7 @@ Hard rules:
 
 Before outputting any guitar arrangement:
 
-Concrete tab events must use the app/tool schema below whenever the Guitar workflow or Guitar Fingerstyle pipeline validates a comping sample, voicing, fill, intro, interlude, outro, or final fingerstyle output. The Accompaniment workflow now contains only Guitar Profile and Guitar Voicing; fill density is owned by Guitar Fingerstyle settings.
+The accompaniment workflow validates representative Guitar Classic comping and voicing samples. Final Guitar Fingerstyle TimeGrid, fills, section material, and physical-output validation belong exclusively to `/compose/:slug/guitar-fingerstyle`, where fill density is configured independently.
 
 ```ts
 type GuitarTabEvent = {

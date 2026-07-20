@@ -4,7 +4,7 @@
 >
 > **Prerequisite:** The harmonic framework must exist before piano textures are generated. If the input is melody-only, run the Harmonization Pipeline from [`THEORY.md`](./THEORY.md) §6.4 first.
 >
-> **Route Participation:** Piano participates only in the combined `accompaniment` setup when Piano is enabled in the ordered stack. Skip Piano steps for `solo-fingerstyle`, guitar-only, harmonium-only, djembe-only, or flute-only workflows. Piano order controls whether LH bass should dominate the foundation or yield to lower-ordered instruments.
+> **Route Participation:** This is a piano-arrangement theory reference and separate piano-path guidance. Piano is not currently an instrument branch in `/compose/:slug/accompaniment`; do not infer a Piano setup toggle, Piano workflow step, or Solo/Fingerstyle mode from this module. It does not own any part of `/compose/:slug/guitar-fingerstyle`.
 
 ---
 

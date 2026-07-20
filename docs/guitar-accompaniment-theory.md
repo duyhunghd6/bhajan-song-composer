@@ -358,16 +358,16 @@ Giải thích:
 
 ---
 
-### Guitar Fingerstyle Generation (tách khỏi Accompaniment Wizard)
+### Dedicated Guitar Fingerstyle Generation (tách khỏi Accompaniment Wizard)
 
-Fill density, intro/interlude/outro và final physical validation thuộc pipeline Guitar Fingerstyle độc lập, không còn là một workflow card trong Accompaniment.
+`/compose/:slug/guitar-fingerstyle` sở hữu fill density, intro/interlude/outro, TimeGrid và final physical validation. Route này nhận trực tiếp ABC đã chọn ở Harmony Step 3 (`voice-leading-validation`), độc lập với output Accompaniment; nó không phải workflow card hay mode trong `/compose/:slug/accompaniment`.
 
 ##### Fill Policy (Nốt chêm)
 
 | Khi nào fill | Cách fill | Ví dụ |
 |-------------|----------|-------|
 | Giai điệu nghỉ (rest) | Neighbor tones hoặc chord tones | Melody nghỉ → guitar gẩy G→A→B rồi quay lại |
-| Giai điệu giữ nốt dài | Bass walks nhẹ nhàng | Melody giữ E₄ → bass đi E₂→F#₂→G₂→A₂ |
+| Giai điệu giữ nốt dài | Không thêm discretionary fill hoặc harmony attack/sustain | Giữ khoảng trống để melody tiếp tục nổi bật |
 | Giữa 2 phrase | Turnaround nhỏ | Kết phrase → fill D→C→B→E |
 
 > [!CAUTION]
@@ -401,12 +401,12 @@ Outro (1-2 ô nhịp sau khi ca sĩ kết thúc):
 
 ---
 
-#### Solo Guitar Compression (chỉ nếu Solo mode)
+#### Dedicated Guitar Fingerstyle Route
 
 > [!NOTE]
-> Phần này chỉ áp dụng khi chọn **Solo/Fingerstyle** mode — guitar tự mang giai điệu, bass, và hợp âm trên cùng 1 cây đàn. Với đệm hát, Accompaniment Wizard kết thúc Guitar branch sau `guitar-voicing-bass`.
+> Phần này chỉ áp dụng tại `/compose/:slug/guitar-fingerstyle` — guitar tự mang giai điệu, bass, và hợp âm trên cùng 1 cây đàn. Đây không phải mode trong Accompaniment Wizard; Guitar Classic accompaniment kết thúc branch sau `guitar-voicing-bass`.
 
-Nếu chọn Fingerstyle, áp dụng **Downward Compression Algorithm**:
+Trên dedicated route, áp dụng **Downward Compression Algorithm**:
 
 ```text
 Phase 2: Nén xuống 1 cây guitar
@@ -477,8 +477,8 @@ Beat 4: B₃ (5th)
 □ 4. Chọn Guitar Comping Profile (Arpeggio / Strum)
 □ 5. Lên Voicing Map + Bass Plan (open voicing, alternating bass)
   ────── Xong Accompaniment Guitar Branch ──────
-□ [Tuỳ chọn] Trong Guitar Fingerstyle: chọn Fill density, tạo intro/outro và validate playability
-□ Output: Final Guitar ABC + TAB
+□ [Dedicated route] Mở `/compose/:slug/guitar-fingerstyle` từ ABC `voice-leading-validation`; chọn skill/fill density, tạo intro/outro và validate TimeGrid
+□ Output dedicated Guitar Fingerstyle: Final Guitar ABC + TAB
 ```
 
 ---
@@ -591,12 +591,12 @@ Source ABC:
 ### Chord-Tone Reference Table (K:G)    ← MỚI: inject ở đây
 ...table + per-measure mapping...
 
-### Time-Slice Melodic Grid              ← Đã có sẵn
-...16-step quantized grid...
+### Dedicated Guitar Fingerstyle staged contracts
+`tablature:v1` foundation → paginated `fill-opportunities:v1` → `fill-selection:v1` → `fills:v1`
 
 USER NOTE TO ADD TO PROMPT:
 ...
 ```
 
-Vị trí này đảm bảo LLM đọc chord tones **ngay trước** khi đọc Time-Slice grid để lên kế hoạch fingerstyle.
+Dedicated Guitar Fingerstyle does not send a replacement TimeGrid to the LLM. The server keeps the meter-aware source grid authoritative, exposes only bounded staged contracts, then deterministically validates and renders Guitar ABC/TAB.
 

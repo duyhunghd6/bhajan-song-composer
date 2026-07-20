@@ -1,8 +1,10 @@
 # Research Notes: Guitar TAB Rendering & Interludes ("Giang tấu")
 
-This document details the research findings for:
-1. Adding Guitar TAB into the sheet music rendering below standard notation using `abcjs`.
+This document records research findings for:
+1. Rendering dedicated Guitar Fingerstyle TAB below standard notation using `abcjs`.
 2. Constructing interludes ("giang tấu") or melodic fills during pauses between phrases/sections.
+
+> **Production boundary:** `/compose/:slug/guitar-fingerstyle` exclusively owns TimeGrid edits, physical guitar events, generated Guitar ABC, and TAB. `/compose/:slug/accompaniment` is combined accompaniment only and does not generate Guitar TAB. For the current workflow contract, see [Guitar Fingerstyle Arrangement Guide](./guitar-fingerstyle-arrangement-guide.md) and [TimeGrid Conversion Guide](./timegrid-conversion-guide.md).
 
 ---
 
@@ -24,15 +26,15 @@ ABCJS.renderAbc("paper-canvas", abcString, {
       tuning: ["E,", "A,", "D", "G", "B", "e"], // Low to high
       capo: 0,
       hideTabSymbol: false
-    } // Voice 2 (Layer 2 Guitar Accompaniment) -> rendered as Guitar TAB
+    } // Dedicated physical V:Guitar fingerstyle voice -> rendered as Guitar TAB
   ]
 });
 ```
 
 ### Demonstration and Filtering
-When rendering the music sheet for accompaniment options:
-- **Piano Accompaniment**: Do not specify the `tablature` option, as piano does not use guitar TAB.
-- **Guitar Accompaniment**: Pass the `tablature` array where the melody voice gets `{}` (no TAB) and the "Layer 2 Guitar Accompaniment" voice (Voice 2) gets `{ instrument: "guitar", ... }`. This ensures only the guitar track is rendered with a TAB line.
+When rendering a dedicated Guitar Fingerstyle result:
+- **Combined Accompaniment**: Do not create a Guitar TAB voice on `/compose/:slug/accompaniment`.
+- **Dedicated Guitar Fingerstyle**: Pass the `tablature` array where the melody voice gets `{}` (no TAB) and the generated physical `V:Guitar` fingerstyle voice gets `{ instrument: "guitar", ... }`. This ensures TAB represents one validated guitarist, not an accompaniment-page layer.
 
 ---
 
@@ -41,12 +43,12 @@ When rendering the music sheet for accompaniment options:
 An interlude ("giang tấu") is a melodic or harmonic fill played by an accompaniment instrument during pauses between vocal lines (phrases) or sections.
 
 ### Detection of Gaps
-In the current composer engine, the melody is analyzed beat-by-beat to locate regions where the voice is silent or holding a long note.
-In `src/lib/theory/piano-accompaniment.ts`, the function `detectMelodicGap` already locates:
-- **Rest Gaps**: Consecutive rest tokens (`z`) in the melody.
-- **Held Note Gaps**: Notes sustained for more than 2 beats.
+The dedicated Guitar Fingerstyle engine analyzes the selected Harmony Step 3 source beat-by-beat and permits discretionary fills only in legal source-rest/phrase-gap windows.
 
-Gaps are marked as `safe` for filling if their duration is 2 beats or longer.
+- **Rest gaps**: consecutive rest tokens (`z`) in the melody may be scored as fill windows.
+- **Held melody**: attacks and sustains remain protected; generated discretionary fills and harmony must not attack or remain sounding across them.
+
+The server validates physical candidates, density budgets, and phrase boundaries before rendering any Guitar ABC/TAB artifact.
 
 ### Generating Interludes / Fills
 When a gap is detected:
@@ -60,5 +62,4 @@ When a gap is detected:
    - Play a short hammer-on or pull-off embellishment on the high strings.
 
 ### AI Generation of Interludes
-When calling the AI Accompaniment generator, we can instruct the LLM to output these interludes/fills directly inside the ABC string for the accompaniment voices during measures where the melody contains rests.
-This is achieved by updating the AI prompt to request note embellishments (colored notes) and bass walkdowns specifically in the empty spaces.
+The dedicated Guitar Fingerstyle workflow does not ask an accompaniment generator to write raw ABC fills. Its LLM selects and composes only server-scored, legal TimeGrid candidates through bounded staged contracts; the server merges and validates physical events, then deterministically renders Guitar ABC and TAB. Interludes and fills therefore remain restricted to legal source-rest/phrase-gap windows.

@@ -31,7 +31,7 @@ export const ACCOMPANIMENT_WORKFLOW_STEP_IDS = [
 export type AccompanimentWorkflowStepId = (typeof ACCOMPANIMENT_WORKFLOW_STEP_IDS)[number];
 export type AccompanimentWorkflowScope = "shared" | "guitar" | "harmonium" | "djembe";
 export type AccompanimentInstrumentId = "guitar-classic" | "indian-harmonium" | "djembe";
-export type AccompanimentStyleId = "solo-fingerstyle" | "accompaniment";
+export type AccompanimentStyleId = "accompaniment";
 
 export interface AccompanimentInstrumentSelection {
   id: AccompanimentInstrumentId;
@@ -49,11 +49,6 @@ export const ACCOMPANIMENT_INSTRUMENT_LABELS: Record<AccompanimentInstrumentId, 
   "guitar-classic": "Guitar Classic",
   "indian-harmonium": "Indian Harmonium",
   djembe: "Djembe",
-};
-
-export const ACCOMPANIMENT_STYLE_LABELS: Record<AccompanimentStyleId, string> = {
-  "solo-fingerstyle": "Solo/Fingerstyle",
-  accompaniment: "Accompaniment (combined instruments)",
 };
 
 export const ACCOMPANIMENT_GUITAR_TAB_VALIDATION_STEP_IDS = [

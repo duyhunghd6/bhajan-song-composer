@@ -157,10 +157,9 @@ Accompaniment is a human-in-the-loop workflow hosted on the existing single comp
 
 Before small-step generation, capture the setup defined in `src/lib/theory/accompaniment-workflow/definition.ts`:
 
-- Style: `solo-fingerstyle` or `accompaniment`.
 - Ordered instrument stack: Guitar Classic, Indian Harmonium, Djembe.
 - Role hints derive from order: bottom/foundation instruments bias bass/drone/transient support; middle instruments bias comping and sustained support; top instruments bias light rhythmic color.
-- New and restored workflows default to combined `accompaniment` with all three instruments enabled; persisted removed-instrument selections are discarded during normalization.
+- New and restored workflows use combined `accompaniment` with all three instruments enabled; legacy persisted Solo/Fingerstyle setup values normalize to this mode, while persisted removed-instrument selections are discarded during normalization.
 
 Use the small workflow steps defined in `src/lib/theory/accompaniment-workflow/definition.ts`:
 1. `key-beats` — analyze key/scale/raga context, phrase endings, cadence targets, and strong-beat emphasis.
@@ -176,8 +175,7 @@ Use the small workflow steps defined in `src/lib/theory/accompaniment-workflow/d
 Dynamic step gating:
 
 - Shared steps 1–3 are always enabled.
-- `solo-fingerstyle` enables shared steps plus branch steps for exactly the retained instruments the user enabled in the ordered setup. Disabled instrument branches must not appear, block completion, or be required before the accompaniment result is applied.
-- Combined `accompaniment` enables branch steps only for enabled instruments in the ordered stack.
+- Combined `accompaniment` enables branch steps only for enabled instruments in the ordered stack. Disabled instrument branches must not appear, block completion, or be required before the accompaniment result is applied.
 - The planned step grid must react whenever a retained instrument checkbox changes, including after a workflow has started: newly checked instruments add their branch steps, unchecked instruments remove their branch steps and must not block completion.
 - Guitar Classic owns the Guitar branch.
 - Disabled branches must not block `getNextUncompletedWorkflowStepId` or step unlock checks.

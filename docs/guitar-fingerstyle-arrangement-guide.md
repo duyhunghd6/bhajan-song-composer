@@ -1,6 +1,8 @@
 # Guitar Fingerstyle Arrangement Guide
 
-This document describes the line-level solo-guitar pipeline used by `/compose/:slug/guitar-fingerstyle`. The canonical arrangement document is an event-based, meter-aware `TimeSliceMeasure[]` TimeGrid: it retains source-derived melody/context facts and stores independent physical guitar attacks in each `grid[].tablature[]` array. Guitar ABC notation and ASCII-GuitarTab are deterministic generated artifacts, not raw-text editing targets.
+This document describes the line-level solo-guitar pipeline used only by `/compose/:slug/guitar-fingerstyle`. Its input is the selected Harmony Step 3 (`voice-leading-validation`) ABC. It is an independent sibling of `/compose/:slug/accompaniment`: accompaniment output, setup style, branch options, and completion state never become inputs to this TimeGrid workflow.
+
+The canonical arrangement document is an event-based, meter-aware `TimeSliceMeasure[]` TimeGrid: it retains source-derived melody/context facts and stores independent physical guitar attacks in each `grid[].tablature[]` array. Guitar ABC notation and ASCII-GuitarTab are deterministic generated artifacts, not raw-text editing targets.
 
 The design keeps locked melody facts and physical constraints server-owned while leaving two genuinely musical decisions to the LLM:
 
@@ -34,7 +36,7 @@ source ABC → compile locked source facts into TimeGrid
            → deterministically render Guitar ABC and ASCII-GuitarTab
 ```
 
-The working representation has three distinct layers: the in-memory canonical `{ version: 1, source, measures }` document; the emitted `timegrid-document:v3` import/copy/download JSON; and the separate `{ version: 1, sourceFingerprint, measures }` local-restore envelope. Only the TimeGrid is editable authority. The Composer Guitar Fingerstyle page exposes v3 copy, download, paste import, and file import; imports must match the current workflow-applied raw source ABC, then overlay only validated physical tab events on freshly compiled source facts. The v3 document preserves the immutable raw source ABC plus literal melody states and physical tab events; local restore overlays only compatible tab/visual-tab data on freshly compiled source facts and rejects malformed or physically invalid browser drafts.
+The working representation has three distinct layers: the in-memory canonical `{ version: 1, source, measures }` document; the emitted `timegrid-document:v3` import/copy/download JSON; and the separate `{ version: 1, sourceFingerprint, measures }` local-restore envelope. Only the TimeGrid is editable authority. The Composer Guitar Fingerstyle page exposes v3 copy, download, paste import, and file import; imports must match the currently selected `voice-leading-validation` raw source ABC, then overlay only validated physical tab events on freshly compiled source facts. The v3 document preserves the immutable raw source ABC plus literal melody states and physical tab events; local restore overlays only compatible tab/visual-tab data on freshly compiled source facts and rejects malformed or physically invalid browser drafts.
 
 See [TimeGrid Conversion Guide](./timegrid-conversion-guide.md) for the exact v3 wire shape, persisted envelope, representation-level edit operations, validation sequence, and serialization rules.
 

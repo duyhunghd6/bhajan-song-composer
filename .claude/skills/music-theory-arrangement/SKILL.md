@@ -55,59 +55,36 @@ Read these when the task requires **generating arrangement parts** for specific 
 | **Piano** | [`ARRANGEMENT02-PIANO.md`](./ARRANGEMENT02-PIANO.md) | Generating two-handed piano accompaniment with LH bass anchoring, RH voicing, comping profiles (ballad/rock/classical), fill generation, and pedal automation |
 | **Ensemble** | [`ARRANGEMENT03-ESSEMBLE.md`](./ARRANGEMENT03-ESSEMBLE.md) | Expanding a melody+accompaniment foundation into a full ensemble with Djembe (percussion), Flute (melodic highlight), and Violin (harmonic bed) — includes yield logic, frequency stratification, and conflict resolution |
 
-### Arrangement Pipeline (Reading Order)
+### Arrangement Pipeline and Route Ownership
 
-When arranging from a melody-only input, follow this document reading order:
+When arranging from a melody-only input, first complete the shared Harmony foundation: `key-beats`, `chord-roles-progression`, then the selected `voice-leading-validation` ABC. That selected Step 3 ABC independently feeds two sibling routes:
 
-```
-1. THEORY.md §6.4           →  Harmonize the melody (find chords)
-2. Initial setup            →  Choose style and ordered instrument stack
-3. ARRANGEMENT01-GUITAR.md  →  If Guitar Classic/Acoustic or Solo/Fingerstyle is enabled
-   OR ARRANGEMENT02-PIANO.md →  If Piano is enabled
-   OR harmonium guidance     →  If Indian Harmonium is enabled
-4. ARRANGEMENT03-ESSEMBLE.md →  If Djembe/Flute/Violin support or later ensemble expansion is enabled
+```text
+Harmony Step 3: selected voice-leading-validation ABC
+  ├─ /compose/:slug/accompaniment       → combined support workflow
+  └─ /compose/:slug/guitar-fingerstyle  → dedicated solo-guitar TimeGrid workflow
 ```
 
-### Initial Accompaniment Setup
+`/compose/:slug/accompaniment` has one combined accompaniment setup with this ordered, selectable stack:
 
-The accompaniment workflow starts on the single route `/compose/:slug/accompaniment` (for example `/compose/hari-bol/accompaniment`). Before small-step generation, capture:
+1. Guitar Classic
+2. Indian Harmonium
+3. Djembe
 
-1. **Style**
-   - `Solo/Fingerstyle` — compress melody, chord support, and chord-derived bass onto the top enabled guitar. Disable Piano, Harmonium, Djembe, Flute, and Violin branches so the solo guitar remains clear.
-   - `Accompaniment (combined instruments)` — combine enabled instruments while preserving the devotional melody first.
-2. **Ordered instrument stack**
-   - Guitar Classic
-   - Guitar Acoustic
-   - Piano
-   - Indian Harmonium
-   - Flute
-   - Djembe
-   - Violin
+Stack order supplies orchestration priority: lower instruments bias foundation/bass/drone/transient support; middle instruments bias comping and sustain; upper instruments bias lighter treble or rhythmic color while yielding to melody.
 
-Use the order as orchestration priority:
+Conditional accompaniment steps:
 
-- Lower/bottom instruments should take foundation, bass, drone, or transient-support duties.
-- Middle instruments should provide comping, guide tones, or sustained support.
-- Upper/top instruments should provide treble fills, breath, halo, sustained strings, or light rhythmic color.
-- Djembe can support low Bass/Dum events when placed lower, or Tone/Slap transient color when placed higher.
-- Violin can provide harmonic bed, drone-pad, or restrained counterline support and should yield before it covers the devotional melody.
+- Shared foundation: `key-beats`, `chord-roles-progression`, `voice-leading-validation`.
+- Guitar Classic: `guitar-comping-profile`, `guitar-voicing-bass`.
+- Indian Harmonium: `harmonium-drone-register`, `harmonium-chord-voicing-validation`.
+- Djembe: `djembe-groove-interlock`, `djembe-fill-validation`.
 
-Conditional step planning:
+Disabled instrument branches must not appear, block completion, or be required before applying accompaniment output. The route does not offer Solo/Fingerstyle, fill-density, TimeGrid, generated Guitar ABC, or Guitar TAB output.
 
-- Always run the shared harmonic foundation steps: `key-beats`, `chord-roles-progression`, and `voice-leading-validation`.
-- Enable the Accompaniment Guitar steps when Guitar Classic or Guitar Acoustic is active: `guitar-comping-profile` and `guitar-voicing-bass`. Each Guitar step that proposes concrete notes must validate representative `guitarTab.events` against the one-physical-guitar rules in `ARRANGEMENT01-GUITAR.md §4`: one source note maps to one string, every note is within the selected fretboard range, and one left hand can fret the target shape. Fill density and final fill generation remain independent Guitar Fingerstyle settings and stages.
-- Enable Piano steps only when Piano is active and the style is combined Accompaniment: `piano-comping-bass`, `piano-rh-voicing`, and `piano-fills-pedal-validation`.
-- Enable Harmonium steps only when Indian Harmonium is active and the style is combined Accompaniment: `harmonium-drone-register` and `harmonium-chord-voicing-validation`.
-- Enable Djembe steps only when Djembe is active and the style is combined Accompaniment: `djembe-groove-interlock` and `djembe-fill-validation`.
-- Enable Flute steps only when Flute is active and the style is combined Accompaniment: `flute-yield-register` and `flute-breath-fill-validation`.
-- Enable Violin steps only when Violin is active and the style is combined Accompaniment: `violin-bed-register` and `violin-expression-validation`.
+`/compose/:slug/guitar-fingerstyle` alone owns solo compression, skill and fill-density settings, the meter-aware TimeGrid, physical guitar validation, generated Guitar ABC, and ASCII-GuitarTab. It never waits for or consumes accompaniment output, setup style, branch options, or completion state. Follow [Guitar Fingerstyle Arrangement Guide](../../../docs/guitar-fingerstyle-arrangement-guide.md) and [TimeGrid Conversion Guide](../../../docs/timegrid-conversion-guide.md) for its bounded staged contracts; do not ask the LLM to replace a complete grid.
 
-Implementation behavior:
-
-- The setup is persisted with the composer workspace and embedded in each accompaniment workflow session.
-- New workflows default to combined Accompaniment with all seven setup instruments enabled in the order listed above.
-- Legacy restored sessions without a setup are normalized to the older Guitar Classic + Piano combined-accompaniment behavior so existing localStorage drafts continue to unlock and render predictably.
-- Do not create a separate `/music-theory-arrangement` app page for this workflow; this is a Claude skill and a theory reference, not a Next.js route.
+Do not create a separate `/music-theory-arrangement` app page for this workflow; this is a Claude skill and a theory reference, not a Next.js route.
 
 ### 🎹 MIDI Instrument Mapping Guide
 
@@ -157,45 +134,13 @@ When generating ABC for Guitar (or any string instrument) intended to be rendere
 4. **Key Signature Awareness**: When converting fret/string coordinates back to ABC notation, respect the active key signature. If a physical pitch is natural but the key signature has a sharp/flat on that note letter (e.g., F-natural in `K:Em` where F is sharped), you **MUST** output an explicit natural indicator `=` (e.g., `!1!=f` instead of `!1!f`) so that ABCJS does not incorrectly render it as fret 2. Conversely, omit the sharp/flat accidental if the key signature already implies it.
 5. **Export Portability**: When exporting or copying the ABC notation, `cleanAbcForExport()` strips out the `!N!` decorations (since other software would render them as staff fingering numbers) and normalizes `clef=treble-8` to `clef=treble` so that third-party ABC viewers render the staff correctly.
 
-### 🎸 Guitar Fingerstyle Tab Generation (Time-Slice Grid)
+### 🎸 Dedicated Guitar Fingerstyle (TimeGrid)
 
-For solo guitar fingerstyle arrangements, the backend translates the melody and chord progression into a quantized 16-step JSON grid. The LLM acts as a logic router to map voicings and fingerpicking filler notes.
+Use this material only for `/compose/:slug/guitar-fingerstyle`, after a selected Harmony Step 3 (`voice-leading-validation`) ABC exists. The dedicated workflow compiles that source into a meter-aware `TimeSliceMeasure[]` TimeGrid with four quantized steps per notated beat: 4/4 has 16 steps, 3/4 has 12, and supported meters use `numerator × 4` steps.
 
-#### 1. Quantized JSON Step Grid Schema
-The JSON grid contains exactly 16 steps per measure (for 4/4 meter):
-```json
-{
-  "measure": 1,
-  "style_profile": {
-    "key": "Em",
-    "comping_style": "PIMA devotional fingerstyle. Sparse fills.",
-    "voicing_plan": "Open-position Em and D shapes. Thumbed E/B and D/A anchors."
-  },
-  "grid": [
-    {"step": 1, "chord": "Em", "weight": "⬤", "melody": {"pitch": "E4", "state": "attack"}, "lyric": "Ha-"},
-    {"step": 2, "chord": "Em", "weight": null, "melody": {"pitch": "E4", "state": "sustain"}, "lyric": null},
-    {"step": 3, "chord": "Em", "weight": "*", "melody": {"pitch": "E4", "state": "attack"}, "lyric": "ri"},
-    {"step": 4, "chord": "Em", "weight": null, "melody": {"pitch": "E4", "state": "sustain"}, "lyric": null}
-  ]
-}
-```
-* **weight**: Indicates the rhythmic weight. Strong beat downbeat (`⬤`), medium beat (`●`), soft beat (`*`), or off-beat (`null`).
-* **melody.state**: Either `"attack"`, `"sustain"`, or `"rest"`.
-* **lyric**: Syllable string, melisma (`_`), or skip (`*`).
+The server owns locked source facts, physical placement, and TimeGrid mutation. The LLM uses bounded staged contracts—foundation placement, paginated fill opportunities, use/skip selection, and physical candidate composition—rather than receiving or replacing a full grid. Fill density belongs only to the dedicated route, and discretionary fills remain confined to legal source-rest/phrase-gap windows.
 
-#### 2. Exposed Arrangement Tools
-* **`query_guitar_voicings(chord, melody_pitch, target_position)`**: Returns valid safe left-hand open chord shapes (e.g. `{"bass": {"string": 6, "fret": 0}, "melody": {"string": 1, "fret": 0}, "available_inner_strings": [3, 4]}`).
-* **`validate_fingerstyle_physics(proposed_grid)`**: Evaluates playability. Returns an error if any inner-string note is placed on a string holding a sustaining melody note (`"state": "sustain"`).
-* **`submit_arranged_measure(final_grid)`**: Submits the verified tablature grid.
-
-#### 3. LLM Guidelines & System Prompt
-The LLM must follow this systematic process:
-1. **Anchor the Bass**: Place the lowest root bass note (Thumb/P) on `⬤` (Beat 1), and a secondary root/5th on `●` (Beat 3). Do not place heavy bass on `*` (Soft beats).
-2. **Lock the Grip**: Query open-position shapes for chords at step 1 and 9 via `query_guitar_voicings()`.
-3. **Protect the Melody**: Map melody pitches exactly on the highest treble strings (1-3).
-4. **PIMA Fills**: Place sparse filler notes (Index/Middle) on empty `null` steps using available inner strings. Check that no filler notes collide with sustaining melody strings (The Sustain Rule).
-
----
+Read [Guitar Fingerstyle Arrangement Guide](../../../docs/guitar-fingerstyle-arrangement-guide.md) and [TimeGrid Conversion Guide](../../../docs/timegrid-conversion-guide.md) for the canonical pipeline, contracts, validation rules, and Guitar ABC/TAB projection behavior.
 
 ## Relationship to Other Skills
 

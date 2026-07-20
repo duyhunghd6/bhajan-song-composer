@@ -30,6 +30,7 @@ graph TD
     ComposeMelody["Step 1: Melody Input <br> (/compose/[slug]/melody)"]
     ComposeHarmony["Step 2: Harmonization <br> (/compose/[slug]/harmony)"]
     ComposeAccomp["Step 3: Accompaniment <br> (/compose/[slug]/accompaniment)"]
+    ComposeFingerstyle["Step 3.1: Guitar Fingerstyle <br> (/compose/[slug]/guitar-fingerstyle)"]
     ComposeEnsemble["Step 4: Ensemble Expansion <br> (/compose/[slug]/ensemble)"]
     ComposeReview["Step 5: Review & Export <br> (/compose/[slug]/review)"]
 
@@ -48,7 +49,9 @@ graph TD
     ComposeGeneral -->|Save Metadata| ComposeMelody
     ComposeMelody -->|Save Melody| ComposeHarmony
     ComposeHarmony -->|Save Harmony| ComposeAccomp
+    ComposeHarmony -.->|Open dedicated Guitar Fingerstyle| ComposeFingerstyle
     ComposeAccomp -->|Save Accompaniment| ComposeEnsemble
+    ComposeFingerstyle -.->|Independent Guitar layer available to review| ComposeReview
     ComposeEnsemble -->|Save Ensemble| ComposeReview
     ComposeReview -->|Export Markdown/PR| EditList
 
@@ -61,7 +64,7 @@ graph TD
     %% Apply Styles
     class Home,Catalog,SongDetail,EditList hub;
     class ComposeGeneral composer;
-    class ComposeMelody,ComposeHarmony,ComposeAccomp,ComposeEnsemble,ComposeReview step;
+    class ComposeMelody,ComposeHarmony,ComposeAccomp,ComposeFingerstyle,ComposeEnsemble,ComposeReview step;
     class MockupHub,MockArrangement,MockFingerstyle,MockPiano,MockEnsemble mockup;
 ```
 
@@ -103,9 +106,9 @@ The playback screen is optimized for double-medium split playback: users can wat
 +----------------------------------------------------------------------------------+
 ```
 
-### 2.2 Workstation Route-Based Layout (The 5 Child-UIs)
+### 2.2 Workstation Route-Based Layout
 
-To prevent UI clutter and to empower **Agentic AI Coding**, the Composer Workstation is **strictly split into 5 smaller, dedicated child-UIs** using Next.js subroutes (`/compose/[slug]/[step]`). 
+To prevent UI clutter and to empower **Agentic AI Coding**, the Composer Workstation is split into dedicated child-UIs using Next.js subroutes (`/compose/[slug]/[step]`). The dedicated Guitar Fingerstyle route is a sibling downstream of Harmony rather than an accompaniment substep.
 
 A monolithic screen containing all these features would be an anti-pattern. By decoupling the pipeline into distinct routes, each UI is small, state is localized, and AI agents can reason about one workflow at a time. The Workstation uses a compact checkpoint strip for Layers & Navigation so step progress remains visible without consuming the left side of the canvas.
 
@@ -179,7 +182,7 @@ Focus: AI Theory Assistant generating chord progressions and refining them with 
 *(Note: Ghosted Background Layers allow the user to see the Melody notes faintly behind the active Chord track).*
 
 #### 2.2.3 Step 3: Accompaniment (`/compose/[slug]/accompaniment`)
-Focus: AI-assisted generation of Piano Accompaniment or Guitar Fingerstyle from the Harmonized Melody.
+Focus: combined accompaniment planning from the selected Harmony Step 3 (`voice-leading-validation`) ABC.
 
 ```
 +----------------------------------------------------------------------------------+
@@ -187,29 +190,21 @@ Focus: AI-assisted generation of Piano Accompaniment or Guitar Fingerstyle from 
 +----------------------------------------------------------------------------------+
 | MAIN WORKSPACE CANVAS: STEP 3 - ACCOMPANIMENT                                    |
 |                                                                                  |
-| STACK 1: AI Accompaniment Generation (Two-column grid)                           |
-|  +------------------------------------+  +------------------------------------+  |
-|  | AI Accompaniment Settings          |  | Resulting ABC Staff Preview        |  |
-|  | [✨ Suggest AI Accompaniment]      |  | [Music Staff Playback]             |  |
-|  |                                    |  |                                    |  |
-|  | AI Suggested Accompaniments        |  +------------------------------------+  |
-|  | [Option 1: Flowing Pop Piano]      |  | Generated ABC Source               |  |
-|  | [Option 2: Strict PIMA Guitar]     |  | X:1 ... V:PianoLH ...              |  |
-|  | [Option 3: Folk Travis Guitar]     |  |                                    |  |
-|  +------------------------------------+  +------------------------------------+  |
+| Ordered stack: [x] Guitar Classic  [x] Indian Harmonium  [x] Djembe             |
+| Shared Harmony review: Key & Beats → Chords → Validate Harmony                   |
+| Instrument branches: Guitar comping/voicing · Harmonium · Djembe                 |
 |                                                                                  |
-| STACK 2: Virtual Instruments (Full width)                                        |
-|  +----------------------------------------------------------------------------+  |
-|  | Piano Voicing Keyboard                                                     |  |
-|  | [============= KEYS & NOTE HIGHLIGHTING ===============]                     |  |
-|  +----------------------------------------------------------------------------+  |
-|  | Guitar Fretboard preview                                                   |  |
-|  | [============== FRETS & STRING MARKERS ===============]                     |  |
-|  +----------------------------------------------------------------------------+  |
-|                                                                                  |
-| [ Back ]                                                        [ Save & Next ]  |
+|  +------------------------------------+  +------------------------------------+  |
+|  | AI Accompaniment Workflow          |  | Resulting ABC Staff Preview        |  |
+|  | [Generate / review branch options] |  | [Music Staff Playback]             |  |
+|  | No Solo/Fingerstyle or TAB output  |  | Combined support voices only        |  |
+|  +------------------------------------+  +------------------------------------+  |
 +----------------------------------------------------------------------------------+
 ```
+
+#### 2.2.4 Dedicated Guitar Fingerstyle (`/compose/[slug]/guitar-fingerstyle`)
+
+This independent sibling route compiles the selected `voice-leading-validation` ABC into the meter-aware TimeGrid. It owns skill and fill-density settings, physical validation, generated Guitar ABC, and ASCII-GuitarTab; it never consumes accompaniment output.
 
 #### 2.2.4 Step 4: Ensemble Expansion (`/compose/[slug]/ensemble`)
 Focus: Layering Flute, Violin, and Djembe on top of the accompaniment.
@@ -317,6 +312,7 @@ sequenceDiagram
     participant MelodyPage as /compose/[slug]/melody
     participant HarmonyPage as /compose/[slug]/harmony
     participant AccompPage as /compose/[slug]/accompaniment
+    participant FingerstylePage as /compose/[slug]/guitar-fingerstyle
     participant DB as Local Storage
 
     User->>MetaPage: Enter metadata (Title, Key, Time)
@@ -339,18 +335,21 @@ sequenceDiagram
     HarmonyPage->>DB: Save Harmony Layer
     HarmonyPage-->>User: Navigate to Step 3: /compose/[slug]/accompaniment
     
-    Note over AccompPage: Step 3: Accompaniment / Fingerstyle
-    User->>AccompPage: Select "Fingerstyle Generator"
-    AccompPage->>User: Show playability report (max span)
-    User->>AccompPage: Click "Save & Next"
-    AccompPage->>DB: Save Guitar Layer
-    AccompPage-->>User: Navigate to Step 4: /compose/[slug]/ensemble (etc.)
+    Note over AccompPage: Step 3: combined accompaniment only
+    User->>AccompPage: Configure Guitar Classic, Harmonium, and Djembe branches
+    AccompPage->>User: Preview combined support ABC
+    User->>AccompPage: Save accompaniment decisions
+
+    User->>FingerstylePage: Open independent Guitar Fingerstyle route
+    Note over FingerstylePage: Compile selected voice-leading-validation ABC into TimeGrid
+    FingerstylePage->>User: Review skill/density, physical validation, Guitar ABC, and TAB
+    FingerstylePage->>DB: Save dedicated Guitar Fingerstyle artifact
 ```
 
 ---
 
-### 3.3 Flow 3: Fingerstyle Compression & Playability Tuning
-This flow highlights the interaction between the downward compression algorithm and the user setting physical constraints, specifically on the `/compose/[slug]/accompaniment` or `/mockups/fingerstyle` page.
+### 3.3 Flow 3: Dedicated Guitar Fingerstyle Compression & Playability Tuning
+This flow highlights the interaction between the downward compression algorithm and physical constraints on `/compose/[slug]/guitar-fingerstyle`. The route independently starts from the selected `voice-leading-validation` ABC; `/compose/[slug]/accompaniment` output is not an input.
 
 ```mermaid
 sequenceDiagram

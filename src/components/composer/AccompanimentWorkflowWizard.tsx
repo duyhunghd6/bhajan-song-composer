@@ -55,7 +55,6 @@ interface AccompanimentWorkflowWizardProps {
   workflowSetup: AccompanimentWorkflowSetup | null;
   onWorkflowChange: (workflow: AccompanimentWorkflowSession | null) => void;
   onWorkflowSetupChange: (setup: AccompanimentWorkflowSetup) => void;
-  onGuitarProfileSelected?: (profile: string | null, option?: AccompanimentWorkflowOption) => void;
   onReset?: () => void;
 }
 
@@ -152,7 +151,6 @@ export default function AccompanimentWorkflowWizard({
   workflowSetup,
   onWorkflowChange,
   onWorkflowSetupChange,
-  onGuitarProfileSelected,
   onReset,
 }: AccompanimentWorkflowWizardProps) {
   const sourceCurrent = isAccompanimentWorkflowSourceCurrent(workflow, sourceAbc);
@@ -226,7 +224,6 @@ export default function AccompanimentWorkflowWizard({
     onWorkflowSetupChange(normalizedSetup);
     onWorkflowChange(next);
     setActiveStepId(next.currentStepId);
-    onGuitarProfileSelected?.(null);
     setUserNotes({});
     setSavedNoteStepId(null);
     setGeneratingStepId(null);
@@ -243,7 +240,6 @@ export default function AccompanimentWorkflowWizard({
     const next = applyAccompanimentWorkflowSetupToSession(session, normalizedSetup);
     onWorkflowChange(next);
     setActiveStepId(next.currentStepId);
-    if (!next.guitarProfileHint) onGuitarProfileSelected?.(null);
     setError(null);
   };
 
@@ -316,16 +312,11 @@ export default function AccompanimentWorkflowWizard({
     }
   };
 
-  const clearProfilesForScope = (scope: BranchScope) => {
-    if (scope === "guitar") onGuitarProfileSelected?.(null);
-  };
-
   const handleSkipBranch = (scope: BranchScope) => {
     if (!session) return;
     const next = skipWorkflowSteps(session, ACCOMPANIMENT_WORKFLOW_BRANCH_STEP_IDS[scope], BRANCH_LABELS[scope], activeUserNote);
     onWorkflowChange(next);
     setActiveStepId(next.currentStepId);
-    clearProfilesForScope(scope);
     setError(null);
   };
 
@@ -338,17 +329,12 @@ export default function AccompanimentWorkflowWizard({
     };
     onWorkflowChange(next);
     setActiveStepId(next.currentStepId);
-    clearProfilesForScope(scope);
     setError(null);
   };
 
   const handleSelectOption = (option: AccompanimentWorkflowOption, runId: string) => {
     if (!session || !activeStep) return;
-    const next = selectOption(session, activeStep.id, option, activeUserNote, runId);
-    onWorkflowChange(next);
-    // Regenerate the Guitar preview progressively across every Guitar branch selection.
-    const isGuitarStep = (ACCOMPANIMENT_WORKFLOW_BRANCH_STEP_IDS.guitar as readonly string[]).includes(activeStep.id);
-    if (isGuitarStep) onGuitarProfileSelected?.(next.guitarProfileHint, option);
+    onWorkflowChange(selectOption(session, activeStep.id, option, activeUserNote, runId));
   };
 
   if (mode === "accompaniment" && !branchSourceAbc) {
@@ -379,7 +365,7 @@ export default function AccompanimentWorkflowWizard({
               ? `${filteredSteps.length} planned review points for the shared harmonic foundation. Configure your instruments above before starting.`
               : mode === "guitar"
                 ? `${filteredSteps.length} planned review points for the guitar fingerstyle arrangement.`
-                : `${filteredSteps.length} planned review points will be created from the selected style and instruments. Change the setup above to preview the exact workflow before starting.`}
+                : `${filteredSteps.length} planned review points will be created from the selected instruments. Change the setup above to preview the exact workflow before starting.`}
           </p>
           {workflow && !sourceCurrent && (
             <p className="mt-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900/70 dark:bg-amber-950/40 dark:text-amber-300">
@@ -416,7 +402,7 @@ export default function AccompanimentWorkflowWizard({
               ? `Start ${filteredSteps.length}-step Harmony Workflow`
               : mode === "guitar"
                 ? `Start ${filteredSteps.length}-step Guitar Fingerstyle Workflow`
-                : `Start ${filteredSteps.length}-step ${editableSetup.style === "solo-fingerstyle" ? "Solo/Fingerstyle" : "Accompaniment"} Workflow`}
+                : `Start ${filteredSteps.length}-step Accompaniment Workflow`}
         </button>
       </div>
     );
