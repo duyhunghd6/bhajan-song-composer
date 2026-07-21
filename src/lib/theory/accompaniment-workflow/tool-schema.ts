@@ -1,6 +1,7 @@
 import {
   ACCOMPANIMENT_GUITAR_TAB_VALIDATION_STEP_IDS,
   ACCOMPANIMENT_WORKFLOW_STEPS,
+  GUITAR_CLASSIC_COMPING_PROFILE_IDS,
   type AccompanimentWorkflowStepId,
 } from "./definition";
 
@@ -16,8 +17,9 @@ function isGuitarTabValidationWorkflowStep(stepId: AccompanimentWorkflowStepId):
 
 /**
  * Compact guitar tab event schema.
- * Key map: m=measureIndex, b=beat, n=note, s=string, f=fret, r=role,
- * sid=sourceEventId, sd=subdivision, gid=simultaneousGroupId.
+ * Key map: m=measureIndex, t=one-based grid step, d=durationSteps,
+ * b=beat, n=note, s=string, f=fret, r=role, sid=sourceEventId,
+ * sd=subdivision, gid=simultaneousGroupId.
  */
 function buildGuitarTabDataProperty() {
   return {
@@ -32,7 +34,13 @@ function buildGuitarTabDataProperty() {
       },
       voicingProfileId: {
         type: "string",
-        description: "Voicing profile: open-position, barre, fingerstyle, etc.",
+        description: "Supported voicing profile: open-position, barre, or any.",
+        enum: ["open-position", "barre", "any"],
+      },
+      compingProfileId: {
+        type: "string",
+        enum: [...GUITAR_CLASSIC_COMPING_PROFILE_IDS],
+        description: "Selected Step 4 Guitar Classic realization technique.",
       },
       events: {
         type: "array",
@@ -42,8 +50,10 @@ function buildGuitarTabDataProperty() {
           type: "object",
           additionalProperties: false,
           properties: {
-            m: { type: "number", description: "Measure index." },
-            b: { type: "number", description: "Beat within measure." },
+            m: { type: "number", description: "One-based source measure number." },
+            t: { type: "integer", minimum: 1, description: "One-based sixteenth-note grid step within the source measure." },
+            d: { type: "integer", minimum: 1, description: "Positive duration in sixteenth-note grid steps." },
+            b: { type: "number", description: "Beat within measure, retained as a human-readable timing aid." },
             sd: { type: ["string", "number"], description: "Subdivision label." },
             gid: { type: "string", description: "Simultaneous group id." },
             sid: { type: "string", description: "Source event id." },
@@ -52,11 +62,11 @@ function buildGuitarTabDataProperty() {
             f: { type: "number", description: "Fret number." },
             r: { type: "string", description: "Role: melody, bass, root, fill, etc." },
           },
-          required: ["m", "b", "sid", "n", "s", "f", "r"],
+          required: ["m", "t", "d", "b", "sid", "n", "s", "f", "r"],
         },
       },
     },
-    required: ["profileId", "events"],
+    required: ["profileId", "compingProfileId", "events"],
   };
 }
 
@@ -64,6 +74,8 @@ function buildGuitarTabDataProperty() {
 export function expandCompactTabEvent(compact: Record<string, unknown>): Record<string, unknown> {
   return {
     measureIndex: compact.m ?? compact.measureIndex,
+    step: compact.t ?? compact.step,
+    durationSteps: compact.d ?? compact.durationSteps,
     beat: compact.b ?? compact.beat,
     subdivision: compact.sd ?? compact.subdivision,
     simultaneousGroupId: compact.gid ?? compact.simultaneousGroupId,
@@ -92,7 +104,7 @@ function buildWorkflowOptionDataProperty(stepId?: AccompanimentWorkflowStepId) {
   if (isGuitarTabValidationWorkflowStep(stepId ?? "key-beats")) {
     return {
       type: "object",
-      description: "Step data with guitarTab.events using compact keys (m/b/n/s/f/r).",
+      description: "Step-specific Guitar Classic data with a representative sample (Step 4) or structural voicing/bass anchors (Step 5); compact events use m/t/d/b/n/s/f/r/sid.",
       additionalProperties: true,
       properties: {
         guitarTab: buildGuitarTabDataProperty(),
@@ -320,7 +332,7 @@ export function buildQueryGuitarVoicingsToolSchema() {
         properties: {
           chord: { type: "string" },
           melody_pitch: { type: "string" },
-          target_position: { type: "string", enum: ["open"] }
+          target_position: { type: "string", enum: ["open", "barre", "any"] }
         },
         required: ["chord"]
       }

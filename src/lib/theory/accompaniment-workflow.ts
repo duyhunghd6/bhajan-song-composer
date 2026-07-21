@@ -27,6 +27,8 @@ import {
   type AccompanimentWorkflowStepState,
 } from "./accompaniment-workflow/definition";
 export * from "./accompaniment-workflow/definition";
+export { convertGuitarClassicEventsToAbc } from "./accompaniment-workflow/guitar-classic-abc";
+export { realizeGuitarClassicAccompaniment } from "./accompaniment-workflow/guitar-classic-realization";
 export { buildChordToneReferenceTable, validateGuitarVoiceChordTones } from "./chord-tone-reference";
 export {
   buildAccompanimentWorkflowToolSchema,
@@ -328,6 +330,16 @@ export function normalizeAccompanimentWorkflowSession(value: unknown): Accompani
   for (const stepId of ACCOMPANIMENT_WORKFLOW_STEP_IDS) {
     const restored = normalizePersistedStepState(rawSteps[stepId]);
     if (restored) steps[stepId] = restored;
+  }
+
+  const persistedVersion = typeof value.version === "number" ? value.version : 0;
+  if (persistedVersion < ACCOMPANIMENT_WORKFLOW_VERSION) {
+    // Earlier Guitar Classic selections have only sparse physical anchors and
+    // no explicit Step 4 realization technique. Regenerate this branch rather
+    // than guessing which arpeggio/strum the user intended.
+    for (const stepId of ACCOMPANIMENT_WORKFLOW_BRANCH_STEP_IDS.guitar) {
+      steps[stepId] = getInitialAccompanimentWorkflowSteps()[stepId];
+    }
   }
 
   const normalized: AccompanimentWorkflowSession = {
@@ -974,14 +986,14 @@ export function buildAccompanimentWorkflowPrompt(input: {
     ? "\nStrong Beats: choose emphasis direction. Call add_strong_beat_icons for each emphasis direction before the final tool call. Final option.data MUST include strongBeatEmphasis only. Do not include annotatedAbc, strongBeatDirectives, measureIndex, or beatTime."
     : "";
   const guitarTabInstruction = isGuitarTabValidationWorkflowStep(input.stepId)
-    ? "\nGuitar tab validation: option.data MUST include guitarTab with compact event keys (m=measure, b=beat, n=note, s=string, f=fret, r=role, sid=sourceEventId). Call query_guitar_voicings BEFORE fretting notes. Call valid_guitar_tab to validate. Rules: (1) one string per simultaneous group per source event, (2) all frets within profile range, (3) one left hand can fret the position."
+    ? "\nGuitar Classic singer-support contract: option.data MUST include guitarTab with compact keys m=measure, t=grid step, d=duration, b=beat, n=note, s=string, f=fret, r=role, sid=sourceEventId. Call query_guitar_voicings before proposing concrete frets, then call valid_guitar_tab on the exact final events. Step 4 provides only a representative profile sample; Step 5 provides bounded voicing/root-fifth/transition anchors, never the full accompaniment texture. Step 6 deterministically schedules it. Strings 4–6 are restrained bass anchors (30–45% of realized PIMA/pinch note attacks); strings 1–3 provide most motion (55–70%). Never plan more than two ordinary bass-only onsets in succession. Walking bass is optional and only immediately before a real chord change. Pinch is one bass plus one treble string on a strong metric step. Rules: (1) one string per simultaneous group per source event, (2) all frets within profile range, (3) one left hand can fret the position."
     : "";
   const guitarFingerstyleInstruction = "";
   const lyricChordInstruction = lyricChordAnnotations.length > 0 && isChordIngestionWorkflowStep(input.stepId)
     ? "\n- The source ABC has chord symbols embedded inside the lyric w: lines. Treat those lyric chord symbols as the user-supplied chord progression. Do not invent a different progression; map roles, progression, and validation around these chords."
     : "";
   const sustainRuleInstruction = isGuitarTabValidationWorkflowStep(input.stepId)
-    ? "\n- The Sustain Rule: If a step has \"state\": \"sustain\" in the Time-Slice grid, the vocal melody is currently ringing out on a specific string. When you add fingerpicking/comping filler notes on empty steps, you are strictly forbidden from placing a note on the exact same string that holds the sustaining melody (treble string 1, 2, or 3)."
+    ? "\n- Vocal-yield rule: this is singer accompaniment, not solo fingerstyle. Structural low-register root/fifth anchors may support active melody, but do not add decorative high-register fills, unison doubles, or an independent treble melody while the vocal is active or sustaining. Use upper chord tones as quiet support between vocal phrases."
     : "";
   const midiInstruction = "\n- Any generated Guitar Classic/Classical Guitar ABC must include `%%MIDI program 24` immediately after the Guitar voice declaration.\n- Only an exact `Guitar Left Hand` target may be retargeted to Harmonium/Reed Organ, and it must use `%%MIDI program 20`; do not change `Guitar LH Accompaniment`, `Guitar Right Hand`, or generic Guitar layers.";
   const staffSystemInstruction = "\n- Multi-voice ABC line grouping requirement: when returning ABC with Melody plus Guitar, Harmonium, or Djembe, preserve the source Melody visual staff systems. Emit/validate each staff-system group as Melody line N, then lyric/helper rows for that Melody line, then every instrument's line N for the same measure range before moving to Melody line N+1. Do not write all Melody lines first and all accompaniment lines later when the final ABC contains multiple instruments.";

@@ -47,7 +47,20 @@ The rhythm guitar is **Layer 2** — it supports the melody with harmonic and rh
 | **Avoid melody register** | If the melody sits in the high-E / B string range, use voicings that emphasize the lower 4 strings |
 | **Guide tones** | Ensure the 3rd and 7th of each chord are present — they define major/minor/dominant quality |
 
-### 2.3 Harmonium Retarget for Exact `Guitar Left Hand`
+### 2.3 Devotional singer-support attack policy
+
+This policy applies only to **Guitar Classic accompaniment**. It is not the solo Fingerstyle TimeGrid contract.
+
+- Strings **4–6** are the bass band; strings **1–3** are the treble band. The thumb (`p`) supplies bass/root/fifth/approach motion; `i–m–a` supply inner and treble chord tones.
+- For PIMA and pinch profiles, count individual note attacks across the whole realized support voice. Target **30–45% bass-band** and **55–70% treble-band** attacks. A pinch counts as one bass and one treble attack.
+- Do not use more than two consecutive bass-only onsets. A third bass-only onset is exceptional transition/cadence material, never routine pulse.
+- Walking bass is optional: use it only immediately before a real chord change when it is stepwise, playable, and does not crowd the singer. Do not require a beat-four approach in every bar.
+- A pinch is exactly a simultaneous bass-plus-treble support accent on a metric strong beat. If a split chord window has no strong step, use ordinary arpeggio rather than moving the pinch to a weak subdivision.
+- In a split bar, restart the active chord window from its own root/voicing context; never sustain tones from a previous chord through an incompatible chord change.
+
+The physical validator confirms strings, frets, timing, simultaneous grip reach, and barres. PIMA right-hand assignments are a deterministic performance convention; Guitar Classic does not yet persist individual `p/i/m/a` metadata.
+
+### 2.4 Harmonium Retarget for Exact `Guitar Left Hand`
 
 If a generation path or source layer is explicitly named `Guitar Left Hand`, treat that target as **Harmonium / Reed Organ accompaniment** instead of guitar. Emit `V:Harmonium` with `%%MIDI program 20`, use sustained devotional chord support, and do not retarget similarly named guitar layers such as `Guitar LH Accompaniment` or `Guitar Right Hand`.
 
@@ -97,12 +110,12 @@ L:1/8
 
 ### 2.4 Bass Line Construction
 
-The guitar bass (strings 6, 5, 4) must follow these rules:
+The guitar bass (strings 6, 5, 4) is a restrained harmonic pulse:
 
-1. **Root on beat 1** — always anchor the chord identity
-2. **5th on beat 3** — provides harmonic motion without ambiguity
-3. **Walking bass on transitions** — when moving between chords, use stepwise chromatic or scalar approach notes on beat 4 to smoothly connect to the next chord's root
-4. **Avoid lowest note doubling** — if the bass guitar/piano already covers the low register in an ensemble, thin the guitar bass
+1. **Root at a chord-window start** — anchor identity when a new harmony begins.
+2. **Fifth or root later in a stable window** — use only when the complete PIMA/pinch distribution remains treble-led.
+3. **Walking bass only at transitions** — an optional, stepwise approach may occupy the final weak subdivision before a new chord root; omit it at arrivals, phrase endings, short windows, or when it crowds the singer.
+4. **Avoid lowest-note doubling** — if bass guitar/piano already covers the low register, thin Guitar Classic bass further.
 
 ---
 

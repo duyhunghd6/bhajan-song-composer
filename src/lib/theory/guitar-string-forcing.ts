@@ -24,6 +24,12 @@ const BASS_STRINGS: GuitarPlayabilityStringNumber[] = [4, 5, 6];
 
 const MAX_FRET = 20;
 
+/** TAB rendering is shared by solo Guitar and singer-support Guitar Classic. */
+export function isTabCapableGuitarVoiceId(voiceId: string): boolean {
+  return voiceId === "Guitar" || voiceId === "GuitarSupport";
+}
+
+
 /**
  * Check if a note token already has a string-forcing decoration.
  * Matches patterns like `!1!`, `!2!`, ..., `!6!` preceding the note.
@@ -259,7 +265,7 @@ export function processGuitarLine(line: string, keyAccidentals: AbcKeyAccidental
  */
 export function ensureGuitarStringForcing(abcString: string): string {
   // Quick check: if there's no Guitar voice, return as-is
-  if (!/V:Guitar\b/i.test(abcString)) return abcString;
+  if (!/V:Guitar(?:Support)?\b/i.test(abcString)) return abcString;
 
   // Quick check: if all Guitar notes already have !N! decorations, return as-is
   // (This handles the common case where the time-slice pipeline already processed it)
@@ -283,13 +289,13 @@ export function ensureGuitarStringForcing(abcString: string): string {
     // Track voice context
     if (trimmed.startsWith("V:")) {
       const voiceId = trimmed.substring(2).split(/\s/)[0];
-      inGuitarVoice = /^Guitar\b/i.test(voiceId);
+      inGuitarVoice = isTabCapableGuitarVoiceId(voiceId);
       result.push(line);
       continue;
     }
 
     // Inline voice: [V:Guitar] content — process Guitar notes
-    const inlineGuitarMatch = trimmed.match(/^(\[V:Guitar[^\]]*\])\s*(.*)/i);
+    const inlineGuitarMatch = trimmed.match(/^(\[V:Guitar(?:Support)?[^\]]*\])\s*(.*)/i);
     if (inlineGuitarMatch) {
       inGuitarVoice = true;
       const voiceTag = inlineGuitarMatch[1];
@@ -340,11 +346,11 @@ function extractGuitarVoiceLines(abcString: string): string[] {
 
     if (trimmed.startsWith("V:")) {
       const voiceId = trimmed.substring(2).split(/\s/)[0];
-      inGuitarVoice = /^Guitar\b/i.test(voiceId);
+      inGuitarVoice = isTabCapableGuitarVoiceId(voiceId);
       continue;
     }
 
-    const inlineMatch = trimmed.match(/^\[V:Guitar[^\]]*\]\s*(.*)/i);
+    const inlineMatch = trimmed.match(/^\[V:Guitar(?:Support)?[^\]]*\]\s*(.*)/i);
     if (inlineMatch) {
       inGuitarVoice = true;
       if (inlineMatch[1]) guitarLines.push(inlineMatch[1]);
@@ -420,7 +426,7 @@ function wrapForcedSingleNotesInLine(line: string): string {
  * single notes must be represented as one-note chords at the render boundary.
  */
 export function prepareGuitarStringForcingForAbcjs(abcString: string): string {
-  if (!/V:Guitar\b/i.test(abcString)) return abcString;
+  if (!/V:Guitar(?:Support)?\b/i.test(abcString)) return abcString;
 
   const lines = abcString.split(/\r?\n/);
   const result: string[] = [];
@@ -430,12 +436,12 @@ export function prepareGuitarStringForcingForAbcjs(abcString: string): string {
     const trimmed = line.trim();
     if (trimmed.startsWith("V:")) {
       const voiceId = trimmed.substring(2).split(/\s/)[0];
-      inGuitarVoice = /^Guitar\b/i.test(voiceId);
+      inGuitarVoice = isTabCapableGuitarVoiceId(voiceId);
       result.push(line);
       continue;
     }
 
-    const inlineGuitarMatch = trimmed.match(/^(\[V:Guitar[^\]]*\])\s*(.*)/i);
+    const inlineGuitarMatch = trimmed.match(/^(\[V:Guitar(?:Support)?[^\]]*\])\s*(.*)/i);
     if (inlineGuitarMatch) {
       inGuitarVoice = true;
       result.push(`${inlineGuitarMatch[1]} ${wrapForcedSingleNotesInLine(inlineGuitarMatch[2])}`);
@@ -464,7 +470,7 @@ export function prepareGuitarStringForcingForAbcjs(abcString: string): string {
  * as left-hand fingering numbers.
  */
 export function stripGuitarStringForcing(abcString: string): string {
-  if (!/V:Guitar\b/i.test(abcString)) return abcString;
+  if (!/V:Guitar(?:Support)?\b/i.test(abcString)) return abcString;
 
   const lines = abcString.split(/\r?\n/);
   const result: string[] = [];
@@ -475,12 +481,12 @@ export function stripGuitarStringForcing(abcString: string): string {
 
     if (trimmed.startsWith("V:")) {
       const voiceId = trimmed.substring(2).split(/\s/)[0];
-      inGuitarVoice = /^Guitar\b/i.test(voiceId);
+      inGuitarVoice = isTabCapableGuitarVoiceId(voiceId);
       result.push(line);
       continue;
     }
 
-    const inlineMatch = trimmed.match(/^(\[V:Guitar[^\]]*\])\s*(.*)/i);
+    const inlineMatch = trimmed.match(/^(\[V:Guitar(?:Support)?[^\]]*\])\s*(.*)/i);
     if (inlineMatch) {
       inGuitarVoice = true;
       result.push(`${inlineMatch[1]} ${inlineMatch[2].replace(/![1-6]!/g, "")}`);

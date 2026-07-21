@@ -423,11 +423,17 @@ function guitarTabValidationOptionsFromToolArgs(args: unknown, input: GenerateAc
   };
 }
 
-function validateGuitarWorkflowResult(raw: unknown, input: GenerateAccompanimentWorkflowStepInput): ToolLoopValidationResult {
+function validateGuitarWorkflowResult(
+  raw: unknown,
+  input: GenerateAccompanimentWorkflowStepInput,
+  toolEvidence: { queriedVoicings: boolean; validatedTab: boolean },
+): ToolLoopValidationResult {
   const result = raw as RawWorkflowStepResult;
   const options = Array.isArray(result.options) ? result.options.slice(0, 5) : [];
   const validations: Array<{ optionId: string; validation: GuitarTabValidationResult }> = [];
   const messages: string[] = [];
+  if (!toolEvidence.queriedVoicings) messages.push("Call query_guitar_voicings before finalizing Guitar Classic fretting.");
+  if (!toolEvidence.validatedTab) messages.push("Call valid_guitar_tab on the proposed Guitar Classic events before finalizing.");
 
   if (options.length === 0) {
     return { valid: false, message: "Final guitar workflow output contained no options." };
@@ -851,8 +857,10 @@ export async function generateAccompanimentWorkflowStep(
         onDiagnostic,
       });
     } else if (isGuitarTabValidationWorkflowStep(input.stepId)) {
+      let queriedVoicings = false;
+      let validatedTab = false;
       rawResult = await requestOpenAiCompatibleToolLoop({
-        systemPrompt: `${systemPrompt} For guitar tab steps, call query_guitar_voicings BEFORE fretting notes. Call valid_guitar_tab to validate. Use compact timed tab keys (m/t/d/b/n/s/f/r/sid) and include data.guitarTab.compingProfileId. Step 4 selects devotional-pima-arpeggio, devotional-pinch-arpeggio, or bhajan-strum; Step 5 must retain that exact selection. Ensure unique string/source assignment and one-left-hand reach. Root/fifth anchors are inputs to Step 6 realization, not the complete accompaniment texture.`,
+        systemPrompt: `${systemPrompt} For Guitar Classic singer-support steps, call query_guitar_voicings before concrete fretting and valid_guitar_tab on the exact proposed events; both calls are required before final output. Use compact timed tab keys (m/t/d/b/n/s/f/r/sid) and include data.guitarTab.compingProfileId. Step 4 selects devotional-pima-arpeggio, devotional-pinch-arpeggio, or bhajan-strum with a representative sample. Step 5 retains that profile and plans bounded voicing/root-fifth/transition anchors, not a full texture. Step 6 deterministically makes the treble-led accompaniment: strings 4-6 are restrained structural bass, strings 1-3 carry most PIMA/pinch motion, walking bass is optional transition material, and pinches are bass-plus-treble on metric strong beats. Ensure unique string/source assignment and one-left-hand reach.`,
         userPrompt: requestPrompt,
         tools: [buildValidGuitarTabToolSchema(), buildQueryGuitarVoicingsToolSchema(), toolSchema],
         finalToolName: toolName,
@@ -860,6 +868,7 @@ export async function generateAccompanimentWorkflowStep(
           {
             name: "valid_guitar_tab",
             execute: (args) => {
+              validatedTab = true;
               const events = (args as { events?: unknown }).events;
               return validateGuitarTab(
                 normalizeGuitarTabEvents(events) as unknown as GuitarTabEvent[],
@@ -870,12 +879,13 @@ export async function generateAccompanimentWorkflowStep(
           {
             name: "query_guitar_voicings",
             execute: (args) => {
+              queriedVoicings = true;
               const { chord, melody_pitch, target_position } = args as any;
               return query_guitar_voicings(chord, melody_pitch, target_position);
             }
           }
         ],
-        validateFinalResult: (args) => validateGuitarWorkflowResult(args, input),
+        validateFinalResult: (args) => validateGuitarWorkflowResult(args, input, { queriedVoicings, validatedTab }),
         temperature: 0.25,
         maxIterations: MAX_TOOL_LOOP_ITERATIONS,
         maxValidationAttempts: MAX_VALIDATION_REPAIR_ATTEMPTS,

@@ -6,7 +6,8 @@ import AccompanimentWorkflowWizard from "../AccompanimentWorkflowWizard";
 import type { HarmonyPreviewModel } from "./arrangement-preview-model";
 import { LayerVisibilityControls } from "./LayerVisibilityControls";
 import {
-  COMPOSER_PREVIEW_PROPS,
+  COMPOSER_PREVIEW_RENDER_OPTIONS,
+  COMPOSER_STAFF_PLAYBACK_PROPS,
   ComposerNotationPreviewLayout,
 } from "./preview";
 
@@ -104,7 +105,11 @@ export function HarmonyStep({
                 title="Harmonization Audio Preview"
                 canvasId="composer-harmony-preview"
                 synthOptions={harmonyPreview.synthOptions}
-                {...COMPOSER_PREVIEW_PROPS}
+                renderOptions={harmonyPreview.getRenderOptionsFor(
+                  harmonyPreview.abc,
+                  COMPOSER_PREVIEW_RENDER_OPTIONS,
+                )}
+                {...COMPOSER_STAFF_PLAYBACK_PROPS}
               />
             </div>
 

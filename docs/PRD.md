@@ -67,8 +67,8 @@ Once the chord progression exists, the system decides how those chords should be
 
 - **Theory used**: Voice leading, rhythmic motifs, and bassline construction.
 - **Method**:
-  1. **Separate the bass**: Extract the lowest note of each chord as the foundation. Use inversions, such as placing the 3rd or 5th of a chord in the bass, to create a smooth walking bassline instead of jumping wildly between root notes.
-  2. **Determine the groove (comping)**: Choose whether the piano or guitar plays block chords on the beat, arpeggios / broken chords, or syncopated rhythmic patterns.
+  1. **Separate the bass with restraint**: Use root/fifth anchors for structural pulse. For Guitar Classic singer support, reserve walking bass for playable chord transitions and leave most individual-note movement to upper chord tones so the vocal stays clear.
+  2. **Determine the groove (comping)**: Choose whether the piano or guitar plays block chords on the beat, arpeggios / broken chords, or syncopated rhythmic patterns; Guitar Classic PIMA/pinch should balance bass strings 4–6 with treble strings 1–3 rather than repeat a bass ostinato.
   3. **Apply voice leading**: When moving from C Major (C-E-G) to G Major (G-B-D), keep shared tones stable where possible and move other notes by the smallest practical interval. This makes accompaniment sound professional and fluid rather than clunky.
 
 #### Step 3: Layer 3 — Drums & Additional Instruments

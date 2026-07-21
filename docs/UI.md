@@ -192,12 +192,13 @@ Focus: combined accompaniment planning from the selected Harmony Step 3 (`voice-
 |                                                                                  |
 | Ordered stack: [x] Guitar Classic  [x] Indian Harmonium  [x] Djembe             |
 | Shared Harmony review: Key & Beats → Chords → Validate Harmony                   |
-| Instrument branches: Guitar comping/voicing · Harmonium · Djembe                 |
+| Instrument branches: Guitar comping/voicing/ABC · Harmonium · Djembe             |
 |                                                                                  |
 |  +------------------------------------+  +------------------------------------+  |
 |  | AI Accompaniment Workflow          |  | Resulting ABC Staff Preview        |  |
 |  | [Generate / review branch options] |  | [Music Staff Playback]             |  |
-|  | No Solo/Fingerstyle or TAB output  |  | Combined support voices only        |  |
+|  | No Solo/Fingerstyle or TAB output  |  | Guitar Classic standard staff +     |  |
+|  |                                    |  | combined support voices             |  |
 |  +------------------------------------+  +------------------------------------+  |
 +----------------------------------------------------------------------------------+
 ```

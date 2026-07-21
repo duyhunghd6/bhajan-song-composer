@@ -13,6 +13,10 @@ export type GuitarTabStringNumber = 1 | 2 | 3 | 4 | 5 | 6;
 
 export interface GuitarTabEvent {
   measureIndex: number;
+  /** One-based sixteenth-note grid step used by Guitar Classic ABC conversion. */
+  step?: number;
+  /** Positive sounding duration in grid steps used by Guitar Classic ABC conversion. */
+  durationSteps?: number;
   beat: number;
   subdivision?: string | number;
   simultaneousGroupId?: string;
@@ -28,6 +32,7 @@ export interface GuitarTabValidationOptions {
   voicingProfile?: GuitarVoicingPlayabilityProfileInput;
   requireScientificPitch?: boolean;
   requireSourceEventIds?: boolean;
+  requireRenderableTiming?: boolean;
 }
 
 export interface GuitarTabValidationIssue {
@@ -45,7 +50,9 @@ export interface GuitarTabValidationIssue {
     | "missing-octave"
     | "pitch-register-mismatch"
     | "left-hand-unfingerable"
-    | "multiple-barres";
+    | "multiple-barres"
+    | "invalid-grid-step"
+    | "invalid-duration";
   message: string;
   measureIndex?: number;
   beat?: number;
@@ -374,6 +381,36 @@ export function validateLeftHandReach(
   return Array.from(groupEvents(events).entries()).flatMap(([key, group]) => analyzeLeftHandGroup(key, group, options).issues);
 }
 
+function validateRenderableTiming(
+  events: GuitarTabEvent[],
+  options: GuitarTabValidationOptions
+): GuitarTabValidationIssue[] {
+  if (!options.requireRenderableTiming) return [];
+
+  return events.flatMap((event) => {
+    const issues: GuitarTabValidationIssue[] = [];
+    if (!Number.isInteger(event.step) || (event.step ?? 0) < 1) {
+      issues.push({
+        code: "invalid-grid-step",
+        message: `${event.note} at measure ${event.measureIndex} needs a one-based integer grid step for ABCNotation conversion.`,
+        ...issueLocation([event]),
+        string: event.string,
+        events: [event],
+      });
+    }
+    if (!Number.isInteger(event.durationSteps) || (event.durationSteps ?? 0) < 1) {
+      issues.push({
+        code: "invalid-duration",
+        message: `${event.note} at measure ${event.measureIndex} needs a positive integer durationSteps value for ABCNotation conversion.`,
+        ...issueLocation([event]),
+        string: event.string,
+        events: [event],
+      });
+    }
+    return issues;
+  });
+}
+
 export function validateGuitarTab(
   events: GuitarTabEvent[],
   options: GuitarTabValidationOptions = {}
@@ -381,6 +418,7 @@ export function validateGuitarTab(
   const profile = resolveGuitarPlayabilityProfile(options.guitarProfile);
   const voicingProfile = resolveGuitarVoicingProfile(options.voicingProfile);
   const issues = [
+    ...validateRenderableTiming(events, options),
     ...validateGuitarFretboardRange(events, options),
     ...validateOneGuitarStringAssignments(events, options),
     ...validateLeftHandReach(events, options),
@@ -416,7 +454,9 @@ export function validateGuitarTab(
 
 function buildGuitarTabEventSchemaProperties() {
   return {
-    measureIndex: { type: "number", description: "Zero-based or one-based measure index; use consistently." },
+    measureIndex: { type: "number", description: "One-based source measure number." },
+    step: { type: "integer", minimum: 1, description: "One-based sixteenth-note grid step within the measure." },
+    durationSteps: { type: "integer", minimum: 1, description: "Positive duration in sixteenth-note grid steps." },
     beat: { type: "number", description: "Beat or subdivision time within the measure." },
     subdivision: { type: ["string", "number"], description: "Optional subdivision label when multiple events occur inside a beat." },
     simultaneousGroupId: { type: "string", description: "Optional explicit group id for notes that sound together." },
@@ -453,15 +493,15 @@ export function buildValidGuitarTabToolSchema() {
           },
           events: {
             type: "array",
-            description: "Compact guitar tab events: m=measure, b=beat, sid=source id, n=pitch, s=string, f=fret, r=role. Events sharing m + b + sd or gid are simultaneous.",
+            description: "Compact guitar tab events: m=one-based measure, t=one-based grid step, d=duration steps, b=beat, sid=source id, n=pitch, s=string, f=fret, r=role. Events sharing m + t or gid are simultaneous.",
             items: {
               type: "object",
               additionalProperties: false,
               properties: {
-                m: { type: "number" }, b: { type: "number" }, sd: { type: ["string", "number"] }, gid: { type: "string" }, sid: { type: "string" },
+                m: { type: "number" }, t: { type: "integer", minimum: 1 }, d: { type: "integer", minimum: 1 }, b: { type: "number" }, sd: { type: ["string", "number"] }, gid: { type: "string" }, sid: { type: "string" },
                 n: { type: "string" }, s: { type: "integer", enum: [1, 2, 3, 4, 5, 6] }, f: { type: "number" }, r: { type: "string" },
               },
-              required: ["m", "b", "sid", "n", "s", "f", "r"],
+              required: ["m", "t", "d", "b", "sid", "n", "s", "f", "r"],
             },
           },
         },

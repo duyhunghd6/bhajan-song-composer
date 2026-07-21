@@ -25,6 +25,7 @@ import { generateAccompanimentSupportLayers } from "@/lib/theory/accompaniment-w
 import { generateArrangementPipeline, type ArrangementPipelineResult } from "@/lib/theory/arrangement-pipeline";
 import type { StrongBeatDirective } from "@/lib/theory/abc-beat-annotations";
 import { normalizeAbcVoiceId } from "@/lib/theory/abc-voice-normalization";
+import { isTabCapableGuitarVoiceId } from "@/lib/theory/guitar-string-forcing";
 import type { GeneratedGuitarOrigin } from "../useWorkspaceState";
 import type { ACCOMPANIMENT_PREVIEW_RENDER_OPTIONS, COMPOSER_PREVIEW_RENDER_OPTIONS } from "./preview";
 
@@ -38,6 +39,7 @@ export interface HarmonyPreviewModel {
   layerVisibilityItems: AbcLayerVisibilityItem[];
   synthOptions: { voicesOff?: boolean; chordsOff?: boolean };
   harmonyStepComplete: boolean;
+  getRenderOptionsFor: (abc: string, baseOptions: ComposerPreviewRenderOptions) => Record<string, unknown>;
 }
 
 export interface AccompanimentPreviewModel {
@@ -127,7 +129,7 @@ function getScoreGuitarStaffIndex(abc: string): number {
       .replace(/[(){}\[\]]/g, " ")
       .split(/\s+/)
       .map(normalizeAbcVoiceId)
-      .includes("Guitar"));
+      .some(isTabCapableGuitarVoiceId));
   }
 
   const bareVoices = scoreLine
@@ -135,7 +137,7 @@ function getScoreGuitarStaffIndex(abc: string): number {
     .map((voice) => voice.trim())
     .filter(Boolean)
     .map(normalizeAbcVoiceId);
-  return bareVoices.indexOf("Guitar");
+  return bareVoices.findIndex(isTabCapableGuitarVoiceId);
 }
 
 export function getArrangementRenderOptionsFor(
@@ -148,7 +150,7 @@ export function getArrangementRenderOptionsFor(
   let guitarIndex = getScoreGuitarStaffIndex(abc);
 
   if (guitarIndex === -1) {
-    guitarIndex = extractAbcVoiceIds(abc, false).indexOf("Guitar");
+    guitarIndex = extractAbcVoiceIds(abc, false).findIndex(isTabCapableGuitarVoiceId);
   }
 
   if (guitarIndex >= 0) {
@@ -204,7 +206,13 @@ export function buildArrangementPreviewModel(input: BuildArrangementPreviewModel
       workflow: activeWorkflow,
     })
     : { djembe: null };
-  const accompanimentSupportSources = [accompanimentSupportLayers.djembe];
+  const guitarClassicOption = activeWorkflow && isAccompanimentWorkflowStepComplete(activeWorkflow, "guitar-classic-abc-notation")
+    ? getSelectedWorkflowOption(activeWorkflow, "guitar-classic-abc-notation")
+    : null;
+  const guitarClassicAbc = typeof guitarClassicOption?.data.guitarClassicAbc === "string"
+    ? guitarClassicOption.data.guitarClassicAbc
+    : null;
+  const accompanimentSupportSources = [guitarClassicAbc, accompanimentSupportLayers.djembe];
   const eligibleGeneratedGuitar = input.previewPurpose === "accompaniment"
     ? null
     : input.generatedGuitar;
@@ -226,13 +234,18 @@ export function buildArrangementPreviewModel(input: BuildArrangementPreviewModel
     : accompanimentBuild.abc;
   const rawAccompanimentAbc = applyAbcLayerVolumes(rawAccompanimentWithoutVolumes, input.accompanimentLayerVolumes);
   const accompanimentVisibleVoices = getVisibleAbcVoiceIds(rawAccompanimentAbc, effectiveLayerVisibility);
-  const hasGuitarVoice = accompanimentVisibleVoices.includes("Guitar");
+  const hasGuitarVoice = accompanimentVisibleVoices.some(isTabCapableGuitarVoiceId);
   const guitarTabEnabled = Boolean(
     hasGuitarVoice && isAbcLayerVisible(ABC_LAYER_IDS.tab, effectiveLayerVisibility, false)
   );
   const rawHarmonyAbc = applyAbcLayerVolumes(harmonyDisplayAbc, input.harmonyLayerVolumes);
+  const harmonyVisibleVoices = getVisibleAbcVoiceIds(rawHarmonyAbc, harmonyVisibility);
+  const hasHarmonyGuitarVoice = harmonyVisibleVoices.some(isTabCapableGuitarVoiceId);
+  const harmonyTabEnabled = Boolean(
+    hasHarmonyGuitarVoice && isAbcLayerVisible(ABC_LAYER_IDS.tab, harmonyVisibility, false)
+  );
   const harmonyLayerVisibilityItems = extractAbcLayerVisibilityItems(rawHarmonyAbc, {
-    tabEnabled: getVisibleAbcVoiceIds(rawHarmonyAbc, harmonyVisibility).includes("Guitar"),
+    tabEnabled: hasHarmonyGuitarVoice,
   });
   const accompanimentLayerVisibilityItems = extractAbcLayerVisibilityItems(rawAccompanimentAbc, {
     includeStrongBeats: strongBeatsStepComplete,
@@ -250,6 +263,7 @@ export function buildArrangementPreviewModel(input: BuildArrangementPreviewModel
       layerVisibilityItems: harmonyLayerVisibilityItems,
       synthOptions: buildArrangementSynthOptions(harmonyVisibility),
       harmonyStepComplete,
+      getRenderOptionsFor: (abc, baseOptions) => getArrangementRenderOptionsFor(abc, baseOptions, harmonyTabEnabled),
     },
     accompaniment: {
       abc: applyAbcLayerVisibility(rawAccompanimentAbc, effectiveLayerVisibility),

@@ -34,6 +34,7 @@ describe("accompaniment workflow", () => {
       "voice-leading-validation",
       "guitar-comping-profile",
       "guitar-voicing-bass",
+      "guitar-classic-abc-notation",
       "harmonium-drone-register",
       "harmonium-chord-voicing-validation",
       "djembe-groove-interlock",
@@ -44,7 +45,7 @@ describe("accompaniment workflow", () => {
   it("plans retained instrument branches in setup order", () => {
     const setup = getDefaultAccompanimentWorkflowSetup();
     expect(getEnabledAccompanimentWorkflowStepIds(setup)).toEqual(ACCOMPANIMENT_WORKFLOW_STEP_IDS);
-    expect(getVisibleAccompanimentWorkflowSteps(createAccompanimentWorkflowSession(sampleAbc, setup))).toHaveLength(9);
+    expect(getVisibleAccompanimentWorkflowSteps(createAccompanimentWorkflowSession(sampleAbc, setup))).toHaveLength(10);
   });
 
   it("normalizes persisted Solo/Fingerstyle setup to combined accompaniment", () => {
@@ -73,7 +74,7 @@ describe("accompaniment workflow", () => {
       },
       steps: {},
     });
-    expect(restored?.version).toBe(5);
+    expect(restored?.version).toBe(8);
     expect(restored?.setup.instruments.map((instrument) => instrument.id)).toEqual([
       "guitar-classic", "indian-harmonium", "djembe",
     ]);

@@ -79,6 +79,23 @@ Ví dụ Em: E₂+E₄  G₃  B₃  G₃  B₂+E₄  G₃  B₃  G₃
 ```
 ````
 
+### 2.3 Chính sách Guitar Classic hỗ trợ ca sĩ
+
+Đây là chính sách cho nhánh **Guitar Classic Accompaniment**, không phải solo Guitar Fingerstyle.
+
+| Thành phần | Vai trò | Tỷ trọng mục tiêu |
+|---|---|---:|
+| Dây 6–5–4 | Root, fifth, bass approach (`p`) | 30–45% individual-note attacks |
+| Dây 3–2–1 | Arpeggio, guide tone, color (`i–m–a`) | 55–70% individual-note attacks |
+| Bass liên tiếp | Chỉ cho transition/cadence | Tối đa 2 bass-only onsets thông thường |
+| Pinch | Một bass + một treble cùng lúc | Chỉ ở metric strong beat |
+
+- Một pinch tính một bass attack và một treble attack. Tỷ trọng được xét trên toàn bộ support voice đã realized, không reset ở từng ô nhịp hoặc chord window ngắn.
+- Với đoạn rất ngắn, tỷ lệ nguyên không thể khớp tuyệt đối; scheduler vẫn nhắm mốc bass 37.5% thay vì lặp bass pattern.
+- Walking bass là **tùy chọn**: chỉ dùng ngay trước chord change thực, theo bước ngắn, ở subdivision yếu khi có thể. Không bắt buộc beat 4 của mọi ô nhịp.
+- Trong split bar, mỗi chord window kết thúc/rearticulate texture cũ và bắt đầu context root/voicing của chord mới. Không để harmony cũ sustain xuyên qua chord mới trừ common tone chủ ý còn hợp lệ.
+- Pinch không phải block chord: phải có ít nhất một dây 4–6 và một dây 1–3 khác nhau. Nếu window không có strong step, dùng arpeggio thường.
+
 ### 3. Quy tắc chọn Pattern phù hợp
 
 | Tính chất bài | Pattern khuyên dùng | Lý do |
@@ -91,10 +108,11 @@ Ví dụ Em: E₂+E₄  G₃  B₃  G₃  B₂+E₄  G₃  B₃  G₃
 ### 4. Quy tắc Bass khi rải hợp âm
 
 > [!IMPORTANT]
-> **Bass Line Protocol — Luật bất di bất dịch:**
-> 1. **Beat 1 → Root** (nốt gốc của hợp âm) — luôn luôn
-> 2. **Beat 3 → 5th** hoặc Root lại — tạo chuyển động harmonic
-> 3. **Beat 4 (cuối ô nhịp) → Approach note** — nốt dẫn (bước đi nửa cung hoặc nguyên cung) về Root của hợp âm kế tiếp
+> **Bass Line Protocol — nền đệm ca sĩ có kiểm soát:**
+> 1. **Đầu mỗi chord window → Root** — anchor cho harmony mới.
+> 2. **Beat ổn định tiếp theo → Root hoặc 5th khi cần** — chỉ khi vẫn giữ được texture treble-led.
+> 3. **Subdivision yếu cuối window → optional approach note** — chỉ trước chord change thực, theo bước ngắn và không làm thành bass ostinato.
+> 4. **Không quá hai bass-only onsets liên tiếp** ngoài exception transition/cadence có chủ ý.
 
 Ví dụ chuyển Em → Am:
 
@@ -142,14 +160,19 @@ flowchart TD
 
     D --> G
 
-    subgraph "GIAI ĐOẠN 2: Guitar Branch (Guitar-specific Steps)"
+    subgraph "GIAI ĐOẠN 2: Guitar Classic Accompaniment Branch"
         G["Step 4: Guitar Comping Profile"]
-        G --> H["Step 5: Guitar Voicing & Bass Plan"]
+        G --> H["Step 5: Guitar Voicing, Bass & timed events"]
+        H --> I["Step 6: deterministic Guitar Classic ABCNotation"]
     end
 
-    H --> J["Guitar Fingerstyle generation (tuỳ chọn, tách khỏi wizard)"]
-    J --> K["✅ Final Guitar ABC + TAB Output"]
+    I --> K["✅ Guitar Classic standard-notation Music Sheet"]
+    D --> J["Dedicated Guitar Fingerstyle (sibling route)"]
+    J --> L["✅ Final Fingerstyle Guitar ABC + TAB"]
 ```
+
+> [!IMPORTANT]
+> **Step 6 không phải là bước copy bass thưa sang ABC.** Step 4 chọn kỹ thuật có cấu trúc (PIMA arpeggio, pinch arpeggio, hoặc bhajan strum); Step 5 chọn vị trí bấm, bass anchor và voicing. Step 6 dùng hai quyết định đã chọn cùng harmony Step 3 để **deterministically** materialize một texture hợp âm đầy đủ: PIMA/pinch rải các chord tone theo nhịp, còn strum tạo nhóm nhiều dây đồng thời. Vì vậy root/fifth anchors là nền để thực hiện phối, không phải toàn bộ phần đệm. `V:GuitarSupport` vẫn chỉ là standard notation/MIDI 24; TAB chỉ thuộc route Guitar Fingerstyle.
 
 ### GIAI ĐOẠN 1: Chuẩn Bị Harmonic Foundation (3 Shared Steps)
 
@@ -260,7 +283,7 @@ Chuyển D → Em:
 
 ---
 
-### GIAI ĐOẠN 2: Guitar Branch (2 Guitar-specific Steps)
+### GIAI ĐOẠN 2: Guitar Classic Accompaniment Branch (3 Guitar-specific Steps)
 
 Sau khi đã có harmonic foundation, bắt đầu quy trình **chỉ dành cho Guitar**:
 
@@ -358,6 +381,14 @@ Giải thích:
 
 ---
 
+#### Step 6: Guitar Classic ABCNotation & Music Sheet (`guitar-classic-abc-notation`)
+
+Sau khi người dùng chọn một Step 5 voicing hợp lệ, app chuyển đổi **deterministically** các event `measure + grid step + duration + string + fret` thành `V:GuitarSupport clef=treble-8` với MIDI program 24. Voice này được ghép theo từng staff system của Melody và phát được ngay trên Music Sheet Playback.
+
+Đây là **standard notation support voice** cho Guitar Classic: không có Guitar TAB, không có ASCII tab, không nén melody/bass thành solo guitar, và không trở thành input cho Fingerstyle. Guitar Fingerstyle vẫn có TimeGrid/TAB độc lập như bên dưới.
+
+---
+
 ### Dedicated Guitar Fingerstyle Generation (tách khỏi Accompaniment Wizard)
 
 `/compose/:slug/guitar-fingerstyle` sở hữu fill density, intro/interlude/outro, TimeGrid và final physical validation. Route này nhận trực tiếp ABC đã chọn ở Harmony Step 3 (`voice-leading-validation`), độc lập với output Accompaniment; nó không phải workflow card hay mode trong `/compose/:slug/accompaniment`.
@@ -404,7 +435,7 @@ Outro (1-2 ô nhịp sau khi ca sĩ kết thúc):
 #### Dedicated Guitar Fingerstyle Route
 
 > [!NOTE]
-> Phần này chỉ áp dụng tại `/compose/:slug/guitar-fingerstyle` — guitar tự mang giai điệu, bass, và hợp âm trên cùng 1 cây đàn. Đây không phải mode trong Accompaniment Wizard; Guitar Classic accompaniment kết thúc branch sau `guitar-voicing-bass`.
+> Phần này chỉ áp dụng tại `/compose/:slug/guitar-fingerstyle` — guitar tự mang giai điệu, bass, và hợp âm trên cùng 1 cây đàn. Đây không phải mode trong Accompaniment Wizard; Guitar Classic accompaniment kết thúc sau `guitar-classic-abc-notation` với một standard-notation support voice, không phải Fingerstyle artifact.
 
 Trên dedicated route, áp dụng **Downward Compression Algorithm**:
 
@@ -475,8 +506,9 @@ Beat 4: B₃ (5th)
 □ 3. Validate Voice Leading giữa các hợp âm
   ────── Xong Shared Steps ──────
 □ 4. Chọn Guitar Comping Profile (Arpeggio / Strum)
-□ 5. Lên Voicing Map + Bass Plan (open voicing, alternating bass)
-  ────── Xong Accompaniment Guitar Branch ──────
+□ 5. Lên Voicing Map + Bass Plan (open voicing, alternating bass, grid timing/duration)
+□ 6. Chuyển selected voicing thành Guitar Classic ABCNotation + Music Sheet standard staff
+  ────── Xong Accompaniment Guitar Branch (không TAB) ──────
 □ [Dedicated route] Mở `/compose/:slug/guitar-fingerstyle` từ ABC `voice-leading-validation`; chọn skill/fill density, tạo intro/outro và validate TimeGrid
 □ Output dedicated Guitar Fingerstyle: Final Guitar ABC + TAB
 ```
@@ -490,7 +522,7 @@ Quy trình trên được implement qua các workflow steps trong app:
 | Step | Code Reference | File |
 |------|---------------|------|
 | Shared Steps 1-3 | `ACCOMPANIMENT_WORKFLOW_SHARED_STEP_IDS` | [definition.ts](file:///Users/steve/duyhunghd6/bhajan-song-composer/src/lib/theory/accompaniment-workflow/definition.ts#L3-L7) |
-| Guitar Steps 4-5 | `ACCOMPANIMENT_WORKFLOW_GUITAR_STEP_IDS` | [definition.ts](file:///Users/steve/duyhunghd6/bhajan-song-composer/src/lib/theory/accompaniment-workflow/definition.ts#L9-L13) |
+| Guitar Steps 4-6 | `ACCOMPANIMENT_WORKFLOW_GUITAR_STEP_IDS` | [definition.ts](file:///Users/steve/duyhunghd6/bhajan-song-composer/src/lib/theory/accompaniment-workflow/definition.ts#L9-L14) |
 | Chord-Tone Reference | `buildChordToneReferenceTable`, `validateGuitarVoiceChordTones` | [chord-tone-reference.ts](file:///Users/steve/duyhunghd6/bhajan-song-composer/src/lib/theory/chord-tone-reference.ts) |
 | Guitar Theory | Arrangement Module: Guitar | [ARRANGEMENT01-GUITAR.md](file:///Users/steve/duyhunghd6/bhajan-song-composer/.claude/skills/music-theory-arrangement/ARRANGEMENT01-GUITAR.md) |
 | Music Theory | Comprehensive Theory Foundation | [THEORY.md](file:///Users/steve/duyhunghd6/bhajan-song-composer/.claude/skills/music-theory-arrangement/THEORY.md) |

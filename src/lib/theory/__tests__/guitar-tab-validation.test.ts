@@ -184,6 +184,8 @@ describe("guitar tab validation", () => {
     expect(schema.function.parameters.properties.events.items.properties).toHaveProperty("sid");
     expect(schema.function.parameters.properties.events.items.required).toEqual([
       "m",
+      "t",
+      "d",
       "b",
       "sid",
       "n",

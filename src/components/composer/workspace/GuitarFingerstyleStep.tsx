@@ -15,7 +15,7 @@ import { LayerVisibilityControls } from "./LayerVisibilityControls";
 import { applyAbcLayerVisibility, applyAbcLayerVolumes, extractAbcLayerVisibilityItems, isAbcLayerVisible, ABC_LAYER_IDS, cleanAbcForExport } from "@/lib/theory/abc-layer-visibility";
 import { getArrangementRenderOptionsFor, buildArrangementSynthOptions } from "./arrangement-preview-model";
 import { buildAccompanimentAbc } from "@/lib/theory/accompaniment-abc";
-import { fingerprintAccompanimentSource, getSelectedWorkflowOption } from "@/lib/theory/accompaniment-workflow";
+import { fingerprintAccompanimentSource } from "@/lib/theory/accompaniment-workflow";
 import { getComposerFingerstyleMeasuresStorageKey } from "./storage";
 import { formatFingerstyleTablatureAsToon } from "@/lib/theory/fingerstyle-arranger/llm-codec";
 import { formatLineAsToon, renderCombinedAsciiGuitarTab } from "@/lib/theory/fingerstyle-arranger/toon-utils";
@@ -85,18 +85,11 @@ export function GuitarFingerstyleStep({
     generationCoordinator.invalidateDocument();
     refreshGeneratingLines();
   }, [generationCoordinator, refreshGeneratingLines]);
-  const timeGridOptions = useMemo(() => {
-    const workflow = ws.accompanimentWorkflow;
-    const compingOpt = workflow ? getSelectedWorkflowOption(workflow, "guitar-comping-profile") : undefined;
-    const voicingOpt = workflow ? getSelectedWorkflowOption(workflow, "guitar-voicing-bass") : undefined;
-    return {
-      comping_style: compingOpt ? (compingOpt.data?.compingProfile as string) || compingOpt.label : undefined,
-      voicing_plan: voicingOpt ? (voicingOpt.data?.voicingPlan as string) || voicingOpt.label : undefined,
-    };
-  }, [ws.accompanimentWorkflow]);
+  // Fingerstyle is a sibling of Accompaniment: its TimeGrid may depend only on
+  // the selected Harmony Step 3 ABC, never on Guitar Classic profile/voicing data.
   const compileFreshMeasures = useCallback((rawAbc: string) => (
-    convertAbcToTimeSliceGrid(rawAbc, [], timeGridOptions)
-  ), [timeGridOptions]);
+    convertAbcToTimeSliceGrid(rawAbc, [])
+  ), []);
 
   useEffect(() => {
     if (!hasMounted || !isWorkspaceHydrated || !workflowAppliedMusicAbc.trim()) return;

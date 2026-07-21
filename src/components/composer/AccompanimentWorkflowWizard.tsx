@@ -43,6 +43,7 @@ import {
   SCOPE_CLASS,
 } from "./accompaniment-workflow/wizard-parts";
 import WorkflowSetupPanel from "./accompaniment-workflow/WorkflowSetupPanel";
+import GuitarIcon from "@/components/icons/GuitarIcon";
 
 type BranchScope = Exclude<AccompanimentWorkflowScope, "shared">;
 
@@ -71,6 +72,18 @@ interface WorkflowStepGridProps {
   onStepClick: (stepId: AccompanimentWorkflowStepId) => void;
 }
 
+function ScopeBadge({ scope, className = "px-2 py-0.5" }: { scope: AccompanimentWorkflowScope, className?: string }) {
+  return (
+    <span className={`rounded-full border text-[10px] font-bold uppercase flex items-center justify-center ${className} ${SCOPE_CLASS[scope]}`}>
+      {scope === "guitar" ? (
+        <GuitarIcon className="w-4 h-4" />
+      ) : (
+        scope
+      )}
+    </span>
+  );
+}
+
 function WorkflowStepGrid({ steps, session, activeStepId, onStepClick }: WorkflowStepGridProps) {
   return (
     <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
@@ -96,7 +109,7 @@ function WorkflowStepGrid({ steps, session, activeStepId, onStepClick }: Workflo
           >
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">{step.index}. {step.shortLabel}</span>
-              <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${SCOPE_CLASS[step.scope]}`}>{step.scope}</span>
+              <ScopeBadge scope={step.scope} />
             </div>
             <p className="mt-1 text-[11px] leading-4 text-zinc-500 dark:text-zinc-400">
               {selected?.label ?? (session ? (unlocked ? "Ready" : "Locked") : "Planned")}
@@ -386,7 +399,7 @@ export default function AccompanimentWorkflowWizard({
                 <h4 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">{activeStep.index}. {activeStep.label}</h4>
                 <p className="mt-1 text-xs leading-5 text-zinc-600 dark:text-zinc-400">{activeStep.description}</p>
               </div>
-              <span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase ${SCOPE_CLASS[activeStep.scope]}`}>{activeStep.scope}</span>
+              <ScopeBadge scope={activeStep.scope} className="px-2 py-1" />
             </div>
             <details className="mt-3 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950/50">
               <summary className="cursor-pointer text-xs font-bold text-zinc-700 dark:text-zinc-200">Default prompt preview</summary>
@@ -494,7 +507,7 @@ export default function AccompanimentWorkflowWizard({
               <h4 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">{activeStep.index}. {activeStep.label}</h4>
               <p className="mt-1 text-xs leading-5 text-zinc-600 dark:text-zinc-400">{activeStep.description}</p>
             </div>
-            <span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase ${SCOPE_CLASS[activeStep.scope]}`}>{activeStep.scope}</span>
+            <ScopeBadge scope={activeStep.scope} className="px-2 py-1" />
           </div>
 
           <details className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950/50">

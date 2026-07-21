@@ -283,6 +283,7 @@ function isGuitarLeftHandVoiceLine(voiceLine: string): boolean {
 function getFriendlyVoiceName(voiceId: string): string {
   const normalized = voiceId.toLowerCase();
   if (normalized === "melody") return "Melody";
+  if (normalized === "guitarsupport") return "Guitar Classic Support";
   if (normalized.includes("guitar")) return "Guitar";
   if (normalized === "harmonium") return "Indian Harmonium";
   if (normalized === "djembe") return "Djembe";

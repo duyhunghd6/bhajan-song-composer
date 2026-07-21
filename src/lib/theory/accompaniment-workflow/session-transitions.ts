@@ -134,7 +134,13 @@ export function selectOption(
 }
 
 export function extractProfile(option: AccompanimentWorkflowOption): string | null {
+  const guitarTab = option.data.guitarTab;
+  const guitarTabData = guitarTab && typeof guitarTab === "object" && !Array.isArray(guitarTab)
+    ? guitarTab as Record<string, unknown>
+    : null;
   const candidates = [
+    guitarTabData?.compingProfileId,
+    option.data.compingProfileId,
     option.data.profileId,
     option.data.compingProfile,
     option.data.pickingProfile,

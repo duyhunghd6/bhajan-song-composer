@@ -57,7 +57,8 @@ const expectedPlaybackAttributes = [
 ];
 
 describe("Composer result staff playback", () => {
-  it("uses the shared responsive ABCJS playback presentation for harmony", () => {
+  it("preserves harmony tab-aware render options with shared playback presentation", () => {
+    const getRenderOptionsFor = vi.fn(() => ({ tablature: [{ instrument: "guitar" }] }));
     const markup = renderToStaticMarkup(
       <HarmonyStep
         melodyAbc={staffAbc}
@@ -69,6 +70,7 @@ describe("Composer result staff playback", () => {
           synthOptions: { voicesOff: [1] },
           layerVisibilityItems: [],
           harmonyStepComplete: true,
+          getRenderOptionsFor,
         } as never}
         layerVisibility={{}}
         setLayerVisibility={noop as never}
@@ -83,7 +85,8 @@ describe("Composer result staff playback", () => {
     expect(markup).toContain(`data-abc="${staffAbc.replace(/\n/g, "\n")}"`);
     expectedPlaybackAttributes.forEach((attribute) => expect(markup).toContain(attribute));
     expect(markup).toContain('data-synth-options="{&quot;voicesOff&quot;:[1]}"');
-    expect(markup).toContain('&quot;staffwidth&quot;:720');
+    expect(getRenderOptionsFor).toHaveBeenCalledWith(staffAbc, expect.objectContaining({ staffwidth: 720 }));
+    expect(markup).toContain('&quot;tablature&quot;:[{&quot;instrument&quot;:&quot;guitar&quot;}]');
   });
 
   it("preserves accompaniment tab-aware render options with shared playback presentation", () => {

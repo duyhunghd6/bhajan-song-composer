@@ -13,7 +13,10 @@ import {
   buildArrangementPreviewModel,
   getArrangementRenderOptionsFor,
 } from "../arrangement-preview-model";
-import { ACCOMPANIMENT_PREVIEW_RENDER_OPTIONS } from "../preview";
+import {
+  ACCOMPANIMENT_PREVIEW_RENDER_OPTIONS,
+  COMPOSER_PREVIEW_RENDER_OPTIONS,
+} from "../preview";
 
 const sampleAbc = `X:1
 T:Preview Model Sample
@@ -36,6 +39,19 @@ L:1/8
 K:C
 V:Guitar clef=treble
 [V:Guitar] C2 G2 E2 G2 | C2 G2 E2 G2 |`;
+
+const harmonyGuitarSupportAbc = `X:1
+T:Harmony Guitar Support
+M:4/4
+L:1/8
+%%score (Melody) (Piano) (GuitarSupport)
+V:Melody clef=treble
+V:Piano clef=treble
+V:GuitarSupport clef=treble-8
+K:C
+[V:Melody] C2 D2 E2 F2 |
+[V:Piano] [CEG]2 [DFA]2 [EGB]2 [FAC]2 |
+[V:GuitarSupport] C,2 G,2 E2 G2 |`;
 
 const djembeOnlySetup = {
   style: "accompaniment" as const,
@@ -128,6 +144,33 @@ describe("arrangement preview model", () => {
     expect(model.harmony.abc).not.toContain("C2 D2");
   });
 
+  it("renders Harmony GuitarSupport TAB only when the TAB layer is visible", () => {
+    const workflow = selectWorkflowStep(
+      createAccompanimentWorkflowSession(sampleAbc),
+      "voice-leading-validation",
+      makeOption("validated-harmony", { validatedAbc: harmonyGuitarSupportAbc }),
+    );
+    const tabOff = buildModel({
+      workflow,
+      harmonyLayerVisibility: { GuitarSupport: true, __guitar_tab__: false },
+    });
+    const tabOn = buildModel({
+      workflow,
+      harmonyLayerVisibility: { GuitarSupport: true, __guitar_tab__: true },
+    });
+
+    expect(tabOn.harmony.layerVisibilityItems.find((item) => item.id === "TAB")?.enabled).toBe(true);
+    expect(tabOff.harmony.getRenderOptionsFor(tabOff.harmony.abc, COMPOSER_PREVIEW_RENDER_OPTIONS))
+      .not.toHaveProperty("tablature");
+    expect(tabOn.harmony.getRenderOptionsFor(tabOn.harmony.abc, COMPOSER_PREVIEW_RENDER_OPTIONS)).toMatchObject({
+      tablature: [
+        { instrument: "" },
+        { instrument: "" },
+        { instrument: "guitar", label: "", capo: 0, hideTabSymbol: false },
+      ],
+    });
+  });
+
   it("keeps Harmony on the source melody until validation completes", () => {
     const workflow = selectWorkflowStep(
       createAccompanimentWorkflowSession(sampleAbc),
@@ -213,6 +256,46 @@ describe("arrangement preview model", () => {
   });
 
 
+
+  it("adds selected Guitar Classic ABC to Accompaniment with optional TAB", () => {
+    let workflow = createAccompanimentWorkflowSession(sampleAbc);
+    workflow = selectWorkflowStep(
+      workflow,
+      "voice-leading-validation",
+      makeOption("validated-harmony", { validatedAbc: sampleAbc }),
+    );
+    workflow = selectWorkflowStep(
+      workflow,
+      "guitar-comping-profile",
+      makeOption("guitar-profile"),
+    );
+    workflow = selectWorkflowStep(
+      workflow,
+      "guitar-voicing-bass",
+      makeOption("guitar-voicing"),
+    );
+    workflow = selectWorkflowStep(
+      workflow,
+      "guitar-classic-abc-notation",
+      makeOption("guitar-classic-abc", {
+        guitarClassicAbc: `V:GuitarSupport clef=treble-8 name="Guitar Classic Support"\n%%MIDI program 24\n| E,2 B,2 G2 z2 | B,4 z4 |`,
+      }),
+    );
+
+    const model = buildModel({
+      workflow,
+      accompanimentLayerVisibility: { __melody__: true, __strong_beats__: false, __chords__: true, __guitar_tab__: true },
+    });
+
+    expect(model.accompaniment.rawAbc).toContain("V:GuitarSupport");
+    expect(model.accompaniment.rawAbc).toContain("%%MIDI program 24");
+    expect(model.accompaniment.visibleVoiceNames).toContain("GuitarSupport");
+    expect(model.accompaniment.guitarTabEnabled).toBe(true);
+    const renderOptions = model.getRenderOptionsFor(model.accompaniment.abc, ACCOMPANIMENT_PREVIEW_RENDER_OPTIONS) as {
+      tablature?: Array<{ instrument: string }>;
+    };
+    expect(renderOptions.tablature?.some((staff) => staff.instrument === "guitar")).toBe(true);
+  });
 
   it("excludes Fingerstyle guitar from Accompaniment while preserving it for final previews", () => {
     const fingerstyleGuitarAbc = `X:1
@@ -300,7 +383,7 @@ V:Guitar clef=treble-8 name="Layer 2 Guitar Fingerstyle"
     expect(model.accompaniment.appliedWorkflowStep?.id).toBe("djembe-fill-validation");
     expect(model.accompaniment.rawAbc).toContain("V:Djembe");
     expect(model.accompaniment.voiceNames).toContain("Djembe");
-    expect(model.accompaniment.rawAbc).toContain("ABCNotation applied after Step 9: Djembe Fill & Transient Validation");
+    expect(model.accompaniment.rawAbc).toContain("ABCNotation applied after Step 10: Djembe Fill & Transient Validation");
   });
 
   it("derives guitar tablature render options from score order", () => {
