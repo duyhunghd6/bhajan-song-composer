@@ -298,7 +298,7 @@ A **rule-based music theory engine** (no API keys required) that analyzes melody
 │  3. Arrangement Generator                           │
 │     ├→ Piano Accompaniment (LH bass clef ABC)       │
 │     ├→ Piano Solo (grand staff: treble + bass)      │
-│     ├→ Guitar Accompaniment (chord diagrams)        │
+│     ├→ Guitar Classic Accompaniment (ABC + diagrams)│
 │     └→ Guitar Fingerstyle (melody + bass + chords)  │
 │                                                     │
 │  OUTPUT: New .abc layers + visual diagrams          │
@@ -316,7 +316,7 @@ A **rule-based music theory engine** (no API keys required) that analyzes melody
 |:---|:---|
 | **Piano Accompaniment** | Bass clef (left hand) with root-fifth, Alberti bass, or arpeggio patterns. You play LH while someone sings the melody. |
 | **Piano Solo (Grand Staff)** | Right hand carries the original melody; left hand plays bass/chord accompaniment. Complete piano piece. |
-| **Guitar Accompaniment** | Chord voicings with fretboard diagrams + strumming patterns derived from the auto-harmonized progression. |
+| **Guitar Classic Accompaniment** | Selected validated chord voicings become a separate standard-notation ABC support layer (MIDI program 24), alongside fretboard diagrams and strumming patterns; no TAB is shown on the accompaniment page. |
 | **Guitar Fingerstyle** | Combined arrangement: thumb plays bass notes (chord roots on strings 4-6), fingers play melody (strings 1-3), chord tones fill gaps between melody notes. |
 
 Each generated arrangement is saved as a **separate `.abc` layer** — viewable in the Playback module, editable in the Composer.

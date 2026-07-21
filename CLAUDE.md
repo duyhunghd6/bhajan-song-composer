@@ -165,12 +165,13 @@ Use the small workflow steps defined in `src/lib/theory/accompaniment-workflow/d
 1. `key-beats` — analyze key/scale/raga context, phrase endings, cadence targets, and strong-beat emphasis.
 2. `chord-roles-progression` — map strong melody notes to chord roles and produce harmonized ABC.
 3. `voice-leading-validation` — smooth transitions and validate harmonized ABC.
-4. `guitar-comping-profile` — choose Guitar Classic comping/picking profile.
-5. `guitar-voicing-bass` — plan Guitar Classic voicings, bass anchors, and walking motion.
-6. `harmonium-drone-register` — choose devotional harmonium drone tones, register, sustain density, and melody-yield behavior.
-7. `harmonium-chord-voicing-validation` — validate harmonium chord voicings, root-fifth anchors, and collision-safe sustained support.
-8. `djembe-groove-interlock` — choose Djembe groove profile and interlock Bass/Tone/Slap strokes with accompaniment transients.
-9. `djembe-fill-validation` — validate Djembe fill policy, backbeat/slap behavior, and transient conflict limits.
+4. `guitar-comping-profile` — choose the Guitar Classic realization technique: devotional PIMA arpeggio, devotional pinch arpeggio, or bhajan strum.
+5. `guitar-voicing-bass` — plan Guitar Classic voicings, bass anchors, walking motion, and meter-grid event durations for the selected technique.
+6. `guitar-classic-abc-notation` — deterministically materialize the selected profile and voicing anchors as a complete chord-driven, measure-aligned standard-notation support voice for Music Sheet Playback.
+7. `harmonium-drone-register` — choose devotional harmonium drone tones, register, sustain density, and melody-yield behavior.
+8. `harmonium-chord-voicing-validation` — validate harmonium chord voicings, root-fifth anchors, and collision-safe sustained support.
+9. `djembe-groove-interlock` — choose Djembe groove profile and interlock Bass/Tone/Slap strokes with accompaniment transients.
+10. `djembe-fill-validation` — validate Djembe fill policy, backbeat/slap behavior, and transient conflict limits.
 
 Dynamic step gating:
 
@@ -185,11 +186,11 @@ Important accompaniment rules:
 - Preserve the melody ABC exactly unless the specific step allows chord annotations.
 - Directed source flow is mandatory: Melody → shared Harmony Steps 1–3 → selected `voice-leading-validation` ABC → independent Accompaniment and Guitar Fingerstyle branches. Accompaniment output must never feed Guitar Fingerstyle. Before Step 3 is selected, downstream routes display only the original melody as read-only reference and must not generate branch output.
 - For chord ingestion from lyric `w:` lines, treat embedded `[Chord]` symbols as user-supplied progression context.
-- Guitar tab validation steps must provide concrete tab events with measure, beat, note, string, fret, and role.
+- Guitar tab validation steps must provide concrete tab events with one-based measure, grid step, duration, beat, note, string, fret, and role. Step 4 persists a supported Guitar Classic profile and Step 5 provides physical anchors/voicing context; `guitar-classic-abc-notation` deterministically realizes those choices into a complete arpeggio, pinch, or multi-string strum texture before emitting the standard-notation `V:GuitarSupport` layer. Root/fifth anchors alone must never be treated as the completed accompaniment. Its validated physical strings may render an optional GuitarSupport TAB staff, but that render feature never feeds Fingerstyle.
 - Guitar Fingerstyle must be a solo guitar plan: the Guitar voice carries the melody itself, adds bass from chord progression roots/fifths/approaches, exposes intro/interlude/outro section metadata, and renders GUITAR TAB.
 - Line-level Guitar Fingerstyle generation is staged: non-fill foundation → skill-aware deterministic TimeGrid placement and freeze → exhaustive paginated fill opportunities → LLM use/skip selection → LLM candidate/duration composition → deterministic server merge/final validation. Quoted section/form annotations are not harmonic TimeGrid chords. Fills are discretionary: after bounded fill-stage retries, return the validated bass foundation with a non-fatal fills-unavailable notice rather than discarding it. Do not let the LLM replace the source grid or run mutating placement after opportunity scoring.
 - Fingerstyle skill defaults to beginner; density defaults to auto (beginner→few, intermediate→normal, advanced→many). Preserve their independence. Fill density belongs to Guitar Fingerstyle generation settings, not the accompaniment workflow. Density increases selection budgets among legal source-rest windows only: discretionary fills and harmony must never attack or remain sounding during a Melody attack or sustain. Skill fret ceilings constrain discretionary accompaniment and fills; if an authoritative melody attack is physically playable only above that ceiling, preserve its exact pitch with a labelled melody-only exception rather than transposing it or relaxing the rest of the line.
-- The Djembe branch may render a support ABC layer directly on the accompaniment page once its validation step is selected.
+- The Guitar Classic branch may render its standard-notation support ABC layer after `guitar-classic-abc-notation` is selected; the Djembe branch may render its support ABC layer after its validation step is selected.
 - Keep generated ABC previewable with `AbcjsPlaybackController`.
 - For multi-instrument ABC, preserve Melody visual line breaks and group by staff system: `[V:Melody]` line N, then each Guitar/Harmonium/Djembe line N for the same measure range, before moving to line N+1.
 
