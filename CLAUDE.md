@@ -27,7 +27,9 @@ Keep modules deep and local:
 
 Composer UI lives in `src/components/composer/`.
 
-- `ComposerStepWorkspace.tsx` is the step router for melody, harmony, accompaniment, ensemble, and review.
+- `ComposerStepWorkspace.tsx` is the step router for melody, harmony, accompaniment, Guitar Fingerstyle, and Export.
+- `workspace/arrangement-source/arrangement-source-graph.ts` owns source-current branch derivation and raw exportable notation layers.
+- `workspace/export/ExportStep.tsx` owns explicit notation selection and publication status.
 - `workspace/` contains step-specific UI modules:
   - `HarmonyStep.tsx`
   - `AccompanimentStep.tsx`
@@ -120,10 +122,11 @@ When you are asked to work on specific Composer URLs, refer to these short lists
   - `src/lib/theory/fingerstyle-arranger/time-slice.ts` (Stable time-slice/ABC entrypoints)
   - `src/app/actions/fingerstyle-line-arranger.ts` (Public staged Server Action)
 
-- `/compose/:slug/review`:
-  - `src/components/composer/ComposerStepWorkspace.tsx` (Review/Export layout fallback)
-  - `src/components/composer/workspace/preview.tsx` (Notation Preview Layout)
-  - `src/components/music-sheet/AbcjsPlaybackController.tsx` (Final Playback)
+- `/compose/:slug/review` (displayed as Export):
+  - `src/components/composer/workspace/export/ExportStep.tsx` (layer selection and publish UX)
+  - `src/app/actions/publish-arrangement.ts` (durable catalogue publication)
+  - `src/components/composer/workspace/arrangement-source/arrangement-source-graph.ts` (eligible source layers)
+  - `src/app/practice/[slug]/PracticeViewer.tsx` (published Practice showcase)
 
 ## Music arrangement workflow discipline
 
@@ -136,8 +139,10 @@ High-level Composer step order:
 1. Melody
 2. Harmony
 3. Accompaniment
-4. Ensemble
-5. Review/export
+4. Guitar Fingerstyle (independent sibling branch)
+5. Export (stable route ID: `review`)
+
+`/practice/:slug` is the only Showcase experience. It reads published catalogue notation only; it must never overlay Composer localStorage drafts. Export lets the user explicitly select `melody`, `harmony`, `accompaniment`, and/or `guitar-fingerstyle` layers to publish. Ensemble remains experimental until its route, source contract, export mapping, and end-to-end coverage are implemented.
 
 ### Harmony step
 

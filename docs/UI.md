@@ -31,8 +31,8 @@ graph TD
     ComposeHarmony["Step 2: Harmonization <br> (/compose/[slug]/harmony)"]
     ComposeAccomp["Step 3: Accompaniment <br> (/compose/[slug]/accompaniment)"]
     ComposeFingerstyle["Step 3.1: Guitar Fingerstyle <br> (/compose/[slug]/guitar-fingerstyle)"]
-    ComposeEnsemble["Step 4: Ensemble Expansion <br> (/compose/[slug]/ensemble)"]
-    ComposeReview["Step 5: Review & Export <br> (/compose/[slug]/review)"]
+    ComposeExport["Step 4: Export to Practice <br> (/compose/[slug]/review)"]
+    Practice["Practice / Showcase <br> (/practice/[slug])"]
 
     %% Navigation Paths
     Home -->|Browse Language| Catalog
@@ -50,10 +50,9 @@ graph TD
     ComposeMelody -->|Save Melody| ComposeHarmony
     ComposeHarmony -->|Save Harmony| ComposeAccomp
     ComposeHarmony -.->|Open dedicated Guitar Fingerstyle| ComposeFingerstyle
-    ComposeAccomp -->|Save Accompaniment| ComposeEnsemble
-    ComposeFingerstyle -.->|Independent Guitar layer available to review| ComposeReview
-    ComposeEnsemble -->|Save Ensemble| ComposeReview
-    ComposeReview -->|Export Markdown/PR| EditList
+    ComposeAccomp -.->|Independent accompaniment layer available to export| ComposeExport
+    ComposeFingerstyle -.->|Independent Guitar layer available to export| ComposeExport
+    ComposeExport -->|Publish selected layers| Practice
 
     %% Define Styles
     classDef hub fill:#f0f7ff,stroke:#0284c7,stroke-width:2px;
@@ -64,7 +63,7 @@ graph TD
     %% Apply Styles
     class Home,Catalog,SongDetail,EditList hub;
     class ComposeGeneral composer;
-    class ComposeMelody,ComposeHarmony,ComposeAccomp,ComposeFingerstyle,ComposeEnsemble,ComposeReview step;
+    class ComposeMelody,ComposeHarmony,ComposeAccomp,ComposeFingerstyle,ComposeExport,Practice step;
     class MockupHub,MockArrangement,MockFingerstyle,MockPiano,MockEnsemble mockup;
 ```
 
@@ -207,50 +206,22 @@ Focus: combined accompaniment planning from the selected Harmony Step 3 (`voice-
 
 This independent sibling route compiles the selected `voice-leading-validation` ABC into the meter-aware TimeGrid. It owns skill and fill-density settings, physical validation, generated Guitar ABC, and ASCII-GuitarTab; it never consumes accompaniment output.
 
-#### 2.2.4 Step 4: Ensemble Expansion (`/compose/[slug]/ensemble`)
-Focus: Layering Flute, Violin, and Djembe on top of the accompaniment.
+#### 2.2.5 Step 4: Export to Practice (`/compose/[slug]/review`)
+
+Export is the durable handoff from Composer drafts to Practice (the only Showcase). It lists source-current Melody, Validated Harmony, Accompaniment, and Guitar Fingerstyle layers. The user selects exactly which layers to publish; unselected notation files and the Markdown Lyrics/Notes body remain unchanged.
 
 ```
-+-----------------------+----------------------------------------------------------+
-|  SIDEBAR (20%)        |  MAIN WORKSPACE CANVAS: STEP 4 - ENSEMBLE (80%)          |
-|                       |                                                          |
-|  [✓] 3. Accompaniment |  +----------------------------------------------------+  |
-|  [▶] 4. Ensemble      |  | Enable Layers: [x] Djembe  [x] Flute  [ ] Violin   |  |
-|  [ ] 5. Review        |  | [ Generate Ensemble Support ]                      |  |
-|                       |  +----------------------------------------------------+  |
-|  [Track States]       |  +----------------------------------------------------+  |
-|  (All Background)     |  | Conflict Resolution Hierarchy Log                  |  |
-|                       |  | "Flute yielded in m.8 due to active melody..."     |  |
-|                       |  +----------------------------------------------------+  |
-|                       |  +----------------------------------------------------+  |
-|                       |  | Multi-track ABCJS Render (Full Score View)         |  |
-|                       |  +----------------------------------------------------+  |
-|                       |  [ Back ]                            [ Save & Next ]     |
-+-----------------------+----------------------------------------------------------+
++-----------------------------------+------------------------------------------+
+| EXPORT SELECTOR                   | ARRANGEMENT PREVIEW                      |
+| [ ] Melody                        | [ ABCJS playback ]                       |
+| [ ] Validated Harmony             | Preview may combine valid draft branches |
+| [ ] Accompaniment                 |                                          |
+| [ ] Guitar Fingerstyle            |                                          |
+| [ Publish selected layers ]       | [ Open Practice after publication ]      |
++-----------------------------------+------------------------------------------+
 ```
 
-#### 2.2.5 Step 5: Review & Export (`/compose/[slug]/review`)
-Focus: Reviewing the final multi-layer arrangement and exporting to markdown for a Pull Request.
-
-```
-+-----------------------+----------------------------------------------------------+
-|  SIDEBAR (20%)        |  MAIN WORKSPACE CANVAS: STEP 5 - REVIEW & EXPORT (80%)   |
-|                       |                                                          |
-|  [✓] 4. Ensemble      |  +----------------------------------------------------+  |
-|  [▶] 5. Review        |  | Playback Simulation: Test Full Audio & Sync        |  |
-|                       |  | [ Play All Layers ]                                |  |
-|                       |  +----------------------------------------------------+  |
-|                       |  +----------------------------------------------------+  |
-|  [Track States]       |  | Raw Markdown Output File Preview                   |  |
-|  All Layers Active    |  | ---                                                |  |
-|                       |  | title: "..."                                       |  |
-|                       |  | abcNotations: [...]                                |  |
-|                       |  | ---                                                |  |
-|                       |  | ## Lyrics ...                                      |  |
-|                       |  +----------------------------------------------------+  |
-|                       |  [ Back ]      [ Copy Markdown ]   [ Submit as PR ]      |
-+-----------------------+----------------------------------------------------------+
-```
+> Ensemble remains a mockup/experimental workflow and has no Composer route in the active product flow.
 
 ### 2.3 Reusable Shared Components
 

@@ -8,11 +8,13 @@ This project is a Next.js bhajan song composition app. The codebase is organized
 
 Composer screens live under `src/components/composer/`.
 
-- `ComposerStepWorkspace.tsx` is the step router for melody, harmony, accompaniment, ensemble, and review flows.
+- `ComposerStepWorkspace.tsx` is the step router for melody, harmony, accompaniment, Guitar Fingerstyle, and Export flows.
 - `workspace/` contains step-specific modules:
   - `HarmonyStep.tsx` handles harmonization selection and preview.
   - `AccompanimentStep.tsx` handles accompaniment workflow review, setup persistence, layer visibility, and instrument previews.
-  - `arrangement-preview-model.ts` derives harmony and accompaniment preview models from workspace state, workflow state, ABC builders, and layer visibility.
+  - `workspace/arrangement-source/arrangement-source-graph.ts` owns the source-current branch graph and exportable raw notation layers.
+- `arrangement-preview-model.ts` adapts that source graph into harmony/accompaniment render models, layer visibility, volume directives, and ABCJS options.
+- `workspace/export/ExportStep.tsx` selects valid notation layers for publication and links the resulting Practice experience.
   - `fingerstyle-measure-persistence.ts` versions source-bound TimeGrid overlays, safely rejects malformed/stale/physically invalid browser drafts, restores only compatible tablature events, and rebuilds canonical forced Guitar ABC after hydration.
   - `fingerstyle-diagnostic-persistence.ts` retains bounded, source-fingerprint-compatible LLM/TimeGrid workflow diagnostic summaries; it removes LLM payload previews and enforces per-line, per-song, plaintext, event, and storage limits.
   - `GuitarFingerstyleStep.tsx` owns the canonical in-memory TimeGrid document, persists independent player-skill/fill-density settings, imports/exports validated `timegrid-document:v3` JSON, passes previous/next-line measure context, and owns the route-level single-line generation/stale-result lock.
@@ -28,11 +30,19 @@ Composer screens live under `src/components/composer/`.
 - `song-form/metadata.ts` contains metadata defaults and YAML serialization.
 - `song-form/TextField.tsx` contains the shared text field module.
 
-The Composer UI owns React state, persistence hooks, and user interaction. It delegates music decisions and ABC construction to theory modules.
+The Composer UI owns React state, browser-local draft persistence, and user interaction. It delegates music decisions and ABC construction to theory modules. `publish-arrangement.ts` is the durable publication seam: it validates selected named layers, upserts their metadata and ABC files, and preserves the song Markdown body. Practice is a published-catalogue consumer, not a Composer draft renderer.
 
 The accompaniment workflow is intentionally a single-page wizard under the existing dynamic route `/compose/[slug]/[step]`; `/compose/hari-bol/accompaniment` is handled by `step=accompaniment`, not by a dedicated route folder. Internal accompaniment substeps live in persisted workflow state rather than route segments.
 
-The downstream source graph is directed: Melody feeds Harmony Steps 1–3; the selected Step 3 `voice-leading-validation` ABC then independently feeds Accompaniment and Guitar Fingerstyle. Accompaniment output is never a Fingerstyle source. The dedicated TimeGrid and artifact contract is specified in `docs/guitar-fingerstyle-arrangement-guide.md` and `docs/timegrid-conversion-guide.md`. Until Step 3 has a selected ABC, both downstream routes show the original melody as read-only reference and keep branch generation unavailable.
+The downstream source graph is directed: Melody feeds Harmony Steps 1–3; the selected Step 3 `voice-leading-validation` ABC then independently feeds Accompaniment and Guitar Fingerstyle. Accompaniment output is never a Fingerstyle source. Until Step 3 has a selected ABC, both downstream routes show the original melody as read-only reference and keep branch generation unavailable. Export publishes only selected, source-current layers to `data/songs`; Practice is the Showcase and reads only those published catalogue layers, never browser-local Composer state. See `CONTEXT.md` and [ADR 0001](docs/adr/0001-composer-publication-and-practice.md).
+
+| Change | Invalidated draft state | Durable catalogue effect |
+| --- | --- | --- |
+| Melody changes | Harmony workflow and both downstream branches become source-stale; branch outputs cannot export | None until explicit Export |
+| Harmony Step 3 selection changes | Accompaniment/Guitar Fingerstyle branch results and persisted Fingerstyle measures are cleared | None until explicit Export |
+| Accompaniment or Fingerstyle changes | Only that sibling artifact changes | None until explicit Export |
+| Storage pruning/quota failure | Missing draft artifacts are excluded from Export with warnings | No published files change |
+| Export | No implicit draft reset | Selected named layer files and metadata are upserted; unselected layers and Markdown body are preserved |
 
 ### Music sheet / ABCJS playback
 

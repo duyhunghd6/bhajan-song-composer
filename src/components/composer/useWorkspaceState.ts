@@ -8,9 +8,6 @@ import {
   type AccompanimentWorkflowSession,
   type AccompanimentWorkflowSetup,
 } from "@/lib/theory/accompaniment-workflow";
-import type { EnsembleWorkflowSession } from "@/lib/theory/ensemble-workflow";
-import type { EnsembleExpansionValidation } from "@/lib/theory/ensemble-output-contract";
-import type { EnsembleConflictReportEntry } from "@/lib/theory/ensemble-conflicts";
 import type { FillDensityMode } from "@/lib/theory/fingerstyle-arranger/fill-opportunities";
 import type { SkillLevel } from "@/lib/theory/fingerstyle-arranger/fingerstyle-constraints";
 import { getComposerWorkspaceStorageKey } from "./workspace/storage";
@@ -35,18 +32,6 @@ export const DEFAULT_LAYER_VOLUMES: Record<string, number> = {
   ChordProgression: 100,
   Melody: 100,
 };
-
-export interface EnsembleLayerAbcBundle {
-  djembe: string | null;
-  flute: string | null;
-  violin: string | null;
-  combined: string | null;
-  sourceFingerprint: string;
-  selectionFingerprint: string;
-  appliedAt: string | null;
-  validation?: EnsembleExpansionValidation;
-  conflictReport?: EnsembleConflictReportEntry[];
-}
 
 export interface FingerstyleGenerationSettings {
   skillLevel: SkillLevel;
@@ -74,9 +59,6 @@ export interface WorkspaceState {
   generatedGuitarOrigin: GeneratedGuitarOrigin;
   accompanimentWorkflowSetup: AccompanimentWorkflowSetup | null;
   accompanimentWorkflow: AccompanimentWorkflowSession | null;
-  ensembleWorkflow: EnsembleWorkflowSession | null;
-  stagedEnsembleLayers: EnsembleLayerAbcBundle | null;
-  appliedEnsembleLayers: EnsembleLayerAbcBundle | null;
   accompanimentLayerVisibility: Record<string, boolean>;
   accompanimentLayerVolumes: Record<string, number>;
   fingerstyleGenerationSettings: FingerstyleGenerationSettings;
@@ -96,9 +78,6 @@ export const DEFAULT_WORKSPACE_STATE: WorkspaceState = {
   generatedGuitarOrigin: null,
   accompanimentWorkflowSetup: null,
   accompanimentWorkflow: null,
-  ensembleWorkflow: null,
-  stagedEnsembleLayers: null,
-  appliedEnsembleLayers: null,
   accompanimentLayerVisibility: DEFAULT_ACCOMPANIMENT_LAYER_VISIBILITY,
   accompanimentLayerVolumes: DEFAULT_LAYER_VOLUMES,
   fingerstyleGenerationSettings: DEFAULT_FINGERSTYLE_GENERATION_SETTINGS,
@@ -117,7 +96,16 @@ export function useWorkspaceState(slug: string) {
       if (saved) {
         const parsed = JSON.parse(saved);
         const restoredWorkflow = normalizeAccompanimentWorkflowSession(parsed.accompanimentWorkflow);
-        const { pianoAccompanimentData: _pianoData, aiPianoSuggestions: _pianoSuggestions, selectedPianoIndex: _selectedPiano, generatedPiano: _generatedPiano, ...supportedWorkspace } = parsed;
+        const {
+          pianoAccompanimentData: _pianoData,
+          aiPianoSuggestions: _pianoSuggestions,
+          selectedPianoIndex: _selectedPiano,
+          generatedPiano: _generatedPiano,
+          ensembleWorkflow: _ensembleWorkflow,
+          stagedEnsembleLayers: _stagedEnsembleLayers,
+          appliedEnsembleLayers: _appliedEnsembleLayers,
+          ...supportedWorkspace
+        } = parsed;
         const isDedicatedFingerstyle = parsed.generatedGuitarOrigin === "fingerstyle-timegrid";
         // eslint-disable-next-line react-hooks/set-state-in-effect -- workspace state must hydrate from localStorage after mount to avoid SSR/localStorage mismatches.
         setState({

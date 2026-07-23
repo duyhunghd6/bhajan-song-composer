@@ -25,6 +25,7 @@ type EditorHistory = {
 interface AbcEditorProps {
   initialAbc?: string;
   storageKey?: string;
+  manageStorage?: boolean;
   title?: string;
   value?: string;
   onChange?: (abc: string) => void;
@@ -33,6 +34,7 @@ interface AbcEditorProps {
 export default function AbcEditor({
   initialAbc = DEFAULT_ABC,
   storageKey = DEFAULT_STORAGE_KEY,
+  manageStorage = true,
   title = "ABC Notation Editor",
   value,
   onChange,
@@ -42,8 +44,10 @@ export default function AbcEditor({
     present: value ?? initialAbc,
     future: [],
   });
-  const [storageStatus, setStorageStatus] = useState("Draft saves locally in this browser.");
-  const [hasLoadedStorage, setHasLoadedStorage] = useState(false);
+  const [storageStatus, setStorageStatus] = useState(
+    manageStorage ? "Draft saves locally in this browser." : "Draft persistence is managed by the Composer workspace."
+  );
+  const [hasLoadedStorage, setHasLoadedStorage] = useState(!manageStorage);
   const [isValidating, setIsValidating] = useState(false);
   const [validationFeedback, setValidationFeedback] = useState<string | null>(null);
   const [validationEdits, setValidationEdits] = useState<AbcValidationEdit[] | null>(null);
@@ -94,7 +98,7 @@ export default function AbcEditor({
   }, [value]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (!manageStorage || typeof window === "undefined") return;
 
     const timeoutId = window.setTimeout(() => {
       try {
@@ -113,10 +117,10 @@ export default function AbcEditor({
     }, 0);
 
     return () => window.clearTimeout(timeoutId);
-  }, [storageKey, onChange]);
+  }, [storageKey, onChange, manageStorage]);
 
   useEffect(() => {
-    if (!hasLoadedStorage || typeof window === "undefined") return;
+    if (!manageStorage || !hasLoadedStorage || typeof window === "undefined") return;
 
     const timeoutId = window.setTimeout(() => {
       try {
@@ -129,7 +133,7 @@ export default function AbcEditor({
     }, 0);
 
     return () => window.clearTimeout(timeoutId);
-  }, [hasLoadedStorage, history.present, storageKey]);
+  }, [hasLoadedStorage, history.present, storageKey, manageStorage]);
 
   const commitText = useCallback((nextText: string) => {
     setHistory((current) => {

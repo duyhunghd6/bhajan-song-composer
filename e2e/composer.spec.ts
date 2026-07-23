@@ -75,21 +75,13 @@ test.describe("composer workflow", () => {
     await expect(page.getByRole("heading", { name: "AI Accompaniment Generation" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Resulting ABC Staff Preview" })).toBeVisible();
 
-    await page.getByRole("link", { name: "Save & Add Ensemble" }).click();
-    await expect(page).toHaveURL(`/compose/${slug}/ensemble`);
-    await expect(page.getByRole("heading", { name: "Step 4: Ensemble Expansion" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "AI Ensemble Generation" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Step-by-step AI Ensemble Workflow" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Start 8-step Ensemble Workflow" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Conflict Resolution Hierarchy Log" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Multi-track ABCJS Render (Full Score View)" })).toBeVisible();
+    await page.goto(`/compose/${slug}/guitar-fingerstyle`);
+    await expect(page.getByRole("heading", { name: "Step 3.1: Guitar Fingerstyle" })).toBeVisible();
 
-    await page.getByRole("link", { name: "Save & Review" }).click();
-    await expect(page).toHaveURL(`/compose/${slug}/review`);
-    await expect(page.getByRole("heading", { name: "Step 5: Review & Export" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Playback Simulation: Test Full Audio & Sync" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Raw Markdown Output File Preview" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Copy Markdown" })).toBeVisible();
+    await page.goto(`/compose/${slug}/review`);
+    await expect(page.getByRole("heading", { name: "Step 4: Export to Practice" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Export selected notation layers" })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Publish selected layers/ })).toBeDisabled();
   });
 
   test("keeps Solo/Fingerstyle off accompaniment while preserving the dedicated route", async ({ page }) => {
@@ -108,12 +100,12 @@ test.describe("composer workflow", () => {
   test("places source on the left and playback on the right at widescreen", async ({ page }) => {
     await page.setViewportSize({ width: 1920, height: 1080 });
 
-    for (const step of ["harmony", "accompaniment", "ensemble", "review"] as const) {
+    for (const step of ["harmony", "accompaniment", "guitar-fingerstyle", "review"] as const) {
       await page.goto(`/compose/happy-birthday/${step}`);
 
       const sourcePanel = page.locator(".composer-step-source-panel").first();
       const previewPanel = page.locator(".composer-step-responsive-grid > div").nth(1);
-      const previewCanvas = page.locator(`#composer-${step}-preview`);
+      const previewCanvas = page.locator(step === "review" ? "#composer-export-preview" : `#composer-${step}-preview`);
       await expect(sourcePanel).toBeVisible();
       await expect(previewPanel).toBeVisible();
       await expect(previewCanvas).toBeVisible();

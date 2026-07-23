@@ -22,7 +22,7 @@ export const COMPOSER_STEPS = [
     number: 3,
     label: "Accompaniment",
     title: "Step 3: Accompaniment",
-    focus: "Generate piano accompaniment or guitar fingerstyle from the harmonized melody.",
+    focus: "Build devotional Guitar Classic, Harmonium, and Djembe support from validated harmony.",
     backLabel: "Back to Harmony",
     nextLabel: "Save & Continue",
   },
@@ -38,11 +38,11 @@ export const COMPOSER_STEPS = [
   {
     id: "review",
     number: 4,
-    label: "Review",
-    title: "Step 4: Review & Export",
-    focus: "Review the final arrangement and export markdown for contribution.",
-    backLabel: "Back to Accompaniment",
-    nextLabel: "Export Markdown/PR",
+    label: "Export",
+    title: "Step 4: Export to Practice",
+    focus: "Choose validated notation layers to publish and practice from the catalogue.",
+    backLabel: "Back to Guitar Fingerstyle",
+    nextLabel: "Publish Selected Layers",
   },
 ] as const;
 

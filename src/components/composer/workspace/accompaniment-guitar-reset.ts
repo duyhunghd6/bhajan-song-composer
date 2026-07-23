@@ -18,10 +18,7 @@ export function hasAccompanimentGuitarBranchWork(state: WorkspaceState): boolean
     state.generatedGuitar ||
     state.guitarAccompanimentData ||
     hasItems(state.aiGuitarSuggestions) ||
-    state.selectedGuitarIndex !== null ||
-    state.ensembleWorkflow ||
-    state.stagedEnsembleLayers ||
-    state.appliedEnsembleLayers
+    state.selectedGuitarIndex !== null
   );
 }
 
@@ -43,9 +40,6 @@ export function buildHarmonyValidationBranchResetState(state: WorkspaceState): P
     aiGuitarSuggestions: [],
     selectedGuitarIndex: null,
     accompanimentWorkflow: clearedWorkflow,
-    ensembleWorkflow: null,
-    stagedEnsembleLayers: null,
-    appliedEnsembleLayers: null,
   };
 }
 
@@ -67,8 +61,5 @@ export function buildAccompanimentGuitarBranchResetState(state: WorkspaceState):
     aiGuitarSuggestions: [],
     selectedGuitarIndex: null,
     accompanimentWorkflow: clearedWorkflow,
-    ensembleWorkflow: null,
-    stagedEnsembleLayers: null,
-    appliedEnsembleLayers: null,
   };
 }

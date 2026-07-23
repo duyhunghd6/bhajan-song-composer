@@ -9,25 +9,16 @@ import {
   normalizeAbcLayerVisibility,
   type AbcLayerVisibilityItem,
 } from "@/lib/theory/abc-layer-visibility";
-import { buildAccompanimentAbc } from "@/lib/theory/accompaniment-abc";
 import {
-  buildAccompanimentWorkflowAbcAnnotation,
-  getHarmonyValidationAbc,
   getLatestSelectedWorkflowStep,
-  getSelectedWorkflowOption,
-  getWorkflowAppliedMusicAbc,
-  isAccompanimentWorkflowSourceCurrent,
-  isAccompanimentWorkflowStepComplete,
   type AccompanimentWorkflowSession,
   type AccompanimentWorkflowStepDefinition,
 } from "@/lib/theory/accompaniment-workflow";
-import { generateAccompanimentSupportLayers } from "@/lib/theory/accompaniment-workflow/support-layers";
-import { generateArrangementPipeline, type ArrangementPipelineResult } from "@/lib/theory/arrangement-pipeline";
-import type { StrongBeatDirective } from "@/lib/theory/abc-beat-annotations";
 import { normalizeAbcVoiceId } from "@/lib/theory/abc-voice-normalization";
 import { isTabCapableGuitarVoiceId } from "@/lib/theory/guitar-string-forcing";
 import type { GeneratedGuitarOrigin } from "../useWorkspaceState";
 import type { ACCOMPANIMENT_PREVIEW_RENDER_OPTIONS, COMPOSER_PREVIEW_RENDER_OPTIONS } from "./preview";
+import { buildArrangementSourceGraph, type ArrangementSourceGraph } from "./arrangement-source/arrangement-source-graph";
 
 export type HarmonyLayerVisibility = Record<string, boolean>;
 export type AccompanimentLayerVisibility = Record<string, boolean>;
@@ -57,7 +48,8 @@ export interface AccompanimentPreviewModel {
 }
 
 export interface ArrangementPreviewModel {
-  pipeline: ArrangementPipelineResult | null;
+  sourceGraph: ArrangementSourceGraph;
+  pipeline: ArrangementSourceGraph["pipeline"];
   activeWorkflow: AccompanimentWorkflowSession | null;
   workflowAppliedMusicAbc: string;
   harmonyValidationAbc: string | null;
@@ -79,23 +71,12 @@ export interface BuildArrangementPreviewModelInput {
   accompanimentLayerVolumes: Record<string, number>;
 }
 
-function generatePipelineSafely(abc: string, fallback: ArrangementPipelineResult | null = null): ArrangementPipelineResult | null {
-  try {
-    return generateArrangementPipeline(abc);
-  } catch {
-    return fallback;
-  }
-}
-
 export function buildArrangementSynthOptions(
   layerVisibility: Record<string, boolean>,
   abcString?: string
 ): { voicesOff?: boolean; chordsOff?: boolean } {
   const normalizedVisibility = normalizeAbcLayerVisibility(layerVisibility);
   const synthOptions: { voicesOff?: boolean; chordsOff?: boolean } = {};
-  // Only set voicesOff if Melody is hidden AND the ABC still has a V:Melody voice.
-  // When Melody is promoted away (replaced by an instrument as primary voice),
-  // voicesOff would silence the promoted instrument since it's now the first voice.
   const melodyHidden = !isAbcLayerVisible("Melody", normalizedVisibility, true);
   const abcHasMelodyVoice = abcString ? /\bV:Melody\b/.test(abcString) : true;
   if (melodyHidden && abcHasMelodyVoice) synthOptions.voicesOff = true;
@@ -121,23 +102,21 @@ function effectiveAccompanimentLayerVisibility(
 function getScoreGuitarStaffIndex(abc: string): number {
   const scoreMatch = abc.match(/^%%score\s+(.+)$/m);
   if (!scoreMatch) return -1;
-
   const scoreLine = scoreMatch[1];
   const groupedStaffs = scoreLine.match(/\([^)]*\)|\[[^\]]*\]|\{[^}]*\}/g);
-  if (groupedStaffs && groupedStaffs.length > 0) {
+  if (groupedStaffs?.length) {
     return groupedStaffs.findIndex((group) => group
       .replace(/[(){}\[\]]/g, " ")
       .split(/\s+/)
       .map(normalizeAbcVoiceId)
       .some(isTabCapableGuitarVoiceId));
   }
-
-  const bareVoices = scoreLine
+  return scoreLine
     .split(/\s+/)
     .map((voice) => voice.trim())
     .filter(Boolean)
-    .map(normalizeAbcVoiceId);
-  return bareVoices.findIndex(isTabCapableGuitarVoiceId);
+    .map(normalizeAbcVoiceId)
+    .findIndex(isTabCapableGuitarVoiceId);
 }
 
 export function getArrangementRenderOptionsFor(
@@ -146,123 +125,64 @@ export function getArrangementRenderOptionsFor(
   guitarTabEnabled: boolean
 ): Record<string, unknown> {
   if (!guitarTabEnabled) return baseOptions;
-
   let guitarIndex = getScoreGuitarStaffIndex(abc);
+  if (guitarIndex === -1) guitarIndex = extractAbcVoiceIds(abc, false).findIndex(isTabCapableGuitarVoiceId);
+  if (guitarIndex < 0) return baseOptions;
 
-  if (guitarIndex === -1) {
-    guitarIndex = extractAbcVoiceIds(abc, false).findIndex(isTabCapableGuitarVoiceId);
-  }
-
-  if (guitarIndex >= 0) {
-    return {
-      staffwidth: baseOptions.staffwidth,
-      paddingright: baseOptions.paddingright,
-      stafftopmargin: 35,
-      tablature: [
-        ...Array.from({ length: guitarIndex }, () => ({ instrument: "" as const })),
-        {
-          instrument: "guitar" as const,
-          label: "",
-          tuning: ["E,", "A,", "D", "G", "B", "e"],
-          capo: 0,
-          hideTabSymbol: false,
-        },
-      ],
-    };
-  }
-
-  return baseOptions;
+  return {
+    staffwidth: baseOptions.staffwidth,
+    paddingright: baseOptions.paddingright,
+    stafftopmargin: 35,
+    tablature: [
+      ...Array.from({ length: guitarIndex }, () => ({ instrument: "" as const })),
+      { instrument: "guitar" as const, label: "", tuning: ["E,", "A,", "D", "G", "B", "e"], capo: 0, hideTabSymbol: false },
+    ],
+  };
 }
 
 export function buildArrangementPreviewModel(input: BuildArrangementPreviewModelInput): ArrangementPreviewModel {
-  const pipeline = generatePipelineSafely(input.activeAbc);
-  const activeWorkflow = isAccompanimentWorkflowSourceCurrent(input.workflow, input.activeAbc)
-    ? input.workflow
-    : null;
-  const strongBeatsStepComplete = Boolean(
-    activeWorkflow && isAccompanimentWorkflowStepComplete(activeWorkflow, "key-beats")
-  );
+  const sourceGraph = buildArrangementSourceGraph({
+    activeAbc: input.activeAbc,
+    workflow: input.workflow,
+    generatedAccompaniment: input.generatedAccompaniment,
+    generatedGuitar: input.generatedGuitar,
+    generatedGuitarOrigin: input.generatedGuitarOrigin,
+    includeFingerstyle: input.previewPurpose === "final",
+  });
   const harmonyVisibility = normalizeAbcLayerVisibility(input.harmonyLayerVisibility);
   const effectiveLayerVisibility = effectiveAccompanimentLayerVisibility(
     input.accompanimentLayerVisibility,
-    strongBeatsStepComplete
+    sourceGraph.strongBeatsStepComplete
   );
-  const workflowAppliedMusicAbc = getWorkflowAppliedMusicAbc(activeWorkflow, input.activeAbc);
-  const harmonyValidationAbc = getHarmonyValidationAbc(activeWorkflow);
-  const harmonyStepComplete = Boolean(
-    activeWorkflow && isAccompanimentWorkflowStepComplete(activeWorkflow, "voice-leading-validation")
-  );
-  const harmonyDisplayAbc = harmonyStepComplete && harmonyValidationAbc
-    ? harmonyValidationAbc
+  const harmonyDisplayAbc = sourceGraph.harmonyStepComplete && sourceGraph.harmonyValidationAbc
+    ? sourceGraph.harmonyValidationAbc
     : input.activeAbc;
-  const branchSourceAbc = harmonyValidationAbc ?? input.activeAbc;
-  const workflowAppliedPipeline = generatePipelineSafely(branchSourceAbc, pipeline);
-  const strongBeatDirectives = activeWorkflow
-    ? (getSelectedWorkflowOption(activeWorkflow, "key-beats")?.data?.strongBeatDirectives as StrongBeatDirective[] | undefined)
-    : undefined;
-  const accompanimentSupportLayers = harmonyValidationAbc
-    ? generateAccompanimentSupportLayers(branchSourceAbc, {
-      accompaniment: workflowAppliedPipeline?.accompaniment ?? null,
-      workflow: activeWorkflow,
-    })
-    : { djembe: null };
-  const guitarClassicOption = activeWorkflow && isAccompanimentWorkflowStepComplete(activeWorkflow, "guitar-classic-abc-notation")
-    ? getSelectedWorkflowOption(activeWorkflow, "guitar-classic-abc-notation")
-    : null;
-  const guitarClassicAbc = typeof guitarClassicOption?.data.guitarClassicAbc === "string"
-    ? guitarClassicOption.data.guitarClassicAbc
-    : null;
-  const accompanimentSupportSources = [guitarClassicAbc, accompanimentSupportLayers.djembe];
-  const eligibleGeneratedGuitar = input.previewPurpose === "accompaniment"
-    ? null
-    : input.generatedGuitar;
-  const accompanimentBuild = buildAccompanimentAbc({
-    baseAbc: branchSourceAbc,
-    generatedAccompaniment: harmonyValidationAbc ? input.generatedAccompaniment : null,
-    generatedGuitar: harmonyValidationAbc ? eligibleGeneratedGuitar : null,
-    extraVoiceSources: accompanimentSupportSources,
-    layerVisibility: {
-      __melody__: true,
-      __chords__: true,
-      __strong_beats__: strongBeatsStepComplete,
-    },
-    strongBeatDirectives,
-  });
-  const workflowAnnotationAbc = buildAccompanimentWorkflowAbcAnnotation(activeWorkflow);
-  const rawAccompanimentWithoutVolumes = workflowAnnotationAbc
-    ? `${accompanimentBuild.abc.trimEnd()}\n\n${workflowAnnotationAbc}`
-    : accompanimentBuild.abc;
-  const rawAccompanimentAbc = applyAbcLayerVolumes(rawAccompanimentWithoutVolumes, input.accompanimentLayerVolumes);
+  const rawHarmonyAbc = applyAbcLayerVolumes(harmonyDisplayAbc, input.harmonyLayerVolumes);
+  const rawAccompanimentAbc = applyAbcLayerVolumes(sourceGraph.previewAbc, input.accompanimentLayerVolumes);
   const accompanimentVisibleVoices = getVisibleAbcVoiceIds(rawAccompanimentAbc, effectiveLayerVisibility);
   const hasGuitarVoice = accompanimentVisibleVoices.some(isTabCapableGuitarVoiceId);
-  const guitarTabEnabled = Boolean(
-    hasGuitarVoice && isAbcLayerVisible(ABC_LAYER_IDS.tab, effectiveLayerVisibility, false)
-  );
-  const rawHarmonyAbc = applyAbcLayerVolumes(harmonyDisplayAbc, input.harmonyLayerVolumes);
+  const guitarTabEnabled = hasGuitarVoice && isAbcLayerVisible(ABC_LAYER_IDS.tab, effectiveLayerVisibility, false);
   const harmonyVisibleVoices = getVisibleAbcVoiceIds(rawHarmonyAbc, harmonyVisibility);
   const hasHarmonyGuitarVoice = harmonyVisibleVoices.some(isTabCapableGuitarVoiceId);
-  const harmonyTabEnabled = Boolean(
-    hasHarmonyGuitarVoice && isAbcLayerVisible(ABC_LAYER_IDS.tab, harmonyVisibility, false)
-  );
-  const harmonyLayerVisibilityItems = extractAbcLayerVisibilityItems(rawHarmonyAbc, {
-    tabEnabled: hasHarmonyGuitarVoice,
-  });
+  const harmonyTabEnabled = hasHarmonyGuitarVoice && isAbcLayerVisible(ABC_LAYER_IDS.tab, harmonyVisibility, false);
+  const harmonyLayerVisibilityItems = extractAbcLayerVisibilityItems(rawHarmonyAbc, { tabEnabled: hasHarmonyGuitarVoice });
   const accompanimentLayerVisibilityItems = extractAbcLayerVisibilityItems(rawAccompanimentAbc, {
-    includeStrongBeats: strongBeatsStepComplete,
+    includeStrongBeats: sourceGraph.strongBeatsStepComplete,
     tabEnabled: hasGuitarVoice,
   });
 
   return {
-    pipeline,
-    activeWorkflow,
-    workflowAppliedMusicAbc,
-    harmonyValidationAbc,
+    sourceGraph,
+    pipeline: sourceGraph.pipeline,
+    activeWorkflow: sourceGraph.activeWorkflow,
+    workflowAppliedMusicAbc: sourceGraph.workflowAppliedMusicAbc,
+    harmonyValidationAbc: sourceGraph.harmonyValidationAbc,
     harmony: {
       abc: applyAbcLayerVisibility(rawHarmonyAbc, harmonyVisibility),
       rawAbc: rawHarmonyAbc,
       layerVisibilityItems: harmonyLayerVisibilityItems,
       synthOptions: buildArrangementSynthOptions(harmonyVisibility),
-      harmonyStepComplete,
+      harmonyStepComplete: sourceGraph.harmonyStepComplete,
       getRenderOptionsFor: (abc, baseOptions) => getArrangementRenderOptionsFor(abc, baseOptions, harmonyTabEnabled),
     },
     accompaniment: {
@@ -273,8 +193,8 @@ export function buildArrangementPreviewModel(input: BuildArrangementPreviewModel
       visibleVoiceNames: accompanimentVisibleVoices,
       hasGuitarVoice,
       guitarTabEnabled,
-      strongBeatsStepComplete,
-      appliedWorkflowStep: getLatestSelectedWorkflowStep(activeWorkflow),
+      strongBeatsStepComplete: sourceGraph.strongBeatsStepComplete,
+      appliedWorkflowStep: getLatestSelectedWorkflowStep(sourceGraph.activeWorkflow),
       effectiveLayerVisibility,
       hasLayerVisibilityControls: accompanimentLayerVisibilityItems.length > 0,
     },

@@ -17,12 +17,11 @@
  * Level 2 (aggressive) – applied if Level 1 still exceeds quota:
  *   • Drop `guitarAccompanimentData.arrangement` and
  *     `pianoAccompanimentData` entirely (can be regenerated).
- *   • Drop `ensembleWorkflow` session data.
+ *   • Drop regenerable legacy arrangement payloads.
  */
 
 import type { WorkspaceState } from "../useWorkspaceState";
 import type { AccompanimentWorkflowSession, AccompanimentWorkflowStepState } from "@/lib/theory/accompaniment-workflow";
-import type { EnsembleWorkflowSession, EnsembleWorkflowStepState } from "@/lib/theory/ensemble-workflow";
 
 // ---------------------------------------------------------------------------
 // Level 0 – strip debug/replay-only blobs
@@ -55,23 +54,6 @@ function pruneAccompanimentWorkflowRuns(steps: AccompanimentWorkflowSession["ste
   return pruned as AccompanimentWorkflowSession["steps"];
 }
 
-function pruneEnsembleWorkflowRuns(steps: EnsembleWorkflowSession["steps"]): EnsembleWorkflowSession["steps"] {
-  const pruned = { ...steps } as Record<string, EnsembleWorkflowStepState>;
-  for (const stepId of Object.keys(pruned)) {
-    const stepState = pruned[stepId];
-    if (!stepState?.runs?.length) continue;
-    pruned[stepId] = {
-      ...stepState,
-      runs: stepState.runs.map((run) => {
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { rawResult, ...rest } = run;
-        return rest;
-      }),
-    };
-  }
-  return pruned as EnsembleWorkflowSession["steps"];
-}
-
 function pruneLevel0(state: WorkspaceState): WorkspaceState {
   const result = { ...state };
 
@@ -80,14 +62,6 @@ function pruneLevel0(state: WorkspaceState): WorkspaceState {
     result.accompanimentWorkflow = {
       ...result.accompanimentWorkflow,
       steps: pruneAccompanimentWorkflowRuns(result.accompanimentWorkflow.steps),
-    };
-  }
-
-  // Prune ensemble workflow runs
-  if (result.ensembleWorkflow) {
-    result.ensembleWorkflow = {
-      ...result.ensembleWorkflow,
-      steps: pruneEnsembleWorkflowRuns(result.ensembleWorkflow.steps),
     };
   }
 
@@ -153,16 +127,6 @@ function pruneLevel2(state: WorkspaceState): WorkspaceState {
   // Drop full arrangement (regenerable from workflow data)
   if (result.guitarAccompanimentData) {
     result.guitarAccompanimentData = null;
-  }
-
-  // Drop ensemble workflow (regenerable from accompaniment)
-  if (result.ensembleWorkflow) {
-    result.ensembleWorkflow = null;
-  }
-
-  // Drop staged ensemble layers (regenerable)
-  if (result.stagedEnsembleLayers) {
-    result.stagedEnsembleLayers = null;
   }
 
   return result;
@@ -253,9 +217,6 @@ function pruneLevel3(state: WorkspaceState): WorkspaceState {
   result.generatedGuitar = null;
   result.generatedGuitarOrigin = null;
   result.generatedAccompaniment = null;
-
-  // Drop applied ensemble layers
-  result.appliedEnsembleLayers = null;
 
   return result;
 }
