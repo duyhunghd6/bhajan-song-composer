@@ -2,6 +2,8 @@
 
 This guide defines the editable representation for solo fingerstyle guitar arrangements. It complements the [Guitar Fingerstyle Arrangement Guide](./guitar-fingerstyle-arrangement-guide.md), which defines the staged AI workflow and fill policy.
 
+> **Agent navigation:** start with `src/lib/theory/fingerstyle-arranger/time-slice.ts` for the canonical source-to-grid contract, `time-slice-abc-renderer.ts` for the notation projection, and `timegrid-document-codec.ts` for import/export. `src/components/composer/workspace/fingerstyle-measure-persistence.ts` owns the distinct browser restore overlay, while `GuitarFingerstyleStep.tsx` owns route-level hydration and generated artifacts. Validate in layers: codec shape/continuity first, source-fingerprint compatibility at import/restore, then source-lock and physical/music validation before committing an arrangement.
+
 ## 1. Authority and data flow
 
 The meter-aware TimeGrid belongs exclusively to `/compose/:slug/guitar-fingerstyle`. It is compiled from the selected Harmony Step 3 (`voice-leading-validation`) ABC, not from `/compose/:slug/accompaniment` output. The accompaniment workflow may independently plan Guitar Classic comping and voicings, but it never owns, replaces, or serializes the TimeGrid.

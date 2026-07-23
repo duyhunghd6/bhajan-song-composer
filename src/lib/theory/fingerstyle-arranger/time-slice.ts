@@ -5,6 +5,12 @@ import type { GuitarStringNumber } from "../fingerstyle-compressor";
 import { getKeyAccidentalsFromAbc, abcNoteToMidiWithKey, type AbcKeyAccidentalMap } from "../abc-key-signature";
 import { renderTimeSliceMeasureToAbc } from "./time-slice-abc-renderer";
 
+/**
+ * Stable TimeGrid facade and canonical Fingerstyle arrangement contract.
+ * Compilation creates source-locked measures here; notation rendering delegates
+ * to `time-slice-abc-renderer.ts`. Callers edit structured tablature events,
+ * never derived Guitar ABC or ASCII tab.
+ */
 export interface TimeSliceMelodyEvent {
   kind: "note" | "rest";
   token: string;
@@ -302,7 +308,8 @@ export function convertAbcToTimeSliceGrid(
   const keyAccidentals = getKeyAccidentalsFromAbc(abcString);
   const { unitsPerBeat, meter } = durationContext;
   const stepsPerBeat = 4;
-  const stepsPerMeasure = meter.numerator * stepsPerBeat; // 16 for 4/4
+  // Resolution follows the active meter; 16 is only the 4/4 instance.
+  const stepsPerMeasure = meter.numerator * stepsPerBeat;
 
   // Extract melody lines and matching lyrics / beat weights
   const lines = abcString.split(/\r?\n/);

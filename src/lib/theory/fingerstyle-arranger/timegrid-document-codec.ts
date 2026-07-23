@@ -10,7 +10,12 @@ import {
 } from "./timegrid-document-codec-v2";
 import { formatV3Document, parseV3Document, TimeGridDocumentV3Error, V3_FORMAT } from "./timegrid-document-codec-v3";
 
-/** Immutable source envelope plus its editable canonical guitar arrangement. */
+/**
+ * Stable interchange facade for the immutable source envelope and its editable
+ * canonical guitar arrangement. Current writes are readable v3 documents;
+ * v1/v2 remain migration-only inputs. This is intentionally separate from the
+ * source-fingerprint browser restore envelope in `fingerstyle-measure-persistence.ts`.
+ */
 export interface ImportedTimeGridDocument {
   version: 1;
   source: { rawAbc: string };

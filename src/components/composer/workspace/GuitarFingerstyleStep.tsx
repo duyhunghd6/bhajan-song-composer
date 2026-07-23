@@ -137,7 +137,10 @@ export function GuitarFingerstyleStep({
     ws.fingerstyleGenerationSettings.skillLevel,
   ]);
 
-  // Save the authoritative structured measures and derive workspace Guitar ABC from them.
+  // The v3 import/copy document and this browser restore envelope are separate:
+  // restore overlays compatible tab data on freshly compiled source facts, while
+  // import validates a complete interchange document. Save authoritative
+  // structured measures and derive workspace Guitar ABC from them.
   useEffect(() => {
     if (restoredSourceFingerprint !== sourceFingerprint || measures.length === 0) return;
 

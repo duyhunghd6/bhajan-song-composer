@@ -7,6 +7,11 @@ import {
   normalizeAbcVoiceSyntax,
 } from "./abc-voice-normalization";
 
+/**
+ * Semantic display/playback projection for ABC layers. This module may filter
+ * or annotate preview ABC, but it does not establish branch provenance or
+ * rewrite the canonical arrangement/source documents.
+ */
 export const ABC_LAYER_IDS = {
   chordProgression: "ChordProgression",
   lyrics: "Lyrics",
@@ -321,6 +326,8 @@ export function applyAbcLayerVisibility(abcString: string, visibility: Record<st
     return /"[^"]+"/.test(trimmed);
   });
 
+  // Lyrics and chord symbols are anchored to the Melody music line, so hiding
+  // its note layer cannot remove that structural carrier while either is shown.
   const melodyVisible = isAbcLayerVisible("Melody", normalizedVisibility, true) || hasLyrics || hasChords;
   const allVoices = extractAbcVoiceIds(abcString, true);
   const visibleVoices = new Set(

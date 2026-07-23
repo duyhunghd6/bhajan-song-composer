@@ -32,6 +32,9 @@ interface ChatMessage {
   name?: string;
 }
 
+// Transport and tool-loop control only: provider schemas guide a model but do
+// not establish music validity. Callers retain ownership of local validation,
+// source locks, physical constraints, and final artifact acceptance.
 interface LocalToolDefinition {
   name: string;
   execute: (args: unknown) => unknown | Promise<unknown>;

@@ -11,6 +11,8 @@ The design keeps locked melody facts and physical constraints server-owned while
 
 The LLM does **not** replace locked source fields or invent unvalidated timing coordinates, strings, or frets. It may propose accompaniment events only through the staged, server-validated workflow.
 
+> **Function-call boundary:** the server selects and exposes only the tool for the current phase. These tool calls are bounded decision interfaces, not a global capability set: provider JSON is validated against server-owned source facts, legal candidate sets, physical constraints, and final merge rules before any arrangement state is accepted.
+
 ## 1. Canonical TimeGrid and locked source facts
 
 Source ABC provides melody, inline chord symbols, lyrics, optional beat-weight metadata, meter, key, and barline context. The time-slice compiler pins those facts into the canonical TimeGrid, where they are not editable as part of a fingerstyle arrangement edit:

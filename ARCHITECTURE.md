@@ -44,6 +44,20 @@ The downstream source graph is directed: Melody feeds Harmony Steps 1–3; the s
 | Storage pruning/quota failure | Missing draft artifacts are excluded from Export with warnings | No published files change |
 | Export | No implicit draft reset | Selected named layer files and metadata are upserted; unselected layers and Markdown body are preserved |
 
+#### Arrangement authority and projection matrix
+
+| Representation | Owner / purpose | May become a downstream source or durable layer? |
+| --- | --- | --- |
+| Editable melody ABC | Composer workspace draft root | Yes: it feeds the source-current Harmony workflow. |
+| Selected Harmony Step 3 ABC | `voice-leading-validation` result | Yes: it is the only harmonic source for Accompaniment and Fingerstyle. |
+| Accompaniment support ABC | Accompaniment sibling branch | Yes for its own preview/export layer; never Fingerstyle input. |
+| `TimeSliceMeasure[]` | Guitar Fingerstyle physical arrangement authority | Yes for Fingerstyle editing and deterministic Guitar projections. |
+| Generated Guitar ABC / ASCII tab | TimeGrid projection | Preview/export/display artifact; never an alternate edit authority. |
+| `ArrangementSourceGraph.exportableLayers` | Source-current export eligibility | Candidate layers only; Export requires explicit user selection. |
+| Published catalogue notation | `publish-arrangement.ts` output | The sole source for Practice/Showcase. |
+
+`arrangement-source-graph.ts` establishes source-current provenance and named export eligibility. `arrangement-preview-model.ts` is a projection adapter that applies visibility, volumes, synth choices, and TAB options to that graph; its rendered ABC must not be persisted as a new source. `abc-layer-visibility.ts` transforms the display/playback projection, while `cleanAbcForExport()` produces portable export text. These transformations do not change upstream authority.
+
 ### Music sheet / ABCJS playback
 
 Music notation playback lives under `src/components/music-sheet/`.
@@ -89,6 +103,12 @@ Music-theory logic lives under `src/lib/theory/`.
 - `ensemble-workflow/definition.ts` contains ensemble workflow ids, types, default generation plan, and step definitions.
 
 Compatibility entrypoints were preserved so existing callers can continue importing from `@/lib/theory/piano-accompaniment`, `@/lib/theory/fingerstyle-arranger`, `@/lib/theory/accompaniment-workflow`, and `@/lib/theory/ensemble-workflow`.
+
+### Configured LLM function-call boundary
+
+`src/app/actions/ai-config.ts` is the bounded OpenAI-compatible chat-completions/function-call transport and tool-loop control boundary. It applies configured request, transcript, tool-schema, tool-result, turn, retry, timeout, and deadline limits; it is not the authority for arrangement validity. The calling workflow controls which tools are exposed for its current phase, and deterministic theory modules validate source locks, legal candidates, physical guitar constraints, and final artifacts before state is accepted.
+
+For Fingerstyle specifically, `src/app/actions/fingerstyle-line-arranger.ts` is the public Server Action and its local `workflow.ts` exposes only the next allowed staged tool. The model selects bounded musical decisions; it does not replace a TimeGrid or invent unconstrained physical coordinates. Diagnostics are bounded operational summaries and must remain separate from durable musical artifact contracts.
 
 ### Visual instrument mockups
 

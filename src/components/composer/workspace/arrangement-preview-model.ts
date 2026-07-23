@@ -20,6 +20,11 @@ import type { GeneratedGuitarOrigin } from "../useWorkspaceState";
 import type { ACCOMPANIMENT_PREVIEW_RENDER_OPTIONS, COMPOSER_PREVIEW_RENDER_OPTIONS } from "./preview";
 import { buildArrangementSourceGraph, type ArrangementSourceGraph } from "./arrangement-source/arrangement-source-graph";
 
+/**
+ * Preview-only adapter over the source-current arrangement graph. It composes
+ * visibility, volume, synth, and ABCJS options; its ABC output is not a source
+ * artifact to persist, export, or feed into either arrangement branch.
+ */
 export type HarmonyLayerVisibility = Record<string, boolean>;
 export type AccompanimentLayerVisibility = Record<string, boolean>;
 export type ComposerPreviewRenderOptions = typeof ACCOMPANIMENT_PREVIEW_RENDER_OPTIONS | typeof COMPOSER_PREVIEW_RENDER_OPTIONS;
@@ -160,6 +165,8 @@ export function buildArrangementPreviewModel(input: BuildArrangementPreviewModel
   const rawHarmonyAbc = applyAbcLayerVolumes(harmonyDisplayAbc, input.harmonyLayerVolumes);
   const rawAccompanimentAbc = applyAbcLayerVolumes(sourceGraph.previewAbc, input.accompanimentLayerVolumes);
   const accompanimentVisibleVoices = getVisibleAbcVoiceIds(rawAccompanimentAbc, effectiveLayerVisibility);
+  // TAB is an ABCJS render option, not a textual layer: enable it only when a
+  // currently visible Guitar voice can supply physical notation.
   const hasGuitarVoice = accompanimentVisibleVoices.some(isTabCapableGuitarVoiceId);
   const guitarTabEnabled = hasGuitarVoice && isAbcLayerVisible(ABC_LAYER_IDS.tab, effectiveLayerVisibility, false);
   const harmonyVisibleVoices = getVisibleAbcVoiceIds(rawHarmonyAbc, harmonyVisibility);

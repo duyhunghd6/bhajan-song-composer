@@ -234,6 +234,8 @@ export async function runFingerstyleLineWorkflow(
     toolChoice: { type: "function", function: { name: tool.function.name } },
     maxToolCallsPerTurn: 1,
   });
+  // Expose exactly one server-selected tool for the next legal phase. The model
+  // cannot skip ahead, regain a prior phase, or access the complete tool set.
   const resolveFingerstyleToolTurn = () => {
     if (fillRepairStage === "reservation") return forceToolTurn(SELECT_FILL_RESERVATIONS_TOOL_DEFINITION);
     if (fillRepairStage === "bass") return forceToolTurn(SELECT_BASS_POSITIONS_TOOL_DEFINITION);

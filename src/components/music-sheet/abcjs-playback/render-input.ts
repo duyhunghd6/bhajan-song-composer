@@ -66,7 +66,10 @@ function sanitizeInertGraceGroupsForAbcjs(abc: string): string {
 }
 
 /**
- * Build the exact ABC string passed to the abcjs render boundary.
+ * Build the transient ABCJS input: caller ABC → render-only adaptation →
+ * `abcjs.renderAbc`. Nothing returned here may be persisted as canonical ABC
+ * or reused for portable export; string forcing and sanitization are adapter
+ * concerns only.
  */
 export function prepareAbcjsRenderInput({
   abcString,

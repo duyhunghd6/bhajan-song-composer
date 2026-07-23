@@ -14,6 +14,11 @@ import type { StrongBeatDirective } from "@/lib/theory/abc-beat-annotations";
 import type { GeneratedGuitarOrigin } from "../../useWorkspaceState";
 import type { ComposerPublishedNotationType } from "@/lib/songs/composer-notation";
 
+/**
+ * Source-current provenance and export-eligibility boundary for Composer branches.
+ * This module derives eligible raw layers; preview transformations belong in
+ * `arrangement-preview-model.ts` and must never become a new branch source.
+ */
 export type ComposerNotationLayerType = ComposerPublishedNotationType;
 
 export interface ExportableNotationLayer {
@@ -99,6 +104,9 @@ export function buildArrangementSourceGraph(input: BuildArrangementSourceGraphIn
     },
     strongBeatDirectives,
   };
+  // `accompanimentAbc` remains the accompaniment-only layer. The optional
+  // Fingerstyle inclusion below is final-preview composition, never an input
+  // to either sibling branch or an accompaniment export replacement.
   const accompanimentBuild = buildAccompanimentAbc({
     ...sharedAccompanimentInput,
     generatedGuitar: null,
