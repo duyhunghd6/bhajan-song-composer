@@ -172,6 +172,8 @@ A solo fingerstyle guitar must simulate drums through technique:
 | **String slap** | Beats 2 and 4 | Snare illusion — side of thumb strikes lower strings against frets |
 | **Ghost notes** | Off-beats ("ands") | Hi-hat illusion — muted string taps between melody notes |
 
+> **Note:** Travis-picking bass patterns are realized in the foundation stage of the TimeGrid engine. String slap and ghost-note percussion mapping are **theoretical/aspirational techniques** documented here for completeness and future implementation — the current deterministic engine does not automate them.
+
 ### 3.4 Execution Architecture: Physical Hand Mapping
 
 #### Fretting Hand (LH) Constraints
@@ -262,7 +264,22 @@ Fingerstyle polish sections support the devotional melody; they must not become 
 | **Intro** | Before the first Melody system | Tonic/dominant arpeggio or the opening `Sthayi` motive | 1–2 measures by default | Establish key and picking profile before the singer enters |
 | **Interlude** | At phrase/cadence boundaries, commonly between `Sthayi` and `Antara` | Short turnaround from the preceding cadence or a recognizable melodic fragment | Keep below melody density; avoid fast runs unless melody is resting | Reconnect smoothly to the next phrase's first chord/root |
 | **Outro** | After the final Melody system | Final cadence arpeggio using tonic/root bass and stable top voice | 1–2 measures, thinning toward final note | End on tonic/root bass with consonant top voice |
-| **Fill** | Inside vocal gaps only | Neighbor tones, chord tones, or brief motive echo | Yield immediately when melody resumes | Never obscure phrase-ending melody notes |
+| **Fill** | Inside vocal gaps only | Chord tones, common tones, scale approach tones, neighbor tones, or brief motive echo | Yield immediately when melody resumes | Never obscure phrase-ending melody notes |
+
+#### Fill Note Methods Summary
+
+The following table summarizes all fill note techniques available for solo fingerstyle arrangement, their harmonic basis, placement constraints, and whether the current TimeGrid engine automates them:
+
+| Method | Source Material | Placement Constraint | Engine Support |
+| ------ | --------------- | -------------------- | -------------- |
+| **Chord Tone Fill** | Root, 3rd, 5th, 7th, extensions of the active chord | Any legal rest window; 3rds prioritized, 5ths dropped first | ✅ Automated — `enumerateFillCandidates` pitch pool |
+| **Common Tone Fill** | Notes shared between the current chord and the next chord | Near chord changes; creates smooth voice-leading bridges | ✅ Automated — `common-tone-next-chord` condition with +10 score bonus |
+| **Scale Approach Tone** | Key-scale notes not in the active chord | Weak beats / off-beats only; **must resolve** to a chord tone before the fill window ends | ✅ Automated — `scale-approach` role with `resolve-by-window-end` condition |
+| **Neighbor Tone Fill** | Upper or lower neighbor (half/whole step) from a target chord tone | Short windows (1–2 steps); must return to the target note | ⚠️ Partial — covered by scale-approach candidates when the neighbor pitch is diatonic |
+| **Phrase-Transfer Fill** | Arpeggio or stepwise motion connecting the end of one vocal line to the start of the next | Line-end rest windows; highest scoring opportunity (up to +20 phrase-transfer bonus) | ✅ Automated — `phraseTransfer` scoring component with boundary evidence |
+| **Motive Echo / Fragment** | Reuse of Sthayi/Antara motives, cadence targets, or melodic fragments | Intro, interlude, outro, or long rest gaps | ❌ Compositional — LLM or human decision; engine provides legal windows but not motive analysis |
+| **Ghost Notes / String Slap** | Muted string taps (hi-hat illusion) or thumb slaps (snare illusion) | Off-beats and beats 2/4 respectively | ❌ Aspirational — documented theory for future implementation |
+| **Travis-Picking Bass Pattern** | Alternating root/fifth bass in steady quarter notes | Continuous background pattern on strings 4–6 | ✅ Foundation stage — bass alternation is part of TimeGrid foundation, not fill analysis |
 
 Hard rules:
 

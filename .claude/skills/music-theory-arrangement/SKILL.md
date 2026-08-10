@@ -45,6 +45,17 @@ Use this skill when the task involves:
 > 5. **Form, Structure & Motivic Development** — cadences, song forms, bhajan structure, motivic techniques
 > 6. **Output Generation Rules** — validation checklist, harmonization pipeline, ABC output format
 
+### 🎚️ Instrument Skill Levels
+
+> **Read [`INSTRUMENT-SKILL-LEVELS.md`](./INSTRUMENT-SKILL-LEVELS.md)** for level-aware arrangement constraints:
+>
+> - **5 proficiency levels** (Foundation → Elementary → Intermediate → Advanced → Virtuoso) mapped to both Western (ABRSM) and Indian (ABGMVM) grading systems
+> - **12 instruments:** Piano, Harmonium, Guitar, Djembe, Flute (Bansuri), Violin, Tabla, Tanpura, Dholak, Bass Guitar, Sitar, Voice
+> - Per-level technique whitelists, register constraints, rhythmic density caps, and physical demand limits
+> - Bhajan-specific application notes per instrument per level
+> - Cross-instrument ensemble compatibility matrix
+> - Algorithmic generation rules (technique gating, density scaling, register enforcement, physical validation)
+
 ### 🎸 Instrument Arrangement Modules
 
 Read these when the task requires **generating arrangement parts** for specific instruments:

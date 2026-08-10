@@ -276,6 +276,8 @@ When generating multi-part harmony, these rules are **mandatory**:
 - **Contour:** Melodies must have a focal point (highest or lowest peak). Balance leaps with subsequent stepwise motion in the opposite direction.
 - **Chord Tones on Strong Beats:** Melody notes falling on beat 1 and beat 3 (in 4/4) should ideally be chord tones. Passing tones, neighbor tones, and suspensions occur on weak beats.
 
+> **Fill context:** In solo fingerstyle arrangement, these same non-chord tones (passing tones, neighbor tones, scale approach tones) serve as fill note candidates during melody rests. See [`ARRANGEMENT01-GUITAR.md`](./ARRANGEMENT01-GUITAR.md) §3.6 Fill Note Methods Summary for the full taxonomy and engine support status.
+
 ### 5.2 Motivic Development Techniques
 
 | Technique          | Description                                         |

@@ -154,7 +154,10 @@ For each legal start step, the engine derives candidates from:
 
 - active-chord root, third, fifth, seventh, and useful extensions;
 - common tones into the next chord;
-- key-scale approach tones only on weak/unweighted placements, with an explicit resolution requirement.
+- key-scale approach tones only on weak/unweighted placements, with an explicit resolution requirement;
+- neighbor tones (upper or lower by half/whole step from a chord tone) — these are partially covered by scale-approach candidates when the neighbor pitch is diatonic. Chromatic neighbor tones are not currently enumerated.
+
+For motive echo, fragment reuse, and percussion-based fill techniques (ghost notes, string slaps), see the comprehensive [Fill Note Methods Summary](../.agents/skills/music-theory-arrangement/ARRANGEMENT01-GUITAR.md#fill-note-methods-summary) in the Guitar Arrangement module. These are compositional decisions made by the LLM or arranger, not deterministic engine candidates.
 
 Fill-role candidates use inner/treble strings 1–4 with `i`, `m`, or `a`. Bass anchors remain part of the frozen foundation. Duplicate concert pitches on different strings remain distinct because string choice affects fingering and sustain behavior.
 
