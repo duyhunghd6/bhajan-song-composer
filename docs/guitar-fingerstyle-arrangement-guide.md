@@ -1,4 +1,5 @@
 # Guitar Fingerstyle Arrangement Guide
+<!-- beads-id: br-guide-fingerstyle-arrangement -->
 
 This document describes the line-level solo-guitar pipeline used only by `/compose/:slug/guitar-fingerstyle`. Its input is the selected Harmony Step 3 (`voice-leading-validation`) ABC. It is an independent sibling of `/compose/:slug/accompaniment`: accompaniment output, setup style, branch options, and completion state never become inputs to this TimeGrid workflow.
 
@@ -14,6 +15,7 @@ The LLM does **not** replace locked source fields or invent unvalidated timing c
 > **Function-call boundary:** the server selects and exposes only the tool for the current phase. These tool calls are bounded decision interfaces, not a global capability set: provider JSON is validated against server-owned source facts, legal candidate sets, physical constraints, and final merge rules before any arrangement state is accepted.
 
 ## 1. Canonical TimeGrid and locked source facts
+<!-- beads-id: br-guide-fingerstyle-arrangement-s01 -->
 
 Source ABC provides melody, inline chord symbols, lyrics, optional beat-weight metadata, meter, key, and barline context. The time-slice compiler pins those facts into the canonical TimeGrid, where they are not editable as part of a fingerstyle arrangement edit:
 
@@ -30,6 +32,7 @@ The editable arrangement layer is the independent `tablature` attack-event array
 A source line is useful structural evidence, but it is not assumed to be a perfect phrase annotation. Phrase-transfer scoring also considers rest length, lyric termination, repeat boundaries, current chord/key, cadence character, and the next line's melody entrance.
 
 ### Canonical data flow
+<!-- beads-id: br-guide-fingerstyle-arrangement-s02 -->
 
 ```text
 source ABC → compile locked source facts into TimeGrid
@@ -43,6 +46,7 @@ The working representation has three distinct layers: the in-memory canonical `{
 See [TimeGrid Conversion Guide](./timegrid-conversion-guide.md) for the exact v3 wire shape, persisted envelope, representation-level edit operations, validation sequence, and serialization rules.
 
 ### Meter-aware resolution
+<!-- beads-id: br-guide-fingerstyle-arrangement-s03 -->
 
 The grid uses four quantized steps per notated beat. Its length follows the meter numerator:
 
@@ -53,10 +57,12 @@ The grid uses four quantized steps per notated beat. Its length follows the mete
 Therefore, the production format is not an always-16-step schema. Pickup padding is excluded from generation and fill analysis.
 
 ## 2. Generation policy
+<!-- beads-id: br-guide-fingerstyle-arrangement-s04 -->
 
 Guitar complexity and fill quantity are separate controls.
 
 ### Player skill
+<!-- beads-id: br-guide-fingerstyle-arrangement-s05 -->
 
 | Skill | Main effect |
 |---|---|
@@ -67,6 +73,7 @@ Guitar complexity and fill quantity are separate controls.
 The canonical limits come from `SKILL_LEVEL_CONSTRAINTS` in `fingerstyle-arranger/fingerstyle-constraints.ts`. The selected skill is passed to deterministic TimeGrid foundation placement, fill enumeration, and final physical validation.
 
 ### Fill density
+<!-- beads-id: br-guide-fingerstyle-arrangement-s06 -->
 
 The Guitar Fingerstyle page is the authoritative owner of fill density; it is no longer supplied by an accompaniment workflow step. The UI exposes `auto`, `few`, `normal`, and `many`.
 
@@ -80,26 +87,32 @@ All discretionary fills are restricted to actual source-rest/phrase-gap windows.
 Settings are persisted in the per-song Composer workspace. Changing settings does not regenerate existing lines.
 
 ## 3. Enforced staged tool workflow
+<!-- beads-id: br-guide-fingerstyle-arrangement-s07 -->
 
 `generateAIFingerstyleLine` remains the public server action. Its implementation is local to `src/app/actions/fingerstyle-line-arranger/` and uses one OpenAI-compatible tool loop with server-owned phase state.
 
 ### Stage 1 — Fill-position reservations
+<!-- beads-id: br-guide-fingerstyle-arrangement-s08 -->
 
 The LLM first inspects every source-only fill reservation slot and explicitly selects or skips each musical location. A reservation contains measure/step, melody state, chord, metric context, and rationale only; it is not a physical note and contains no pitch, string, fret, duration, or finger.
 
 ### Stage 2 — Bass positions and annotated source ABC
+<!-- beads-id: br-guide-fingerstyle-arrangement-s09 -->
 
 The server exposes legal weighted bass-anchor slots after excluding pickup padding and selected fill reservations. The LLM explicitly selects or skips each slot. The diagnostic log then emits a read-only source-ABC projection with below-note labels such as `"_Bass M3:S1"`; raw source ABC remains byte-identical and annotations are never canonical input.
 
 ### Stage 3 — Chord-derived bass pitch selection
+<!-- beads-id: br-guide-fingerstyle-arrangement-s10 -->
 
 For each selected bass position the server enumerates ranked root/fifth low-register candidates with legal physical string/fret options. The LLM chooses candidate IDs only. It cannot invent a pitch, role, string, or fret.
 
 ### Stage 4 — Deterministic TimeGrid materialization and freeze
+<!-- beads-id: br-guide-fingerstyle-arrangement-s11 -->
 
 The server rebuilds from pristine source facts, realizes exact melody attacks and selected bass candidates, assigns/repairs physical positions under the selected skill constraints, writes explicit structural durations, validates physics, and freezes the canonical non-fill TimeGrid.
 
 ### Stage 5 — Post-bass fill analysis and composition
+<!-- beads-id: br-guide-fingerstyle-arrangement-s12 -->
 
 The LLM calls `inspect_fill_opportunities` beginning at cursor `0` and follows every `nextCursor` until `end`. The server rejects skipped, repeated, or out-of-order pages.
 
@@ -120,10 +133,12 @@ Analysis visits every active grid step and records a typed eligibility rejection
 Safe windows are formed only from contiguous Melody rests in every density mode. `normal` and `many` increase selection budgets among those legal windows; they never create sustain windows. Windows split at melody attacks, foundation attacks, chord changes, measure boundaries, pickup padding, and line boundaries.
 
 ### Stage 5a — Reservation reconciliation
+<!-- beads-id: br-guide-fingerstyle-arrangement-s13 -->
 
 After every post-bass page is inspected, the server reconciles each earlier selected fill reservation against a physical scored window. A reservation must still have legal candidates at its original measure/step; it is never silently moved. If bass materialization invalidates it, the LLM receives a repair result and must revise bass or reservation choices. The server validates source and opportunity-set fingerprints, reservation bindings, density/per-measure budgets, and zero-fill compatibility mode before it exposes late candidate composition.
 
 ### Stage 5b — LLM physical fill composition
+<!-- beads-id: br-guide-fingerstyle-arrangement-s14 -->
 
 The LLM calls `validate_composed_fills` with selected atomic candidate IDs plus its chosen duration and right-hand finger.
 
@@ -141,14 +156,17 @@ The LLM still decides the note sequence, rhythmic duration inside each legal cap
 The server rejects unknown or duplicate candidates, candidates from skipped windows, duration overflow, per-window note-budget overflow, same-string interval overlap, and scale approaches that do not resolve by step to a nearby chord tone.
 
 ### Stage 6 — Server merge, ASCII-GuitarTab, and Guitar ABC/ABCJS
+<!-- beads-id: br-guide-fingerstyle-arrangement-s15 -->
 
 The server reconstructs the final canonical TimeGrid measures from the frozen foundation and accepted candidate IDs. It adds `durationSteps`, `fillWindowId`, and `fillCandidateId` provenance to accepted fill events.
 
 The final `submit_arranged_line` call must reference the same accepted `fills:v1` payload. The LLM cannot replace locked source fields or submit a replacement grid at final submission. After accepted merge the server first renders and validates ASCII-GuitarTab, then generates forced-string `[V:Guitar]` ABC notation, and the Composer sends that generated ABC to the ABCJS music-staff/playback canvas.
 
 ## 4. Opportunity and candidate generation
+<!-- beads-id: br-guide-fingerstyle-arrangement-s16 -->
 
 ### Harmonic pool
+<!-- beads-id: br-guide-fingerstyle-arrangement-s17 -->
 
 For each legal start step, the engine derives candidates from:
 
@@ -162,6 +180,7 @@ For motive echo, fragment reuse, and percussion-based fill techniques (ghost not
 Fill-role candidates use inner/treble strings 1–4 with `i`, `m`, or `a`. Bass anchors remain part of the frozen foundation. Duplicate concert pitches on different strings remain distinct because string choice affects fingering and sustain behavior.
 
 ### Physical filtering
+<!-- beads-id: br-guide-fingerstyle-arrangement-s18 -->
 
 Hard constraints run before scoring:
 
@@ -181,6 +200,7 @@ c-m3-s7-B3-str2f0
 The opportunity-set ID includes the source fingerprint, policy, and frozen TimeGrid foundation signature. A selection from a different foundation is rejected as stale.
 
 ## 5. Stable 0–100 opportunity score
+<!-- beads-id: br-guide-fingerstyle-arrangement-s19 -->
 
 Each window exposes the complete breakdown.
 
@@ -201,10 +221,12 @@ The positive components total 100 before penalties. Hard physical failures never
 A line ending can receive a transfer bonus and a tonic-cadence restraint penalty simultaneously. This is intentional: line transitions are valuable, but the system should not automatically decorate every devotional cadence.
 
 ## 6. Compact versioned contracts
+<!-- beads-id: br-guide-fingerstyle-arrangement-s20 -->
 
 The model-facing payloads use compact row tables rather than verbose replacement JSON.
 
 ### Foundation: `tablature:v1`
+<!-- beads-id: br-guide-fingerstyle-arrangement-s21 -->
 
 ```text
 tablature:v1
@@ -217,6 +239,7 @@ tablature:v1
 Omitted steps have no attack. `harmony` is available for structural inner pinch tones; `fill` is forbidden in the foundation.
 
 ### Opportunity page: `fill-opportunities:v1`
+<!-- beads-id: br-guide-fingerstyle-arrangement-s22 -->
 
 ```text
 fill-opportunities:v1
@@ -234,6 +257,7 @@ C,c-m3-s6-B3-str2f0,w-m3-s6-8,3,6,B3,59,fifth,2,0,m,3,0,0,0,92,
 Pages carry explicit cursor metadata. Legal rows are never silently truncated.
 
 ### Selection: `fill-selection:v1`
+<!-- beads-id: br-guide-fingerstyle-arrangement-s23 -->
 
 ```text
 fill-selection:v1
@@ -245,6 +269,7 @@ D,w-m3-s6-8,use,long phrase transfer with stable open grip
 ```
 
 ### Composition: `fills:v1`
+<!-- beads-id: br-guide-fingerstyle-arrangement-s24 -->
 
 ```text
 fills:v1
@@ -258,6 +283,7 @@ N,c-m3-s7-D4-str2f3,2,m
 All codecs validate exact versions and headers, byte/row limits, bindings, row shape, enum values, and integer durations.
 
 ## 7. Duration, ties, and generated tablature
+<!-- beads-id: br-guide-fingerstyle-arrangement-s25 -->
 
 The accepted TimeGrid is the source for both Guitar ABC notation and ASCII-GuitarTab. Neither generated text format is a canonical editing surface; changes are made to validated `TimeSliceGridStep.tablature` events and then rendered again. The detailed conversion contract is in the [TimeGrid Conversion Guide](./timegrid-conversion-guide.md).
 
@@ -281,6 +307,7 @@ The accepted TimeGrid is the source for both Guitar ABC notation and ASCII-Guita
 Final physical validation also checks sounding same-string collisions and durations that extend outside a measure.
 
 ## 8. Diagnostics and UI
+<!-- beads-id: br-guide-fingerstyle-arrangement-s26 -->
 
 One run ID covers:
 
@@ -313,6 +340,7 @@ Each line card shows a compact run summary with:
 Only one line can generate at a time on the route. Other line buttons, skill/density settings, and TimeGrid import controls are disabled until the active run finishes. A response is accepted only when its source fingerprint and route revision still match the active canonical TimeGrid; source/import changes discard stale results.
 
 ## 9. Source fixtures and validation
+<!-- beads-id: br-guide-fingerstyle-arrangement-s27 -->
 
 Use:
 

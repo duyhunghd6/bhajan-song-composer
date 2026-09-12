@@ -1,5 +1,5 @@
 # Bhajan Song Composer — Product Requirements Document
-<!-- beads-id: prd-bsc -->
+<!-- beads-id: br-prd01 -->
 
 > **Version**: 1.0  
 > **Date**: 2026-06-29  
@@ -9,7 +9,7 @@
 ---
 
 ## Problem Statement
-<!-- beads-id: prd-bsc-s1 -->
+<!-- beads-id: br-prd01-s1 -->
 
 Sahaja Yoga practitioners worldwide learn, practice, and perform bhajans (devotional songs) using scattered resources — YouTube videos of varying quality, hand-copied lyric sheets, informal chord charts passed between musicians, and occasionally formal ABC notation sheets maintained by individual contributors. There is **no unified, open-source platform** that:
 
@@ -22,12 +22,12 @@ Sahaja Yoga practitioners worldwide learn, practice, and perform bhajans (devoti
 ---
 
 ## Solution
-<!-- beads-id: prd-bsc-s2 -->
+<!-- beads-id: br-prd01-s2 -->
 
 **Bhajan Song Composer** is an open-source web application that serves as both a **Playback Hub** and a **Composition Workstation** for Sahaja Yoga devotional music.
 
 ### Three Core Modules
-<!-- beads-id: prd-bsc-s3 -->
+<!-- beads-id: br-prd01-s3 -->
 
 | Module | Description |
 |:---|:---|
@@ -36,12 +36,12 @@ Sahaja Yoga practitioners worldwide learn, practice, and perform bhajans (devoti
 | **🤖 AI Theory Assistant** | Rule-based music theory engine that **analyzes a melody-only treble clef sheet** and auto-generates: harmonized chord progressions, guitar chord voicings (accompaniment and fingerstyle), and piano arrangements (accompaniment and solo, both left and right hand) based on the song's key, scale, and raga. |
 
 ### Arrangement Pipeline (From Zero to Full Track)
-<!-- beads-id: prd-bsc-s29 -->
+<!-- beads-id: br-prd01-s29 -->
 
 When the user only has **Layer 1: Melody**, the product must not jump directly to **Layer 2: Accompaniment**. It must first deduce the song's harmonic framework, then use that framework to build accompaniment and full-band layers in a musically coherent order.
 
 #### Step 1: Harmonization (Finding the Chords)
-<!-- beads-id: prd-bsc-s30 -->
+<!-- beads-id: br-prd01-s30 -->
 
 Before generating piano backing, guitar accompaniment, drums, or additional instruments, the system must assign chords to the melody.
 
@@ -61,7 +61,7 @@ Before generating piano backing, guitar accompaniment, drums, or additional inst
     2. Provide a 2-sentence theoretical explanation for the harmonic choices (e.g., explaining a specific cadence or modal borrowed chord) below the notation block.
 
 #### Step 2: Layer 2 — The Accompaniment (Piano / Rhythm Guitar)
-<!-- beads-id: prd-bsc-s31 -->
+<!-- beads-id: br-prd01-s31 -->
 
 Once the chord progression exists, the system decides how those chords should be played to support the singer or lead instrument.
 
@@ -72,7 +72,7 @@ Once the chord progression exists, the system decides how those chords should be
   3. **Apply voice leading**: When moving from C Major (C-E-G) to G Major (G-B-D), keep shared tones stable where possible and move other notes by the smallest practical interval. This makes accompaniment sound professional and fluid rather than clunky.
 
 #### Step 3: Layer 3 — Drums & Additional Instruments
-<!-- beads-id: prd-bsc-s32 -->
+<!-- beads-id: br-prd01-s32 -->
 
 After melody and accompaniment are harmonically grounded, the product can expand the arrangement into a full band or richer polyphonic texture.
 
@@ -85,7 +85,7 @@ After melody and accompaniment are harmonically grounded, the product can expand
 This arrangement pipeline is a core product workflow: **Melody → Harmonization → Accompaniment → Drums & Additional Instruments → Full Track**.
 
 ### Multi-Layer Fingerstyle Arrangement Engine
-<!-- beads-id: prd-bsc-s33 -->
+<!-- beads-id: br-prd01-s33 -->
 
 The **Multi-Layer Fingerstyle Arrangement Engine** is a major AI Theory Assistant feature implemented on the dedicated `/compose/:slug/guitar-fingerstyle` route. It independently consumes the selected Harmony Step 3 (`voice-leading-validation`) ABC; `/compose/:slug/accompaniment` output is not an input. It converts musical data across two complementary phases:
 
@@ -95,7 +95,7 @@ The **Multi-Layer Fingerstyle Arrangement Engine** is a major AI Theory Assistan
 The engine must treat fingerstyle generation as more than chord labels plus melody notes. It must produce an executable guitar arrangement where melody, bass, harmonic guide tones, percussive effects, and right-hand technique all fit on a six-string instrument with four fretting fingers and a maximum of five picking-hand digits.
 
 #### Phase 1: Upward Construction Pipeline
-<!-- beads-id: prd-bsc-s34 -->
+<!-- beads-id: br-prd01-s34 -->
 
 The first phase creates the full arrangement context before compression begins. It reuses the core Arrangement Pipeline and makes the intermediate layers explicit so the Composer can inspect and edit them.
 
@@ -105,7 +105,7 @@ The first phase creates the full arrangement context before compression begins. 
 - **Layer 3 — Rhythm & Percussion**: The system expands the arrangement with rhythm lock, kick/bass synchronization, snare backbeat placement, and frequency allocation across bass/low, chord/mid, and melody/high registers.
 
 #### Phase 2: Downward Compression Algorithm
-<!-- beads-id: prd-bsc-s35 -->
+<!-- beads-id: br-prd01-s35 -->
 
 The second phase reduces the full multi-track arrangement into a solo fingerstyle guitar matrix.
 
@@ -123,7 +123,7 @@ The second phase reduces the full multi-track arrangement into a solo fingerstyl
   - Simulate snare using a string slap on beats 2 and 4, where the side of the thumb strikes lower strings against the frets to produce a percussive transient while melodic plucks continue.
 
 #### Execution Architecture: Physical Hand Mapping
-<!-- beads-id: prd-bsc-s36 -->
+<!-- beads-id: br-prd01-s36 -->
 
 The generated fingerstyle arrangement must map to the player's hands, not only to abstract pitches.
 
@@ -143,14 +143,14 @@ The generated fingerstyle arrangement must map to the player's hands, not only t
     - Uses an anchored posture, with pinky planted on the soundboard, to maximize rhythmic stability, heavy thumb attack, and bass palm-muting.
 
 ### Piano Accompaniment Generation Engine
-<!-- beads-id: prd-bsc-s39 -->
+<!-- beads-id: br-prd01-s39 -->
 
 The **Piano Accompaniment Generation Engine** expands a single baseline melody into a fully realized two-handed piano accompaniment. Unlike guitar fingerstyle compression, piano generation is an expansion problem: it distributes harmony, bass, rhythm, counterpoint, and sustain behavior across ten fingers and the 88-key frequency spectrum.
 
 The engine must produce accompaniment that is musical, readable, and physically playable: the left hand anchors bass and time, the right hand supplies guide tones and rhythmic comping below the melody, and the sustain pedal acts as a controlled third hand without causing harmonic bleeding.
 
 #### Phase 1: Harmonic Framework & Bass Anchoring
-<!-- beads-id: prd-bsc-s40 -->
+<!-- beads-id: br-prd01-s40 -->
 
 Before piano-specific textures are generated, the system must establish the chordal framework and anchor the lowest frequencies.
 
@@ -167,7 +167,7 @@ Before piano-specific textures are generated, the system must establish the chor
   - Do not generate 3rds, 7ths, or dense chord clusters in the deep bass register because they create acoustic mud and intermodulation distortion.
 
 #### Phase 2: Spatial Allocation & Voice Leading
-<!-- beads-id: prd-bsc-s41 -->
+<!-- beads-id: br-prd01-s41 -->
 
 After bass anchoring, the system decides how remaining chord tones should be distributed to the right hand and how both hands should move between chords.
 
@@ -180,7 +180,7 @@ After bass anchoring, the system decides how remaining chord tones should be dis
   - Prefer right-hand movements where individual fingers move by no more than a whole step (2 semitones) when a musically valid inversion is available.
 
 #### Phase 3: Rhythmic & Stylistic Texturing
-<!-- beads-id: prd-bsc-s42 -->
+<!-- beads-id: br-prd01-s42 -->
 
 Static block chords are not enough. The engine must apply selectable **Comping Profiles** that turn chord data into continuous accompaniment motion.
 
@@ -195,7 +195,7 @@ Static block chords are not enough. The engine must apply selectable **Comping P
   - Right hand sustains guide tones with minimal rhythmic interference so the melody remains clear.
 
 #### Phase 4: Dynamic Counterpoint & Automation
-<!-- beads-id: prd-bsc-s43 -->
+<!-- beads-id: br-prd01-s43 -->
 
 Professional piano accompaniment breathes with the melody. The system must detect melodic gaps and use them for tasteful motion without competing with the singer or lead instrument.
 
@@ -207,7 +207,7 @@ Professional piano accompaniment breathes with the melody. The system must detec
   - Apply a strict yield rule: the moment the primary melody resumes active movement, suppress fills and return to the Phase 3 comping profile so the melody keeps priority.
 
 #### Execution Architecture: Piano Physical Validation
-<!-- beads-id: prd-bsc-s44 -->
+<!-- beads-id: br-prd01-s44 -->
 
 The final piano accompaniment matrix must pass a physical and acoustic validation layer before being accepted into the Composer.
 
@@ -223,14 +223,14 @@ The final piano accompaniment matrix must pass a physical and acoustic validatio
   - Treat pedal data as part of the arrangement output, not as a decorative playback-only effect.
 
 ### Ensemble Expansion Engine (Percussion & Orchestral Layers)
-<!-- beads-id: prd-bsc-s47 -->
+<!-- beads-id: br-prd01-s47 -->
 
 The **Ensemble Expansion Engine** expands a completed two-layer foundation — **Layer 1: Primary Melody** plus **Layer 2: Piano / Guitar Accompaniment** — into a full multi-instrument ensemble. It generates a rhythm layer for **Djembe** and sustaining melodic support layers for **Flute** and/or **Violin**.
 
 The engine must follow a strict support-first rule: auxiliary layers should enhance the bhajan arrangement through rhythmic interlocking, frequency stratification, and counterpoint, but they must never fight the primary melody or accompaniment. The central product constraint is **Yield Logic**: Djembe, Flute, and Violin must know when to play, when to hold, when to simplify, and when to disappear.
 
 #### Phase 0: Integration Handshake (Prerequisite Analysis)
-<!-- beads-id: prd-bsc-s48 -->
+<!-- beads-id: br-prd01-s48 -->
 
 Before generating any new notes, the system must analyze the existing guitar or piano foundation to determine safe rhythmic and frequency zones for additional instruments.
 
@@ -239,7 +239,7 @@ Before generating any new notes, the system must analyze the existing guitar or 
 - **Melodic gap array**: Scan Layer 1 melody to identify rests or sustained notes longer than 1.5 beats. These spans become **Fill Zones** for Flute / Violin counter-melodies and optional Djembe fills.
 
 #### Phase 1: Rhythmic Interlock (Appending the Djembe)
-<!-- beads-id: prd-bsc-s49 -->
+<!-- beads-id: br-prd01-s49 -->
 
 The Djembe layer must stitch itself mathematically to the rhythmic topography already established by Layer 2.
 
@@ -254,7 +254,7 @@ The Djembe layer must stitch itself mathematically to the rhythmic topography al
   - When the guitar fingerstyle layer already includes percussive string slaps, align the Djembe Slap with those events to reinforce physical groove impact without creating conflicting transients.
 
 #### Phase 2: Melodic Support (Appending Flute & Violin)
-<!-- beads-id: prd-bsc-s50 -->
+<!-- beads-id: br-prd01-s50 -->
 
 Flute and Violin act as sustaining pads and counterpoint textures. Their job is to fill spatial and temporal voids while leaving the lead melody intelligible.
 
@@ -269,7 +269,7 @@ Flute and Violin act as sustaining pads and counterpoint textures. Their job is 
   - **Violin Bowing Automation**: Apply slow expression swells using MIDI CC 11 on sustained notes, and delay vibrato using MIDI CC 1 until the note has been held for more than 300ms.
 
 #### Phase 3: Master Output & Conflict Resolution
-<!-- beads-id: prd-bsc-s51 -->
+<!-- beads-id: br-prd01-s51 -->
 
 Before outputting the final four-to-five-layer ABC notation or MIDI event data, the system must run a final conflict check.
 
@@ -281,7 +281,7 @@ Before outputting the final four-to-five-layer ABC notation or MIDI event data, 
   - If a generated double stop exceeds standard fingerboard hand-stretch limits, typically around a musical 10th, drop the lower note and retain the melodic or harmonically essential upper note.
 
 ### Mockup / Proof-of-Concept Demonstration Gate
-<!-- beads-id: prd-bsc-s54 -->
+<!-- beads-id: br-prd01-s54 -->
 
 Every major arrangement workflow must ship a **mockup product / proof-of-concept demonstration page** before it is integrated into the main feature page or Composer workflow. This applies to:
 
@@ -293,7 +293,7 @@ Every major arrangement workflow must ship a **mockup product / proof-of-concept
 Each proof-of-concept page must be a self-contained product mockup that demonstrates the workflow with representative sample data before production integration. It must show the input melody/layers, the step-by-step generated intermediate decisions, the final generated ABC/playback artifact, and any validation or conflict-resolution report. Integration into the main Composer or Playback feature page is blocked until the mockup page demonstrates the workflow end-to-end and has behavior-focused tests covering its visible output.
 
 ### Song Data Model
-<!-- beads-id: prd-bsc-s4 -->
+<!-- beads-id: br-prd01-s4 -->
 
 Each song is a **Markdown file with YAML frontmatter** stored in `data/songs/{language}/{song-slug}.md`:
 
@@ -348,10 +348,10 @@ The ABC notation content is stored in separate `.abc` files alongside the Markdo
 ---
 
 ## User Stories
-<!-- beads-id: prd-bsc-s5 -->
+<!-- beads-id: br-prd01-s5 -->
 
 ### Playback Module
-<!-- beads-id: prd-bsc-s6 -->
+<!-- beads-id: br-prd01-s6 -->
 
 1. As a **practitioner**, I want to browse songs organized by language/tradition (Hindi, Marathi, Sanskrit, English), so that I can find songs from my cultural background quickly.
 2. As a **practitioner**, I want an A-Z alphabetical navigation within each language category, so that I can jump to a specific song by its first letter.
@@ -377,7 +377,7 @@ The ABC notation content is stored in separate `.abc` files alongside the Markdo
 19. As a **practitioner**, I want the app to be fully responsive and work well on mobile devices, so that I can use it during group meditation sessions from my phone.
 
 ### Composer Module
-<!-- beads-id: prd-bsc-s7 -->
+<!-- beads-id: br-prd01-s7 -->
 
 20. As a **composer**, I want to create a new song entry using the same Markdown+YAML+ABC format as the Playback module, so that my compositions are immediately compatible with the catalogue.
 21. As a **composer**, I want a form-based song editor where I can fill in the frontmatter fields (title, language, category, raga, taal, key, time signature, videos, tags), so that I don't need to write raw YAML.
@@ -394,10 +394,10 @@ The ABC notation content is stored in separate `.abc` files alongside the Markdo
 32. As a **composer**, I want to browse all catalogue songs in a separate `/edit` page with live search, viewing their key signature and resource indicators (Video, Backing Track, Melody, Guitar, Piano), so that I can easily find and click 'Edit' to load any song into the composer workstation at `/compose?edit={slug}`.
 
 ### AI Theory Assistant Module
-<!-- beads-id: prd-bsc-s8 -->
+<!-- beads-id: br-prd01-s8 -->
 
 #### Core Use Case: Melody → Full Arrangement
-<!-- beads-id: prd-bsc-s9 -->
+<!-- beads-id: br-prd01-s9 -->
 
 _The most common scenario: a user has a melody-only ABC sheet (treble clef / G clef only, no bass clef / F clef) and wants to generate piano accompaniment or guitar fingerstyle arrangements._
 
@@ -411,7 +411,7 @@ _The most common scenario: a user has a melody-only ABC sheet (treble clef / G c
 40. As a **practitioner**, I want each generated arrangement to be output as a **separate ABC notation layer** (e.g., `namostute.piano-accompaniment.abc`, `namostute.fingerstyle.abc`) that I can view in the Playback module or edit in the Composer, so that AI-generated arrangements are first-class song content.
 
 #### Chord & Voicing Suggestions
-<!-- beads-id: prd-bsc-s10 -->
+<!-- beads-id: br-prd01-s10 -->
 
 41. As a **practitioner learning music theory**, I want the AI assistant to suggest a chord progression based on the song's key and raga, so that I can understand the harmonic structure.
 42. As a **practitioner**, I want the chord suggestions to be rendered as interactive visual diagrams (guitar fretboard with finger positions, piano keyboard with highlighted keys), so that I can learn the voicings visually.
@@ -422,7 +422,7 @@ _The most common scenario: a user has a melody-only ABC sheet (treble clef / G c
 47. As a **practitioner**, I want to override individual chords in the auto-harmonized progression (e.g., change one chord from Am to Am7), so that I can fine-tune the arrangement to my taste while keeping the rest of the AI-generated output.
 
 ### Multi-Layer Fingerstyle Arrangement Engine
-<!-- beads-id: prd-bsc-s37 -->
+<!-- beads-id: br-prd01-s37 -->
 
 48. As a **guitar player**, I want the system to build a full multi-track arrangement before reducing it to fingerstyle, so that the solo guitar output preserves melody, harmony, bass movement, and rhythmic feel.
 49. As a **fingerstyle guitarist**, I want melody notes routed to the top three strings and bass roots routed to the bottom three strings, so that the arrangement follows idiomatic guitar register usage.
@@ -439,7 +439,7 @@ _The most common scenario: a user has a melody-only ABC sheet (treble clef / G c
 60. As a **learner**, I want the visual guitar to show numbered note markers and event labels for thumb-clock, pinch, syncopation, and string-slap events, so that I can understand how to physically perform the generated fingerstyle matrix without simulated hand movement.
 
 ### Piano Accompaniment Generation Engine
-<!-- beads-id: prd-bsc-s45 -->
+<!-- beads-id: br-prd01-s45 -->
 
 61. As a **piano player**, I want the system to expand a melody-only sheet into a two-handed piano accompaniment, so that I can support a singer or lead instrument without writing bass and chord parts manually.
 62. As a **piano player**, I want chord choices derived from strong-beat melody notes and cadence points, so that the accompaniment follows the devotional phrase structure.
@@ -459,7 +459,7 @@ _The most common scenario: a user has a melody-only ABC sheet (treble clef / G c
 76. As a **piano performer**, I want sustain pedal automation with clean Pedal Down and Pedal Up / Flush events, so that the generated accompaniment sounds connected without harmonic bleeding.
 
 ### Ensemble Expansion Engine
-<!-- beads-id: prd-bsc-s52 -->
+<!-- beads-id: br-prd01-s52 -->
 
 77. As a **composer**, I want to add Djembe, Flute, and Violin layers after the melody and piano/guitar foundation are established, so that ensemble expansion starts from a stable arrangement rather than guessing blindly.
 78. As a **composer**, I want the system to analyze Layer 2 rhythmic density before adding new instruments, so that percussion and orchestral layers do not overcrowd a busy accompaniment.
@@ -479,7 +479,7 @@ _The most common scenario: a user has a melody-only ABC sheet (treble clef / G c
 92. As a **violinist**, I want generated double stops limited to two notes and validated against hand-stretch limits, so that the violin layer remains realistic.
 
 ### Mockup / Proof-of-Concept Demonstration Gate
-<!-- beads-id: prd-bsc-s55 -->
+<!-- beads-id: br-prd01-s55 -->
 
 93. As a **product reviewer**, I want every major arrangement workflow to have a standalone mockup / proof-of-concept page before production integration, so that I can validate the user experience and musical decisions before they affect the main Composer.
 94. As a **composer**, I want the Arrangement Pipeline mockup to show melody input, harmonization, accompaniment, full-track expansion, and validation reports, so that I can understand the whole workflow before using it in my songs.
@@ -490,7 +490,7 @@ _The most common scenario: a user has a melody-only ABC sheet (treble clef / G c
 99. As a **contributor**, I want mockup pages to use representative sample data and visibly labeled intermediate outputs, so that I can review musical logic without reading implementation code.
 
 ### Community & Open Source
-<!-- beads-id: prd-bsc-s11 -->
+<!-- beads-id: br-prd01-s11 -->
 
 100. As a **contributor**, I want clear documentation on how to add a new song to the catalogue (file format, naming conventions, PR process), so that I can contribute without needing deep technical knowledge.
 101. As a **contributor**, I want a song data validation tool that checks my Markdown+YAML+ABC files for correctness before I submit a PR, so that I can fix errors locally.
@@ -500,10 +500,10 @@ _The most common scenario: a user has a melody-only ABC sheet (treble clef / G c
 ---
 
 ## Implementation Decisions
-<!-- beads-id: prd-bsc-s12 -->
+<!-- beads-id: br-prd01-s12 -->
 
 ### Architecture
-<!-- beads-id: prd-bsc-s13 -->
+<!-- beads-id: br-prd01-s13 -->
 
 - **Framework**: Next.js with TypeScript, using App Router. Static Site Generation (SSG) for song pages to enable zero-cost hosting on Vercel/Netlify.
 - **Song Data Storage**: Markdown files with YAML frontmatter in `data/songs/{language}/` directory. ABC notation in separate `.abc` files alongside the Markdown. Git is the database — community contributes via Pull Requests.
@@ -525,7 +525,7 @@ _The most common scenario: a user has a melody-only ABC sheet (treble clef / G c
   - **ABC notation generation** from chord/voicing data
 
 ### Data Flow
-<!-- beads-id: prd-bsc-s14 -->
+<!-- beads-id: br-prd01-s14 -->
 
 ```
 Song Markdown (.md)  →  Next.js SSG Build  →  Static Song Pages
@@ -553,7 +553,7 @@ Melody ABC (.abc)  ─┤  1. Melody Analyzer                 │
 ```
 
 ### Key Modules
-<!-- beads-id: prd-bsc-s15 -->
+<!-- beads-id: br-prd01-s15 -->
 
 1. **Song Catalogue Module** — File-system based song registry with language categorization and A-Z index. Uses `fs.readFileSync` + `gray-matter` at build time for SSG.
 2. **Playback Controller Module** — Unified controller component that manages the currently active media type (video vs. sheet) and sub-type selection (which video, which sheet notation layer).
@@ -572,7 +572,7 @@ Melody ABC (.abc)  ─┤  1. Melody Analyzer                 │
 10. **Visual Instrument Module** — Reusable guitar fretboard and piano keyboard SVG components that can highlight specific notes/chords, subscribe to Music Sheet playback events, and render synchronized numbered note markers `(1)` through `(5)` on the intended fret/string or key targets. Left-hand markers use blue styling and right-hand markers use yellow styling. Adapted from patterns in the existing `music-theory` project.
 
 ### File Organization
-<!-- beads-id: prd-bsc-s16 -->
+<!-- beads-id: br-prd01-s16 -->
 
 ```
 data/
@@ -658,7 +658,7 @@ src/
 ```
 
 ### Instrument-Specific Output Detail
-<!-- beads-id: prd-bsc-s17 -->
+<!-- beads-id: br-prd01-s17 -->
 
 The AI Theory Assistant provides **visual chord diagrams** as the primary output format:
 
@@ -678,7 +678,7 @@ The AI Theory Assistant provides **visual chord diagrams** as the primary output
 - **ABC Notation Layer**: Each suggested arrangement is also available as downloadable ABC notation that can be imported into the Composer as a new layer.
 
 ### Fingerstyle Compression Output Contract
-<!-- beads-id: prd-bsc-s38 -->
+<!-- beads-id: br-prd01-s38 -->
 
 The Multi-Layer Fingerstyle Arrangement Engine must expose a structured intermediate result before generating final ABC notation. This contract is required so the Composer, Visual Instrument views, tests, and future issue tracker tasks can inspect the same musical decisions.
 
@@ -692,7 +692,7 @@ The Multi-Layer Fingerstyle Arrangement Engine must expose a structured intermed
 - **Generated artifacts**: Final ABC layer, guitar tablature/string-position metadata, fretboard-highlight events, and numbered note-marker events.
 
 ### Piano Accompaniment Output Contract
-<!-- beads-id: prd-bsc-s46 -->
+<!-- beads-id: br-prd01-s46 -->
 
 The Piano Accompaniment Generation Engine must expose a structured intermediate result before emitting final grand-staff ABC notation. This lets the Composer, Piano Keyboard view, playback engine, tests, and future issue tracker tasks inspect the same accompaniment decisions.
 
@@ -707,7 +707,7 @@ The Piano Accompaniment Generation Engine must expose a structured intermediate 
 - **Generated artifacts**: Grand-staff ABC layer, playback events, piano-keyboard highlight events, optional fingering metadata, and pedal-event metadata.
 
 ### Ensemble Expansion Output Contract
-<!-- beads-id: prd-bsc-s53 -->
+<!-- beads-id: br-prd01-s53 -->
 
 The Ensemble Expansion Engine must expose a structured intermediate result before emitting final multi-layer ABC notation or MIDI-style playback events. This contract lets the Composer, playback engine, visual layer indicators, tests, and future issue tracker tasks inspect why each auxiliary instrument plays or yields.
 
@@ -722,15 +722,15 @@ The Ensemble Expansion Engine must expose a structured intermediate result befor
 ---
 
 ## Testing Decisions
-<!-- beads-id: prd-bsc-s18 -->
+<!-- beads-id: br-prd01-s18 -->
 
 ### What Makes a Good Test
-<!-- beads-id: prd-bsc-s19 -->
+<!-- beads-id: br-prd01-s19 -->
 
 Tests should verify **external behavior and user-visible outcomes**, not implementation details. A good test for this application asks: "Can the user see/hear/interact with the correct output given this input?"
 
 ### Modules to Test
-<!-- beads-id: prd-bsc-s20 -->
+<!-- beads-id: br-prd01-s20 -->
 
 1. **Song Loader** — Given a valid Markdown+ABC file set, assert that the parsed output matches the expected data shape (frontmatter fields, ABC content, correct file associations). Given invalid files, assert meaningful error messages.
 
@@ -809,7 +809,7 @@ Tests should verify **external behavior and user-visible outcomes**, not impleme
    - No duplicate slugs within the same language
 
 ### Testing Tools
-<!-- beads-id: prd-bsc-s21 -->
+<!-- beads-id: br-prd01-s21 -->
 
 - **Vitest** for unit tests (theory engine, song loader, validation)
 - **Playwright** for E2E tests (playback controller interactions, composer workflow)
@@ -818,7 +818,7 @@ Tests should verify **external behavior and user-visible outcomes**, not impleme
 ---
 
 ## Out of Scope
-<!-- beads-id: prd-bsc-s22 -->
+<!-- beads-id: br-prd01-s22 -->
 
 The following are explicitly **out of scope** for this PRD (v1.0):
 
@@ -836,10 +836,10 @@ The following are explicitly **out of scope** for this PRD (v1.0):
 ---
 
 ## Further Notes
-<!-- beads-id: prd-bsc-s23 -->
+<!-- beads-id: br-prd01-s23 -->
 
 ### Relationship to Existing `music-theory` Project
-<!-- beads-id: prd-bsc-s24 -->
+<!-- beads-id: br-prd01-s24 -->
 
 This project draws architectural inspiration from the existing [`music-theory`](file:///Users/steve/duyhunghd6/music-theory) application, particularly:
 - ABC notation rendering patterns (abcjs integration)
@@ -849,7 +849,7 @@ This project draws architectural inspiration from the existing [`music-theory`](
 However, Bhajan Song Composer is a **standalone project** with its own repository, focused specifically on the devotional music community's needs rather than general music education.
 
 ### Raga-to-Scale Mapping
-<!-- beads-id: prd-bsc-s25 -->
+<!-- beads-id: br-prd01-s25 -->
 
 A key differentiator is the raga-to-Western-scale mapping table that powers the AI Theory Assistant. Common mappings include:
 
@@ -865,7 +865,7 @@ A key differentiator is the raga-to-Western-scale mapping table that powers the 
 This mapping enables the theory engine to suggest Western chord voicings that are harmonically compatible with Indian raga-based melodies.
 
 ### Contribution Model
-<!-- beads-id: prd-bsc-s26 -->
+<!-- beads-id: br-prd01-s26 -->
 
 The open-source contribution model follows a "Git is the database" philosophy:
 1. Fork the repository
@@ -876,14 +876,14 @@ The open-source contribution model follows a "Git is the database" philosophy:
 6. Maintainers review and merge
 
 ### Deployment Strategy
-<!-- beads-id: prd-bsc-s27 -->
+<!-- beads-id: br-prd01-s27 -->
 
 - **Primary**: Vercel (free tier) with automatic deployments from `main` branch
 - **Alternative**: Netlify, GitHub Pages (via `next export`)
 - **Domain**: To be determined by the community
 
 ### Vietnamese Music Terminology Reference
-<!-- beads-id: prd-bsc-s28 -->
+<!-- beads-id: br-prd01-s28 -->
 
 | Vietnamese | English | Context |
 |:---|:---|:---|

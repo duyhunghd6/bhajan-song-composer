@@ -1,4 +1,5 @@
 # Bhajan Song Composer — User Interface Specification
+<!-- beads-id: br-ds-ui-document | satisfies: br-prd01-s2 -->
 
 This document details the user interface (UI) architecture, layout structure, screen connectivity, and user experience flows for the **Bhajan Song Composer** web application. 
 
@@ -7,6 +8,7 @@ It is designed to satisfy the playback and composition requirements outlined in 
 ---
 
 ## 1. Application Navigation Graph
+<!-- beads-id: br-ds-ui-navigation-graph | satisfies: br-prd01-s6, br-prd01-s7, br-prd01-s54 -->
 
 The application follows a clean, responsive web flow divided into three primary zones: the **Playback Hub**, the **Composer Workstation**, and the **Mockup / PoC Gates** (for isolated testing of agentic AI workflows).
 
@@ -70,8 +72,10 @@ graph TD
 ---
 
 ## 2. Page Layout Architectures
+<!-- beads-id: br-ds-ui-layout -->
 
 ### 2.1 Song Playback Page Layout
+<!-- beads-id: br-ds-ui-playback-page | satisfies: br-prd01-s6 -->
 The playback screen is optimized for double-medium split playback: users can watch video-based reference material or interact with dynamic, MIDI-synthesized sheet music.
 
 ```
@@ -106,12 +110,14 @@ The playback screen is optimized for double-medium split playback: users can wat
 ```
 
 ### 2.2 Workstation Route-Based Layout
+<!-- beads-id: br-ds-ui-workstation-layout | satisfies: br-prd01-s7 -->
 
 To prevent UI clutter and to empower **Agentic AI Coding**, the Composer Workstation is split into dedicated child-UIs using Next.js subroutes (`/compose/[slug]/[step]`). The dedicated Guitar Fingerstyle route is a sibling downstream of Harmony rather than an accompaniment substep.
 
 A monolithic screen containing all these features would be an anti-pattern. By decoupling the pipeline into distinct routes, each UI is small, state is localized, and AI agents can reason about one workflow at a time. The Workstation uses a compact checkpoint strip for Layers & Navigation so step progress remains visible without consuming the left side of the canvas.
 
 #### 2.2.1 Step 1: Melody Input (`/compose/[slug]/melody`)
+<!-- beads-id: br-ds-ui-melody-input | satisfies: br-prd01-s7 -->
 Focus: Inputting the foundational Treble Clef ABC notation.
 
 ```
@@ -141,6 +147,7 @@ Focus: Inputting the foundational Treble Clef ABC notation.
 ```
 
 #### 2.2.2 Step 2: Harmonization (`/compose/[slug]/harmony`)
+<!-- beads-id: br-ds-ui-harmonization | satisfies: br-prd01-s8, br-prd01-s9, br-prd01-s10 -->
 Focus: AI Theory Assistant generating chord progressions and refining them with a real-time preview and virtual instruments.
 
 ```
@@ -181,6 +188,7 @@ Focus: AI Theory Assistant generating chord progressions and refining them with 
 *(Note: Ghosted Background Layers allow the user to see the Melody notes faintly behind the active Chord track).*
 
 #### 2.2.3 Step 3: Accompaniment (`/compose/[slug]/accompaniment`)
+<!-- beads-id: br-ds-ui-accompaniment | satisfies: br-prd01-s31 -->
 Focus: combined accompaniment planning from the selected Harmony Step 3 (`voice-leading-validation`) ABC.
 
 ```
@@ -203,10 +211,12 @@ Focus: combined accompaniment planning from the selected Harmony Step 3 (`voice-
 ```
 
 #### 2.2.4 Dedicated Guitar Fingerstyle (`/compose/[slug]/guitar-fingerstyle`)
+<!-- beads-id: br-ds-ui-guitar-fingerstyle | satisfies: br-prd01-s33, br-prd01-s38 -->
 
 This independent sibling route compiles the selected `voice-leading-validation` ABC into the meter-aware TimeGrid. It owns skill and fill-density settings, physical validation, generated Guitar ABC, and ASCII-GuitarTab; it never consumes accompaniment output.
 
 #### 2.2.5 Step 4: Export to Practice (`/compose/[slug]/review`)
+<!-- beads-id: br-ds-ui-export-practice | satisfies: br-prd01-s7 -->
 
 Export is the durable handoff from Composer drafts to Practice (the only Showcase). It lists source-current Melody, Validated Harmony, Accompaniment, and Guitar Fingerstyle layers. The user selects exactly which layers to publish; unselected notation files and the Markdown Lyrics/Notes body remain unchanged.
 
@@ -224,8 +234,10 @@ Export is the durable handoff from Composer drafts to Practice (the only Showcas
 > Ensemble remains a mockup/experimental workflow and has no Composer route in the active product flow.
 
 ### 2.3 Reusable Shared Components
+<!-- beads-id: br-ds-ui-shared-components | satisfies: br-prd01-s6 -->
 
 #### 2.3.1 Universal ABCJS Playback Controller
+<!-- beads-id: br-ds-ui-abcjs-playback-controller | satisfies: br-prd01-s6 -->
 To maintain consistency across the Playback Hub, Composer Workstation, and Mockup Gates, the music rendering and playback controls must be abstracted into a single, highly reusable React component (e.g., `<AbcjsPlaybackController />`).
 
 **Features & Capabilities:**
@@ -240,8 +252,10 @@ To maintain consistency across the Playback Hub, Composer Workstation, and Mocku
 ---
 
 ## 3. Core User Experience Flows
+<!-- beads-id: br-ds-ui-user-flows -->
 
 ### 3.1 Flow 1: Playback & Practice Flow (Learner/Practitioner)
+<!-- beads-id: br-ds-ui-playback-practice-flow | satisfies: br-prd01-s6 -->
 This flow guides a practitioner through finding, listening to, and learning chords or finger placements for a devotional song.
 
 ```mermaid
@@ -275,6 +289,7 @@ sequenceDiagram
 ---
 
 ### 3.2 Flow 2: Composition & Upward Construction Flow (Composer)
+<!-- beads-id: br-ds-ui-composition-flow | satisfies: br-prd01-s7, br-prd01-s29 -->
 This flow details how a composer moves chronologically through the arrangement pipeline, passing through the dedicated child-UIs.
 
 ```mermaid
@@ -321,6 +336,7 @@ sequenceDiagram
 ---
 
 ### 3.3 Flow 3: Dedicated Guitar Fingerstyle Compression & Playability Tuning
+<!-- beads-id: br-ds-ui-fingerstyle-flow | satisfies: br-prd01-s35, br-prd01-s36, br-prd01-s37, br-prd01-s38 -->
 This flow highlights the interaction between the downward compression algorithm and physical constraints on `/compose/[slug]/guitar-fingerstyle`. The route independently starts from the selected `voice-leading-validation` ABC; `/compose/[slug]/accompaniment` output is not an input.
 
 ```mermaid
@@ -353,6 +369,7 @@ sequenceDiagram
 ---
 
 ## 4. Layout States and Responsiveness Guidelines
+<!-- beads-id: br-ds-ui-responsive-layout | satisfies: br-prd01-s6, br-prd01-s7 -->
 
 1. **Desktop View (>= 1024px)**:
    - Workstation child-UIs use a compact top checkpoint strip for Layers & Navigation instead of a persistent 20% sidebar, keeping the main canvas readable.

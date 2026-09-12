@@ -1,6 +1,8 @@
 # Lý Thuyết Rải Hợp Âm Guitar & Quy Trình Xây Dựng Đệm Hát
+<!-- beads-id: br-guide-guitar-accompaniment -->
 
 ## Ngữ cảnh: Bài Hari Bol — K:Em, M:4/4
+<!-- beads-id: br-guide-guitar-accompaniment-s01 -->
 
 > [!NOTE]
 > Tài liệu này nghiên cứu lý thuyết rải hợp âm (arpeggiation) cho Guitar và quy trình xây dựng bài phối đệm hát (accompaniment) chỉ riêng cho Guitar, áp dụng vào bài Hari Bol với giả định: **Key: Em**, **Time Signature: 4/4**, và Chord Progression đã xác định.
@@ -8,8 +10,10 @@
 ---
 
 ## Phần I: Lý Thuyết Rải Hợp Âm Guitar (Arpeggiation Theory)
+<!-- beads-id: br-guide-guitar-accompaniment-s02 -->
 
 ### 1. Rải hợp âm là gì?
+<!-- beads-id: br-guide-guitar-accompaniment-s03 -->
 
 **Rải hợp âm (Arpeggiation)** = thay vì đánh đồng thời tất cả các nốt của hợp âm (block chord / strumming), ta **lần lượt gẩy từng nốt** theo một trật tự nhất định. Điều này tạo ra:
 
@@ -18,8 +22,10 @@
 - **Tạo "hơi thở" cho bài hát** — phù hợp nhạc thiền, bhajan, ballad
 
 ### 2. Các mẫu rải hợp âm cơ bản (Arpeggio Patterns)
+<!-- beads-id: br-guide-guitar-accompaniment-s04 -->
 
 #### 2.1 Hệ thống PIMA (Classical Fingerpicking)
+<!-- beads-id: br-guide-guitar-accompaniment-s05 -->
 
 Tay phải guitar chia thành các ngón chuyên biệt:
 
@@ -31,6 +37,7 @@ Tay phải guitar chia thành các ngón chuyên biệt:
 | **A (Anular / Ring)** | A | Dây 1 (treble) | Melody / highest voice |
 
 #### 2.2 Các Pattern Rải Cơ Bản (cho nhịp 4/4, L:1/8 = 8 phách con/ô nhịp)
+<!-- beads-id: br-guide-guitar-accompaniment-s06 -->
 
 ````carousel
 **Pattern 1: P-I-M-A-M-I (Ascending-Descending / "Cánh quạt")**
@@ -80,6 +87,7 @@ Ví dụ Em: E₂+E₄  G₃  B₃  G₃  B₂+E₄  G₃  B₃  G₃
 ````
 
 ### 2.3 Chính sách Guitar Classic hỗ trợ ca sĩ
+<!-- beads-id: br-guide-guitar-accompaniment-s07 -->
 
 Đây là chính sách cho nhánh **Guitar Classic Accompaniment**, không phải solo Guitar Fingerstyle.
 
@@ -97,6 +105,7 @@ Ví dụ Em: E₂+E₄  G₃  B₃  G₃  B₂+E₄  G₃  B₃  G₃
 - Pinch không phải block chord: phải có ít nhất một dây 4–6 và một dây 1–3 khác nhau. Nếu window không có strong step, dùng arpeggio thường.
 
 ### 3. Quy tắc chọn Pattern phù hợp
+<!-- beads-id: br-guide-guitar-accompaniment-s08 -->
 
 | Tính chất bài | Pattern khuyên dùng | Lý do |
 |--------------|---------------------|-------|
@@ -106,6 +115,7 @@ Ví dụ Em: E₂+E₄  G₃  B₃  G₃  B₂+E₄  G₃  B₃  G₃
 | **Rock, mạnh** | Power chord strum + muted 16th | Percussive, impact |
 
 ### 4. Quy tắc Bass khi rải hợp âm
+<!-- beads-id: br-guide-guitar-accompaniment-s09 -->
 
 > [!IMPORTANT]
 > **Bass Line Protocol — nền đệm ca sĩ có kiểm soát:**
@@ -125,6 +135,7 @@ Bass:     A₂(root) -arp-    E₃(5th)  G₂(approach→...)
 ```
 
 ### 5. Lý thuyết Voice Leading trong rải hợp âm Guitar
+<!-- beads-id: br-guide-guitar-accompaniment-s10 -->
 
 Khi chuyển từ hợp âm này sang hợp âm khác, các nốt cần tuân thủ **Luật Đường Ngắn Nhất (Law of Shortest Path)**:
 
@@ -145,8 +156,10 @@ graph LR
 ---
 
 ## Phần II: Quy Trình Xây Dựng Bài Đệm Guitar cho Hari Bol
+<!-- beads-id: br-guide-guitar-accompaniment-s11 -->
 
 ### Tổng quan Pipeline
+<!-- beads-id: br-guide-guitar-accompaniment-s12 -->
 
 ```mermaid
 flowchart TD
@@ -175,12 +188,14 @@ flowchart TD
 > **Step 6 không phải là bước copy bass thưa sang ABC.** Step 4 chọn kỹ thuật có cấu trúc (PIMA arpeggio, pinch arpeggio, hoặc bhajan strum); Step 5 chọn vị trí bấm, bass anchor và voicing. Step 6 dùng hai quyết định đã chọn cùng harmony Step 3 để **deterministically** materialize một texture hợp âm đầy đủ: PIMA/pinch rải các chord tone theo nhịp, còn strum tạo nhóm nhiều dây đồng thời. Vì vậy root/fifth anchors là nền để thực hiện phối, không phải toàn bộ phần đệm. `V:GuitarSupport` vẫn chỉ là standard notation/MIDI 24; TAB chỉ thuộc route Guitar Fingerstyle.
 
 ### GIAI ĐOẠN 1: Chuẩn Bị Harmonic Foundation (3 Shared Steps)
+<!-- beads-id: br-guide-guitar-accompaniment-s13 -->
 
 Đây là 5 bước **chung cho tất cả nhạc cụ**, phải hoàn thành trước khi bắt đầu bất kỳ nhạc cụ nào:
 
 ---
 
 #### Step 1: Key, Scale, Cadence & Strong Beats (`key-beats`)
+<!-- beads-id: br-guide-guitar-accompaniment-s14 -->
 
 **Mục tiêu:** Xác nhận key, scale, và các điểm cadence.
 
@@ -205,6 +220,7 @@ Với Hari Bol:
 ---
 
 ##### 1.2 Strong-Beat Target Notes
+<!-- beads-id: br-guide-guitar-accompaniment-s15 -->
 
 **Mục tiêu:** Xác định nốt giai điệu quan trọng ở beat mạnh.
 
@@ -224,6 +240,7 @@ Ví dụ phân tích 1 ô nhịp giai điệu Hari Bol (giả định):
 ---
 
 #### Step 2: Chord Roles & Progression (`chord-roles-progression`)
+<!-- beads-id: br-guide-guitar-accompaniment-s16 -->
 
 **Mục tiêu:** Map mỗi nốt giai điệu ở beat mạnh → vai trò trong hợp âm.
 
@@ -239,6 +256,7 @@ Ví dụ phân tích 1 ô nhịp giai điệu Hari Bol (giả định):
 ---
 
 ##### 2.2 Chord Progression Selection
+<!-- beads-id: br-guide-guitar-accompaniment-s17 -->
 
 **Mục tiêu:** Chọn chord progression phù hợp cho bài bhajan.
 
@@ -257,6 +275,7 @@ Các ứng viên phổ biến cho bhajan Em:
 ---
 
 #### Step 3: Voice-Leading Validation (`voice-leading-validation`)
+<!-- beads-id: br-guide-guitar-accompaniment-s18 -->
 
 **Mục tiêu:** Kiểm tra và điều chỉnh voice leading giữa các hợp âm.
 
@@ -284,12 +303,14 @@ Chuyển D → Em:
 ---
 
 ### GIAI ĐOẠN 2: Guitar Classic Accompaniment Branch (3 Guitar-specific Steps)
+<!-- beads-id: br-guide-guitar-accompaniment-s19 -->
 
 Sau khi đã có harmonic foundation, bắt đầu quy trình **chỉ dành cho Guitar**:
 
 ---
 
 #### Step 4: Guitar Comping Profile (`guitar-comping-profile`)
+<!-- beads-id: br-guide-guitar-accompaniment-s20 -->
 
 **Mục tiêu:** Chọn kiểu đệm guitar phù hợp.
 
@@ -337,10 +358,12 @@ M:4/4
 ---
 
 #### Step 5: Guitar Voicing & Bass Plan (`guitar-voicing-bass`)
+<!-- beads-id: br-guide-guitar-accompaniment-s21 -->
 
 **Mục tiêu:** Lên kế hoạch voicing cụ thể và bass line cho từng hợp âm.
 
 ##### 5.1 Open Voicing Map (Standard Tuning, Em)
+<!-- beads-id: br-guide-guitar-accompaniment-s22 -->
 
 | Hợp âm | Voicing (dây 6→1) | Fret | Bass Root | Bass 5th |
 |--------|-------------------|------|-----------|----------|
@@ -352,6 +375,7 @@ M:4/4
 | **Bm** | x-2-4-4-3-2 | Barre | B₂ (dây 5, fret 2) | F#₃ (dây 4, fret 4) |
 
 ##### 5.2 Bass Plan (Alternating Bass + Walking Bass Transitions)
+<!-- beads-id: br-guide-guitar-accompaniment-s23 -->
 
 ```text
 Ô nhịp:   |   Em              |   Am              |   D               |   Em              |
@@ -368,6 +392,7 @@ Giải thích:
 ```
 
 ##### 5.3 Guide Tone Strategy
+<!-- beads-id: br-guide-guitar-accompaniment-s24 -->
 
 > **Guide tones** = quãng 3 và quãng 7 của mỗi hợp âm. Đây là các nốt xác định "tính chất" hợp âm (major hay minor).
 
@@ -382,6 +407,7 @@ Giải thích:
 ---
 
 #### Step 6: Guitar Classic ABCNotation & Music Sheet (`guitar-classic-abc-notation`)
+<!-- beads-id: br-guide-guitar-accompaniment-s25 -->
 
 Sau khi người dùng chọn một Step 5 voicing hợp lệ, app chuyển đổi **deterministically** các event `measure + grid step + duration + string + fret` thành `V:GuitarSupport clef=treble-8` với MIDI program 24. Voice này được ghép theo từng staff system của Melody và phát được ngay trên Music Sheet Playback.
 
@@ -390,10 +416,12 @@ Sau khi người dùng chọn một Step 5 voicing hợp lệ, app chuyển đ�
 ---
 
 ### Dedicated Guitar Fingerstyle Generation (tách khỏi Accompaniment Wizard)
+<!-- beads-id: br-guide-guitar-accompaniment-s26 -->
 
 `/compose/:slug/guitar-fingerstyle` sở hữu fill density, intro/interlude/outro, TimeGrid và final physical validation. Route này nhận trực tiếp ABC đã chọn ở Harmony Step 3 (`voice-leading-validation`), độc lập với output Accompaniment; nó không phải workflow card hay mode trong `/compose/:slug/accompaniment`.
 
 ##### Fill Policy (Nốt chêm)
+<!-- beads-id: br-guide-guitar-accompaniment-s27 -->
 
 | Khi nào fill | Cách fill | Ví dụ |
 |-------------|----------|-------|
@@ -405,6 +433,7 @@ Sau khi người dùng chọn một Step 5 voicing hợp lệ, app chuyển đ�
 > **KHÔNG BAO GIỜ fill khi melody đang hát!** Guitar phải **yield** (nhường) khi giai điệu đang active. Fills chỉ xuất hiện ở khoảng trống.
 
 ##### Intro Plan
+<!-- beads-id: br-guide-guitar-accompaniment-s28 -->
 
 ```text
 Intro (1-2 ô nhịp trước khi ca sĩ vào):
@@ -413,6 +442,7 @@ Intro (1-2 ô nhịp trước khi ca sĩ vào):
 ```
 
 ##### Outro Plan
+<!-- beads-id: br-guide-guitar-accompaniment-s29 -->
 
 ```text
 Outro (1-2 ô nhịp sau khi ca sĩ kết thúc):
@@ -421,6 +451,7 @@ Outro (1-2 ô nhịp sau khi ca sĩ kết thúc):
 ```
 
 ##### Physical Playability Validation
+<!-- beads-id: br-guide-guitar-accompaniment-s30 -->
 
 | Kiểm tra | Quy tắc | Kết quả |
 |---------|---------|---------|
@@ -433,6 +464,7 @@ Outro (1-2 ô nhịp sau khi ca sĩ kết thúc):
 ---
 
 #### Dedicated Guitar Fingerstyle Route
+<!-- beads-id: br-guide-guitar-accompaniment-s31 -->
 
 > [!NOTE]
 > Phần này chỉ áp dụng tại `/compose/:slug/guitar-fingerstyle` — guitar tự mang giai điệu, bass, và hợp âm trên cùng 1 cây đàn. Đây không phải mode trong Accompaniment Wizard; Guitar Classic accompaniment kết thúc sau `guitar-classic-abc-notation` với một standard-notation support voice, không phải Fingerstyle artifact.
@@ -457,8 +489,10 @@ Kết quả: Cả giai điệu + bass + hợp âm trên 1 guitar
 ---
 
 ## Phần III: Ví Dụ Tổng Hợp — Hari Bol Guitar Accompaniment (ABC)
+<!-- beads-id: br-guide-guitar-accompaniment-s32 -->
 
 ### Ví dụ đệm hát (Accompaniment Mode) — 4 ô nhịp đầu
+<!-- beads-id: br-guide-guitar-accompaniment-s33 -->
 
 ```abc
 %abc-2.1
@@ -484,6 +518,7 @@ K:Em
 ```
 
 ### Phân tích ô nhịp 1 (Em):
+<!-- beads-id: br-guide-guitar-accompaniment-s34 -->
 
 ```text
 Beat 1: Pinch E₂+E₄ (root octave — thiết lập hợp âm)
@@ -499,6 +534,7 @@ Beat 4: B₃ (5th)
 ---
 
 ## Phần IV: Tóm Tắt Quy Trình (Checklist)
+<!-- beads-id: br-guide-guitar-accompaniment-s35 -->
 
 ```text
 □ 1. Xác nhận Key, Scale, Cadence và Strong-Beat notes
@@ -516,6 +552,7 @@ Beat 4: B₃ (5th)
 ---
 
 ## Phần V: Tham Chiếu Kiến Trúc trong App
+<!-- beads-id: br-guide-guitar-accompaniment-s36 -->
 
 Quy trình trên được implement qua các workflow steps trong app:
 
@@ -532,11 +569,13 @@ Quy trình trên được implement qua các workflow steps trong app:
 ---
 
 ## Phần VI: Hệ Thống Chord-Tone Reference (Bảng Tham Chiếu Nốt Hợp Âm)
+<!-- beads-id: br-guide-guitar-accompaniment-s37 -->
 
 > [!NOTE]
 > Phần này mô tả hệ thống tự động tạo bảng tham chiếu chord-tone cho LLM, đảm bảo mọi nốt guitar phải thuộc hợp âm được ghi chú trong melody. Module: [chord-tone-reference.ts](file:///Users/steve/duyhunghd6/bhajan-song-composer/src/lib/theory/chord-tone-reference.ts)
 
 ### 1. Vấn đề: LLM tạo nốt sai hợp âm
+<!-- beads-id: br-guide-guitar-accompaniment-s38 -->
 
 Khi LLM tạo guitar arpeggio, 3 lỗi hệ thống thường xảy ra:
 
@@ -547,10 +586,12 @@ Khi LLM tạo guitar arpeggio, 3 lỗi hệ thống thường xảy ra:
 | **Bỏ qua chord split** | Am→B7 trong 1 ô nhịp → dùng chỉ Am tones | LLM không nhận ra ô nhịp chia 2 hợp âm |
 
 ### 2. Giải pháp: Chord-Tone Reference Table
+<!-- beads-id: br-guide-guitar-accompaniment-s39 -->
 
 Hệ thống tự động trích xuất chord symbols từ ABC, phân giải từng chord thành các nốt cụ thể, và map sang ABC tokens dưới key signature hiện tại.
 
 #### 2.1 Luồng xử lý
+<!-- beads-id: br-guide-guitar-accompaniment-s40 -->
 
 ```mermaid
 flowchart LR
@@ -562,9 +603,11 @@ flowchart LR
 ```
 
 #### 2.2 Ví dụ output cho Hari Bol (K:G)
+<!-- beads-id: br-guide-guitar-accompaniment-s41 -->
 
 ```text
 ### Chord-Tone Reference Table (K:G)
+<!-- beads-id: br-guide-guitar-accompaniment-s42 -->
 
 CHORD-TONE ENFORCEMENT: Every Guitar voice note in every measure MUST be a member
 of the chord annotated in the Melody for that measure.
@@ -579,6 +622,7 @@ of the chord annotated in the Melody for that measure.
 ```
 
 #### 2.3 Quy tắc Key Signature cho ABC token
+<!-- beads-id: br-guide-guitar-accompaniment-s43 -->
 
 > [!IMPORTANT]
 > **Quy tắc accidental dưới K:G (1 dấu thăng: F#):**
@@ -593,6 +637,7 @@ of the chord annotated in the Melody for that measure.
 > **Lỗi thường gặp:** Viết `^G` khi muốn G natural trong Em → đây là G# = **SAI**
 
 ### 3. Validation: Kiểm tra Chord-Tone sau khi LLM tạo output
+<!-- beads-id: br-guide-guitar-accompaniment-s44 -->
 
 Hệ thống chạy `validateGuitarVoiceChordTones()` sau khi LLM tạo guitar ABC:
 
@@ -611,6 +656,7 @@ Ví dụ warning output:
 > Validation hiện tại ở mức **warning** (không blocking). LLM vẫn trả về kết quả nhưng user thấy warning và có thể yêu cầu regenerate. Trong tương lai có thể nâng lên blocking nếu tỷ lệ warning quá cao.
 
 ### 4. Vị trí injection trong prompt
+<!-- beads-id: br-guide-guitar-accompaniment-s45 -->
 
 Chord-Tone Reference Table được inject vào prompt theo thứ tự:
 
@@ -621,9 +667,11 @@ Source ABC:
 ```
 
 ### Chord-Tone Reference Table (K:G)    ← MỚI: inject ở đây
+<!-- beads-id: br-guide-guitar-accompaniment-s46 -->
 ...table + per-measure mapping...
 
 ### Dedicated Guitar Fingerstyle staged contracts
+<!-- beads-id: br-guide-guitar-accompaniment-s47 -->
 `tablature:v1` foundation → paginated `fill-opportunities:v1` → `fill-selection:v1` → `fills:v1`
 
 USER NOTE TO ADD TO PROMPT:
@@ -631,4 +679,3 @@ USER NOTE TO ADD TO PROMPT:
 ```
 
 Dedicated Guitar Fingerstyle does not send a replacement TimeGrid to the LLM. The server keeps the meter-aware source grid authoritative, exposes only bounded staged contracts, then deterministically validates and renders Guitar ABC/TAB.
-

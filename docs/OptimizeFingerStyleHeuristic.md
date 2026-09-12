@@ -1,6 +1,8 @@
 # Deterministic Fingerstyle TimeGrid Placement
+<!-- beads-id: br-guide-fingerstyle-heuristic -->
 
 ## Status and production seam
+<!-- beads-id: br-guide-fingerstyle-heuristic-s01 -->
 
 The fingerstyle workflow has one deterministic foundation-placement pass. `TimeSliceMeasure[]` is the canonical editable TimeGrid; compact LLM tables can propose tablature attacks, but source facts, physical validation, and derived artifacts remain server-owned.
 
@@ -18,6 +20,7 @@ LLM compact foundation rows
 `placeFingerstyleFoundationOnTimeGrid()` in `fingerstyle-arranger/heuristic-time-slice.ts` performs the placement pass.
 
 ## Placement rules
+<!-- beads-id: br-guide-fingerstyle-heuristic-s02 -->
 
 1. **Melody first:** parse every authoritative `grid[].melody.pitch` attack to MIDI and choose an available exact-pitch position on strings 1–3. Prefer open strings, then lower frets, then submitted/previous strings. A labelled melody-only high-fret exception preserves an otherwise playable source melody without relaxing accompaniment limits.
 2. **Bass second:** retain each submitted bass pitch and deterministically route it to strings 6–4 without colliding with simultaneous melody/support events.
@@ -25,6 +28,7 @@ LLM compact foundation rows
 4. **Freeze before fills:** the accepted foundation has explicit support durations before the scored fill pipeline enumerates legal windows. No placement pass runs after scoring.
 
 ## Hard invariants
+<!-- beads-id: br-guide-fingerstyle-heuristic-s03 -->
 
 - Every source melody attack has exactly one physical, MIDI-equal melody event.
 - Simultaneous or sustaining events never reuse a guitar string.
@@ -33,11 +37,13 @@ LLM compact foundation rows
 - Generated Guitar ABC and ASCII-GuitarTab are deterministic projections of the same TimeGrid events. Guitar ABC uses concert pitch, `clef=treble-8`, key-aware accidentals, ties, and explicit `!N!` string forcing.
 
 ## Compact LLM boundary and context safety
+<!-- beads-id: br-guide-fingerstyle-heuristic-s04 -->
 
 The LLM never receives a complete TimeGrid document. It exchanges bounded `tablature:v1` foundation rows and paginated `fill-opportunities:v1`, `fill-selection:v1`, and `fills:v1` tables. The tool loop rejects oversized prompts, schemas, tool results, calls per turn, message histories, and total transcripts rather than silently truncating musical rows.
 
 `timegrid-document:v3` is a readable import/copy/download format, not an LLM payload. Production local persistence is a source-fingerprint-bound TimeGrid tab overlay.
 
 ## Verification anchors
+<!-- beads-id: br-guide-fingerstyle-heuristic-s05 -->
 
 Keep regressions for source melody MIDI equality, independent root/fifth preservation, unique simultaneous strings, skill limits, Ganesha pickup/tie/repeat behavior, forced-string ABC, ASCII-GuitarTab parity, duplicate pitches on distinct strings, key-aware naturals, and deterministic repeat runs.

@@ -1,10 +1,12 @@
 # Fingerstyle TimeGrid Conversion Guide
+<!-- beads-id: br-guide-timegrid-conversion -->
 
 This guide defines the editable representation for solo fingerstyle guitar arrangements. It complements the [Guitar Fingerstyle Arrangement Guide](./guitar-fingerstyle-arrangement-guide.md), which defines the staged AI workflow and fill policy.
 
 > **Agent navigation:** start with `src/lib/theory/fingerstyle-arranger/time-slice.ts` for the canonical source-to-grid contract, `time-slice-abc-renderer.ts` for the notation projection, and `timegrid-document-codec.ts` for import/export. `src/components/composer/workspace/fingerstyle-measure-persistence.ts` owns the distinct browser restore overlay, while `GuitarFingerstyleStep.tsx` owns route-level hydration and generated artifacts. Validate in layers: codec shape/continuity first, source-fingerprint compatibility at import/restore, then source-lock and physical/music validation before committing an arrangement.
 
 ## 1. Authority and data flow
+<!-- beads-id: br-guide-timegrid-conversion-s01 -->
 
 The meter-aware TimeGrid belongs exclusively to `/compose/:slug/guitar-fingerstyle`. It is compiled from the selected Harmony Step 3 (`voice-leading-validation`) ABC, not from `/compose/:slug/accompaniment` output. The accompaniment workflow may independently plan Guitar Classic comping and voicings, but it never owns, replaces, or serializes the TimeGrid.
 
@@ -32,6 +34,7 @@ The authority boundary is deliberate:
 Do not mutate raw generated ABC text to add a bass note or a fill. Make a structured grid edit, validate the resulting TimeGrid, then regenerate every derived artifact.
 
 ### Source-document identity versus generated Guitar ABC
+<!-- beads-id: br-guide-timegrid-conversion-s02 -->
 
 `TimeSliceMeasure[]` is a canonical guitar-arrangement model, not a lossless ABC concrete-syntax tree. It does not preserve document-level details such as comments, directives, all voice bodies, token spelling, whitespace, or line endings. An import/test flow that requires exact source-ABC identity must retain the raw input in an immutable document envelope alongside the compiled TimeGrid, then re-emit that raw string unchanged.
 
@@ -44,12 +47,14 @@ This source-identity assertion is distinct from derived-artifact validation:
 Generated discretionary fills are legal only in source-rest windows at every density. If a legacy or imported physical event overlaps a held Melody, the renderer serializes that physical reality with an interval split and tied continuation rather than hiding it to resemble source notation; server-generated output rejects that overlap before rendering.
 
 ### Forced-string Guitar import
+<!-- beads-id: br-guide-timegrid-conversion-s03 -->
 
 `abc-timegrid-import.ts` imports the supported `V:Guitar` subset into physical TimeGrid events without treating it as a replacement for `source.rawAbc`. It recognizes `!1!`–`!6!` string forcing, notes and bracket chords, rests, explicit durations, quoted chord symbols, trailing event ties, and per-member chord ties. A tie extends only the same adjacent pitch on the same physical string; it never creates a fresh attack or becomes a slur. Explicit ties and matched parentheses may cross exactly one adjacent barline: the origin measure stores `guitarTiesToNext` / `guitarSlursToNext`, while local parentheses remain one-based inclusive/exclusive `guitarSlurs` boundaries. Equal adjacent pitches never infer a tie.
 
 Tuplets, broken rhythm, grace syntax, non-grid durations, malformed ties, unforced Guitar notes, overlapping same-string attacks, and out-of-range positions are not lossless TimeGrid syntax. The importer uses deterministic nearest-step normalization when a physical event can still be represented and emits a diagnostic; it retains the original source unchanged regardless. A document with no forced Guitar strings continues through the Melody diagnostic projection rather than inventing physical string assignments.
 
 ### Source loops, repeats, voltas, and visual line breaks
+<!-- beads-id: br-guide-timegrid-conversion-s04 -->
 
 Source ABC may contain repeat-start (`|:`), repeat-end (`:|`), volta endings (`|[1`, `|[2`), and intentional visual line breaks. These are source-structure facts, not discretionary guitar edits.
 
@@ -59,6 +64,7 @@ Source ABC may contain repeat-start (`|:`), repeat-end (`:|`), volta endings (`|
 - Tests for imported ABC must cover both layers: exact raw source re-emission, plus `lineIndex` and repeat/volta metadata preservation in the compiled TimeGrid and generated Guitar projection.
 
 ## 2. Meter-aware TimeGrid model
+<!-- beads-id: br-guide-timegrid-conversion-s05 -->
 
 The implementation uses the `TimeSliceMeasure` and `TimeSliceGridStep` contracts in `src/lib/theory/fingerstyle-arranger/time-slice.ts`.
 
@@ -69,6 +75,7 @@ The implementation uses the `TimeSliceMeasure` and `TimeSliceGridStep` contracts
 - Guitar strings use `1` for the high E string through `6` for the low E string.
 
 ### Three working TimeGrid layers: canonical object, v3 interchange, and local persistence
+<!-- beads-id: br-guide-timegrid-conversion-s06 -->
 
 The working TimeGrid has three deliberately distinct versioned representations. Do not conflate the internal `version: 1` value with an old wire-format version.
 
@@ -118,6 +125,7 @@ The existing TOON formats have narrower roles. `toon-utils.ts` is readable edita
 The LLM must never receive a complete TimeGrid document by default. Foundation and fill exchanges use their bounded compact-row codecs; the tool loop enforces prompt, schema, tool-result, message-count, and cumulative-transcript byte budgets, rejecting an oversized semantic payload rather than truncating it.
 
 ### Example measure
+<!-- beads-id: br-guide-timegrid-conversion-s07 -->
 
 The following is a representative 4/4 excerpt. It illustrates the existing `TimeSliceMeasure` shape; real measures retain the complete 16-step grid and source metadata.
 
@@ -191,6 +199,7 @@ The following is a representative 4/4 excerpt. It illustrates the existing `Time
 A single step may contain several simultaneous events: a locked melody attack on string 1, a bass event on string 6, and an optional harmony event on an inner string. They become one simultaneous ABC chord at render time.
 
 ### Event roles
+<!-- beads-id: br-guide-timegrid-conversion-s08 -->
 
 | Role | Intent | Default edit policy |
 |---|---|---|
@@ -204,6 +213,7 @@ A single step may contain several simultaneous events: a locked melody attack on
 The current persisted event type has physical fields (`string`, `fret`, `finger`, `role`, optional `durationSteps`) and optional server-generated fill provenance (`fillWindowId`, `fillCandidateId`). It does not yet persist a general event `id` or `locked` flag. A future UI command layer may add stable IDs and presentation metadata, but it must preserve this canonical physical/event contract or migrate it explicitly.
 
 ## 3. Locked source facts versus editable accompaniment
+<!-- beads-id: br-guide-timegrid-conversion-s09 -->
 
 The source melody remains independent of its guitar realization. Adding bass or fills must not change its musical pitch or timing.
 
@@ -220,10 +230,12 @@ The source melody remains independent of its guitar realization. Adding bass or 
 A melody attack that requires a fret above the selected accompaniment skill ceiling remains exact. It is reported as a labeled melody-only exception rather than transposed or used to relax limits for discretionary accompaniment.
 
 ## 4. Representation-level edit operations
+<!-- beads-id: br-guide-timegrid-conversion-s10 -->
 
 The following commands describe the desired structured edit boundary. They are **not** a claim that every command is already exposed as a UI control. A UI may provide them through click, keyboard, drag, and context-menu interactions.
 
 ### Add a bass/root/fifth/harmony/fill attack
+<!-- beads-id: br-guide-timegrid-conversion-s11 -->
 
 ```json
 {
@@ -258,6 +270,7 @@ Adding a fill uses the same operation at an eligible empty or safe step:
 ```
 
 ### Change physical placement or duration
+<!-- beads-id: br-guide-timegrid-conversion-s12 -->
 
 The command layer must resolve an event by a stable UI ID, or by an unambiguous measure/step/event index while IDs are absent from the persisted schema.
 
@@ -279,6 +292,7 @@ The command layer must resolve an event by a stable UI ID, or by an unambiguous 
 ```
 
 ### Remove discretionary support
+<!-- beads-id: br-guide-timegrid-conversion-s13 -->
 
 ```json
 {
@@ -299,6 +313,7 @@ A user experience can map these commands naturally:
 Locked melody events are not removable, movable, or resizable through these arrangement operations.
 
 ## 5. Validate before committing an edit
+<!-- beads-id: br-guide-timegrid-conversion-s14 -->
 
 An editor should use a candidate-copy flow rather than mutating canonical state first:
 
@@ -316,6 +331,7 @@ For example:
 > Cannot add fill at measure 4, step 6: string 2 is occupied by a sustained locked melody note until step 9.
 
 ### Required validation categories
+<!-- beads-id: br-guide-timegrid-conversion-s15 -->
 
 1. **Envelope and structure**
    - Version and source fingerprint are compatible.
@@ -343,6 +359,7 @@ For example:
 The persistence helper currently performs compatibility and basic tab-coordinate checks when restoring local data. Full physical and musical validation is enforced in the fingerstyle workflow and final validation paths; do not mistake local-storage shape checks for complete edit validation.
 
 ## 6. Deterministic TimeGrid-to-ABC conversion
+<!-- beads-id: br-guide-timegrid-conversion-s16 -->
 
 The renderer in `src/lib/theory/fingerstyle-arranger/time-slice-abc-renderer.ts` derives **sounding intervals**, not isolated independent cells:
 
@@ -361,6 +378,7 @@ Source tie boundaries preserve notation segmentation such as `E3- E2` as generat
 For the step-1 bass (two steps) plus melody (four steps) example, rendering must split at step 3. It must preserve one sounding melody event with a tie/continuation, rather than creating a second melody attack merely because the bass ended.
 
 ### Guitar ABC rules
+<!-- beads-id: br-guide-timegrid-conversion-s17 -->
 
 Every generated guitar pitch follows these rules:
 
@@ -374,6 +392,7 @@ Every generated guitar pitch follows these rules:
 The generated Guitar voice is assembled with `clef=treble-8`, MIDI program 24, and source-aware measure barlines. The grid, source key/meter context, and renderer version together determine the exact ABC output.
 
 ## 7. Deterministic TimeGrid-to-ASCII-GuitarTab conversion
+<!-- beads-id: br-guide-timegrid-conversion-s18 -->
 
 ASCII-GuitarTab is generated from the same accepted TimeGrid as a six-string positional display. It is useful for inspection, copying, and export, but it is not an independent timing database:
 
@@ -385,12 +404,14 @@ ASCII-GuitarTab is generated from the same accepted TimeGrid as a six-string pos
 The existing ASCII conversion/import path has fixed-width 4/4 assumptions in places. That limitation does not change the TimeGrid contract, which remains meter-aware; do not treat a 16-step ASCII representation as a universal source schema.
 
 ## 8. Persistence, restore, and import boundary
+<!-- beads-id: br-guide-timegrid-conversion-s19 -->
 
 Persist the versioned TimeGrid envelope after a valid edit. On restore, compile fresh source measures first, then restore only compatible persisted tablature and visual-tab data. A changed source fingerprint, unsupported version, changed measure/grid structure, or incompatible source data discards the saved arrangement rather than applying it to different music.
 
 Raw ABC and ASCII can remain useful import/export formats, but their conversion must produce and validate a TimeGrid before it becomes canonical. The application must not accept a raw string edit as an unvalidated replacement for locked melody/context data or physical guitar events.
 
 ## 9. Related implementation and references
+<!-- beads-id: br-guide-timegrid-conversion-s20 -->
 
 - `src/lib/theory/fingerstyle-arranger/time-slice.ts` — TimeGrid contracts and compilation.
 - `src/lib/theory/fingerstyle-arranger/time-slice-abc-renderer.ts` — interval-based ABC rendering.

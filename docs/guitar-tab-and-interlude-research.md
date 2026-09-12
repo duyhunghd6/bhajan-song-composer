@@ -1,4 +1,5 @@
 # Research Notes: Guitar TAB Rendering & Interludes ("Giang tấu")
+<!-- beads-id: br-research-guitar-tab-interlude -->
 
 This document records research findings for:
 1. Rendering dedicated Guitar Fingerstyle TAB below standard notation using `abcjs`.
@@ -9,8 +10,10 @@ This document records research findings for:
 ---
 
 ## 1. Guitar TAB Rendering via `abcjs`
+<!-- beads-id: br-research-guitar-tab-interlude-s01 -->
 
 ### Mechanism
+<!-- beads-id: br-research-guitar-tab-interlude-s02 -->
 `abcjs` supports rendering tablature (TAB) below standard staff notation. This is configured entirely through the visual rendering parameters passed to `ABCJS.renderAbc(canvas, abcString, options)`.
 
 The `tablature` parameter expects an array of configurations, matching the voices defined in the ABC notation by index order:
@@ -32,6 +35,7 @@ ABCJS.renderAbc("paper-canvas", abcString, {
 ```
 
 ### Demonstration and Filtering
+<!-- beads-id: br-research-guitar-tab-interlude-s03 -->
 When rendering a dedicated Guitar Fingerstyle result:
 - **Combined Accompaniment**: Do not create a Guitar TAB voice on `/compose/:slug/accompaniment`.
 - **Dedicated Guitar Fingerstyle**: Pass the `tablature` array where the melody voice gets `{}` (no TAB) and the generated physical `V:Guitar` fingerstyle voice gets `{ instrument: "guitar", ... }`. This ensures TAB represents one validated guitarist, not an accompaniment-page layer.
@@ -39,10 +43,12 @@ When rendering a dedicated Guitar Fingerstyle result:
 ---
 
 ## 2. Phrase Interludes ("Giang tấu")
+<!-- beads-id: br-research-guitar-tab-interlude-s04 -->
 
 An interlude ("giang tấu") is a melodic or harmonic fill played by an accompaniment instrument during pauses between vocal lines (phrases) or sections.
 
 ### Detection of Gaps
+<!-- beads-id: br-research-guitar-tab-interlude-s05 -->
 The dedicated Guitar Fingerstyle engine analyzes the selected Harmony Step 3 source beat-by-beat and permits discretionary fills only in legal source-rest/phrase-gap windows.
 
 - **Rest gaps**: consecutive rest tokens (`z`) in the melody may be scored as fill windows.
@@ -51,6 +57,7 @@ The dedicated Guitar Fingerstyle engine analyzes the selected Harmony Step 3 sou
 The server validates physical candidates, density budgets, and phrase boundaries before rendering any Guitar ABC/TAB artifact.
 
 ### Generating Interludes / Fills
+<!-- beads-id: br-research-guitar-tab-interlude-s06 -->
 When a gap is detected:
 1. **Piano Interlude**:
    - Instead of static chords, we can insert a **Passing Fill** or **Arpeggio Run**.
@@ -62,4 +69,5 @@ When a gap is detected:
    - Play a short hammer-on or pull-off embellishment on the high strings.
 
 ### AI Generation of Interludes
+<!-- beads-id: br-research-guitar-tab-interlude-s07 -->
 The dedicated Guitar Fingerstyle workflow does not ask an accompaniment generator to write raw ABC fills. Its LLM selects and composes only server-scored, legal TimeGrid candidates through bounded staged contracts; the server merges and validates physical events, then deterministically renders Guitar ABC and TAB. Interludes and fills therefore remain restricted to legal source-rest/phrase-gap windows.

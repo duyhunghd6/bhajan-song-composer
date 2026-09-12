@@ -1,25 +1,24 @@
 # Implementation Plan: Bhajan Song Composer
-
-<!-- beads-id: br-plan | satisfies: prd-bsc -->
+<!-- beads-id: br-plan-00 | satisfies: br-prd01 -->
 
 This document outlines the step-by-step implementation plan for the Bhajan Song Composer, acting as a technical translation of the Product Requirements Document.
 
 ## 1. Project Initialization & Core Architecture
-<!-- beads-id: br-plan-01 | satisfies: prd-bsc-s2, prd-bsc-s13, prd-bsc-s16, prd-bsc-s27 -->
+<!-- beads-id: br-plan-01 | satisfies: br-prd01-s2, br-prd01-s13, br-prd01-s16, br-prd01-s27 -->
 
 - **Framework Setup**: Initialize a Next.js (App Router) project with TypeScript, Tailwind CSS, and structured for Static Site Generation (SSG) to support zero-cost Vercel/Netlify hosting.
 - **Directory Structure**: Scaffold the prescribed directories including `data/songs/`, `src/app/`, `src/components/`, and `src/lib/`.
 - **Dependencies**: Install core libraries: `abcjs` (notation/MIDI), `gray-matter` (Markdown/YAML parsing), `zod` (validation).
 
 ## 2. Data Layer & Song Catalogue Module
-<!-- beads-id: br-plan-02 | satisfies: prd-bsc-s3, prd-bsc-s4, prd-bsc-s15 -->
+<!-- beads-id: br-plan-02 | satisfies: br-prd01-s3, br-prd01-s4, br-prd01-s15 -->
 
 - **Schema Definition**: Define TypeScript types and Zod schemas (`lib/songs/schema.ts`) for the song data model (YAML frontmatter + ABC configurations).
 - **Song Loader**: Implement `lib/songs/loader.ts` to parse the file-system-based Markdown and associative `.abc` files.
 - **SSG Pages**: Build the landing page (`app/page.tsx`), language catalog (`app/[language]/page.tsx`), and setup the static paths for individual songs (`app/[language]/[slug]/page.tsx`).
 
 ## 3. Playback Module
-<!-- beads-id: br-plan-03 | satisfies: prd-bsc-s3, prd-bsc-s6, prd-bsc-s14, prd-bsc-s15 -->
+<!-- beads-id: br-plan-03 | satisfies: br-prd01-s3, br-prd01-s6, br-prd01-s14, br-prd01-s15 -->
 
 - **Playback Controller (`PlaybackController.tsx`)**: Build the unified toggle UI to seamlessly switch between different Video types and ABC notation layers.
 - **YouTube Integration (`YouTubePlayer.tsx`)**: Embed the YouTube IFrame API to support dynamic video URL switching.
@@ -27,7 +26,7 @@ This document outlines the step-by-step implementation plan for the Bhajan Song 
 - **Playback Page Wrapper (`AbcSheetViewer.tsx`)**: Keep this as a thin playback-specific wrapper around `MusicSheetRenderer` instead of duplicating ABCJS rendering logic.
 
 ## 4. Composer Module
-<!-- beads-id: br-plan-04 | satisfies: prd-bsc-s3, prd-bsc-s7 -->
+<!-- beads-id: br-plan-04 | satisfies: br-prd01-s3, br-prd01-s7 -->
 
 - **Metadata Editor (`SongForm.tsx`)**: Build form inputs bound to the YAML frontmatter schema to assist contributors.
 - **Interactive Notation Editor (`AbcEditor.tsx`)**: Develop the core editor with live preview powered by the shared `MusicSheetRenderer`, undo/redo capabilities, and localStorage caching for WIP compositions. The ABC source must stay vertically stacked above the Music Sheet preview; do not place them side-by-side because the editor workflow needs vertical spacing.
@@ -36,7 +35,7 @@ This document outlines the step-by-step implementation plan for the Bhajan Song 
 - **Song Edit Selection Page (`app/edit/page.tsx` & `SongEditList.tsx`)**: Implement a dedicated `/edit` page displaying the full list of catalogue songs. Support live text search by song name, and display the key tone and resource icons (Video, Backing Track, Melody, Guitar, Piano) for each song. Provide an "Edit" button to open that song at `/compose?edit={slug}`.
 
 ## 5. AI Theory Engine Core
-<!-- beads-id: br-plan-05 | satisfies: prd-bsc-s3, prd-bsc-s8, prd-bsc-s9, prd-bsc-s10, prd-bsc-s25 -->
+<!-- beads-id: br-plan-05 | satisfies: br-prd01-s3, br-prd01-s8, br-prd01-s9, br-prd01-s10, br-prd01-s25 -->
 
 - **Foundational Theory (`scales.ts`, `chords.ts`)**: Implement the diatonic systems, scales, and Raga-to-Western mappings.
 - **Melody Analyzer (`melody-analyzer.ts`)**: Construct the parser to evaluate treble-clef ABC notation, detect the key, and identify strong-beat notes.
@@ -44,7 +43,7 @@ This document outlines the step-by-step implementation plan for the Bhajan Song 
 - **Arrangers (`piano-arranger.ts`, `fingerstyle-arranger.ts`)**: Implement rule-based generation to output bass clef patterns (for piano) and interleaved melody/bass (for guitar fingerstyle).
 
 ## 5A. Arrangement Pipeline: Melody → Full Track
-<!-- beads-id: br-plan-08 | satisfies: prd-bsc-s29, prd-bsc-s30, prd-bsc-s31, prd-bsc-s32 -->
+<!-- beads-id: br-plan-08 | satisfies: br-prd01-s29, br-prd01-s30, br-prd01-s31, br-prd01-s32 -->
 
 - **Pipeline Orchestrator**: Implement the product workflow as an explicit sequence: Melody → Harmonization → Accompaniment → Drums & Additional Instruments → Full Track. The UI and theory engine should prevent users from skipping directly from a melody-only layer to full accompaniment without first establishing the harmonic framework.
 - **Harmonization Stage**: Extend melody analysis and auto-harmonization to identify key/scale, prioritize strong-beat notes, choose chords using diatonic and functional harmony, and annotate chord choices with tonic/subdominant/dominant function and cadence role.
@@ -54,7 +53,7 @@ This document outlines the step-by-step implementation plan for the Bhajan Song 
 - **Validation & Tests**: Add regression coverage for stage ordering, strong-beat chord selection, smooth bass movement through inversions, voice-leading distance, drum/bass rhythmic alignment, frequency-range metadata, and counter-melody placement during melody rests or held notes.
 
 ## 5B. Workflow Mockup / Proof-of-Concept Demo Pages
-<!-- beads-id: br-plan-09 | satisfies: prd-bsc-s54, prd-bsc-s55 -->
+<!-- beads-id: br-plan-09 | satisfies: br-prd01-s54, br-prd01-s55 -->
 
 - **Mockup Gate**: Before integrating any major arrangement workflow into the main Composer or feature page, build a standalone proof-of-concept page using representative sample melody and arrangement data. Treat the mockup as a required product review gate, not an optional prototype.
 - **Arrangement Pipeline POC**: Build a demo page for Melody → Harmonization → Accompaniment → Drums & Additional Instruments → Full Track. It must show the input melody, detected key/scale, strong-beat analysis, chord functions, generated accompaniment, full-track expansion decisions, final ABC/playback preview, and validation report.
@@ -65,7 +64,7 @@ This document outlines the step-by-step implementation plan for the Bhajan Song 
 - **POC Test Coverage**: Add Playwright coverage for each mockup page at the highest seam: visible sample input, step-by-step decision output, final ABC/playback artifact, validation/conflict report, and integration-ready status.
 
 ## 5C. Multi-Layer Fingerstyle Arrangement Engine
-<!-- beads-id: br-plan-10 | satisfies: prd-bsc-s33, prd-bsc-s34, prd-bsc-s35, prd-bsc-s36, prd-bsc-s37, prd-bsc-s38 -->
+<!-- beads-id: br-plan-10 | satisfies: br-prd01-s33, br-prd01-s34, br-prd01-s35, br-prd01-s36, br-prd01-s37, br-prd01-s38 -->
 
 - **Upward Construction Context**: Reuse the core arrangement pipeline to build inspectable melody, harmonization, accompaniment, rhythm/percussion, bassline, and optional counter-melody source layers before any guitar reduction begins.
 - **Downward Compression Algorithm**: Implement `fingerstyle-compressor.ts` to route melody to strings 1-3, route root bass notes to strings 4-6, validate Beat 1 melody/bass pairings, prune non-essential 5ths before 3rds/7ths, place guide tones on weak beats or melody rests, and propose transposition fallbacks when fret-stretch limits exceed 4-5 frets.
@@ -75,7 +74,7 @@ This document outlines the step-by-step implementation plan for the Bhajan Song 
 - **Validation & Tests**: Add behavior-focused coverage for layer ordering, string routing, fret-stretch failures, transposition fallback suggestions, guide-tone pruning, weak-beat placement, Travis thumb-clock timing, string-slap events, profile-specific picking assignments, and visual event streams.
 
 ## 5D. Piano Accompaniment Generation Engine
-<!-- beads-id: br-plan-11 | satisfies: prd-bsc-s39, prd-bsc-s40, prd-bsc-s41, prd-bsc-s42, prd-bsc-s43, prd-bsc-s44, prd-bsc-s45, prd-bsc-s46 -->
+<!-- beads-id: br-plan-11 | satisfies: br-prd01-s39, br-prd01-s40, br-prd01-s41, br-prd01-s42, br-prd01-s43, br-prd01-s44, br-prd01-s45, br-prd01-s46 -->
 
 - **Harmonic Framework & Bass Anchoring**: Implement `piano-accompaniment.ts` to consume melody analysis and harmonized chords, parse cadence points and phrase endings, map chord roots into the C2-C3 register, generate roots/octaves/open fifths/1-5-8 foundations, and enforce Low Interval Limit rules below C3.
 - **Spatial Allocation & Voice Leading**: Implement right-hand voicing logic that prioritizes 3rds and 7ths in C3-C5, dynamically inverts chords below the melody to avoid masking the singer, retains common tones, and applies shortest-path voice leading with minimal semitone movement where possible.
@@ -86,7 +85,7 @@ This document outlines the step-by-step implementation plan for the Bhajan Song 
 - **Validation & Tests**: Add coverage for strong-beat/cadence chord mapping, C2-C3 bass anchoring, Low Interval Limit enforcement, guide-tone placement, melody-masking avoidance, shortest-path voice leading, all comping profiles, gap-fill yield behavior, hand-span conversion, hand-collision fixes, pedal automation, and synchronized grand-staff playback metadata.
 
 ## 5E. Ensemble Expansion Engine
-<!-- beads-id: br-plan-12 | satisfies: prd-bsc-s47, prd-bsc-s48, prd-bsc-s49, prd-bsc-s50, prd-bsc-s51, prd-bsc-s52, prd-bsc-s53 -->
+<!-- beads-id: br-plan-12 | satisfies: br-prd01-s47, br-prd01-s48, br-prd01-s49, br-prd01-s50, br-prd01-s51, br-prd01-s52, br-prd01-s53 -->
 
 - **Integration Handshake**: Implement `ensemble-expander.ts` to require an established Layer 1 melody plus Layer 2 piano/guitar foundation, then derive a rhythmic density grid, millisecond-level bass map, and Melodic Gap Array of rests or sustained notes longer than 1.5 beats before adding auxiliary instruments.
 - **Djembe Rhythmic Interlock**: Implement `djembe-arranger.ts` to lock Djembe Bass strokes to Layer 2 bass transients, place Mid-Tone taps on unused subdivisions, map Slap strokes to beats 2 and 4 or existing guitar string-slap events, and assign velocity metadata without creating conflicting transient attacks.
@@ -97,7 +96,7 @@ This document outlines the step-by-step implementation plan for the Bhajan Song 
 - **Validation & Tests**: Add coverage for prerequisite ordering, rhythmic density analysis, bass-map sync, Fill Zone detection, Djembe bass/mid/slap placement, Flute altitude and breath rules, Violin bed/vibrato/double-stop rules, yield hierarchy, density overload simplification, and synchronized ensemble playback events.
 
 ## 6. Visual Instruments & AI UI
-<!-- beads-id: br-plan-06 | satisfies: prd-bsc-s17, prd-bsc-s25, prd-bsc-s36, prd-bsc-s38, prd-bsc-s46, prd-bsc-s53 -->
+<!-- beads-id: br-plan-06 | satisfies: br-prd01-s17, br-prd01-s25, br-prd01-s36, br-prd01-s38, br-prd01-s46, br-prd01-s53 -->
 
 - **Instrument Renderers (`GuitarFretboard.tsx`, `PianoKeyboard.tsx`)**: Build the SVG interactive components showing finger positions and highlighted keys, adapting logic from the existing `music-theory` project.
 - **Synchronized Instrument Highlighting**: Connect Guitar and Piano renderers to Music Sheet playback cursor events so currently playing ABC notes/chords highlight the matching guitar fret/string or piano key in real time.
@@ -108,7 +107,7 @@ This document outlines the step-by-step implementation plan for the Bhajan Song 
 - **Theory Assistant UI (`TheoryAssistant.tsx`)**: Create the side panel for users to specify constraints (capo, skill level) and review/accept auto-harmonized arrangements into their Composer layers.
 
 ## 7. Quality Assurance, CI & Community Tools
-<!-- beads-id: br-plan-07 | satisfies: prd-bsc-s11, prd-bsc-s18, prd-bsc-s19, prd-bsc-s20, prd-bsc-s21, prd-bsc-s26 -->
+<!-- beads-id: br-plan-07 | satisfies: br-prd01-s11, br-prd01-s18, br-prd01-s19, br-prd01-s20, br-prd01-s21, br-prd01-s26 -->
 
 - **Unit Testing**: Configure Vitest and write assertion suites for the Theory Engine (manual mode) and the Song Loader.
 - **E2E Testing**: Setup Playwright to assert Playback Module UI toggles and Composer workflow scenarios, including shared Music Sheet rendering in both Playback and Composer, tempo/speed changes, loop controls, note highlighting, and synchronized Guitar/Piano highlight + numbered note-marker behavior.
