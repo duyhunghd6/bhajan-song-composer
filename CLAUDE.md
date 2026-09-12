@@ -1,5 +1,7 @@
 # Project Instructions
 
+This file is the prescriptive agent guide. Factual module maps live in `ARCHITECTURE.md`; domain terms in `CONTEXT.md`; detailed contracts in `docs/` (start at [`docs/README.md`](docs/README.md)). Do not duplicate their content here — link to it.
+
 ## Model selection
 
 - Force Claude Code model selection to `gpt-5.6-terra` for this project.
@@ -8,293 +10,75 @@
 
 ## Development constraints
 
-- **CRITICAL NOTE**: Do not edit files or modules inside `node_modules/*`. If changes are needed, apply them at the application level or discuss package upgrades.
+- **CRITICAL:** Do not edit files or modules inside `node_modules/*`. Apply changes at the application level or discuss package upgrades.
+- Keep modules deep and local: public entrypoint files stay stable for callers; extract implementation details into nearby subdirectories instead of broad global helpers; preserve existing public import paths unless a migration is explicitly requested; keep JS/TS/TSX/HTML/CSS files under 500 LoC when practical.
+- The music arrangement flow is intentionally stepwise. Do not collapse small steps into one opaque generation unless the user explicitly requests it.
 
 ## Project overview
 
-This is a Next.js bhajan song composition app. It supports ABC notation editing/playback, harmonization, accompaniment generation, ensemble expansion, and visual instrument previews.
+Next.js bhajan song composition app: ABC notation editing/playback, harmonization, accompaniment generation, solo Guitar Fingerstyle arrangement, export to a published Practice page, and visual instrument previews. Composer UI (`src/components/composer/`) owns React state, local persistence, and interaction; it delegates music decisions and ABC generation to `src/lib/theory/`. `src/components/music-sheet/AbcjsPlaybackController.tsx` is the abcjs playback adapter seam.
 
-Keep modules deep and local:
+## URL → module map
 
-- Public entrypoint files should stay stable for callers.
-- Extract implementation details into nearby subdirectories instead of creating broad global helpers.
-- Preserve existing public import paths unless a migration is explicitly requested.
-- Keep JS/TS/TSX/HTML/CSS files under 500 LoC when practical.
-
-## Directory structure notes
-
-### Composer UI
-
-Composer UI lives in `src/components/composer/`.
-
-- `ComposerStepWorkspace.tsx` is the step router for melody, harmony, accompaniment, Guitar Fingerstyle, and Export.
-- `workspace/arrangement-source/arrangement-source-graph.ts` owns source-current branch derivation and raw exportable notation layers.
-- `workspace/export/ExportStep.tsx` owns explicit notation selection and publication status.
-- `workspace/` contains step-specific UI modules:
-  - `HarmonyStep.tsx`
-  - `AccompanimentStep.tsx`
-  - `preview.tsx`
-- `LayerManager.tsx` is the public layer-stack entrypoint.
-- `layers/layer-manager-parts.tsx` contains layer defaults, parsing/combining utilities, and extracted pipeline/fingerstyle panels.
-- `AccompanimentWorkflowWizard.tsx` and `EnsembleWorkflowWizard.tsx` are workflow shells.
-- `accompaniment-workflow/wizard-parts.tsx` and `ensemble-workflow/wizard-parts.tsx` contain wizard state transitions and option-list UI.
-- `SongForm.tsx` is the metadata form shell.
-- `song-form/metadata.ts` contains defaults and YAML serialization.
-- `song-form/TextField.tsx` contains the shared text field module.
-
-Composer UI owns React state, local persistence, and user interaction. It should delegate music decisions and ABC generation to `src/lib/theory/`.
-
-### Music sheet / ABCJS playback
-
-Music notation playback lives in `src/components/music-sheet/`.
-
-- `AbcjsPlaybackController.tsx` is the public playback entrypoint.
-- `abcjs-playback/types.ts` defines local abcjs adapter types and controller props.
-- `abcjs-playback/abc-rendering.ts` contains tempo parsing and SVG post-processing for beat indicators, lyrics, and tablature staff spacing.
-- `abcjs-playback/AbcjsPlaybackControls.tsx` contains transport, tempo, metadata override, and loop controls.
-- `abcjs-playback/AbcjsPlaybackStyles.tsx` contains scoped rendered-sheet styles.
-
-The playback controller is the abcjs adapter seam. Callers pass ABC text and render/synth options; the implementation owns abcjs rendering, synth lifecycle, click-to-play, cursor events, and visual post-processing.
-
-#### Tablature Rendering and String Mapping Rules
-
-ABCJS rendering of guitar tablature requires strict enforcement of string mapping to prevent auto-assignment errors and layout collapse:
-
-- **String Forcing**: Always prepend ABC notes with the `!N!` string decoration (e.g., `!1!b`, `!6!B`) to explicitly assign the note to string `N` (1-6). This instructs ABCJS's `getStringDecoration()` to bypass its default lowest-fret auto-assignment algorithm.
-- **Render-time Forcing**: To catch raw LLM outputs or custom ABC that lacks decorations, the playback entrypoint automatically applies the `ensureGuitarStringForcing()` post-processor at render-time, preserving chord symbols (e.g., `"Em"`) and respecting non-Guitar voice isolation.
-- **Duplicate Pitches**: Because string forcing bypasses auto-assignment, it is valid to output the same concert pitch on multiple strings simultaneously (e.g., D3 on string 4 and string 5). Do *not* deduplicate identical ABC pitches in tablature chords.
-- **Octave Convention**: Always output concert-pitch ABC tokens for the `treble-8` clef. ABCJS internally applies a `clefTranspose = -12` to the note *before* computing the fret against its un-transposed tuning `stringPitches`. Manually shifting octaves up +1 will cause the fret computation to fail.
-- **Key Signature Awareness**: Key signatures (like `K:Em` where F is sharped) must be respected on both input and output paths. On the input path (ABC-to-MIDI), bare notes inherit implied accidentals (bare `F` in `K:Em` represents F# / MIDI 66). On the output path (Pitch-to-ABC), if a physical note is natural but the key signature has a sharp/flat on that note letter (e.g., F-natural in `K:Em`), you must output an explicit natural indicator `=` (e.g., `!1!=f`) so ABCJS does not incorrectly apply the key signature and render it as fret 2. Conversely, omit the accidental if the pitch matches the key signature default.
-- **Export Portability**: When exporting or copying ABC notation to the clipboard, `cleanAbcForExport()` automatically strips all `!N!` string decorations (which other software would display as confusing fingering numbers) and normalizes `clef=treble-8` to `clef=treble` so that third-party ABC notation viewers render the staff correctly.
-
-### Theory engine
-
-Music theory and arrangement logic lives in `src/lib/theory/`.
-
-- `piano-accompaniment.ts` is the public piano accompaniment entrypoint.
-- `piano-accompaniment/types.ts` contains exported piano accompaniment contracts.
-- `piano-accompaniment/pedal-automation.ts` handles sustain pedal automation and UI pedal metadata.
-- `piano-accompaniment/output-contract.ts` handles key highlights, fingering metadata, and physical hand events.
-- `fingerstyle-arranger.ts` is the public fingerstyle arrangement entrypoint.
-- `fingerstyle-arranger/types.ts` contains source-layer, playability, artifact, and output-contract types.
-- `fingerstyle-arranger/fill-opportunities.ts` is the local stable entrypoint for fill policy, scored windows, legal atomic candidates, compact codecs, and deterministic validation/merge.
-- `fingerstyle-arranger/time-slice-abc-renderer.ts` renders explicit fill durations and tied melody intervals behind the stable `convertTimeSliceMeasureToAbc` export.
-- `accompaniment-workflow.ts` is the public accompaniment workflow entrypoint.
-- `accompaniment-workflow/definition.ts` contains accompaniment workflow ids, constants, types, and step definitions.
-- `accompaniment-workflow/tool-schema.ts` contains structured LLM tool schemas for accompaniment workflow generation.
-- `ensemble-workflow.ts` is the public ensemble workflow entrypoint.
-- `ensemble-workflow/definition.ts` contains ensemble workflow ids, constants, default generation plan, types, and step definitions.
-
-### Visual mockups
-
-Visual prototypes live in `src/app/mockups/visual-instruments/`.
-
-- `VisualInstrumentsMockupClient.tsx` is the interactive mockup shell.
-- `mockup-parts.tsx` contains sample ABC, marker timelines, state panels, event cards, and variant switching.
-
-### URL to Module Mapping
-
-When you are asked to work on specific Composer URLs, refer to these short lists of primary modules to save time:
-
-- `/compose/:slug/melody`:
-  - `src/components/composer/ComposerStepWorkspace.tsx` (Step Router)
-  - `src/components/composer/AbcEditor.tsx` (Notation Editor)
-  - `src/components/music-sheet/AbcjsPlaybackController.tsx` (Playback)
-  - `src/components/composer/useWorkspaceState.ts` (State)
-
-- `/compose/:slug/harmony`:
-  - `src/components/composer/workspace/HarmonyStep.tsx` (UI)
-  - `src/components/composer/workspace/arrangement-preview-model.ts` (Preview State)
-  - `src/components/composer/LayerManager.tsx` (Harmony options/layers)
-  - `src/components/composer/AccompanimentWorkflowWizard.tsx` (Wizard Controller)
-
-- `/compose/:slug/accompaniment`:
-  - `src/components/composer/workspace/AccompanimentStep.tsx` (UI)
-  - `src/components/composer/AccompanimentWorkflowWizard.tsx` (Wizard Controller)
-  - `src/lib/theory/accompaniment-workflow/definition.ts` (Workflow Rules)
-  - `src/app/actions/accompaniment-workflow.ts` (Server Actions)
-  - `src/components/composer/accompaniment-workflow/wizard-parts.tsx` (Wizard UI Parts)
-
-- `/compose/:slug/guitar-fingerstyle`:
-  - `src/components/composer/workspace/GuitarFingerstyleStep.tsx` (Settings, line grouping, generation lock)
-  - `src/components/composer/workspace/FingerstyleLineCard.tsx` (Line-level generation, summary, diagnostics)
-  - `src/lib/theory/fingerstyle-arranger/fill-opportunities.ts` (Fill analysis/validation)
-  - `src/lib/theory/fingerstyle-arranger/time-slice.ts` (Stable time-slice/ABC entrypoints)
-  - `src/app/actions/fingerstyle-line-arranger.ts` (Public staged Server Action)
-
-- `/compose/:slug/review` (displayed as Export):
-  - `src/components/composer/workspace/export/ExportStep.tsx` (layer selection and publish UX)
-  - `src/app/actions/publish-arrangement.ts` (durable catalogue publication)
-  - `src/components/composer/workspace/arrangement-source/arrangement-source-graph.ts` (eligible source layers)
-  - `src/app/practice/[slug]/PracticeViewer.tsx` (published Practice showcase)
-
-## Core Composer starting points and authority map
-
-When working on the main Composer flow, begin at `src/components/composer/ComposerStepWorkspace.tsx`, then follow the named step seam instead of searching broadly:
+Begin at `src/components/composer/ComposerStepWorkspace.tsx` (step router), then follow the named seam instead of searching broadly. Bare names in the table are relative to `src/components/composer/`; anything outside that folder is written as a full `src/…` path.
 
 | URL | First modules to read | Authority boundary |
 | --- | --- | --- |
-| `/compose/:slug/melody` | `AbcEditor.tsx`, `useWorkspaceState.ts`, `workspace/storage.ts` | The editable melody ABC is the local draft root. |
-| `/compose/:slug/harmony` | `workspace/HarmonyStep.tsx`, `AccompanimentWorkflowWizard.tsx`, `accompaniment-workflow/definition.ts` | Harmony Steps 1–3 share the accompaniment workflow; only selected Step 3 is a downstream source. |
-| `/compose/:slug/accompaniment` | `workspace/AccompanimentStep.tsx`, `AccompanimentWorkflowWizard.tsx`, `src/app/actions/accompaniment-workflow.ts` | Generates a support sibling from validated Harmony Step 3, never a Fingerstyle source. |
-| `/compose/:slug/guitar-fingerstyle` | `workspace/GuitarFingerstyleStep.tsx`, `FingerstyleLineCard.tsx`, `src/app/actions/fingerstyle-line-arranger.ts` | Owns the canonical solo-guitar TimeGrid and its deterministic projections. |
+| `/compose/:slug/melody` | `AbcEditor.tsx`, `useWorkspaceState.ts`, `workspace/storage.ts`, `music-sheet/AbcjsPlaybackController.tsx` | The editable melody ABC is the local draft root. |
+| `/compose/:slug/harmony` | `workspace/HarmonyStep.tsx`, `workspace/arrangement-preview-model.ts`, `LayerManager.tsx`, `AccompanimentWorkflowWizard.tsx` | Harmony Steps 1–3 share the accompaniment workflow; only the selected Step 3 is a downstream source. |
+| `/compose/:slug/accompaniment` | `workspace/AccompanimentStep.tsx`, `AccompanimentWorkflowWizard.tsx`, `src/lib/theory/accompaniment-workflow/definition.ts`, `src/app/actions/accompaniment-workflow.ts` | Generates a support sibling from validated Harmony Step 3; never a Fingerstyle source. |
+| `/compose/:slug/guitar-fingerstyle` | `workspace/GuitarFingerstyleStep.tsx`, `workspace/FingerstyleLineCard.tsx`, `src/lib/theory/fingerstyle-arranger/time-slice.ts`, `src/app/actions/fingerstyle-line-arranger.ts` | Owns the canonical solo-guitar TimeGrid and its deterministic projections. |
+| `/compose/:slug/review` (Export) | `workspace/export/ExportStep.tsx`, `src/app/actions/publish-arrangement.ts`, `workspace/arrangement-source/arrangement-source-graph.ts` | The only durable catalogue-publication seam. |
+| `/practice/:slug` | `src/app/practice/[slug]/PracticeViewer.tsx` | Reads published catalogue notation only. |
 
-Read `workspace/arrangement-source/arrangement-source-graph.ts` for source-current provenance and export eligibility. Read `workspace/arrangement-preview-model.ts` only for preview projections, visibility, volumes, synth choices, and ABCJS TAB options. Neither module is a new arrangement source.
+## Mandatory rules (summary — follow the linked source of truth)
 
-### Directed source flow and invalidation
+**Source flow** — [`docs/guides/composer-source-flow.md`](docs/guides/composer-source-flow.md)
+- Directed flow is mandatory: Melody → Harmony Steps 1–3 → selected `voice-leading-validation` ABC → independent Accompaniment and Guitar Fingerstyle branches. Accompaniment output must never feed Fingerstyle. Before Step 3 is selected, downstream routes show the melody read-only and must not generate branch output.
+- A melody edit or changed Step 3 selection makes downstream drafts stale; preserve existing source-fingerprint, reset, hydration, and stale-result guards. Stale artifacts never become preview sources or exportable layers.
+- Visibility/volume/TAB state is preview-only and must not change provenance, canonical ABC, TimeGrid data, or exports.
+- Export is the only publication seam. `/practice/:slug` must never overlay Composer localStorage drafts. Ensemble stays experimental (no route, branch, or exportable layer).
 
-```text
-editable Melody ABC → selected, source-current Harmony Step 3 ABC
-                                       ├→ Accompaniment support branch
-                                       └→ Guitar Fingerstyle TimeGrid branch
-```
+**Accompaniment workflow** — [`docs/guides/accompaniment-workflow.md`](docs/guides/accompaniment-workflow.md); step ids in `src/lib/theory/accompaniment-workflow/definition.ts`
+- Preserve the melody ABC exactly unless the step allows chord annotations. Harmony keeps its small decisions (key/meter → strong beats & cadences → multiple candidates → user selection → preview of the exact Step 3 ABC). Shared Steps 1–3 always enabled; branch steps enabled only for checked instruments and never block completion.
+- The wizard stays on the single `/compose/:slug/accompaniment` route; never add routes for internal substeps unless deep links are explicitly requested.
+- Step 6 `guitar-classic-abc-notation` deterministically realizes the selected profile/voicing into a complete `V:GuitarSupport` texture; root/fifth anchors alone are never the finished accompaniment.
+- Multi-instrument ABC keeps Melody line breaks and groups by staff system (Melody line N, then each instrument line N).
 
-- `voice-leading-validation` (Harmony Step 3) is the sole harmonic source for both downstream branches. Before it is selected, downstream screens show the raw melody only as a read-only reference and must not generate branch output.
-- Accompaniment and Guitar Fingerstyle are siblings. Never pass accompaniment ABC, Guitar Classic support data, instrument setup, options, completion state, or generated layers into the Fingerstyle branch.
-- A melody edit or changed Harmony Step 3 selection makes affected workflow/branch drafts stale. Preserve the existing source fingerprint, reset, hydration, and stale-result guards; stale artifacts must not become preview sources or exportable layers.
-- Export is the only durable catalogue-publication seam. `/practice/:slug` reads published catalogue notation only and must never overlay Composer localStorage drafts.
+**Guitar Fingerstyle / TimeGrid** — [`docs/guides/guitar-fingerstyle-arrangement-guide.md`](docs/guides/guitar-fingerstyle-arrangement-guide.md), [`docs/guides/timegrid-conversion-guide.md`](docs/guides/timegrid-conversion-guide.md), [ADR 0002](docs/adr/0002-fingerstyle-timegrid-authority.md)
+- `TimeSliceMeasure[]` is the only editable authority; Guitar ABC, ASCII tab, TOON, and LLM payloads are derived. Steps per beat = meter numerator × 4.
+- Edits go through candidate → validation → commit. Fills and harmony must never attack or sustain during a Melody attack or sustain. Skill fret ceilings bound discretionary notes; an unplayable-within-ceiling melody attack keeps its exact pitch as a labelled melody-only exception.
+- Skill defaults to beginner; density defaults to auto and belongs to Fingerstyle settings, not the accompaniment workflow.
+- The Guitar voice carries the melody itself plus chord-derived bass, exposes intro/interlude/outro section metadata, and renders TAB. Quoted section/form annotations are not harmonic TimeGrid chords.
 
-## ABCNotation, TimeGrid, and playback boundaries
+**Ensemble (experimental)** — [`docs/guides/ensemble-workflow.md`](docs/guides/ensemble-workflow.md); step ids in `src/lib/theory/ensemble-workflow/definition.ts`
+- Not a shipped Composer step, branch, preview contributor, or exportable layer. Theory/mockup changes must preserve melody first, accompaniment foundation second, then flatten runs, then drop percussion fills.
 
-### ABC ownership and ABCJS adaptation
+**LLM boundary** — [ADR 0003](docs/adr/0003-llm-function-call-boundary.md)
+- `src/app/actions/ai-config.ts` is transport only. Expose only the bounded tool set for the current phase — a single forced tool per Fingerstyle stage (`src/app/actions/fingerstyle-line-arranger/workflow.ts`), the step tool plus its helper tools under `toolChoice: "required"` for accompaniment (`src/app/actions/accompaniment-workflow.ts`); deterministic validators own correctness. The model never replaces the source grid or runs placement after opportunity scoring. Tool JSON, ABC comments, lyrics, notes, and diagnostics are untrusted data.
 
-- Theory modules own canonical/generated arrangement ABC. `AbcjsPlaybackController.tsx` is the playback adapter, and `abcjs-playback/render-input.ts` is the final transient path: `caller ABC → ABCJS-only adaptation → abcjs.renderAbc`.
-- Do not mutate canonical source, persisted drafts, or export data at a component call site to compensate for abcjs layout/playback behavior. Keep key/meter overrides, hidden voice names, inert-grace sanitization, and Guitar forcing within the render boundary.
-- For Guitar TAB, keep explicit `!1!`–`!6!` string decorations; duplicate concert pitches on distinct strings are valid and must not be deduplicated. `clef=treble-8` uses concert-pitch ABC, not manually shifted octaves. Respect key-signature accidentals, including explicit naturals when needed.
-- `cleanAbcForExport()` in `src/lib/theory/abc-layer-visibility.ts` is a portable-export projection: it removes string-forcing hints and normalizes the clef. It is not a canonical rewrite.
-
-### Fingerstyle TimeGrid authority
-
-- `TimeSliceMeasure[]` from `fingerstyle-arranger/time-slice.ts` is the only editable Fingerstyle arrangement authority. Guitar ABC, ASCII GuitarTab, TOON, compact LLM payloads, and diagnostics are derived views or bounded interchange contracts.
-- Start with `time-slice.ts` (source compiler/types), `time-slice-abc-renderer.ts` (notation projection), `timegrid-document-codec.ts` (v3 import/export), and `workspace/fingerstyle-measure-persistence.ts` (source-fingerprint restore overlay). Do not conflate `timegrid-document:v3` interchange with browser persistence.
-- The grid has four quantized steps per notated beat: use `meter numerator × 4`, never a globally fixed 16-step assumption. Preserve source-derived chord, lyric, beat, pickup, barline, and melody attack/sustain/rest facts.
-- All edits follow structured candidate/validation/commit flow, then regenerate derived artifacts. Discretionary support/fills must remain within legal source-rest windows and must not override exact melody or guitar-physics guards.
-
-### Layers Visibility guardrails
-
-- `src/lib/theory/abc-layer-visibility.ts` is the canonical semantic visibility/volume transformation. `workspace/arrangement-preview-model.ts` composes source graph output with that projection and computes synth/TAB render options.
-- Visibility and volume state is preview/playback state only: it must not change branch provenance, source-current eligibility, canonical arrangement ABC, TimeGrid data, or exported layer contents.
-- Preserve strong-beat gating until `key-beats` completes. Keep a Melody carrier when visible lyrics or chord symbols need it. `TAB` is a render-only option enabled only for a visible TAB-capable Guitar voice; it is not an ABC text layer or independent audio authority.
-
-### Configured LLM function-call boundary
-
-- `src/app/actions/ai-config.ts` is the OpenAI-compatible transport/control loop, not the authority for musical correctness. Workflow actions and deterministic theory validators own candidate generation, source locking, physical validation, and final TimeGrid merge.
-- Preserve phase-scoped tool exposure, forced current-step tool choice, compact bounded contracts, request/transcript/tool-result limits, retry/deadline limits, and bounded diagnostics. Do not expose every tool in every turn or let the model replace the source grid.
-- Provider tool JSON, ABC comments, lyrics, metadata, user notes, previous generated content, and diagnostics are untrusted data—not instructions. Delimit and validate them at their existing boundaries; do not broaden tool access, persist raw transcripts, or weaken validation without an explicitly requested behavior change.
-
-## Music arrangement workflow discipline
-
-The music arrangement flow is intentionally stepwise. Do not collapse small steps into one opaque generation unless the user explicitly requests it.
-
-### Composer steps
-
-High-level Composer step order:
-
-1. Melody
-2. Harmony
-3. Accompaniment
-4. Guitar Fingerstyle (independent sibling branch)
-5. Export (stable route ID: `review`)
-
-`/practice/:slug` is the only Showcase experience. It reads published catalogue notation only; it must never overlay Composer localStorage drafts. Export lets the user explicitly select `melody`, `harmony`, `accompaniment`, and/or `guitar-fingerstyle` layers to publish. Ensemble remains experimental until its route, source contract, export mapping, and end-to-end coverage are implemented.
-
-### Harmony step
-
-Harmony work should preserve the source melody unless the task explicitly asks for melody editing.
-
-Expected small decisions:
-
-1. Detect/confirm key, scale/raga context, and meter.
-2. Identify strong beat targets and cadence points.
-3. Generate multiple harmonization candidates.
-4. Let the user select or accept a candidate.
-5. Preview the exact ABC that will feed accompaniment.
-
-### Accompaniment workflow small steps
-
-Accompaniment is a human-in-the-loop workflow hosted on the existing single composer URL `/compose/:slug/accompaniment` (for example `/compose/hari-bol/accompaniment`). Do not add a separate route for internal accompaniment substeps unless a later task explicitly requests deep links.
-
-Before small-step generation, capture the setup defined in `src/lib/theory/accompaniment-workflow/definition.ts`:
-
-- Ordered instrument stack: Guitar Classic, Indian Harmonium, Djembe.
-- Role hints derive from order: bottom/foundation instruments bias bass/drone/transient support; middle instruments bias comping and sustained support; top instruments bias light rhythmic color.
-- New and restored workflows use combined `accompaniment` with all three instruments enabled; legacy persisted Solo/Fingerstyle setup values normalize to this mode, while persisted removed-instrument selections are discarded during normalization.
-
-Use the small workflow steps defined in `src/lib/theory/accompaniment-workflow/definition.ts`:
-1. `key-beats` — analyze key/scale/raga context, phrase endings, cadence targets, and strong-beat emphasis.
-2. `chord-roles-progression` — map strong melody notes to chord roles and produce harmonized ABC.
-3. `voice-leading-validation` — smooth transitions and validate harmonized ABC.
-4. `guitar-comping-profile` — choose the Guitar Classic realization technique: devotional PIMA arpeggio, devotional pinch arpeggio, or bhajan strum.
-5. `guitar-voicing-bass` — plan Guitar Classic voicings, bass anchors, walking motion, and meter-grid event durations for the selected technique.
-6. `guitar-classic-abc-notation` — deterministically materialize the selected profile and voicing anchors as a complete chord-driven, measure-aligned standard-notation support voice for Music Sheet Playback.
-7. `harmonium-drone-register` — choose devotional harmonium drone tones, register, sustain density, and melody-yield behavior.
-8. `harmonium-chord-voicing-validation` — validate harmonium chord voicings, root-fifth anchors, and collision-safe sustained support.
-9. `djembe-groove-interlock` — choose Djembe groove profile and interlock Bass/Tone/Slap strokes with accompaniment transients.
-10. `djembe-fill-validation` — validate Djembe fill policy, backbeat/slap behavior, and transient conflict limits.
-
-Dynamic step gating:
-
-- Shared steps 1–3 are always enabled.
-- Combined `accompaniment` enables branch steps only for enabled instruments in the ordered stack. Disabled instrument branches must not appear, block completion, or be required before the accompaniment result is applied.
-- The planned step grid must react whenever a retained instrument checkbox changes, including after a workflow has started: newly checked instruments add their branch steps, unchecked instruments remove their branch steps and must not block completion.
-- Guitar Classic owns the Guitar branch.
-- Disabled branches must not block `getNextUncompletedWorkflowStepId` or step unlock checks.
-
-Important accompaniment rules:
-
-- Preserve the melody ABC exactly unless the specific step allows chord annotations.
-- Directed source flow is mandatory: Melody → shared Harmony Steps 1–3 → selected `voice-leading-validation` ABC → independent Accompaniment and Guitar Fingerstyle branches. Accompaniment output must never feed Guitar Fingerstyle. Before Step 3 is selected, downstream routes display only the original melody as read-only reference and must not generate branch output.
-- For chord ingestion from lyric `w:` lines, treat embedded `[Chord]` symbols as user-supplied progression context.
-- Guitar tab validation steps must provide concrete tab events with one-based measure, grid step, duration, beat, note, string, fret, and role. Step 4 persists a supported Guitar Classic profile and Step 5 provides physical anchors/voicing context; `guitar-classic-abc-notation` deterministically realizes those choices into a complete arpeggio, pinch, or multi-string strum texture before emitting the standard-notation `V:GuitarSupport` layer. Root/fifth anchors alone must never be treated as the completed accompaniment. Its validated physical strings may render an optional GuitarSupport TAB staff, but that render feature never feeds Fingerstyle.
-- Guitar Fingerstyle must be a solo guitar plan: the Guitar voice carries the melody itself, adds bass from chord progression roots/fifths/approaches, exposes intro/interlude/outro section metadata, and renders GUITAR TAB.
-- Line-level Guitar Fingerstyle generation is staged: non-fill foundation → skill-aware deterministic TimeGrid placement and freeze → exhaustive paginated fill opportunities → LLM use/skip selection → LLM candidate/duration composition → deterministic server merge/final validation. Quoted section/form annotations are not harmonic TimeGrid chords. Fills are discretionary: after bounded fill-stage retries, return the validated bass foundation with a non-fatal fills-unavailable notice rather than discarding it. Do not let the LLM replace the source grid or run mutating placement after opportunity scoring.
-- Fingerstyle skill defaults to beginner; density defaults to auto (beginner→few, intermediate→normal, advanced→many). Preserve their independence. Fill density belongs to Guitar Fingerstyle generation settings, not the accompaniment workflow. Density increases selection budgets among legal source-rest windows only: discretionary fills and harmony must never attack or remain sounding during a Melody attack or sustain. Skill fret ceilings constrain discretionary accompaniment and fills; if an authoritative melody attack is physically playable only above that ceiling, preserve its exact pitch with a labelled melody-only exception rather than transposing it or relaxing the rest of the line.
-- The Guitar Classic branch may render its standard-notation support ABC layer after `guitar-classic-abc-notation` is selected; the Djembe branch may render its support ABC layer after its validation step is selected.
-- Keep generated ABC previewable with `AbcjsPlaybackController`.
-- For multi-instrument ABC, preserve Melody visual line breaks and group by staff system: `[V:Melody]` line N, then each Guitar/Harmonium/Djembe line N for the same measure range, before moving to line N+1.
-
-### Ensemble workflow small steps
-
-Ensemble is Layer 3 expansion over the Layer 1 melody and Layer 2 accompaniment foundation. Use the small workflow steps defined in `src/lib/theory/ensemble-workflow/definition.ts`:
-
-1. `foundation-handshake` — confirm melody, accompaniment foundation, density grid, bass map, and melodic-gap strategy.
-2. `djembe-groove-interlock` — choose Djembe groove profile and bass/transient interlock.
-3. `djembe-fill-validation` — choose fill policy, backbeat/slap behavior, and transient conflict limits.
-4. `flute-yield-register` — choose Flute role, register, and yield behavior while melody is active.
-5. `flute-breath-fill-validation` — choose fill density, breath interval, and playable gap fills.
-6. `violin-bed-register` — choose Violin harmonic bed/counterline/drone strategy and register relationship.
-7. `violin-expression-validation` — choose bow expression, vibrato/swell, double-stop policy, and playability constraints.
-8. `final-conflict-review-apply` — review Djembe/Flute/Violin choices, resolve conflicts, and prepare final Layer 3 ABC bundle.
-
-Important ensemble rules:
-
-- Preserve Layer 1 melody first.
-- Preserve Layer 2 accompaniment second.
-- Use ensemble instruments to support, not overcrowd, the devotional melody.
-- Apply conflict resolution in this order: preserve melody, preserve accompaniment foundation, flatten melodic runs, then remove/soften percussion fills.
-- Keep Djembe, Flute, and Violin decisions independently reviewable before final apply.
-- Final Layer 3 ABC must inherit the same staff-system grouping as accompaniment: Melody line N, Layer 2 line N, then each Djembe/Flute/Violin line N for the same measure range.
+**ABC / abcjs rendering** — [`docs/guides/abcjs-tablature-rendering.md`](docs/guides/abcjs-tablature-rendering.md)
+- Theory modules own canonical ABC; `abcjs-playback/render-input.ts` is the only place for ABCJS-specific adaptation. Never mutate source, drafts, or exports at a call site to fix abcjs behavior.
+- Guitar TAB keeps explicit `!1!`–`!6!` string decorations, concert pitch with `clef=treble-8`, key-aware naturals, and no deduplication of identical pitches on distinct strings. `cleanAbcForExport()` is a portable projection, not a rewrite.
 
 ## Validation commands
-
-Use these commands after code changes:
 
 ```bash
 npm test
 npx tsc --noEmit
 npm run lint
 npm run build
+npm run docs:check
 ```
 
-Known project notes:
-
 - `npm test` and `npx tsc --noEmit` are the primary regression checks.
-- `npm run lint` currently reports on vendored/minified `public/abcjs-basic-min.js` unless lint config excludes it.
-- `npm run build` currently fails when static export is enabled with Server Actions; do not treat that as a refactor regression unless the build config also changes.
+- `npm run lint` currently reports on vendored `public/abcjs-basic-min.js` unless lint config excludes it.
+- `npm run build` currently fails when static export is enabled with Server Actions; not a refactor regression unless the build config also changes.
+- `npm run docs:check` runs the Universal ID extractor and verifies markdown links, backtick code paths, and the absence of `file:///` URLs across `docs/` and the root docs; run it after any documentation change.
 
 ## Documentation and comment policy
 
-- Keep `ARCHITECTURE.md` aligned when moving modules or changing seams. It is factual architecture; this file is the prescriptive agent guide. Use `CONTEXT.md`, `docs/timegrid-conversion-guide.md`, and `docs/guitar-fingerstyle-arrangement-guide.md` for detailed domain contracts rather than duplicating their protocols here.
-- If workflow step ids, arrangement rules, public entrypoints, TimeGrid wire contracts, or LLM phase/tool contracts change, update this file, `ARCHITECTURE.md`, and the relevant specialist guide together.
-- Write comments only for ownership boundaries, non-obvious invariants, compatibility reasons, or a reason a tempting simplification is unsafe. Do not mass-reword comments that merely restate adjacent code.
-- Preserve public import paths and extracted implementation seams unless an explicit migration is requested. When a comment names another module or contract, keep that cross-reference accurate as part of the same change.
+- `docs/README.md` holds the source-of-truth matrix. If workflow step ids, arrangement rules, public entrypoints, TimeGrid wire contracts, or LLM phase/tool contracts change, update the owning guide, `ARCHITECTURE.md`, and this file in the same change.
+- Keep `ARCHITECTURE.md` factual and aligned when moving modules or changing seams. Record new architectural decisions as `docs/adr/NNNN-*.md`.
+- Every `docs/` heading carries a single-line `beads-id` HTML comment; moving or renaming retains the ID, and retired IDs are recorded in `docs/universal-id-registry.md`.
+- Write comments only for ownership boundaries, non-obvious invariants, compatibility reasons, or why a tempting simplification is unsafe. Do not mass-reword comments that restate adjacent code. When a comment names another module or contract, keep that cross-reference accurate in the same change.

@@ -42,7 +42,7 @@ test.describe("mockup review gate", () => {
     ).toBeVisible();
   });
 
-  test("keeps the shorter docs/UI.md mockup routes available", async ({ page }) => {
+  test("keeps the shorter docs/design/UI.md mockup routes available", async ({ page }) => {
     await page.goto("/mockups/arrangement");
     await expect(page.getByRole("heading", { name: /Arrangement Pipeline/i })).toBeVisible();
 

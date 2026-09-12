@@ -22,7 +22,7 @@ Composer screens live under `src/components/composer/`.
   - `preview.tsx` contains shared preview layout, render options, and harmonization display helpers.
 - `LayerManager.tsx` remains the public layer-stack entrypoint.
 - `layers/layer-manager-parts.tsx` contains layer stack defaults, layer parsing/combining utilities, and the extracted pipeline/fingerstyle panels.
-- `AccompanimentWorkflowWizard.tsx` and `EnsembleWorkflowWizard.tsx` are workflow shells.
+- `AccompanimentWorkflowWizard.tsx` is the accompaniment workflow shell; the experimental ensemble workflow has only `ensemble-workflow/wizard-parts.tsx` (state transitions and option-list UI), no shipped shell or route.
 - `accompaniment-workflow/WorkflowSetupPanel.tsx` contains the setup UI for the ordered accompaniment instrument stack, native drag/drop, and accessible up/down reordering.
 - `accompaniment-workflow/wizard-parts.tsx` contains accompaniment wizard presentation helpers and option-list UI.
 - `ensemble-workflow/wizard-parts.tsx` contains reusable ensemble wizard state transitions and option-list UI.
@@ -34,29 +34,7 @@ The Composer UI owns React state, browser-local draft persistence, and user inte
 
 The accompaniment workflow is intentionally a single-page wizard under the existing dynamic route `/compose/[slug]/[step]`; `/compose/hari-bol/accompaniment` is handled by `step=accompaniment`, not by a dedicated route folder. Internal accompaniment substeps live in persisted workflow state rather than route segments.
 
-The downstream source graph is directed: Melody feeds Harmony Steps 1–3; the selected Step 3 `voice-leading-validation` ABC then independently feeds Accompaniment and Guitar Fingerstyle. Accompaniment output is never a Fingerstyle source. Until Step 3 has a selected ABC, both downstream routes show the original melody as read-only reference and keep branch generation unavailable. Export publishes only selected, source-current layers to `data/songs`; Practice is the Showcase and reads only those published catalogue layers, never browser-local Composer state. See `CONTEXT.md` and [ADR 0001](docs/adr/0001-composer-publication-and-practice.md).
-
-| Change | Invalidated draft state | Durable catalogue effect |
-| --- | --- | --- |
-| Melody changes | Harmony workflow and both downstream branches become source-stale; branch outputs cannot export | None until explicit Export |
-| Harmony Step 3 selection changes | Accompaniment/Guitar Fingerstyle branch results and persisted Fingerstyle measures are cleared | None until explicit Export |
-| Accompaniment or Fingerstyle changes | Only that sibling artifact changes | None until explicit Export |
-| Storage pruning/quota failure | Missing draft artifacts are excluded from Export with warnings | No published files change |
-| Export | No implicit draft reset | Selected named layer files and metadata are upserted; unselected layers and Markdown body are preserved |
-
-#### Arrangement authority and projection matrix
-
-| Representation | Owner / purpose | May become a downstream source or durable layer? |
-| --- | --- | --- |
-| Editable melody ABC | Composer workspace draft root | Yes: it feeds the source-current Harmony workflow. |
-| Selected Harmony Step 3 ABC | `voice-leading-validation` result | Yes: it is the only harmonic source for Accompaniment and Fingerstyle. |
-| Accompaniment support ABC | Accompaniment sibling branch | Yes for its own preview/export layer; never Fingerstyle input. |
-| `TimeSliceMeasure[]` | Guitar Fingerstyle physical arrangement authority | Yes for Fingerstyle editing and deterministic Guitar projections. |
-| Generated Guitar ABC / ASCII tab | TimeGrid projection | Preview/export/display artifact; never an alternate edit authority. |
-| `ArrangementSourceGraph.exportableLayers` | Source-current export eligibility | Candidate layers only; Export requires explicit user selection. |
-| Published catalogue notation | `publish-arrangement.ts` output | The sole source for Practice/Showcase. |
-
-`arrangement-source-graph.ts` establishes source-current provenance and named export eligibility. `arrangement-preview-model.ts` is a projection adapter that applies visibility, volumes, synth choices, and TAB options to that graph; its rendered ABC must not be persisted as a new source. `abc-layer-visibility.ts` transforms the display/playback projection, while `cleanAbcForExport()` produces portable export text. These transformations do not change upstream authority.
+The downstream source graph is directed: Melody feeds Harmony Steps 1–3; the selected Step 3 `voice-leading-validation` ABC then independently feeds Accompaniment and Guitar Fingerstyle, and Export publishes only selected source-current layers that Practice reads. The invalidation table, the authority/projection matrix, and the Layers Visibility guardrails are maintained in [docs/guides/composer-source-flow.md](docs/guides/composer-source-flow.md); see also `CONTEXT.md` and [ADR 0001](docs/adr/0001-composer-publication-and-practice.md).
 
 ### Music sheet / ABCJS playback
 
@@ -69,7 +47,7 @@ Music notation playback lives under `src/components/music-sheet/`.
 - `abcjs-playback/AbcjsPlaybackControls.tsx` contains transport, metadata override, tempo, and loop-range controls.
 - `abcjs-playback/AbcjsPlaybackStyles.tsx` contains the scoped styles applied to rendered abcjs output.
 
-The playback module is intentionally a client-side adapter around abcjs. Callers pass ABC text and optional render/synth settings; the implementation owns abcjs rendering, synth lifecycle, click-to-play, cursor events, and visual post-processing.
+The playback module is intentionally a client-side adapter around abcjs. Callers pass ABC text and optional render/synth settings; the implementation owns abcjs rendering, synth lifecycle, click-to-play, cursor events, and visual post-processing. Render-boundary and Guitar TAB string-mapping rules are in [docs/guides/abcjs-tablature-rendering.md](docs/guides/abcjs-tablature-rendering.md).
 
 ### Theory engine
 
@@ -106,9 +84,16 @@ Compatibility entrypoints were preserved so existing callers can continue import
 
 ### Configured LLM function-call boundary
 
-`src/app/actions/ai-config.ts` is the bounded OpenAI-compatible chat-completions/function-call transport and tool-loop control boundary. It applies configured request, transcript, tool-schema, tool-result, turn, retry, timeout, and deadline limits; it is not the authority for arrangement validity. The calling workflow controls which tools are exposed for its current phase, and deterministic theory modules validate source locks, legal candidates, physical guitar constraints, and final artifacts before state is accepted.
+`src/app/actions/ai-config.ts` is the bounded OpenAI-compatible chat-completions/function-call transport and tool-loop control boundary; it is not the authority for arrangement validity. Calling workflows expose only the tool for their current phase, and deterministic theory modules validate source locks, legal candidates, physical guitar constraints, and final artifacts before state is accepted. For Fingerstyle, `src/app/actions/fingerstyle-line-arranger.ts` is the public Server Action and its local `workflow.ts` exposes only the next allowed staged tool. Rationale and limits: [ADR 0003](docs/adr/0003-llm-function-call-boundary.md).
 
-For Fingerstyle specifically, `src/app/actions/fingerstyle-line-arranger.ts` is the public Server Action and its local `workflow.ts` exposes only the next allowed staged tool. The model selects bounded musical decisions; it does not replace a TimeGrid or invent unconstrained physical coordinates. Diagnostics are bounded operational summaries and must remain separate from durable musical artifact contracts.
+### Routes, playback, catalogue, and Server Actions
+
+- `src/app/` — App Router. `[language]/[slug]/page.tsx` is the public Playback page; `edit/` lists the catalogue for editing; `compose/page.tsx` + `compose/[slug]/[step]/page.tsx` host the Composer (`composer-steps.ts` defines `melody`, `harmony`, `accompaniment`, `guitar-fingerstyle`, `review`); `practice/[slug]/PracticeViewer.tsx` renders published notation only; `mockups/` holds POC gate pages (`arrangement/`, `fingerstyle/`, `ensemble/` are aliases of the `*-pipeline`/`*-engine`/`*-expansion` pages); `test-*/` are developer harness pages.
+- `src/components/playback/` — `PlaybackController.tsx` (video/sheet selectors), `YouTubePlayer.tsx`, `AbcSheetViewer.tsx` (thin wrapper over `AbcjsPlaybackController`), `instrument-highlighting.ts` (cursor → fretboard/keyboard events).
+- `src/components/instruments/` — `GuitarFretboard.tsx`, `VirtualGuitarFretboard.tsx`, `PianoKeyboard.tsx`, `InstrumentNoteMarkers.tsx`, `PianoPedalIndicator.tsx`.
+- `src/lib/songs/` — `schema.ts` (Zod), `loader.ts` (Markdown + `.abc` catalogue), `validation.ts`, `composer-notation.ts` (published-layer naming shared with Export).
+- `src/app/actions/` — Server Actions: `harmonize.ts`, `accompaniment-workflow.ts`, `accompaniment.ts`, `ensemble-workflow.ts`, `fingerstyle-line-arranger.ts` (+ local `fingerstyle-line-arranger/`), `fingerstyle-diagnostics.ts`, `fingerstyle-tool-contract.ts`, `publish-arrangement.ts`, `save-abc-to-disk.ts`, `save-song-metadata.ts`, `abc-validation.ts`, and the shared `ai-config.ts` transport. `src/app/api/validate/route.ts` and `scripts/validate-songs.mjs` share `src/lib/songs/validation.ts`.
+- Base theory modules not listed above: `scales.ts`, `chords.ts`, `melody-analyzer.ts`, `harmonizer.ts`, `harmonization-candidates.ts`, `chord-tone-reference.ts`, `arrangement-pipeline.ts`, `accompaniment-stage.ts`, `full-track-expansion-stage.ts`, `accompaniment-abc.ts`, `abc-*.ts` utilities, `guitar-string-forcing.ts`, `guitar-tab-validation.ts`, `guitar-voicings.ts`. POC-only engines that are not on the shipped Composer path: `fingerstyle-compressor.ts`, `guitar-playability.ts`, `picking-profiles.ts`, `piano-arranger.ts`, `piano-comping-profiles.ts`, `piano-playability.ts`, `ensemble-expander.ts`, `djembe-arranger.ts`, `orchestral-arranger.ts`, `ensemble-conflicts.ts`, `ensemble-output-contract.ts`.
 
 ### Visual instrument mockups
 
@@ -142,15 +127,16 @@ The main seams are:
 
 ## Testing strategy
 
-Theory tests are split by module under `src/lib/theory/__tests__/`:
+Vitest suites sit next to the code they cover:
 
-- `accompaniment-stage.test.ts`
-- `piano-accompaniment.test.ts`
-- `piano-arranger.test.ts`
-- `fingerstyle-arranger.test.ts`
-- `arranger-fixtures.ts` for shared ABC fixtures
+- `src/lib/theory/__tests__/` — theory engine (`harmonizer`, `melody-analyzer`, `accompaniment-stage`, `accompaniment-workflow*`, `arrangement-pipeline`, `full-track-expansion-stage`, `fingerstyle-arranger`, `guitar-*`, `abc-*`, `ensemble-*`, `djembe-arranger`, `time-slice`), with `arranger-fixtures.ts` for shared ABC fixtures. `arrangers.test.ts` is a `describe.todo` pointer kept so test discovery stays explicit.
+- `src/lib/theory/fingerstyle-arranger/__tests__/` and `src/lib/theory/accompaniment-workflow/__tests__/` — module-local suites for the TimeGrid pipeline and Guitar Classic realization.
+- `src/app/actions/__tests__/` — bounded LLM tool loop (`ai-config`) and the staged `fingerstyle-line-arranger` action.
+- `src/components/**/__tests__/` — Composer workspace state/persistence/preview, music-sheet playback, and playback instrument highlighting.
+- `src/lib/songs/__tests__/` — schema, loader, validation. `src/lib/docs/__tests__/` pins the traceability matrix totals.
+- `e2e/` — Playwright specs for playback, Composer steps, catalogue editor, and each mockup POC page.
 
-The original `arrangers.test.ts` remains as a skipped pointer so test discovery stays explicit while the real suites live in smaller files.
+Known coverage gaps (tracked in `docs/product/PRD-to-PLAN-statematrix.md` §6): no dedicated tests for the piano engine (`piano-accompaniment`, `piano-playability`, `piano-arranger`), for `orchestral-arranger`/`ensemble-conflicts`, or for `publish-arrangement` and `PracticeViewer`; `e2e/piano-accompaniment-mockup.spec.ts` targets a page that does not exist yet.
 
 Recommended validation commands:
 
@@ -159,9 +145,10 @@ npm test
 npx tsc --noEmit
 npm run lint
 npm run build
+npm run docs:check
 ```
 
-Current project note: focused fingerstyle suites and TypeScript checks pass. The repository-wide song-library test currently fails because `jago-kundalini-ma.melody.abc` is header-only. `npm run lint` may report the vendored `public/abcjs-basic-min.js` file, and `npm run build` can fail because the app uses Server Actions with static export.
+Current project note: `npm run lint` may report the vendored `public/abcjs-basic-min.js` file, and `npm run build` can fail because the app uses Server Actions with static export.
 
 ## File-size and locality guidelines
 

@@ -123,7 +123,7 @@ The guitar bass (strings 6, 5, 4) is a restrained harmonic pulse:
 
 ### 3.1 Overview: The Two-Phase Pipeline
 
-Solo fingerstyle is a **compression** problem: derive melody, chord, bass, and restrained rhythmic support that 4 fretting fingers + 5 picking-hand digits can execute on 6 strings. In this application, the operational TimeGrid contract is owned by `/compose/:slug/guitar-fingerstyle`; see `docs/guitar-fingerstyle-arrangement-guide.md` and `docs/timegrid-conversion-guide.md`.
+Solo fingerstyle is a **compression** problem: derive melody, chord, bass, and restrained rhythmic support that 4 fretting fingers + 5 picking-hand digits can execute on 6 strings. In this application, the operational TimeGrid contract is owned by `/compose/:slug/guitar-fingerstyle`; see `docs/guides/guitar-fingerstyle-arrangement-guide.md` and `docs/guides/timegrid-conversion-guide.md`.
 
 ```
 Phase 1: Upward Construction    →  Build the full arrangement (melody, chords, bass, rhythm)

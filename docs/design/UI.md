@@ -3,7 +3,7 @@
 
 This document details the user interface (UI) architecture, layout structure, screen connectivity, and user experience flows for the **Bhajan Song Composer** web application. 
 
-It is designed to satisfy the playback and composition requirements outlined in [PRD.md](file:///Users/steve/duyhunghd6/bhajan-song-composer/docs/PRD.md) and technical stages in [PLAN.md](file:///Users/steve/duyhunghd6/bhajan-song-composer/docs/PLAN.md).
+It is designed to satisfy the playback and composition requirements outlined in [PRD.md](../product/PRD.md) and technical stages in [PLAN.md](../product/PLAN.md).
 
 ---
 
@@ -22,10 +22,12 @@ graph TD
 
     %% Mockup / PoC Gates Nodes
     MockupHub["Mockups Hub (/mockups)"]
-    MockArrangement["Arrangement Pipeline (/mockups/arrangement)"]
-    MockFingerstyle["Fingerstyle Engine (/mockups/fingerstyle)"]
-    MockPiano["Piano Accompaniment (/mockups/piano)"]
-    MockEnsemble["Ensemble Expansion (/mockups/ensemble)"]
+    MockArrangement["Arrangement Pipeline (/mockups/arrangement-pipeline, alias /mockups/arrangement)"]
+    MockFingerstyle["Fingerstyle Engine (/mockups/fingerstyle-engine, alias /mockups/fingerstyle)"]
+    MockPiano["Piano Accompaniment (/mockups/piano — linked from hub, page not implemented)"]
+    MockEnsemble["Ensemble Expansion (/mockups/ensemble-expansion, alias /mockups/ensemble)"]
+    MockVisual["Visual Instruments & Hands (/mockups/visual-instruments)"]
+    MockBeats["Beat Annotations (/mockups/beats)"]
 
     %% Composer Workstation Nodes (The 5 Child-UIs)
     ComposeGeneral["Composer Home (/compose) <br> [Song Metadata & Layers Dashboard]"]
@@ -45,7 +47,7 @@ graph TD
     SongDetail -->|Edit/Arrange Song| ComposeGeneral
     Home -.->|Access Test Gates| MockupHub
 
-    MockupHub --> MockArrangement & MockFingerstyle & MockPiano & MockEnsemble
+    MockupHub --> MockArrangement & MockFingerstyle & MockPiano & MockEnsemble & MockVisual & MockBeats
 
     %% Composer Workstation Flow (Step-by-step Subpages)
     ComposeGeneral -->|Save Metadata| ComposeMelody
@@ -66,8 +68,18 @@ graph TD
     class Home,Catalog,SongDetail,EditList hub;
     class ComposeGeneral composer;
     class ComposeMelody,ComposeHarmony,ComposeAccomp,ComposeFingerstyle,ComposeExport,Practice step;
-    class MockupHub,MockArrangement,MockFingerstyle,MockPiano,MockEnsemble mockup;
+    class MockupHub,MockArrangement,MockFingerstyle,MockPiano,MockEnsemble,MockVisual,MockBeats mockup;
 ```
+
+Route inventory as of 2026-09-13 (`src/app/`):
+
+| Zone | Route | Source | Note |
+|:---|:---|:---|:---|
+| Playback Hub | `/`, `/[language]`, `/[language]/[slug]`, `/edit` | `page.tsx`, `[language]/…`, `edit/page.tsx` | `/edit` links to `/compose?edit={slug}` |
+| Composer | `/compose`, `/compose/[slug]/[step]` | `compose/page.tsx`, `compose/[slug]/[step]/page.tsx` | steps: `melody`, `harmony`, `accompaniment`, `guitar-fingerstyle`, `review` (Export) |
+| Practice | `/practice/[slug]` | `practice/[slug]/` | published notation only |
+| Mockup gates | `/mockups`, `/mockups/arrangement-pipeline`, `/mockups/fingerstyle-engine`, `/mockups/ensemble-expansion`, `/mockups/visual-instruments`, `/mockups/beats` | `mockups/…` | `arrangement`, `fingerstyle`, `ensemble` re-export the long-form pages; `/mockups/piano` is linked from the hub but has no page yet |
+| Dev harness | `/test-beats`, `/test-tab`, `/test-timegrid-to-abcnotation`, `/test-conversion-ascii-guitar-tab` | `test-*/page.tsx` | not part of the product navigation |
 
 ---
 

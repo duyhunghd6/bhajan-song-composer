@@ -1,11 +1,13 @@
 # Research Notes: Guitar TAB Rendering & Interludes ("Giang tấu")
 <!-- beads-id: br-research-guitar-tab-interlude -->
 
+> **Status: superseded (frozen research notes).** The production contracts now live in [ABCJS Tablature Rendering](../guides/abcjs-tablature-rendering.md) and the [Guitar Fingerstyle Arrangement Guide](../guides/guitar-fingerstyle-arrangement-guide.md). This file is kept for historical context only and is not updated.
+
 This document records research findings for:
 1. Rendering dedicated Guitar Fingerstyle TAB below standard notation using `abcjs`.
 2. Constructing interludes ("giang tấu") or melodic fills during pauses between phrases/sections.
 
-> **Production boundary:** `/compose/:slug/guitar-fingerstyle` exclusively owns solo TimeGrid edits, physical Fingerstyle artifacts, generated **Fingerstyle** Guitar ABC, and TAB. `/compose/:slug/accompaniment` may deterministically materialize the selected Guitar Classic voicing as a standard-notation `V:GuitarSupport` support layer, but does not generate Guitar TAB. For the current workflow contract, see [Guitar Fingerstyle Arrangement Guide](./guitar-fingerstyle-arrangement-guide.md) and [TimeGrid Conversion Guide](./timegrid-conversion-guide.md).
+> **Production boundary:** `/compose/:slug/guitar-fingerstyle` exclusively owns solo TimeGrid edits, physical Fingerstyle artifacts, generated **Fingerstyle** Guitar ABC, and TAB. `/compose/:slug/accompaniment` may deterministically materialize the selected Guitar Classic voicing as a standard-notation `V:GuitarSupport` support layer, but does not generate Guitar TAB. For the current workflow contract, see [Guitar Fingerstyle Arrangement Guide](../guides/guitar-fingerstyle-arrangement-guide.md) and [TimeGrid Conversion Guide](../guides/timegrid-conversion-guide.md).
 
 ---
 

@@ -93,7 +93,7 @@ Conditional accompaniment steps:
 
 Disabled instrument branches must not appear, block completion, or be required before applying accompaniment output. The route does not offer Solo/Fingerstyle, fill-density, TimeGrid, generated Guitar ABC, or Guitar TAB output.
 
-`/compose/:slug/guitar-fingerstyle` alone owns solo compression, skill and fill-density settings, the meter-aware TimeGrid, physical guitar validation, generated Guitar ABC, and ASCII-GuitarTab. It never waits for or consumes accompaniment output, setup style, branch options, or completion state. Follow [Guitar Fingerstyle Arrangement Guide](../../../docs/guitar-fingerstyle-arrangement-guide.md) and [TimeGrid Conversion Guide](../../../docs/timegrid-conversion-guide.md) for its bounded staged contracts; do not ask the LLM to replace a complete grid.
+`/compose/:slug/guitar-fingerstyle` alone owns solo compression, skill and fill-density settings, the meter-aware TimeGrid, physical guitar validation, generated Guitar ABC, and ASCII-GuitarTab. It never waits for or consumes accompaniment output, setup style, branch options, or completion state. Follow [Guitar Fingerstyle Arrangement Guide](../../../docs/guides/guitar-fingerstyle-arrangement-guide.md) and [TimeGrid Conversion Guide](../../../docs/guides/timegrid-conversion-guide.md) for its bounded staged contracts; do not ask the LLM to replace a complete grid.
 
 Do not create a separate `/music-theory-arrangement` app page for this workflow; this is a Claude skill and a theory reference, not a Next.js route.
 
@@ -151,7 +151,7 @@ Use this material only for `/compose/:slug/guitar-fingerstyle`, after a selected
 
 The server owns locked source facts, physical placement, and TimeGrid mutation. The LLM uses bounded staged contracts—foundation placement, paginated fill opportunities, use/skip selection, and physical candidate composition—rather than receiving or replacing a full grid. Fill density belongs only to the dedicated route, and discretionary fills remain confined to legal source-rest/phrase-gap windows.
 
-Read [Guitar Fingerstyle Arrangement Guide](../../../docs/guitar-fingerstyle-arrangement-guide.md) and [TimeGrid Conversion Guide](../../../docs/timegrid-conversion-guide.md) for the canonical pipeline, contracts, validation rules, and Guitar ABC/TAB projection behavior.
+Read [Guitar Fingerstyle Arrangement Guide](../../../docs/guides/guitar-fingerstyle-arrangement-guide.md) and [TimeGrid Conversion Guide](../../../docs/guides/timegrid-conversion-guide.md) for the canonical pipeline, contracts, validation rules, and Guitar ABC/TAB projection behavior.
 
 ## Relationship to Other Skills
 

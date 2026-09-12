@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-const matrixPath = path.join(process.cwd(), "docs", "PRD-to-PLAN-statematrix.md");
+const matrixPath = path.join(process.cwd(), "docs", "product", "PRD-to-PLAN-statematrix.md");
 
 function readMatrix() {
   return readFileSync(matrixPath, "utf8");
@@ -26,21 +26,31 @@ describe("PRD-to-PLAN state matrix trace closure", () => {
     const matrix = readMatrix();
 
     expect(tableRowFor(matrix, "br-plan-06")).toBe(
-      "| `br-plan-06` | Visual Instruments & AI UI | `prd-bsc-s17`, `prd-bsc-s25`, `prd-bsc-s36`, `prd-bsc-s38`, `prd-bsc-s46`, `prd-bsc-s53` | 4 | 0 | 0 | 4 | 0 | 100.0% |"
+      "| `br-plan-06` | Visual Instruments & AI UI | `br-prd01-s17`, `br-prd01-s25`, `br-prd01-s36`, `br-prd01-s38`, `br-prd01-s46`, `br-prd01-s53` | 4 | 0 | 0 | 0 | 4 | 100.0% |"
     );
-    expect(tableRowFor(matrix, "br-plan-06.c02")).toContain("| Implemented |");
+    expect(tableRowFor(matrix, "br-plan-06.c02")).toContain("| Verified |");
     expect(tableRowFor(matrix, "br-plan-06.c02")).toContain("instrument-highlighting.ts");
-    expect(tableRowFor(matrix, "br-plan-06.c03")).toContain("| Implemented |");
+    expect(tableRowFor(matrix, "br-plan-06.c03")).toContain("| Verified |");
     expect(tableRowFor(matrix, "br-plan-06.c03")).toContain("PianoPedalIndicator.tsx");
-    expect(tableRowFor(matrix, "br-plan-06.c04")).toContain("| Implemented |");
+    expect(tableRowFor(matrix, "br-plan-06.c04")).toContain("| Verified |");
     expect(tableRowFor(matrix, "br-plan-06.c04")).toContain("TheoryAssistant.tsx");
+  });
+
+  it("pins PRD trace coverage counts to the metadata-derived values", () => {
+    const matrix = readMatrix();
+
+    expect(matrix).toContain("| All PRD section coverage | `54 covered / 62 PRD IDs` | **87.1%** |");
+    expect(matrix).toContain(
+      "| Actionable/in-scope PRD coverage | `53 covered / 53 actionable child sections` | **100.0%** |"
+    );
+    expect(matrix).toContain("| Unlinked non-actionable/context sections | `8 unlinked / 62 PRD IDs` | **12.9%** |");
   });
 
   it("keeps the aggregate implementation totals synchronized after br-plan-06 closure", () => {
     const matrix = readMatrix();
 
     expect(tableRowFor(matrix, "**Total**")).toBe(
-      "| **Total** | — | — | **59** | **22** | **5** | **32** | **0** | **54.2%** |"
+      "| **Total** | — | — | **74** | **1** | **1** | **23** | **49** | **97.3%** |"
     );
   });
 });

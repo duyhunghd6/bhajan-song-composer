@@ -421,4 +421,4 @@ Raw ABC and ASCII can remain useful import/export formats, but their conversion 
 - `src/lib/theory/fingerstyle-arranger/toon-utils.ts` — editable-draft TOON and ASCII-GuitarTab conversion; not canonical document interchange.
 - `src/lib/theory/fingerstyle-arranger/llm-codec.ts` — narrow `tablature:v1` LLM replacement codec; not canonical document interchange.
 - [Guitar Fingerstyle Arrangement Guide](./guitar-fingerstyle-arrangement-guide.md) — staged AI generation and fill policy.
-- [Optimize FingerStyle Heuristic](./OptimizeFingerStyleHeuristic.md) — deterministic TimeGrid foundation placement and physical constraints.
+- [Guitar Fingerstyle Arrangement Guide § Deterministic foundation placement](./guitar-fingerstyle-arrangement-guide.md#10-deterministic-foundation-placement) — deterministic TimeGrid foundation placement and physical constraints.

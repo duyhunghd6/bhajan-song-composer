@@ -1,0 +1,36 @@
+name: docs-check
+
+on:
+  pull_request:
+    paths:
+      - "docs/**"
+      - "README.md"
+      - "CLAUDE.md"
+      - "CONTEXT.md"
+      - "ARCHITECTURE.md"
+      - "scripts/docs-check.mjs"
+      - "src/lib/docs/**"
+      - ".claude/skills/**"
+      - ".agents/skills/agenticse-gmind-universal-id-agentmem/**"
+  push:
+    branches: [main]
+
+jobs:
+  docs-check:
+    runs-on: ubuntu-latest
+    env:
+      CI: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      # --ignore-scripts skips the postinstall `patch-package` step, which is only needed
+      # to run the app; the docs checker and the RTM vitest suite do not depend on it.
+      - run: npm ci --ignore-scripts
+      - run: npm run docs:check
+      - run: npx vitest run src/lib/docs

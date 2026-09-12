@@ -3,6 +3,8 @@
 
 This document describes the line-level solo-guitar pipeline used only by `/compose/:slug/guitar-fingerstyle`. Its input is the selected Harmony Step 3 (`voice-leading-validation`) ABC. It is an independent sibling of `/compose/:slug/accompaniment`: accompaniment output, setup style, branch options, and completion state never become inputs to this TimeGrid workflow.
 
+The result is a solo-guitar plan: the Guitar voice carries the melody itself, adds bass derived from chord-progression roots/fifths/approaches, exposes intro/interlude/outro section metadata (`FingerstyleFormSection` in `src/lib/theory/fingerstyle-arranger.ts`, used for staff-system assembly), and renders Guitar TAB.
+
 The canonical arrangement document is an event-based, meter-aware `TimeSliceMeasure[]` TimeGrid: it retains source-derived melody/context facts and stores independent physical guitar attacks in each `grid[].tablature[]` array. Guitar ABC notation and ASCII-GuitarTab are deterministic generated artifacts, not raw-text editing targets.
 
 The design keeps locked melody facts and physical constraints server-owned while leaving two genuinely musical decisions to the LLM:
@@ -20,7 +22,7 @@ The LLM does **not** replace locked source fields or invent unvalidated timing c
 Source ABC provides melody, inline chord symbols, lyrics, optional beat-weight metadata, meter, key, and barline context. The time-slice compiler pins those facts into the canonical TimeGrid, where they are not editable as part of a fingerstyle arrangement edit:
 
 - `measure` and source `lineIndex`;
-- active `chord` at every quantized step;
+- active `chord` at every quantized step — only real chord symbols (`isAbcChordSymbol()` in `src/lib/theory/abc-chord-symbol.ts`); quoted section/form annotations such as `"^Intro"`, `"Chorus"`, or `"Fine"` are never harmonic TimeGrid chords;
 - metric `weight`: `⬤`, `●`, `*`, or `null`;
 - melody `pitch` and `state`: `attack`, `sustain`, or `rest`;
 - lyric syllable, melisma marker, or skip marker;
@@ -75,14 +77,15 @@ The canonical limits come from `SKILL_LEVEL_CONSTRAINTS` in `fingerstyle-arrange
 ### Fill density
 <!-- beads-id: br-guide-fingerstyle-arrangement-s06 -->
 
-The Guitar Fingerstyle page is the authoritative owner of fill density; it is no longer supplied by an accompaniment workflow step. The UI exposes `auto`, `few`, `normal`, and `many`.
+The Guitar Fingerstyle page is the authoritative owner of fill density; it is no longer supplied by an accompaniment workflow step. The UI (`src/components/composer/workspace/GuitarFingerstyleStep.tsx`) exposes `auto`, `none`, `few`, `normal`, and `many`.
 
 - `auto`: beginner → few, intermediate → normal, advanced → many;
+- `none`: melody and bass anchors only — the fill stages are skipped (resolved density `off`);
 - `few`: restrained use of the best source-rest/phrase-gap windows;
 - `normal`: moderate phrase support using more legal rest windows;
 - `many`: more legal rest windows, still bounded by physical and musical constraints.
 
-All discretionary fills are restricted to actual source-rest/phrase-gap windows. Melody attacks and held Melody spans remain protected in every density mode. Legacy values normalize at the boundary: `none` becomes zero-fill compatibility mode and `all` becomes `many`. Density controls window budgets; it does not relax fret or hand constraints.
+All discretionary fills are restricted to actual source-rest/phrase-gap windows. Melody attacks and held Melody spans remain protected in every density mode. The legacy value `all` normalizes to `many` at the boundary. Density controls window budgets; it does not relax fret or hand constraints.
 
 Settings are persisted in the per-song Composer workspace. Changing settings does not regenerate existing lines.
 
@@ -175,7 +178,7 @@ For each legal start step, the engine derives candidates from:
 - key-scale approach tones only on weak/unweighted placements, with an explicit resolution requirement;
 - neighbor tones (upper or lower by half/whole step from a chord tone) — these are partially covered by scale-approach candidates when the neighbor pitch is diatonic. Chromatic neighbor tones are not currently enumerated.
 
-For motive echo, fragment reuse, and percussion-based fill techniques (ghost notes, string slaps), see the comprehensive [Fill Note Methods Summary](../.agents/skills/music-theory-arrangement/ARRANGEMENT01-GUITAR.md#fill-note-methods-summary) in the Guitar Arrangement module. These are compositional decisions made by the LLM or arranger, not deterministic engine candidates.
+For motive echo, fragment reuse, and percussion-based fill techniques (ghost notes, string slaps), see the comprehensive [Fill Note Methods Summary](../../.agents/skills/music-theory-arrangement/ARRANGEMENT01-GUITAR.md#fill-note-methods-summary) in the Guitar Arrangement module. These are compositional decisions made by the LLM or arranger, not deterministic engine candidates.
 
 Fill-role candidates use inner/treble strings 1–4 with `i`, `m`, or `a`. Bass anchors remain part of the frozen foundation. Duplicate concert pitches on different strings remain distinct because string choice affects fingering and sustain behavior.
 
@@ -358,4 +361,56 @@ npm run lint
 npm run build
 ```
 
-Known repository-wide caveats remain documented in `CLAUDE.md`: song-library validation fails for the header-only Jago Kundalini Ma fixture, lint may report vendored `public/abcjs-basic-min.js`, and static export can conflict with Server Actions during build.
+Known repository-wide caveats remain documented in `CLAUDE.md`: lint may report vendored `public/abcjs-basic-min.js`, and static export can conflict with Server Actions during build.
+
+## 10. Deterministic foundation placement
+<!-- beads-id: br-guide-fingerstyle-heuristic -->
+
+This section was merged from the former `OptimizeFingerStyleHeuristic.md`. It describes the single deterministic non-fill foundation placement pass (Stage 4 above) and its hard invariants.
+
+### Status and production seam
+<!-- beads-id: br-guide-fingerstyle-heuristic-s01 -->
+
+The fingerstyle workflow has one deterministic foundation-placement pass. `TimeSliceMeasure[]` is the canonical editable TimeGrid; compact LLM tables can propose tablature attacks, but source facts, physical validation, and derived artifacts remain server-owned.
+
+```text
+LLM compact foundation rows
+  → reconstruct canonical TimeGrid
+  → validate locked source facts
+  → deterministic physical placement
+  → freeze non-fill foundation
+  → paginate/select/compose legal fills
+  → validate and merge TimeGrid
+  → generate forced-string Guitar ABC and ASCII-GuitarTab
+```
+
+`placeFingerstyleFoundationOnTimeGrid()` in `fingerstyle-arranger/heuristic-time-slice.ts` performs the placement pass.
+
+### Placement rules
+<!-- beads-id: br-guide-fingerstyle-heuristic-s02 -->
+
+1. **Melody first:** parse every authoritative `grid[].melody.pitch` attack to MIDI and choose an available exact-pitch position on strings 1–3. Prefer open strings, then lower frets, then submitted/previous strings. A labelled melody-only high-fret exception preserves an otherwise playable source melody without relaxing accompaniment limits.
+2. **Bass second:** retain each submitted bass pitch and deterministically route it to strings 6–4 without colliding with simultaneous melody/support events.
+3. **Never rewrite source facts:** measure/step identity, meter grid, chord, lyric, melody pitch/state, pickup, line index, and barline metadata are locked. Root, fifth, harmony, and intentional duplicate pitches remain independent events.
+4. **Freeze before fills:** the accepted foundation has explicit support durations before the scored fill pipeline enumerates legal windows. No placement pass runs after scoring.
+
+### Hard invariants
+<!-- beads-id: br-guide-fingerstyle-heuristic-s03 -->
+
+- Every source melody attack has exactly one physical, MIDI-equal melody event.
+- Simultaneous or sustaining events never reuse a guitar string.
+- Discretionary notes meet selected skill fret, span, and PIMA limits.
+- All changes occur on a candidate TimeGrid copy and invalid/unresolved foundations are rejected before fill selection.
+- Generated Guitar ABC and ASCII-GuitarTab are deterministic projections of the same TimeGrid events. Guitar ABC uses concert pitch, `clef=treble-8`, key-aware accidentals, ties, and explicit `!N!` string forcing.
+
+### Compact LLM boundary and context safety
+<!-- beads-id: br-guide-fingerstyle-heuristic-s04 -->
+
+The LLM never receives a complete TimeGrid document. It exchanges bounded `tablature:v1` foundation rows and paginated `fill-opportunities:v1`, `fill-selection:v1`, and `fills:v1` tables. The tool loop rejects oversized prompts, schemas, tool results, calls per turn, message histories, and total transcripts rather than silently truncating musical rows.
+
+`timegrid-document:v3` is a readable import/copy/download format, not an LLM payload. Production local persistence is a source-fingerprint-bound TimeGrid tab overlay.
+
+### Verification anchors
+<!-- beads-id: br-guide-fingerstyle-heuristic-s05 -->
+
+Keep regressions for source melody MIDI equality, independent root/fifth preservation, unique simultaneous strings, skill limits, Ganesha pickup/tie/repeat behavior, forced-string ABC, ASCII-GuitarTab parity, duplicate pitches on distinct strings, key-aware naturals, and deterministic repeat runs.

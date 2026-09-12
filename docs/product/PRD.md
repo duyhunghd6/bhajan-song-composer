@@ -1,8 +1,9 @@
 # Bhajan Song Composer — Product Requirements Document
 <!-- beads-id: br-prd01 -->
 
-> **Version**: 1.0  
-> **Date**: 2026-06-29  
+> **Version**: 1.1
+> **Date**: 2026-09-13
+<!-- edited 2026-09-13: Version 1.0 (2026-06-29) → 1.1 (2026-09-13) -->
 > **Status**: Draft  
 > **Label**: `ready-for-agent`
 
@@ -26,6 +27,9 @@ Sahaja Yoga practitioners worldwide learn, practice, and perform bhajans (devoti
 
 **Bhajan Song Composer** is an open-source web application that serves as both a **Playback Hub** and a **Composition Workstation** for Sahaja Yoga devotional music.
 
+**Primary product goal — Guitar and Piano singer accompaniment.** The first product outcome is to help a practitioner accompany a singer from the supplied melody, lyrics, and harmonic context. **Guitar Classic accompaniment** and **Piano accompaniment** are equal Layer 2 priorities: each must turn approved harmony into a playable, singer-supporting part, then make that part available for practice and publication. Solo Guitar Fingerstyle, full-band expansion, and other arrangement modes remain valuable extensions, but they must not delay either accompaniment path.
+
+<!-- edited 2026-09-13: added the primary product goal paragraph (Guitar and Piano singer accompaniment) -->
 ### Three Core Modules
 <!-- beads-id: br-prd01-s3 -->
 
@@ -33,7 +37,8 @@ Sahaja Yoga practitioners worldwide learn, practice, and perform bhajans (devoti
 |:---|:---|
 | **🎵 Playback** | Browse the song catalogue (organized by language → A-Z), select a song, and choose between embedded YouTube video players or ABC notation music sheet renderers. Toggle between multiple video types and sheet types per song. |
 | **🎼 Composer** | Create and edit songs using the same data format as the Playback module. Layer multiple ABC notation tracks (melody, backing, bass line, etc.) for a single song. Export and share compositions. |
-| **🤖 AI Theory Assistant** | Rule-based music theory engine that **analyzes a melody-only treble clef sheet** and auto-generates: harmonized chord progressions, guitar chord voicings (accompaniment and fingerstyle), and piano arrangements (accompaniment and solo, both left and right hand) based on the song's key, scale, and raga. |
+| **🤖 AI Theory Assistant** | Rule-based music theory engine that **analyzes a melody-only treble clef sheet** and auto-generates approved harmonized chord progressions plus two primary singer-support outputs: Guitar Classic chord voicings/comping and Piano left-hand/right-hand accompaniment. Guitar Fingerstyle and piano solo are separate extension modes, based on the song's key, scale, and raga. |
+<!-- edited 2026-09-13: AI Theory Assistant row reworded around the two primary singer-support outputs -->
 
 ### Arrangement Pipeline (From Zero to Full Track)
 <!-- beads-id: br-prd01-s29 -->
@@ -63,13 +68,16 @@ Before generating piano backing, guitar accompaniment, drums, or additional inst
 #### Step 2: Layer 2 — The Accompaniment (Piano / Rhythm Guitar)
 <!-- beads-id: br-prd01-s31 -->
 
-Once the chord progression exists, the system decides how those chords should be played to support the singer or lead instrument.
+Once the chord progression exists, the system decides how those chords should be played to support the singer or lead instrument. This is the primary delivery stage: the practitioner chooses **Guitar Classic accompaniment** or **Piano accompaniment** (or both) from the same approved harmony; neither path is subordinate to the other.
+<!-- edited 2026-09-13: accompaniment stage paragraph extended with the Guitar Classic / Piano primary delivery statement -->
 
 - **Theory used**: Voice leading, rhythmic motifs, and bassline construction.
 - **Method**:
   1. **Separate the bass with restraint**: Use root/fifth anchors for structural pulse. For Guitar Classic singer support, reserve walking bass for playable chord transitions and leave most individual-note movement to upper chord tones so the vocal stays clear.
   2. **Determine the groove (comping)**: Choose whether the piano or guitar plays block chords on the beat, arpeggios / broken chords, or syncopated rhythmic patterns; Guitar Classic PIMA/pinch should balance bass strings 4–6 with treble strings 1–3 rather than repeat a bass ostinato.
   3. **Apply voice leading**: When moving from C Major (C-E-G) to G Major (G-B-D), keep shared tones stable where possible and move other notes by the smallest practical interval. This makes accompaniment sound professional and fluid rather than clunky.
+  4. **Produce a playable singer-support part**: Guitar output must provide a playable chord voicing and comping pattern that leaves space for the vocal. Piano output must provide a playable left-hand bass foundation plus right-hand guide-tone/comping voicings below the melody, with both outputs aligned to the same chord and measure timeline.
+<!-- edited 2026-09-13: added item 4 (playable singer-support part) to the accompaniment stage -->
 
 #### Step 3: Layer 3 — Drums & Additional Instruments
 <!-- beads-id: br-prd01-s32 -->
@@ -399,14 +407,17 @@ The ABC notation content is stored in separate `.abc` files alongside the Markdo
 #### Core Use Case: Melody → Full Arrangement
 <!-- beads-id: br-prd01-s9 -->
 
-_The most common scenario: a user has a melody-only ABC sheet (treble clef / G clef only, no bass clef / F clef) and wants to generate piano accompaniment or guitar fingerstyle arrangements._
+_The primary scenario: a user has a melody-only ABC sheet (treble clef / G clef only, no bass clef / F clef) and wants to generate a **Guitar Classic accompaniment** or **Piano accompaniment** so another person can sing the melody. Solo Guitar Fingerstyle and Piano Solo are follow-on modes, not substitutes for these two singer-support paths._
+<!-- edited 2026-09-13: primary scenario reframed around Guitar Classic / Piano singer accompaniment -->
 
 33. As a **practitioner with only a melody sheet**, I want to load my treble-clef-only ABC notation into the AI assistant, so that it can analyze the melody and generate accompaniment parts I'm missing.
 34. As a **practitioner**, I want the AI assistant to **auto-detect the key and scale/raga** from my melody ABC notation (by analyzing the key signature, accidentals, and note patterns), so that I don't need to manually specify the key.
 35. As a **practitioner**, I want the AI assistant to **auto-harmonize my melody** by analyzing which notes fall on strong beats and assigning appropriate chords to each measure, so that I get a complete chord progression without needing music theory knowledge.
-36. As a **piano player (accompaniment)**, I want the AI assistant to generate a **bass clef (left hand) part** from my melody-only sheet — producing root notes, root-fifth patterns, or Alberti bass patterns that match the auto-detected chord progression — so that I can play piano accompaniment with both hands while someone else sings.
+36. As a **piano player (accompaniment)**, I want the AI assistant to generate a **playable two-hand accompaniment** from my melody-only sheet — left-hand roots/fifths/octaves or Alberti patterns plus right-hand guide-tone/comping voicings that leave room for the singer — so that I can accompany someone singing the melody.
+<!-- edited 2026-09-13: story 36 reworded for a playable two-hand piano accompaniment (singer accompaniment) -->
 37. As a **piano player (solo)**, I want the AI assistant to generate a **grand staff arrangement** (treble + bass clef) where the right hand carries the original melody and the left hand plays a bass/chord accompaniment pattern, so that I can perform the song as a complete piano piece.
-38. As a **guitar player (accompaniment)**, I want the AI assistant to suggest guitar chord voicings (with visual fretboard diagrams) derived from the auto-harmonized chord progression, so that I can strum along while someone sings the melody.
+38. As a **guitar player (accompaniment)**, I want the AI assistant to suggest playable Guitar Classic chord voicings, comping patterns, and visual fretboard diagrams derived from the approved chord progression, so that I can strum or arpeggiate while someone sings the melody.
+<!-- edited 2026-09-13: story 38 reworded for playable Guitar Classic voicings/comping (singer accompaniment) -->
 39. As a **guitar player (fingerstyle)**, I want the AI assistant to generate a **combined fingerstyle arrangement** where the thumb plays bass notes (from the chord roots), the fingers play the melody on treble strings, and chord tones fill the gaps between melody notes — so that I can perform the entire song solo on one guitar.
 40. As a **practitioner**, I want each generated arrangement to be output as a **separate ABC notation layer** (e.g., `namostute.piano-accompaniment.abc`, `namostute.fingerstyle.abc`) that I can view in the Playback module or edit in the Composer, so that AI-generated arrangements are first-class song content.
 
@@ -561,7 +572,7 @@ Melody ABC (.abc)  ─┤  1. Melody Analyzer                 │
 4. **ABC Editor Module** — Interactive editor with syntax highlighting, live preview via the shared Music Sheet module, multi-layer tab management, and undo/redo stack.
 5. **AI Theory Engine Module** — Pure TypeScript library with no side effects. Five modes of operation:
    - **Manual mode**: Input: key, scale/raga, time signature. Output: chord progressions, voicings, ABC notation strings.
-   - **Auto-harmonize mode**: Input: melody-only ABC notation. Output: detected key, auto-generated chord progression, and full arrangement ABC layers (piano grand staff, guitar fingerstyle, etc.).
+   - **Auto-harmonize mode**: Input: melody-only ABC notation. Output: detected key, approved chord progression, and the primary accompaniment ABC layers (Guitar Classic support and Piano accompaniment); full solo/full-arrangement modes remain optional extensions.
    - **Piano accompaniment mode**: Input: melody, chord progression, style profile, and hand-span constraints. Output: two-handed piano matrix with left-hand bass anchoring, right-hand voicing, comping events, counterpoint fills, pedal automation, and grand-staff ABC notation.
    - **Fingerstyle compression mode**: Input: full multi-layer arrangement (melody, accompaniment, bassline, rhythm/percussion metadata). Output: a physically validated solo guitar matrix with string assignments, fretting constraints, picking-hand events, transposition fallback suggestions, and ABC notation.
    - **Ensemble expansion mode**: Input: Layer 1 melody, Layer 2 piano/guitar accompaniment, bass map, rhythmic density grid, and melodic gap array. Output: Djembe, Flute, and Violin layers with yield decisions, conflict-resolution metadata, ABC notation, and playback control events.
@@ -574,88 +585,66 @@ Melody ABC (.abc)  ─┤  1. Melody Analyzer                 │
 ### File Organization
 <!-- beads-id: br-prd01-s16 -->
 
+> Updated 2026-09-13 (edited inline, see Amendments) to the tree that actually exists in the repository. Names in the original draft that were renamed or never created are listed after the tree so the history stays traceable.
+
 ```
 data/
   songs/
-    hindi/
-      jai-shri-mataji.md
-      jai-shri-mataji.melody.abc
-      jai-shri-mataji.backing-track.abc
-    marathi/
-      namostute.md
-      namostute.melody.abc
-      namostute.backing-track.abc
-      namostute.piano-karaoke.abc
-    sanskrit/
-    english/
+    <language>/
+      <slug>.md                     # YAML frontmatter + lyrics body
+      <slug>.melody.abc             # Published notation layers: melody | backing-track |
+      <slug>.accompaniment.abc      #   accompaniment | guitar-fingerstyle (declared in abcNotations)
 src/
   app/
-    page.tsx                    # Home: Language categories + search
-    [language]/
-      page.tsx                  # A-Z song list for a language
-      [slug]/
-        page.tsx                # Song detail: Playback page
-    compose/
-      page.tsx                  # Composer editor
-    mockups/
-      arrangement-pipeline/
-        page.tsx                # POC demo before Composer integration
-      fingerstyle-engine/
-        page.tsx                # POC demo for guitar compression workflow
-      piano-accompaniment/
-        page.tsx                # POC demo for two-handed piano generation
-      ensemble-expansion/
-        page.tsx                # POC demo for Djembe/Flute/Violin layers
-    api/
-      validate/
-        route.ts                # Song file validation endpoint
+    page.tsx                        # Home: language categories + search
+    [language]/page.tsx             # A-Z song list for a language
+    [language]/[slug]/page.tsx      # Song detail: Playback page
+    edit/page.tsx                   # Catalogue editor list (search, resource icons)
+    compose/page.tsx                # Composer entry (`/compose`, `/compose?edit={slug}`)
+    compose/[slug]/[step]/page.tsx  # Step router: melody | harmony | accompaniment | guitar-fingerstyle | review (Export)
+    practice/[slug]/                # Practice / Showcase (published notation only)
+    mockups/                        # POC gate hub + arrangement-pipeline, fingerstyle-engine,
+                                    #   ensemble-expansion, visual-instruments, beats (+ alias routes)
+    test-*/                         # Developer harness pages (beats, TAB, TimeGrid→ABC, ASCII tab)
+    actions/                        # Server Actions: ai-config, harmonize, accompaniment-workflow,
+                                    #   fingerstyle-line-arranger(/), publish-arrangement, save-*
+    api/validate/route.ts           # Song file validation endpoint
   components/
-    playback/
-      PlaybackController.tsx    # Video/Sheet type selector
-      YouTubePlayer.tsx         # Embedded YouTube player
-      AbcSheetViewer.tsx        # Thin playback-page wrapper around reusable MusicSheetRenderer
-    music-sheet/
-      MusicSheetRenderer.tsx    # Shared ABCJS SVG + MIDI playback, speed, loop, staff highlighting
-      MusicSheetControls.tsx    # Play/pause/stop, tempo/speed, loop range controls
-      useMusicSheetPlayback.ts  # Shared playback state, timing events, and highlight callbacks
-    composer/
-      SongForm.tsx              # Frontmatter editor form
-      AbcEditor.tsx             # Interactive ABC notation editor using MusicSheetRenderer preview
-      LayerManager.tsx          # Multi-layer ABC track management
-    instruments/
-      GuitarFretboard.tsx       # Visual guitar chord diagram + playback note highlight target
-      PianoKeyboard.tsx         # Visual piano keyboard diagram + playback note highlight target
-      InstrumentNoteMarkers.tsx  # Numbered blue/yellow note markers for instrument playback
-    ai/
-      TheoryAssistant.tsx       # AI suggestion panel UI
-      ChordSuggestions.tsx      # Chord progression display
+    playback/                       # PlaybackController, YouTubePlayer, AbcSheetViewer, instrument-highlighting
+    music-sheet/                    # AbcjsPlaybackController (shared abcjs adapter) + abcjs-playback/ internals
+    composer/                       # ComposerStepWorkspace, AbcEditor, LayerManager, SongForm, wizards
+      workspace/                    # HarmonyStep, AccompanimentStep, GuitarFingerstyleStep, FingerstyleLineCard,
+                                    #   export/ExportStep, arrangement-source/, arrangement-preview-model, storage
+    instruments/                    # GuitarFretboard, VirtualGuitarFretboard, PianoKeyboard, InstrumentNoteMarkers, PianoPedalIndicator
+    mockups/PocHandoffChecklist.tsx
   lib/
+    songs/                          # loader, schema, validation, composer-notation
     theory/
-      scales.ts                 # Scale definitions + raga mappings
-      chords.ts                 # Chord generation from scale degrees
-      melody-analyzer.ts        # Parse melody ABC → beat-note map, key detection
-      harmonizer.ts             # Auto-assign chords to measures from melody analysis
-      piano-arranger.ts         # Generate piano LH (bass clef) ABC from chords
-      piano-accompaniment.ts    # Generate two-handed piano accompaniment matrix and grand staff ABC
-      piano-comping-profiles.ts # Pop/Ballad, Rock/R&B, Classical/Folk accompaniment macros
-      piano-playability.ts      # Validate hand span, hand collision, low interval limit, pedal events
-      fingerstyle-arranger.ts   # Generate guitar fingerstyle ABC (melody+bass+chords)
-      fingerstyle-compressor.ts # Reduce multi-layer arrangements into playable solo guitar matrix
-      guitar-playability.ts     # Validate fret stretch, string routing, open-string transposition fallbacks
-      picking-profiles.ts       # Strict PIMA and Folk / Travis right-hand event mapping
-      ensemble-expander.ts      # Append Djembe, Flute, and Violin layers after accompaniment
-      djembe-arranger.ts        # Generate bass, mid-tone, and slap events from bass map and rhythmic grid
-      orchestral-arranger.ts    # Generate Flute/Violin pads, counter-melodies, and yield decisions
-      ensemble-conflicts.ts     # Validate density overload, frequency masking, breath/bow limits, double stops
-      guitar-voicings.ts        # Guitar chord voicing library
-      piano-voicings.ts         # Piano voicing patterns (LH + RH)
-      progression.ts            # Chord progression algorithms
-      abc-generator.ts          # Generate ABC notation from theory data
-    songs/
-      loader.ts                 # Song file parser (Markdown + ABC)
-      schema.ts                 # TypeScript types + Zod validation
-      index.ts                  # Song catalogue index builder
+      scales.ts, chords.ts, melody-analyzer.ts, harmonizer.ts, harmonization-candidates.ts
+      arrangement-pipeline.ts, accompaniment-stage.ts, full-track-expansion-stage.ts
+      accompaniment-workflow.ts (+ accompaniment-workflow/)   # shared + Guitar Classic/Harmonium/Djembe steps
+      fingerstyle-arranger.ts (+ fingerstyle-arranger/)       # TimeGrid, staged fills, codecs, renderers
+      fingerstyle-compressor.ts, guitar-playability.ts, picking-profiles.ts, guitar-voicings.ts
+      piano-arranger.ts, piano-accompaniment.ts (+ piano-accompaniment/), piano-comping-profiles.ts, piano-playability.ts
+      ensemble-workflow.ts (+ ensemble-workflow/), ensemble-expander.ts, djembe-arranger.ts,
+      orchestral-arranger.ts, ensemble-conflicts.ts, ensemble-output-contract.ts
+      abc-*.ts, guitar-string-forcing.ts, guitar-tab-validation.ts, chord-tone-reference.ts
+docs/                               # See docs/README.md for the documentation map
+e2e/                                # Playwright specs
+scripts/validate-songs.mjs          # Song validation CLI
 ```
+
+Renamed or superseded since the original draft (draft names are historical and intentionally not checked for existence):
+
+<!-- docs-check: ignore-paths -->
+| Draft name | Actual | Note |
+|:---|:---|:---|
+| `music-sheet/MusicSheetRenderer.tsx`, `MusicSheetControls.tsx`, `useMusicSheetPlayback.ts` | `music-sheet/AbcjsPlaybackController.tsx` + `abcjs-playback/` | Single abcjs adapter seam; controls/styles/render-input are local submodules. |
+| `components/ai/TheoryAssistant.tsx`, `ChordSuggestions.tsx` | `components/composer/TheoryAssistant.tsx`, `theory-assistant-layer.ts` | Lives with the Composer. |
+| `theory/piano-voicings.ts`, `progression.ts`, `abc-generator.ts` | not created | Covered by `harmonization-candidates.ts`, `accompaniment-abc.ts`, and workflow modules. |
+| `songs/index.ts` | `songs/loader.ts` | Catalogue index is built by the loader. |
+| `mockups/piano-accompaniment/page.tsx` | not created | Hub links `/mockups/piano`; see `br-plan-09.c04` in the state matrix. |
+| single `compose/page.tsx` editor | `compose/[slug]/[step]/` | See Amendment A1. |
 
 ### Instrument-Specific Output Detail
 <!-- beads-id: br-prd01-s17 -->
@@ -841,7 +830,8 @@ The following are explicitly **out of scope** for this PRD (v1.0):
 ### Relationship to Existing `music-theory` Project
 <!-- beads-id: br-prd01-s24 -->
 
-This project draws architectural inspiration from the existing [`music-theory`](file:///Users/steve/duyhunghd6/music-theory) application, particularly:
+This project draws architectural inspiration from the existing `music-theory` (a separate local project, not part of this repository) application, particularly:
+<!-- edited 2026-09-13: replaced absolute `file:///` link to the sibling music-theory project with plain text -->
 - ABC notation rendering patterns (abcjs integration)
 - Virtual instrument components (guitar fretboard, piano keyboard)
 - Audio engine patterns (MIDI playback via abcjs/Tone.js)
@@ -891,3 +881,53 @@ The open-source contribution model follows a "Git is the database" philosophy:
 | Piano Solo | Piano Solo | Full arrangement for piano alone |
 | Bản nhạc | Music sheet | A written piece of music |
 | Hợp âm | Chord | Multiple notes played together |
+
+---
+
+## Amendments (2026-09)
+<!-- beads-id: br-prd01-s56 -->
+
+The sections above are the original requirements; the edits made on 2026-09-13 (Version 1.1 header, the primary singer-accompaniment goal and stage paragraphs, user stories 36 and 38, the primary scenario line, the File Organization tree, and the `music-theory` reference) are each marked inline with a single-line `<!-- edited 2026-09-13: ... -->` comment. The amendments below record how the shipped product diverged from or extended the original requirements. Where an amendment supersedes an earlier user story or section, it says so explicitly. Detailed contracts live in `docs/guides/` and `docs/adr/` (see [`docs/README.md`](../README.md)).
+
+### A1. Composer step workflow and directed source flow
+<!-- beads-id: br-prd01-s57 -->
+
+The Composer is a stepwise workstation on `/compose/:slug/:step` rather than a single-page layer editor:
+
+1. `melody` — editable ABC root (browser-local draft).
+2. `harmony` — shared Harmony Steps 1–3 (`key-beats`, `chord-roles-progression`, `voice-leading-validation`); the user selects a Step 3 result.
+3. `accompaniment` — Guitar Classic / Harmonium / Djembe support derived from the selected Step 3 ABC.
+4. `guitar-fingerstyle` (Step 3.1) — independent solo-guitar branch derived from the selected Step 3 ABC.
+5. `review` — displayed as **Export**; publishes selected layers to the catalogue.
+
+Directed source flow is a requirement: Melody → selected Harmony Step 3 → independent Accompaniment and Guitar Fingerstyle branches. Accompaniment output never feeds Fingerstyle. A melody edit or a changed Step 3 selection invalidates downstream drafts. Source of truth: [`docs/guides/composer-source-flow.md`](../guides/composer-source-flow.md).
+
+- Supersedes the single-editor reading of user stories 23–24 and 28 (`br-prd01-s7`): layers are produced by workflow steps, and preview happens per step and on Practice.
+- Refines story 32: `/edit` and `/compose?edit={slug}` remain the entry points; the workstation then routes into `/compose/:slug/melody`.
+- Supersedes the "Layer 3 Drums & Additional Instruments" ordering in `br-prd01-s29`–`s32` for the shipped Composer; see A5.
+
+### A2. Export and Practice publication
+<!-- beads-id: br-prd01-s58 -->
+
+Export (`/compose/:slug/review`) is the only durable publication seam. The user explicitly selects among `melody`, `harmony`, `accompaniment`, and `guitar-fingerstyle`; publication upserts `data/songs/<language>/<slug>.<type>.abc` and the matching `abcNotations` metadata while preserving the song Markdown body. `/practice/:slug` is the only Showcase and reads published catalogue notation only — never Composer localStorage drafts. Decision record: [ADR 0001](../adr/0001-composer-publication-and-practice.md).
+
+- Supersedes user story 26 (`br-prd01-s7`, "export as a Markdown file for a Pull Request") as the primary export path; file-based contribution (`br-prd01-s26`) remains valid for new songs.
+
+### A3. Guitar Fingerstyle TimeGrid authority and staged LLM generation
+<!-- beads-id: br-prd01-s59 -->
+
+The Guitar Fingerstyle branch is a solo-guitar plan whose only editable authority is the meter-aware `TimeSliceMeasure[]` TimeGrid (four quantized steps per notated beat). Guitar ABC with forced `!N!` strings, ASCII GuitarTab, TOON, and compact LLM payloads are derived views. Line-level generation is staged: non-fill foundation → deterministic placement and freeze → exhaustive fill-opportunity scoring → LLM use/skip selection → LLM candidate composition → deterministic server merge and validation. Player skill (default beginner) and fill density (default auto) are independent Fingerstyle settings. Decision records: [ADR 0002](../adr/0002-fingerstyle-timegrid-authority.md), [ADR 0003](../adr/0003-llm-function-call-boundary.md); guides: [`guitar-fingerstyle-arrangement-guide.md`](../guides/guitar-fingerstyle-arrangement-guide.md), [`timegrid-conversion-guide.md`](../guides/timegrid-conversion-guide.md).
+
+- Refines `br-prd01-s33`–`s38`: the "downward compression" engine (`fingerstyle-compressor.ts`) remains as a mockup/POC engine; the shipped Composer branch uses the TimeGrid pipeline instead of a multi-layer compression pass.
+
+### A4. Accompaniment instrument stack
+<!-- beads-id: br-prd01-s60 -->
+
+The shipped accompaniment workflow targets an ordered devotional stack — Guitar Classic, Indian Harmonium, Djembe — instead of the piano/rhythm-guitar Layer 2 of `br-prd01-s31`. Shared Steps 1–3 are always enabled; each instrument branch is enabled only when checked and never blocks completion. Guitar Classic materializes a complete, deterministic `V:GuitarSupport` standard-notation voice (never a Fingerstyle input). Step ids are defined in `src/lib/theory/accompaniment-workflow/definition.ts`; guide: [`accompaniment-workflow.md`](../guides/accompaniment-workflow.md).
+
+- Refines `br-prd01-s31` and the piano engine sections `br-prd01-s39`–`s46`: the Piano Accompaniment engine exists as theory modules and mockup input but is not an active Composer step.
+
+### A5. Ensemble is experimental
+<!-- beads-id: br-prd01-s61 -->
+
+The Ensemble Expansion engine (`br-prd01-s47`–`s53`) is implemented as theory modules, a workflow definition, and a mockup page, but it is not an active Composer route, persisted product branch, preview contributor, or exportable layer. It stays experimental until it has a complete route, source/freshness contract, export mapping, and end-to-end coverage (ADR 0001).

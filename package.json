@@ -11,6 +11,7 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "validate:songs": "node scripts/validate-songs.mjs",
+    "docs:check": "node scripts/docs-check.mjs",
     "postinstall": "npx patch-package"
   },
   "dependencies": {
