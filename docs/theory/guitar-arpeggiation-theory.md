@@ -2,6 +2,7 @@
 <!-- beads-id: br-guide-guitar-accompaniment -->
 
 > Tài liệu này là **lý thuyết thuần** (tiếng Việt) về rải hợp âm guitar, ví dụ ABC minh hoạ và hệ thống Chord-Tone Reference. Quy trình workflow từng bước của app (Steps 1–6, code references) nằm ở [Accompaniment Workflow Guide](../guides/accompaniment-workflow.md); nhánh solo Guitar Fingerstyle nằm ở [Guitar Fingerstyle Arrangement Guide](../guides/guitar-fingerstyle-arrangement-guide.md).
+> Mô hình nghiệp vụ chung cho đệm hát Guitar/Piano—timeline hòa thanh, điệu đệm và voicing—nằm ở [Singer-Accompaniment Decision Model](../guides/singer-accompaniment-decision-model.md). Ví dụ Hari Bol bên dưới chỉ là 4/4, không phải catalog điệu cho mọi nhịp.
 
 ## Ngữ cảnh: Bài Hari Bol — K:Em, M:4/4
 <!-- beads-id: br-guide-guitar-accompaniment-s01 -->

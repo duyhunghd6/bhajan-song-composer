@@ -1,5 +1,5 @@
 # Phân tích thiết kế hệ thống — Đệm hát Guitar Classic và Piano
-<!-- beads-id: br-design-singer-accompaniment | satisfies: br-prd01-s2, br-prd01-s31, br-prd01-s39, br-prd01-s40, br-prd01-s41, br-prd01-s42, br-prd01-s43, br-prd01-s44, br-prd01-s45, br-prd01-s46, br-prd01-s57, br-prd01-s58 -->
+<!-- beads-id: br-design-singer-accompaniment | satisfies: br-prd01-s2, br-prd01-s31, br-prd01-s39, br-prd01-s40, br-prd01-s41, br-prd01-s42, br-prd01-s43, br-prd01-s44, br-prd01-s45, br-prd01-s46, br-prd01-s57, br-prd01-s58, br-prd01-s62 -->
 
 > **Loại tài liệu:** thiết kế đích để hoàn thiện nghiệp vụ đã chốt, không phải tuyên bố mọi thành phần bên dưới đã ở production.
 > **Quyết định cốt lõi:** Guitar Classic và Piano là hai nhánh Layer 2 ngang hàng, cùng tiêu thụ Harmony Step 3 đã chọn, nhưng không dùng chung hiện thực nhạc cụ, validation hay artefact đầu ra.
@@ -177,3 +177,21 @@ Practice chỉ truy vấn artefact catalogue đã publish. Với Piano, Practice
 6. **Test gate:** unit cho piano generation/playability/pedal; integration cho branch transitions/stale; prompt tests kiểm tra ABC/different-option/repair boundaries; E2E cho Guitar-only, Piano-only, cả hai, validation failure và publish/practice isolation.
 
 Một release chỉ đạt nghiệp vụ khi người dùng có thể hoàn tất UC-01 + UC-02 hoặc UC-01 + UC-03 từ đầu đến Practice, không cần hoàn tất nhánh nhạc cụ còn lại hay bất kỳ extension nào.
+
+## 12. Mô hình quyết định timeline / điệu / voicing
+<!-- beads-id: br-design-singer-accompaniment-s12 | satisfies: br-prd01-s62 -->
+
+`ApprovedHarmonySnapshot` phải được mở rộng thành input quyết định rõ ràng, không chỉ là ABC: `meterFamily`, tempo, chord window có start/end theo beat/subdivision, phrase/cadence boundary, melody activity/gap và melody-register map theo beat/phrase. Snapshot là immutable; việc chọn điệu hay voicing không được viết ngược vào Harmony.
+
+```text
+ApprovedHarmonySnapshot
+  ├─ deterministic profile eligibility (meter/subdivision/skill)
+  │    └─ LLM ranks 3–4 valid section profiles
+  └─ deterministic playable-voicing inventory (register/physics/quality)
+       └─ LLM ranks a phrase-level voicing plan
+            └─ instrument renderer → validation → candidate review
+```
+
+`compingProfileId` và `voicingId` là dữ liệu riêng, versioned theo source fingerprint và section range. Candidate/repair API nhận đúng tập ID hợp lệ, không nhận quyền tạo fret coordinate, hand span hoặc chord timing tự do. Guitar uses fretboard-region continuity, mandatory chord-third policy and one-player physics; Piano uses LH/RH register separation, guide-tone retention, hand span/collision and pedal coherence. Cả hai đều đánh giá singer-yield trước khi artifact được valid.
+
+Đây là thiết kế đích. Shipped Guitar Classic cần catalog meter-aware và voicing decision persistence để đạt đủ contract; Piano cần các bước Composer/source freshness/publication trước khi được coi là active branch. Chi tiết chuẩn: [Singer-Accompaniment Decision Model](../guides/singer-accompaniment-decision-model.md).

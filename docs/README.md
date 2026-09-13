@@ -15,6 +15,7 @@ This index tells you which document owns which topic. Root-level files (`README.
 | [`adr/`](./adr/) | Decisions — append-only | Architecture decision records: [0001 publication & Practice](./adr/0001-composer-publication-and-practice.md), [0002 TimeGrid authority](./adr/0002-fingerstyle-timegrid-authority.md), [0003 LLM function-call boundary](./adr/0003-llm-function-call-boundary.md). |
 | [`guides/composer-source-flow.md`](./guides/composer-source-flow.md) | Domain contract — changes with code | Directed source flow, invalidation, authority/projection matrix, visibility guardrails, Export/Practice. |
 | [`guides/accompaniment-workflow.md`](./guides/accompaniment-workflow.md) | Domain contract | Accompaniment wizard: shared Steps 1–3, Guitar Classic / Harmonium / Djembe branches, gating, rules, code references. |
+| [`guides/singer-accompaniment-decision-model.md`](./guides/singer-accompaniment-decision-model.md) | Domain contract | Shared Guitar Classic/Piano model: chord windows, meter-aware comping profiles, register-aware voicing plans, validation, and bounded LLM decisions. |
 | [`guides/ensemble-workflow.md`](./guides/ensemble-workflow.md) | Domain contract (experimental) | Ensemble step ids, rules, conflict-resolution order, and promotion criteria; not a shipped Composer step. |
 | [`guides/guitar-fingerstyle-arrangement-guide.md`](./guides/guitar-fingerstyle-arrangement-guide.md) | Domain contract | Solo-guitar staged pipeline, fill policy, compact LLM contracts, deterministic foundation placement, diagnostics. |
 | [`guides/timegrid-conversion-guide.md`](./guides/timegrid-conversion-guide.md) | Domain contract | TimeGrid model, locked facts, edit operations, validation, ABC/ASCII projection, persistence and v3 interchange. |
@@ -35,6 +36,7 @@ Language policy: `guides/` and `adr/` are English (shared engineering contracts)
 |---|---|---|
 | Directed source flow, invalidation, stale guards | `guides/composer-source-flow.md` | `CLAUDE.md`, `ARCHITECTURE.md`, `CONTEXT.md`, ADR 0001 |
 | Accompaniment step ids and gating | `src/lib/theory/accompaniment-workflow/definition.ts`, explained in `guides/accompaniment-workflow.md` | `CLAUDE.md`, `ARCHITECTURE.md` |
+| Singer-accompaniment timeline / comping / voicing decisions | `guides/singer-accompaniment-decision-model.md` | use cases, target design, Guitar theory reference |
 | Ensemble step ids, rules, conflict order (experimental) | `src/lib/theory/ensemble-workflow/definition.ts`, explained in `guides/ensemble-workflow.md` | `CLAUDE.md`, `ARCHITECTURE.md` |
 | TimeGrid authority, v3 codec, persistence | `guides/timegrid-conversion-guide.md` | fingerstyle guide, ADR 0002 |
 | Staged fill pipeline and LLM contracts | `guides/guitar-fingerstyle-arrangement-guide.md` | `CLAUDE.md`, ADR 0003, research notes |

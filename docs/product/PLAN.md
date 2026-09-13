@@ -143,3 +143,13 @@ This document outlines the step-by-step implementation plan for the Bhajan Song 
 - **Composer UI (`workspace/GuitarFingerstyleStep.tsx`, `FingerstyleLineCard.tsx`, `fingerstyle-line-measures.ts`)**: Line-level generation with skill/density settings, generation lock, stale-result guards, TAB preview, and copyable diagnostics.
 - **Validation & Tests**: Cover melody MIDI equality, unique simultaneous strings, skill limits, pickup/tie/repeat handling, ABC/ASCII parity, codec round-trips, staged tool order, and fills-unavailable fallback.
 
+## 10. Singer-Accompaniment Decision Model
+<!-- beads-id: br-plan-15 | satisfies: br-prd01-s62 -->
+
+> This work upgrades the Guitar Classic contract and prepares the Piano target branch. It does not promote Piano to the shipped Composer workflow by itself.
+
+- **Approved source facts**: Extend the selected Harmony Step 3 projection with explicit chord-window boundaries, tempo/meter family, phrase/cadence boundaries, melody activity/gaps, and melody register by beat/phrase.
+- **Meter-aware profile catalog**: Add meter/subdivision, tempo-band, skill, and realization metadata to Guitar and Piano comping profiles; deterministically exclude incompatible candidates before comparison or LLM use.
+- **Voicing decision service**: Enumerate playable Guitar and Piano voicing candidates, score register separation/common-tone continuity/quality-tone retention, and persist a section-level `voicingId` plan with declared exceptions.
+- **Bounded LLM orchestration**: Expose only valid profile/voicing candidates and structured decision tools; require diverse 3–4 option packs and measure-scoped repair while preserving source facts and accepted measures.
+- **Validation and evaluation**: Add unit, contract, and end-to-end coverage for meter filtering, chord-window timing, register conflict handling, third-before-fifth thinning, section continuity, instrument physics, and locked-fact repair boundaries.

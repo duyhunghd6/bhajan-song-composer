@@ -1,5 +1,5 @@
 # Low-fi UI — Đệm hát Guitar Classic và Piano
-<!-- beads-id: br-ds-lowfi-singer-accompaniment | satisfies: br-prd01-s2, br-prd01-s31, br-prd01-s45, br-prd01-s46, br-prd01-s57, br-prd01-s58 -->
+<!-- beads-id: br-ds-lowfi-singer-accompaniment | satisfies: br-prd01-s2, br-prd01-s31, br-prd01-s45, br-prd01-s46, br-prd01-s57, br-prd01-s58, br-prd01-s62 -->
 
 > **Mục đích:** wireframe định hướng triển khai và review nghiệp vụ; không phải thiết kế visual cuối cùng.
 > **Trạng thái:** thiết kế đích cho Piano Composer branch và sự chuẩn hóa lại Guitar Classic/Piano thành hai lựa chọn Layer 2 ngang hàng.
@@ -73,7 +73,7 @@ Sau khi chọn, header của tất cả màn Layer 2 phải hiện `Harmony sour
 Hai card có cùng kích thước, cùng vị trí action và cùng cấp thị giác. Không đặt Piano dưới tiêu đề “more instruments”, và không gọi Guitar Fingerstyle trong màn này.
 
 ### LLM Arrangement Studio — tạo và so sánh phương án
-<!-- beads-id: br-ds-lowfi-singer-accompaniment-s10 -->
+<!-- beads-id: br-ds-lowfi-singer-accompaniment-s10 | satisfies: br-prd01-s62 -->
 
 ```text
 1440 × 900  /compose/:slug/accompaniment?instrument=piano|guitar-classic
@@ -92,6 +92,8 @@ Hai card có cùng kích thước, cùng vị trí action và cùng cấp thị 
 ```
 
 Studio phải cho thấy **brief, constraints đang áp dụng, khác biệt của mỗi option, diagnostics và lineage**; không chỉ hiện một spinner “AI generated”. `Generate variants` tạo option mới có diversity label; `Refine selected` chỉ sửa option đang chọn theo feedback/diagnostic, giữ các option đã pass để A/B. LLM không có CTA Publish.
+
+Trước khi tạo option, sidebar phải hiện facts đã khóa: meter/tempo, chord windows theo measure-beat, phrase hiện tại, melody activity và register band. Profile picker chỉ hiện ứng viên cùng meter family; voicing review hiển thị section range và lý do đổi hoặc giữ vùng tay/register. Không cho UI diễn giải một `profileId` là voicing, hoặc cho một thay đổi voicing làm đổi profile mà không báo rõ.
 
 ## 5. Lane Guitar Classic — cấu hình và duyệt
 <!-- beads-id: br-ds-lowfi-singer-accompaniment-s05 -->

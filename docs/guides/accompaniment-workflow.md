@@ -53,6 +53,13 @@ flowchart TD
 
 The selected Step 3 result is the only harmonic source for every branch and for the independent Guitar Fingerstyle route. Accompaniment output never feeds Fingerstyle.
 
+## 2A. Singer-accompaniment decision model
+<!-- beads-id: br-guide-accompaniment-workflow-s17 | satisfies: br-prd01-s62 -->
+
+For singer accompaniment, distinguish three independent controls: (1) the locked beat/subdivision `chord windows`, (2) the comping profile (`điệu đệm`, not melody), and (3) the voicing plan. The first is source fact; the latter two can be changed independently, but both remain constrained by the source meter, phrase boundaries, singer activity/register, player skill, and instrument physics.
+
+The normal order is source facts → meter-compatible profile shortlist → section-level voicing plan → realization/validation. A profile catalog must filter incompatible meter families before an LLM ranks options. A voicing plan must retain a fretboard/register area across a phrase unless a register conflict, cadence/color lift, or physical constraint warrants a change. See [Singer-Accompaniment Decision Model](./singer-accompaniment-decision-model.md) for the canonical facts, Guitar/Piano policies, and LLM contract.
+
 ## 3. Shared harmony steps (Steps 1–3)
 <!-- beads-id: br-guide-accompaniment-workflow-s03 -->
 
@@ -107,6 +114,8 @@ Choose the realization technique from `GUITAR_CLASSIC_COMPING_PROFILE_IDS`:
 
 Each candidate carries a representative, physically validated one-guitar sample.
 
+The current catalog is devotional and was authored for its existing supported meter behavior. Before exposing a profile for a new meter family, its definition must declare that family and subdivision explicitly; do not compare a 3/4 Valse with 4/4 Slow Rock/Surf or straight Blues as if they were interchangeable candidates.
+
 ### Step 5 — `guitar-voicing-bass`
 <!-- beads-id: br-guide-accompaniment-workflow-s09 -->
 
@@ -114,6 +123,7 @@ Plan open/barre voicings and bounded bass anchors that one guitarist can fret, w
 
 - **Bass line protocol:** root at the start of each chord window; root or fifth on the next stable beat only if the treble-led texture is kept; an optional short-step approach note on the last weak subdivision only before a real chord change; never more than two consecutive bass-only onsets except at intentional transitions/cadences.
 - **Guide tones:** prefer the 3rd and 7th of each chord when arpeggiating before repeating root/fifth.
+- **Register and continuity:** choose from playable voicings after inspecting melody register/activity; retain a phrase-level position where possible, and omit a redundant fifth before the required third. A high-position shape is a deliberate candidate, not a random per-bar decoration.
 - Guitar tab validation steps must provide concrete tab events with one-based measure, grid step, duration, beat, note, string, fret, and role.
 
 Reference open voicings (standard tuning): Em `0-2-2-0-0-0`, Am `x-0-2-2-1-0`, D `x-x-0-2-3-2`, G `3-2-0-0-0-3`, C `x-3-2-0-1-0`, Bm `x-2-4-4-3-2`.

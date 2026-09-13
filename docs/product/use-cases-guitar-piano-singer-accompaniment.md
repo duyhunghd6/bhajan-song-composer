@@ -1,5 +1,5 @@
 # Use case — Đệm hát Guitar Classic và Piano
-<!-- beads-id: br-usecase-singer-accompaniment | satisfies: br-prd01-s2, br-prd01-s31, br-prd01-s45, br-prd01-s57, br-prd01-s58 -->
+<!-- beads-id: br-usecase-singer-accompaniment | satisfies: br-prd01-s2, br-prd01-s31, br-prd01-s45, br-prd01-s57, br-prd01-s58, br-prd01-s62 -->
 
 > **Trạng thái:** Nghiệp vụ đã chốt; tài liệu này là chuẩn hành vi cho lộ trình triển khai.
 > **Phạm vi:** Guitar Classic và Piano là hai kết quả Layer 2 ngang hàng, tạo từ cùng một bản hòa âm đã được người dùng chọn. Đây không phải luồng Guitar Fingerstyle độc tấu hay Piano Solo.
@@ -145,3 +145,19 @@ Hệ thống luôn hiển thị nguồn đã dùng, fingerprint và thời đi�
 | UC-04 Xuất bản/Luyện tập | `br-prd01-s58` | `br-design-singer-accompaniment-s08`; `br-ds-lowfi-singer-accompaniment-s07` |
 | UC-05 Nguồn cũ | `br-prd01-s57` | `br-design-singer-accompaniment-s08`; `br-ds-lowfi-singer-accompaniment-s08` |
 | Phối hợp LLM | `br-prd01-s2`, `s31`, `s45` | `br-design-singer-accompaniment-s11`; `br-ds-lowfi-singer-accompaniment-s10` |
+| UC-06 Timeline / điệu / voicing | `br-prd01-s62` | `br-design-singer-accompaniment-s12`; `br-guide-singer-accompaniment-decision-model` |
+
+## 10. UC-06 — Ra quyết định đệm hát theo timeline, điệu và voicing
+<!-- beads-id: br-usecase-singer-accompaniment-s10 | satisfies: br-prd01-s62 -->
+
+Mục đích là làm rõ ba quyết định không được gộp nhầm: hòa thanh theo thời điểm, điệu đệm và voicing. Người dùng không chọn “giai điệu đệm”; giai điệu là phần ca, còn điệu là profile nhịp/texture của phần đệm.
+
+| Quyết định | Dữ liệu khóa/giới hạn | Hành vi bắt buộc |
+|---|---|---|
+| Harmony timeline | meter, tempo, chord windows, phrase/cadence | Mọi hợp âm phải có beat/subdivision bắt đầu và kết thúc; đổi chord rearticulate đúng window. |
+| Comping profile | meter family, subdivision, tempo, style, energy, singer activity | Hệ thống lọc profile không tương thích nhịp trước; LLM chỉ so sánh 3–4 profile hợp lệ. |
+| Voicing plan | melody register/activity, voice leading, chord quality, skill, physical limits | Chọn voicing theo phrase/section, giữ common tones và vùng tay; giữ third trước fifth khi cần làm mỏng. |
+
+Luồng chính: (1) hệ thống tạo source facts và register map; (2) người dùng/LLM chọn một profile nền trong family nhịp hợp lệ; (3) hệ thống sinh các voicing chơi được, LLM giải thích/xếp hạng theo register và phrase; (4) renderer hiện thực phần đệm, validator kiểm tra lại; (5) người dùng nghe A/B và Apply option valid/current. Guitar/Piano dùng chung timeline nhưng không dùng chung event, shape/hand hoặc validator.
+
+Ngoại lệ: voicing cao chỉ được dùng khi tách được contour/register khỏi giọng hát và đạt playability; không coi “cao cho đẹp” là lý do đủ. Với intentional sus/power/sparse color, việc không giữ third là soft-rule exception phải có rationale, không là lỗi bị che. Hợp đồng đầy đủ: [Singer-Accompaniment Decision Model](../guides/singer-accompaniment-decision-model.md).

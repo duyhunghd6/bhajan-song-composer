@@ -931,3 +931,10 @@ The shipped accompaniment workflow targets an ordered devotional stack — Guita
 <!-- beads-id: br-prd01-s61 -->
 
 The Ensemble Expansion engine (`br-prd01-s47`–`s53`) is implemented as theory modules, a workflow definition, and a mockup page, but it is not an active Composer route, persisted product branch, preview contributor, or exportable layer. It stays experimental until it has a complete route, source/freshness contract, export mapping, and end-to-end coverage (ADR 0001).
+
+### A6. Singer-accompaniment decision model
+<!-- beads-id: br-prd01-s62 -->
+
+Guitar Classic and Piano singer accompaniment are governed by three independent decisions over the selected Harmony Step 3 source: (1) a beat/subdivision-precise harmony timeline (`chord windows`), (2) a meter-compatible comping profile, and (3) a register-, voice-leading-, and playability-aware voicing plan. The melody is the singer/lead line; `điệu đệm`/comping profile is not melody. Both instruments must derive the same immutable source facts—meter, tempo, chord windows, phrase boundaries, melody activity/gaps, and melody-register map—while retaining instrument-specific realization and validation.
+
+The system must filter profiles by meter family before LLM ranking, preserve chord-window timing, maintain section-level voicing continuity unless a deliberate musical reason changes it, favor chord-quality tones (retain a required third before a redundant fifth), and protect singer register/activity. LLM use is bounded to proposing, comparing, and scoped repair of valid profile/voicing candidates; deterministic code owns source analysis, profile eligibility, physical candidate generation, realization, validation, source freshness, and publication eligibility. The canonical contract is [Singer-Accompaniment Decision Model](../guides/singer-accompaniment-decision-model.md).
