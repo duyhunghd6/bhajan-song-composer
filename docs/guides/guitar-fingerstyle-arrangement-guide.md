@@ -1,5 +1,5 @@
 # Guitar Fingerstyle Arrangement Guide
-<!-- beads-id: br-guide-fingerstyle-arrangement -->
+<!-- beads-id: br-guide-fingerstyle-arrangement | satisfies: br-prd01-s59 -->
 
 This document describes the line-level solo-guitar pipeline used only by `/compose/:slug/guitar-fingerstyle`. Its input is the selected Harmony Step 3 (`voice-leading-validation`) ABC. It is an independent sibling of `/compose/:slug/accompaniment`: accompaniment output, setup style, branch options, and completion state never become inputs to this TimeGrid workflow.
 

@@ -223,12 +223,12 @@ Focus: combined accompaniment planning from the selected Harmony Step 3 (`voice-
 ```
 
 #### 2.2.4 Dedicated Guitar Fingerstyle (`/compose/[slug]/guitar-fingerstyle`)
-<!-- beads-id: br-ds-ui-guitar-fingerstyle | satisfies: br-prd01-s33, br-prd01-s38 -->
+<!-- beads-id: br-ds-ui-guitar-fingerstyle | satisfies: br-prd01-s33, br-prd01-s38, br-prd01-s59 -->
 
 This independent sibling route compiles the selected `voice-leading-validation` ABC into the meter-aware TimeGrid. It owns skill and fill-density settings, physical validation, generated Guitar ABC, and ASCII-GuitarTab; it never consumes accompaniment output.
 
 #### 2.2.5 Step 4: Export to Practice (`/compose/[slug]/review`)
-<!-- beads-id: br-ds-ui-export-practice | satisfies: br-prd01-s7 -->
+<!-- beads-id: br-ds-ui-export-practice | satisfies: br-prd01-s7, br-prd01-s58 -->
 
 Export is the durable handoff from Composer drafts to Practice (the only Showcase). It lists source-current Melody, Validated Harmony, Accompaniment, and Guitar Fingerstyle layers. The user selects exactly which layers to publish; unselected notation files and the Markdown Lyrics/Notes body remain unchanged.
 
@@ -301,7 +301,7 @@ sequenceDiagram
 ---
 
 ### 3.2 Flow 2: Composition & Upward Construction Flow (Composer)
-<!-- beads-id: br-ds-ui-composition-flow | satisfies: br-prd01-s7, br-prd01-s29 -->
+<!-- beads-id: br-ds-ui-composition-flow | satisfies: br-prd01-s7, br-prd01-s29, br-prd01-s57 -->
 This flow details how a composer moves chronologically through the arrangement pipeline, passing through the dedicated child-UIs.
 
 ```mermaid
@@ -381,7 +381,7 @@ sequenceDiagram
 ---
 
 ## 4. Layout States and Responsiveness Guidelines
-<!-- beads-id: br-ds-ui-responsive-layout | satisfies: br-prd01-s6, br-prd01-s7 -->
+<!-- beads-id: br-ds-ui-responsive-layout | satisfies: br-prd01-s6, br-prd01-s7, br-prd01-s57 -->
 
 1. **Desktop View (>= 1024px)**:
    - Workstation child-UIs use a compact top checkpoint strip for Layers & Navigation instead of a persistent 20% sidebar, keeping the main canvas readable.

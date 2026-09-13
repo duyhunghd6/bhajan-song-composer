@@ -140,8 +140,8 @@ Hệ thống luôn hiển thị nguồn đã dùng, fingerprint và thời đi�
 | Use case | PRD liên quan | Thiết kế/UI liên quan |
 |---|---|---|
 | UC-01 Nền hòa âm | `br-prd01-s31`, `s57` | `br-design-singer-accompaniment-s04`–`s06`; `br-ds-lowfi-singer-accompaniment-s03` |
-| UC-02 Guitar Classic | `br-prd01-s2`, `s31`, `s60` | `br-design-singer-accompaniment-s06`–`s07`; `br-ds-lowfi-singer-accompaniment-s05` |
-| UC-03 Piano | `br-prd01-s2`, `s31`, `s39`–`s46` | `br-design-singer-accompaniment-s06`–`s07`; `br-ds-lowfi-singer-accompaniment-s06` |
+| UC-02 Guitar Classic | `br-prd01-s2`, `s31`, `s60` | `br-design-singer-accompaniment-s06`; `br-ds-lowfi-singer-accompaniment-s05` |
+| UC-03 Piano | `br-prd01-s2`, `s31`, `s39`–`s46` | `br-design-singer-accompaniment-s07`; `br-ds-lowfi-singer-accompaniment-s06` |
 | UC-04 Xuất bản/Luyện tập | `br-prd01-s58` | `br-design-singer-accompaniment-s08`; `br-ds-lowfi-singer-accompaniment-s07` |
 | UC-05 Nguồn cũ | `br-prd01-s57` | `br-design-singer-accompaniment-s08`; `br-ds-lowfi-singer-accompaniment-s08` |
 | Phối hợp LLM | `br-prd01-s2`, `s31`, `s45` | `br-design-singer-accompaniment-s11`; `br-ds-lowfi-singer-accompaniment-s10` |

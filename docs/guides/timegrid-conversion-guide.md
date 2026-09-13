@@ -1,5 +1,5 @@
 # Fingerstyle TimeGrid Conversion Guide
-<!-- beads-id: br-guide-timegrid-conversion -->
+<!-- beads-id: br-guide-timegrid-conversion | satisfies: br-prd01-s59 -->
 
 This guide defines the editable representation for solo fingerstyle guitar arrangements. It complements the [Guitar Fingerstyle Arrangement Guide](./guitar-fingerstyle-arrangement-guide.md), which defines the staged AI workflow and fill policy.
 

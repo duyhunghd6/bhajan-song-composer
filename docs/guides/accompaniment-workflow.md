@@ -1,5 +1,5 @@
 # Accompaniment Workflow Guide
-<!-- beads-id: br-guide-accompaniment-workflow -->
+<!-- beads-id: br-guide-accompaniment-workflow | satisfies: br-prd01-s60 -->
 
 This guide is the source of truth for the **human-in-the-loop accompaniment workflow** hosted on `/compose/:slug/accompaniment`. It explains the shared harmony steps, the per-instrument branches, dynamic step gating, and the rules every step must respect. The underlying arpeggiation theory (in Vietnamese) is in [Guitar Arpeggiation Theory](../theory/guitar-arpeggiation-theory.md); the directed source flow that feeds this workflow is in [Composer Source Flow](./composer-source-flow.md).
 

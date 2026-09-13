@@ -225,6 +225,8 @@ Ví dụ phân tích 1 ô nhịp giai điệu Hari Bol (giả định):
              ⬤ strong    * weak       ● medium      * weak
 
 
+```
+
 ### Step 2: Chord Roles & Progression (`chord-roles-progression`)
 <!-- beads-id: br-guide-guitar-accompaniment-s16 -->
 
