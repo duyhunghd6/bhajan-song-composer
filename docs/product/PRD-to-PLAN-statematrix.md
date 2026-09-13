@@ -26,11 +26,11 @@ Current counts from metadata:
 | Metric | Formula | Value |
 |:---|:---|---:|
 | PRD document root coverage | `br-prd01` satisfied by `br-plan-00` | Covered |
-| All PRD section coverage | `55 covered / 63 PRD IDs` | **87.3%** |
-| Actionable/in-scope PRD coverage | `54 covered / 54 actionable child sections` | **100.0%** |
-| Unlinked non-actionable/context sections | `8 unlinked / 63 PRD IDs` | **12.7%** |
+| All PRD section coverage | `56 covered / 64 PRD IDs` | **87.5%** |
+| Actionable/in-scope PRD coverage | `55 covered / 55 actionable child sections` | **100.0%** |
+| Unlinked non-actionable/context sections | `8 unlinked / 64 PRD IDs` | **12.5%** |
 
-The only unlinked sections are context, grouping, exclusion, or reference sections: `br-prd01-s1`, `br-prd01-s5`, `br-prd01-s12`, `br-prd01-s22`, `br-prd01-s23`, `br-prd01-s24`, `br-prd01-s28`, `br-prd01-s56`. The 2026-09 amendments root `br-prd01-s56` is a grouping section; its children `s57`–`s62` are actionable and covered by `br-plan-13`–`br-plan-15`.
+The only unlinked sections are context, grouping, exclusion, or reference sections: `br-prd01-s1`, `br-prd01-s5`, `br-prd01-s12`, `br-prd01-s22`, `br-prd01-s23`, `br-prd01-s24`, `br-prd01-s28`, `br-prd01-s56`. The 2026-09 amendments root `br-prd01-s56` is a grouping section; its children `s57`–`s63` are actionable and covered by `br-plan-13`–`br-plan-16`.
 
 ### 1.2 Plan Child State Coverage
 <!-- beads-id: br-rtm-01-s03 -->
@@ -46,12 +46,12 @@ The 2026-09-13 scan of `src/`, `e2e/`, and `scripts/` found implementation files
 
 | Metric | Formula | Value |
 |:---|:---|---:|
-| Total PLAN child items | `sum(children under br-plan-01..15)` | **79** |
-| Planned child items | `6 / 79` | **7.6%** |
-| In-progress child items | `1 / 79` | **1.3%** |
-| Implemented child items | `23 / 79` | **29.1%** |
-| Verified child items | `49 / 79` | **62.0%** |
-| Child completion coverage | `(Implemented + Verified) / 79` | **91.1%** |
+| Total PLAN child items | `sum(children under br-plan-01..16)` | **83** |
+| Planned child items | `6 / 83` | **7.2%** |
+| In-progress child items | `1 / 83` | **1.2%** |
+| Implemented child items | `24 / 83` | **28.9%** |
+| Verified child items | `52 / 83` | **62.7%** |
+| Child completion coverage | `(Implemented + Verified) / 83` | **91.6%** |
 
 ---
 
@@ -138,6 +138,7 @@ The 2026-09-13 scan of `src/`, `e2e/`, and `scripts/` found implementation files
 | `br-prd01-s60` | A4. Accompaniment instrument stack | Actionable | `br-plan-13` | Covered | Guitar Classic / Harmonium / Djembe branch with deterministic `V:GuitarSupport`. |
 | `br-prd01-s61` | A5. Ensemble is experimental | Actionable | `br-plan-13` | Covered | Plan 13 keeps Ensemble out of the step router, preview graph, and Export. |
 | `br-prd01-s62` | A6. Singer-accompaniment decision model | Actionable | `br-plan-15` | Covered | Chord windows, meter-aware profiles, register-aware voicing, bounded LLM orchestration, and validation/evaluation gates. |
+| `br-prd01-s63` | A7. Beat-level voicing edit and durable Composer Project | Actionable | `br-plan-16` | Covered | Strong-beat inspector, versioned override, durable project revision graph, and recovery/test gates. |
 
 ---
 
@@ -161,7 +162,8 @@ The 2026-09-13 scan of `src/`, `e2e/`, and `scripts/` found implementation files
 | `br-plan-13` | Composer Step Workflow, Export & Practice | `br-prd01-s57`, `br-prd01-s58`, `br-prd01-s60`, `br-prd01-s61` | 7 | 0 | 0 | 3 | 4 | 100.0% |
 | `br-plan-14` | Guitar Fingerstyle TimeGrid Staged Pipeline | `br-prd01-s59` | 8 | 0 | 0 | 0 | 8 | 100.0% |
 | `br-plan-15` | Singer-Accompaniment Decision Model | `br-prd01-s62` | 5 | 5 | 0 | 0 | 0 | 0.0% |
-| **Total** | — | — | **79** | **6** | **1** | **23** | **49** | **91.1%** |
+| `br-plan-16` | Beat-level Voicing Edit & Durable Composer Project | `br-prd01-s63` | 4 | 0 | 0 | 1 | 3 | 100.0% |
+| **Total** | — | — | **83** | **6** | **1** | **24** | **52** | **91.6%** |
 
 ---
 
@@ -249,6 +251,10 @@ The 2026-09-13 scan of `src/`, `e2e/`, and `scripts/` found implementation files
 | `br-plan-15.c03` | `br-plan-15` | Voicing decision service: playable candidate inventory, register/continuity/quality-tone scoring, section-level plan persistence. | `br-prd01-s62` | Planned | Add Guitar/Piano voicing-plan contracts and targeted continuity/third-retention tests. |
 | `br-plan-15.c04` | `br-plan-15` | Bounded LLM orchestration: structured candidate ranking, diversity, and scoped repair without source mutation. | `br-prd01-s62` | Planned | Add phase-scoped tool schemas, candidate fixtures, repair-boundary tests, and lineage persistence. |
 | `br-plan-15.c05` | `br-plan-15` | Validation and evaluation: meter, chord-window, singer register, physics, and repair-boundary E2E gates. | `br-prd01-s62` | Planned | Add unit/contract/E2E coverage before enabling new meter profiles or promoting Piano to Composer. |
+| `br-plan-16.c01` | `br-plan-16` | Strong-beat inspector: Guitar/Piano candidate inspector, contextual A/B audition, and explicit chord-window/phrase/section scopes. | `br-prd01-s63` | Verified | `ChordVoicingInspector.tsx`, `workspace/voicing-inspector-integration.ts`, and their component/integration tests. |
+| `br-plan-16.c02` | `br-plan-16` | Override realization: versioned `VoicingOverride`, precedence merge, scope-edge validation and stale/review retention. | `br-prd01-s63` | Verified | `src/lib/theory/voicing-override.ts`; `voicing-override.test.ts` verifies precedence, locked identity, edge review and stale retention. |
+| `br-plan-16.c03` | `br-plan-16` | Durable project revisions: append-only revision graph, run/artifact lineage, autosave/checkpoint/restore and offline conflict-safe outbox. | `br-prd01-s63` | Verified | `src/lib/composer-project/`, `actions/composer-project.ts`, `composer-project-outbox.ts`, and repository/outbox tests. |
+| `br-plan-16.c04` | `br-plan-16` | Verification: override scope/staleness, reload/offline recovery, inspector audition and publish-isolation tests. | `br-prd01-s63` | Implemented | Unit/component/repository coverage is green; a browser E2E for the live audition loop and publish isolation remains before default enablement. |
 
 ---
 
@@ -266,6 +272,7 @@ The 2026-09-13 scan of `src/`, `e2e/`, and `scripts/` found implementation files
 | `br-plan-05.c04`: no `piano-arranger` test despite `ARCHITECTURE.md` historically listing one. | Low. | Add a small suite or fold into the piano engine suite above. |
 | `br-plan-10` (compression engine) is superseded on the shipped path by `br-plan-14`. | Informational. | Keep for the POC page; do not extend it for Composer work. |
 | `br-plan-15` defines the decision-model contract but has no implementation evidence yet. | High for any non-4/4 Guitar expansion or Piano Composer promotion. | Deliver source facts, catalog eligibility, voicing plans, bounded LLM tools, and their test gates in order. |
+| `br-plan-16.c04` lacks browser E2E coverage for the live playback loop and publish isolation. | Medium; pure/component/repository contracts are verified, but the abcjs loop handoff needs browser evidence before default enablement. | Add Playwright coverage for selecting a strong beat, auditioning A/B, saving/reopening, and confirming Practice ignores the draft. |
 | Child item IDs are defined in this matrix, not in `PLAN.md` metadata comments. | Medium if automated child-level extraction is required. | Promote children into headings or add parser-supported single-line metadata in `PLAN.md`. |
 | `src/lib/docs/__tests__/prd-plan-statematrix.test.ts` pins this file's path and totals. | Must be updated whenever totals change. | Keep the test aligned with the Total row and `br-plan-06` rollup. |
 ---

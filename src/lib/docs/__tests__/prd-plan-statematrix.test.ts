@@ -39,18 +39,18 @@ describe("PRD-to-PLAN state matrix trace closure", () => {
   it("pins PRD trace coverage counts to the metadata-derived values", () => {
     const matrix = readMatrix();
 
-    expect(matrix).toContain("| All PRD section coverage | `55 covered / 63 PRD IDs` | **87.3%** |");
+    expect(matrix).toContain("| All PRD section coverage | `56 covered / 64 PRD IDs` | **87.5%** |");
     expect(matrix).toContain(
-      "| Actionable/in-scope PRD coverage | `54 covered / 54 actionable child sections` | **100.0%** |"
+      "| Actionable/in-scope PRD coverage | `55 covered / 55 actionable child sections` | **100.0%** |"
     );
-    expect(matrix).toContain("| Unlinked non-actionable/context sections | `8 unlinked / 63 PRD IDs` | **12.7%** |");
+    expect(matrix).toContain("| Unlinked non-actionable/context sections | `8 unlinked / 64 PRD IDs` | **12.5%** |");
   });
 
   it("keeps the aggregate implementation totals synchronized after br-plan-06 closure", () => {
     const matrix = readMatrix();
 
     expect(tableRowFor(matrix, "**Total**")).toBe(
-      "| **Total** | — | — | **79** | **6** | **1** | **23** | **49** | **91.1%** |"
+      "| **Total** | — | — | **83** | **6** | **1** | **24** | **52** | **91.6%** |"
     );
   });
 });

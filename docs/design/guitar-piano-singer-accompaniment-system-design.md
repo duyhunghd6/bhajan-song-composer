@@ -195,3 +195,21 @@ ApprovedHarmonySnapshot
 `compingProfileId` và `voicingId` là dữ liệu riêng, versioned theo source fingerprint và section range. Candidate/repair API nhận đúng tập ID hợp lệ, không nhận quyền tạo fret coordinate, hand span hoặc chord timing tự do. Guitar uses fretboard-region continuity, mandatory chord-third policy and one-player physics; Piano uses LH/RH register separation, guide-tone retention, hand span/collision and pedal coherence. Cả hai đều đánh giá singer-yield trước khi artifact được valid.
 
 Đây là thiết kế đích. Shipped Guitar Classic cần catalog meter-aware và voicing decision persistence để đạt đủ contract; Piano cần các bước Composer/source freshness/publication trước khi được coi là active branch. Chi tiết chuẩn: [Singer-Accompaniment Decision Model](../guides/singer-accompaniment-decision-model.md).
+
+## 13. Beat override và Project persistence bền vững
+<!-- beads-id: br-design-singer-accompaniment-s13 | satisfies: br-prd01-s62, br-prd01-s57 -->
+
+Thêm `VoicingOverride` vào mỗi instrument draft, thay vì ghi đè chord hoặc thay thế cả voicing plan:
+
+```text
+VoicingOverride
+  id, instrument, windowRange, baseChordIdentity, voicingId
+  sourceRevisionId, createdFromPlanRevisionId, rationale/softException
+  edgeTransitionReport, validationReport, status (valid | review | stale)
+```
+
+`windowRange` mặc định là đúng chord window của strong beat. Renderer hợp nhất theo thứ tự: snapshot khóa → profile plan của section → voicing plan → `VoicingOverride` có scope hẹp nhất → local density/fill events. Khi profile hoặc source thay đổi, recompute/validate lại từ thứ tự đó; không được xóa override hay đổi nó thành một shape khác để “giữ valid”.
+
+`AccompanimentSession` phải được bọc bởi `ComposerProject`, lưu durable phía server/file-backed store theo revision append-only. `ComposerProjectRevision` chứa song source/metadata, snapshot refs, brief/setup, run input/output, selected options, decision plans/overrides, validation report và refs tới ABC/event/audio-preview artefacts. Nội dung lớn được lưu theo content-addressed artifact ref; metadata revision giữ audit trail và parent revision để restore/compare. Raw LLM output được lưu riêng khỏi UI projection để không mất dữ liệu khi tối ưu payload.
+
+Client giữ một working copy và outbox có `baseRevisionId`; autosave debounce tạo revision mới, explicit **Save version** tạo checkpoint có tên. Khi reconnect, server dùng optimistic concurrency: nếu `baseRevisionId` cũ, giữ cả hai nhánh/revisions và yêu cầu người dùng merge ở cấp decision thay vì last-write-wins. `localStorage` chỉ dùng cache/outbox có thể xóa; không được dùng pruning để mất lịch sử Project. Publication chỉ nhận một artifact revision valid/current và vẫn tách khỏi revision của Project.

@@ -153,3 +153,11 @@ This document outlines the step-by-step implementation plan for the Bhajan Song 
 - **Voicing decision service**: Enumerate playable Guitar and Piano voicing candidates, score register separation/common-tone continuity/quality-tone retention, and persist a section-level `voicingId` plan with declared exceptions.
 - **Bounded LLM orchestration**: Expose only valid profile/voicing candidates and structured decision tools; require diverse 3–4 option packs and measure-scoped repair while preserving source facts and accepted measures.
 - **Validation and evaluation**: Add unit, contract, and end-to-end coverage for meter filtering, chord-window timing, register conflict handling, third-before-fifth thinning, section continuity, instrument physics, and locked-fact repair boundaries.
+
+## 11. Beat-level Voicing Edit & Durable Composer Project
+<!-- beads-id: br-plan-16 | satisfies: br-prd01-s63 -->
+
+- **Strong-beat inspector**: Add a Guitar/Piano Chord/Voicing Inspector bound to a selected chord window. It must show the locked chord and current realization, pre-filter playable candidates, audition a contextual A/B loop, and expose only explicit scopes: chord window, phrase, or section.
+- **Override realization**: Add versioned `VoicingOverride` domain data and merge precedence (snapshot → profile → plan → narrowest override → local accent/fill). Revalidate candidate physics, singer yield and both scope-edge transitions; profile changes preserve overrides as current/review/stale rather than mutating or deleting them.
+- **Durable project revisions**: Persist a `ComposerProject` revision graph containing source snapshots, step/run input and raw/normalized output, diagnostics, decisions and content-addressed artifact references. Provide autosave, named checkpoints, restore/compare and an offline outbox with optimistic-concurrency conflict handling.
+- **Verification**: Add unit tests for candidate scope/override precedence and stale retention; integration tests for project reload/offline conflict recovery; and UI tests for strong-beat selection, A/B audition state and explicit publish isolation.

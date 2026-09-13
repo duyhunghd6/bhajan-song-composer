@@ -146,6 +146,7 @@ Hệ thống luôn hiển thị nguồn đã dùng, fingerprint và thời đi�
 | UC-05 Nguồn cũ | `br-prd01-s57` | `br-design-singer-accompaniment-s08`; `br-ds-lowfi-singer-accompaniment-s08` |
 | Phối hợp LLM | `br-prd01-s2`, `s31`, `s45` | `br-design-singer-accompaniment-s11`; `br-ds-lowfi-singer-accompaniment-s10` |
 | UC-06 Timeline / điệu / voicing | `br-prd01-s62` | `br-design-singer-accompaniment-s12`; `br-guide-singer-accompaniment-decision-model` |
+| UC-07 Chỉnh voicing tại beat và lưu project | `br-prd01-s62`, `s57` | `br-design-singer-accompaniment-s13`; `br-ds-lowfi-singer-accompaniment-s11`; `br-guide-singer-accompaniment-decision-model-s08` |
 
 ## 10. UC-06 — Ra quyết định đệm hát theo timeline, điệu và voicing
 <!-- beads-id: br-usecase-singer-accompaniment-s10 | satisfies: br-prd01-s62 -->
@@ -161,3 +162,30 @@ Mục đích là làm rõ ba quyết định không được gộp nhầm: hòa 
 Luồng chính: (1) hệ thống tạo source facts và register map; (2) người dùng/LLM chọn một profile nền trong family nhịp hợp lệ; (3) hệ thống sinh các voicing chơi được, LLM giải thích/xếp hạng theo register và phrase; (4) renderer hiện thực phần đệm, validator kiểm tra lại; (5) người dùng nghe A/B và Apply option valid/current. Guitar/Piano dùng chung timeline nhưng không dùng chung event, shape/hand hoặc validator.
 
 Ngoại lệ: voicing cao chỉ được dùng khi tách được contour/register khỏi giọng hát và đạt playability; không coi “cao cho đẹp” là lý do đủ. Với intentional sus/power/sparse color, việc không giữ third là soft-rule exception phải có rationale, không là lỗi bị che. Hợp đồng đầy đủ: [Singer-Accompaniment Decision Model](../guides/singer-accompaniment-decision-model.md).
+
+## 11. UC-07 — Chỉnh voicing tại strong beat và lưu phiên làm việc thành Project
+<!-- beads-id: br-usecase-singer-accompaniment-s11 | satisfies: br-prd01-s62, br-prd01-s57 -->
+
+Mục đích là cho người soạn ra quyết định nghe được tại đúng vị trí đang nghe, mà không làm mơ hồ ranh giới giữa **đổi hợp âm**, **đổi điệu đệm** và **đổi cách hiện thực cùng một hợp âm**. Mọi phiên Composer là một Project nháp bền vững; đóng tab, đổi máy hoặc quay lại một bước không được làm mất brief, option, quyết định hay kết quả đã tạo.
+
+### Luồng chỉnh voicing theo beat
+
+1. Người dùng click một strong beat (hoặc chord-window marker) trên staff/timeline. Inspector đã biết `chordWindow`, chord hiện hành, melody activity/register, profile đang dùng, voicing hiện hành và các diagnostic tại vị trí đó.
+2. Inspector mặc định mở danh sách **candidate cùng harmonic identity**: với Guitar là các thế tay/shape, inversion, bass note/capo hợp lệ; với Piano là các voicing LH/RH, inversion, spacing và octave placement hợp lệ. Không hiển thị một danh sách “Am” phẳng làm người dùng tưởng rằng mọi Am đều tương đương.
+3. Người dùng nghe preview A/B trong loop ngắn bao quanh beat (mặc định 1 ô trước + 1 ô sau), rồi chọn một candidate. Mặc định chỉ áp dụng cho `chordWindow` đã chọn; menu scope cho phép mở rộng sang phrase/section khi người dùng chủ động chọn.
+4. Renderer chỉ hiện thực lại phạm vi bị ảnh hưởng và validator chạy lại source/timing, singer-yield và physics của đúng nhạc cụ. Nếu voicing mới làm đứt continuity ở mép phạm vi, UI nêu rõ transition bị ảnh hưởng và đề nghị sửa beat kề hoặc mở rộng scope; không âm thầm đổi các ô khác.
+5. Quyết định được lưu thành `VoicingOverride`, có `instrument`, `windowRange`, `baseChordIdentity`, `voicingId`, rationale/exception, validation report và revision nguồn. Nó không sửa `ApprovedHarmonySnapshot` và không đổi điệu/profile.
+
+Ví dụ: tại strong beat đang là `Am`, Guitar có thể chọn `Am-open`, `Am-E-form-barre-f5`, hoặc một inversion hợp lệ. `Am-E-form-barre-f5` chỉ là candidate khi melodic register và lyric onset còn khoảng trống; chọn nó là thay đổi shape/register của Guitar, không phải đổi chord progression. Piano có thể giữ cùng Am nhưng chọn LH A2–E3 + RH C4–E4–A4, hoặc chuyển RH lên một octave/đổi inversion, miễn LH/RH, melody và hand span đều pass.
+
+### Luồng đổi điệu/profile
+
+Nút `Đổi điệu` là control độc lập, đặt ở section/timeline header chứ không lẫn vào chord inspector. Một click chọn profile hợp lệ theo meter sẽ render preview toàn section (hoặc whole song nếu chọn scope đó), giữ harmony timeline không đổi. Hệ thống phải cho nghe A/B trước/sau và hiển thị điều gì bị render lại. Các `VoicingOverride` còn phù hợp được giữ; override trở nên không hợp lệ phải được gắn review/stale có lý do, không bị xóa hay tự thay bằng voicing khác.
+
+Không cho đổi profile chỉ tại một beat trong thao tác thường dùng, vì điều đó thường phá pulse của ca sĩ. Một điểm nhấn cục bộ thuộc density/accent/fill override và phải được gắn nhãn khác với `Đổi điệu`.
+
+### Project nháp bền vững
+
+Project lưu tối thiểu: song metadata/lyrics và Melody ABC; từng revision Harmony và snapshot đã chọn; brief/setup; input, raw output, normalized output, diagnostics và lựa chọn của từng run/step; profile plan, voicing plan/override, event/ABC/playback artefact của từng nhạc cụ; lineage và trạng thái current/stale/applied/published. Save phải có autosave có debounce, explicit checkpoint `Save version`, trạng thái `Saving/Saved/Offline changes`, và khôi phục từ revision đã chọn.
+
+`localStorage` chỉ là cache/offline outbox và recovery nhanh, không phải nguồn duy nhất của Project hay nơi được phép prune input/output lịch sử. Publish vẫn là thao tác riêng: project draft có thể chứa mọi phương án và dữ liệu stale; Practice chỉ đọc artifact đã publish.

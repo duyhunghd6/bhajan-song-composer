@@ -106,3 +106,21 @@ The service validates every result after normalization. A model never sets `vali
 Implementation is complete only when tests prove: meter filtering rejects incompatible profiles; every chord-window change is realized on time; a register conflict chooses/reports a different voicing or density; third-retention/thinning policy is observable; section-level voicing continuity is preserved unless explained; Guitar and Piano validate their own physical constraints; and scoped LLM repair cannot modify locked source facts or unflagged accepted measures.
 
 Piano remains a target branch until its Composer route, source/freshness integration, output publication, and test gates are completed. This guide is therefore an implementation contract for both instruments and a current behavioral contract for the shipped Guitar branch where its required catalog/data is available.
+
+## 8. Beat-level voicing override and project persistence
+<!-- beads-id: br-guide-singer-accompaniment-decision-model-s08 | satisfies: br-prd01-s62, br-prd01-s57 -->
+
+A click on a strong beat opens a **Chord/Voicing Inspector**, not a chord-progression editor. Its default target is the active `chordWindow`; it exposes the locked chord identity and current realization before offering alternatives. The user may deliberately widen the target to phrase/section, but the system must never infer that widening from a single click.
+
+The candidate identity is instrument-specific:
+
+| Instrument | Candidate must expose | Example for `Am` |
+|---|---|---|
+| Guitar Classic | `voicingId`, spelled pitches, shape/position, strings/frets, barre/finger cost, bass note, capo, register and transition cost | open A-minor; fifth-position E-form barre; a playable inversion |
+| Piano | `voicingId`, spelled pitches by LH/RH, inversion, octave/register, spacing/hand span, bass treatment and transition cost | LH A2–E3 + RH C4–E4–A4; same RH an octave higher; close/drop voicing with a different inversion |
+
+Candidate filtering occurs before display: preserve chord quality, satisfy melody/register/singer-yield and hard physical rules. Rank by voice-leading and current hand region, but retain a clearly labelled high-position candidate when it is valid, so the arranger can intentionally create lift. Selecting a candidate creates an immutable `VoicingOverride { instrument, windowRange, baseChordIdentity, voicingId, sourceRevisionId, validation }`; it does not mutate the harmony timeline or comping profile. Preview must audition the current and proposed realization in musical context, including the transitions at both edges of the range.
+
+`Change comping profile` is a separate section-level decision. It re-realizes rhythm/texture while preserving chord windows; it may invalidate an override only after validation, and must retain it with an explicit review reason. Accent, density and a single fill are local realization edits, not disguised profile changes.
+
+The Composer Project is a durable revisioned aggregate, not a browser-state snapshot. Persist each step's structured input, raw response, normalized candidate(s), diagnostics, selected decision and derived artifact by reference; attach source revision/fingerprint and lineage. Autosave writes durable revisions (with a local offline outbox), while an explicit checkpoint names a recoverable version. Published catalogue artifacts remain a separate, immutable projection. Tests must prove that a re-opened project retains an unselected option and its diagnostics, a beat override survives reload, changing upstream source marks rather than deletes dependent data, and an offline change reconciles without overwriting a newer revision.

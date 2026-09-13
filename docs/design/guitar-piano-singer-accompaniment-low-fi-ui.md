@@ -144,7 +144,29 @@ Rolled articulation là warning có thể duyệt, không bị che. Collision kh
 
 Panel Piano cần thêm `Compare options` và `Refine selected`; feedback như “giữ option C nhưng không fill ở Sthayi” chỉ sửa option C. Mỗi option phải hiển thị lý do lựa chọn LH/RH texture, fill/pedal và diagnostics để người dùng có thể so sánh bằng tai lẫn bằng bản nhạc.
 
-## 7. Review, Publish và Practice
+## 7. Chord/Voicing Inspector — chỉnh tại strong beat
+<!-- beads-id: br-ds-lowfi-singer-accompaniment-s11 | satisfies: br-prd01-s62, br-prd01-s57 -->
+
+Click strong beat/chord marker mở inspector cạnh timeline. Strong beat đang chọn phải được highlight trên staff, fretboard/keyboard và loop playback; click không được mở một modal đổi progression mặc định.
+
+```text
+┌ Strong beat: m.4 · beat 3 · Am · singer: sustain (E4) ───────────────────────────────────────┐
+│ Scope [This chord window v]  Current: Am open  ·  profile: Bhajan strum                        │
+│ [Play current] [Play candidate] [A/B loop m.3–5]                                                │
+│                                                                                                  │
+│ GUITAR — same Am, different realization                                                         │
+│ (●) Am open              low/mid · strings 5-1 · easy transition       CURRENT                  │
+│ ( ) Am E-form barre f5   high · full barre · lift after lyric onset     VALID                    │
+│ ( ) Am/C inversion       mid · bass C · warning: transition cost        REVIEW                   │
+│ [Apply voicing]  [Reset override]                                                               │
+│                                                                                                  │
+│ [Change comping profile…]  (section-level, separate action)                                    │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+Piano thay danh sách bằng cột LH/RH: `A2–E3 | C4–E4–A4`, inversion, octave, span và cảnh báo collision/LIL. `+8ve`/`−8ve` là shortcut tạo candidate mới rồi validate, không phải transpose mù. Default scope là chord window; menu chỉ có `This chord window`, `Phrase`, `Section` (không có “entire song” trong inspector). Sau Apply, status bar hiển thị `Saved` hoặc `Saving`; warning transition hiển thị ngay ở hai mép scope.
+
+## 8. Review, Publish và Practice
 <!-- beads-id: br-ds-lowfi-singer-accompaniment-s07 -->
 
 ```text
@@ -168,7 +190,7 @@ Panel Piano cần thêm `Compare options` và `Refine selected`; feedback như �
 
 Sau publish, toast cung cấp `Open Practice`. Practice có sheet selector Guitar Classic/Piano, playback và visual phù hợp; không hiển thị draft local. Layer stale có nhãn đỏ, checkbox disabled và CTA `Regenerate from Harmony`.
 
-## 8. Trạng thái, lỗi và khả năng tiếp cận
+## 9. Trạng thái, lỗi và khả năng tiếp cận
 <!-- beads-id: br-ds-lowfi-singer-accompaniment-s08 -->
 
 | Trạng thái | Biểu diễn tối thiểu | Hành động chính |
@@ -183,7 +205,7 @@ Sau publish, toast cung cấp `Open Practice`. Practice có sheet selector Guita
 
 Tất cả control dùng keyboard được; radio profile có label đầy đủ; bảng validation đọc được bằng screen reader; staff/keyboard không là nơi duy nhất truyền diagnostic. Không tự phát audio khi mở trang.
 
-## 9. Handoff triển khai và tiêu chí review
+## 10. Handoff triển khai và tiêu chí review
 <!-- beads-id: br-ds-lowfi-singer-accompaniment-s09 -->
 
 Trước khi xây UI production, POC Piano phải render đúng màn ở mục 6 với sample data, validation và playback. Khi tích hợp Composer, test E2E tối thiểu phải kiểm tra: Guitar-only qua Publish/Practice, Piano-only qua Publish/Practice, hai lanes cùng current, source change tạo stale cho cả hai, lỗi piano hand collision chặn Apply, và LLM refine chỉ thay đổi option/mô tả phạm vi đã yêu cầu.
