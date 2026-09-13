@@ -8,7 +8,7 @@ import {
   type VoicingCandidate,
   type VoicingOverrideScope,
 } from "../ChordVoicingInspector";
-import type { InspectorIntegration } from "./voicing-inspector-integration";
+import type { InspectorIntegration, VoicingAuditionPreview } from "./voicing-inspector-integration";
 import type { AccompanimentPreviewModel, ComposerPreviewRenderOptions } from "./arrangement-preview-model";
 import { LayerVisibilityControls } from "./LayerVisibilityControls";
 import AccompanimentWorkflowWizard from "../AccompanimentWorkflowWizard";
@@ -35,7 +35,8 @@ interface AccompanimentStepProps {
     selectedTargetIndex: number;
     onSelectTarget: (index: number) => void;
     onApplyCandidate: (target: InspectorIntegration, candidate: VoicingCandidate, scope: VoicingOverrideScope) => void;
-    onAuditionRequest: (request: VoicingAuditionRequest) => void;
+    onAuditionRequest: (target: InspectorIntegration, request: VoicingAuditionRequest) => void;
+    auditionPreview: VoicingAuditionPreview | null;
   };
   projectPersistence?: {
     status: "idle" | "saving" | "saved" | "conflict" | "error";
@@ -173,9 +174,27 @@ export function AccompanimentStep({
                     <ChordVoicingInspector
                       context={target.target.context}
                       candidates={target.candidates}
-                      onAuditionRequest={voicingInspector.onAuditionRequest}
+                      onAuditionRequest={(request) => voicingInspector.onAuditionRequest(target, request)}
                       onApplyCandidate={(candidate, scope) => voicingInspector.onApplyCandidate(target, candidate, scope)}
                     />
+                    {voicingInspector.auditionPreview && (
+                      <section className="mt-4 rounded-xl border border-indigo-200 bg-indigo-50/50 p-3 dark:border-indigo-900/70 dark:bg-indigo-950/20">
+                        <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{voicingInspector.auditionPreview.title}</h3>
+                        <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">Audition preview only — the Harmony source remains unchanged. Use Play in this player to hear the selected realization.</p>
+                        <div className="mt-3">
+                          <AbcjsPlaybackController
+                            abcString={voicingInspector.auditionPreview.abc}
+                            title={voicingInspector.auditionPreview.title}
+                            canvasId={`composer-voicing-audition-${target.target.context.chordWindowId}`}
+                            controls
+                            showLoopControls={false}
+                            allowPdfDownload={false}
+                            minWidthClassName="min-w-[320px]"
+                            sheetViewportClassName="overflow-x-auto p-2"
+                          />
+                        </div>
+                      </section>
+                    )}
                   </section>
                 );
               })()}

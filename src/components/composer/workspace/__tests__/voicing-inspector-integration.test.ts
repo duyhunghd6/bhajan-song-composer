@@ -4,6 +4,7 @@ import type { WorkspaceState } from "../../useWorkspaceState";
 import {
   buildAccompanimentProjectPayload,
   buildInspectorIntegration,
+  buildVoicingAuditionPreview,
   createVoicingOverride,
   revalidateVoicingOverridesForSource,
 } from "../voicing-inspector-integration";
@@ -86,5 +87,26 @@ describe("Accompaniment voicing inspector integration", () => {
 
     expect(revalidated[0]).toMatchObject({ id: override.id, voicingId: override.voicingId, status: "stale" });
     expect(revalidated[0]?.validation.diagnostics.at(-1)).toContain("Harmony source changed");
+  });
+
+  it("creates a bounded, parseable A/B ABC preview without changing the Harmony source", () => {
+    const integration = buildInspectorIntegration({
+      chordSymbol: "Am", measureIndex: 1, measureCount: 3, strongBeatNotes: ["C4"], sourceAbc, overrides: [],
+    });
+    const current = integration.candidates.find((candidate) => candidate.instrument === "guitar" && candidate.status === "current");
+    const alternative = integration.candidates.find((candidate) => candidate.instrument === "guitar" && candidate.status === "valid");
+    if (!current || !alternative) throw new Error("Expected current and alternative Guitar candidates.");
+    const preview = buildVoicingAuditionPreview(integration.target, {
+      mode: "ab-loop",
+      chordWindowId: integration.target.context.chordWindowId,
+      currentCandidateId: current.id,
+      candidateId: alternative.id,
+    });
+
+    expect(preview?.title).toContain("A/B audition");
+    expect(preview?.abc).toContain("X:1\nT:A/B audition");
+    expect(preview?.abc).toContain("%%MIDI program 24");
+    expect(preview?.abc.match(/\|/g)).toHaveLength(3);
+    expect(sourceAbc).toBe("X:1\nT:Locked source\nM:4/4\nL:1/8\nK:Am\n| A2 c2 e2 a2 |");
   });
 });

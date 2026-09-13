@@ -1,6 +1,7 @@
 import { Chord, Note } from "@tonaljs/tonal";
 import type { ComposerProjectPayload, JsonValue } from "@/lib/composer-project";
 import { getGuitarVoicings } from "@/lib/theory/guitar-voicings";
+import { scientificPitchToAbc } from "@/lib/theory/fingerstyle-arranger/time-slice-abc-renderer";
 import {
   type GuitarVoicingCandidate,
   type PianoVoicingCandidate,
@@ -15,6 +16,7 @@ import { fingerprintAccompanimentSource } from "@/lib/theory/accompaniment-workf
 import type {
   ChordVoicingInspectorProps,
   StrongBeatChordWindowContext,
+  VoicingAuditionRequest,
   VoicingCandidate as InspectorCandidate,
   VoicingOverrideScope as InspectorScope,
 } from "../ChordVoicingInspector";
@@ -35,6 +37,11 @@ export interface InspectorTarget {
 export interface InspectorIntegration {
   target: InspectorTarget;
   candidates: InspectorCandidate[];
+}
+
+export interface VoicingAuditionPreview {
+  abc: string;
+  title: string;
 }
 
 function toMidi(note: string, fallback: number): number {
@@ -240,6 +247,47 @@ export function createVoicingOverride(input: {
       diagnostics: physical.valid ? [] : physical.reasons,
     },
     status: physical.valid ? "valid" : "review",
+  };
+}
+
+function candidateMeasure(candidate: DomainVoicingCandidate, role: string): string {
+  const pitches = candidate.spelledPitches.map((pitch) => scientificPitchToAbc(pitch)).join("") || "C";
+  return `"${candidate.chordIdentity.symbol} ${role}" [${pitches}]4`;
+}
+
+/**
+ * Small, standalone ABC used only for audition. It has no melody/harmony
+ * source body, so previewing a candidate can never mutate or become the
+ * branch's selected Harmony source.
+ */
+export function buildVoicingAuditionPreview(
+  target: InspectorTarget,
+  request: VoicingAuditionRequest,
+): VoicingAuditionPreview | null {
+  const current = request.currentCandidateId ? target.candidatesById[request.currentCandidateId] : undefined;
+  const candidate = request.candidateId ? target.candidatesById[request.candidateId] : undefined;
+  const selected = request.mode === "current" ? current : candidate ?? current;
+  if (!selected) return null;
+  const measures = request.mode === "ab-loop" && current && candidate
+    ? [candidateMeasure(current, "A current"), candidateMeasure(candidate, "B candidate")]
+    : [candidateMeasure(selected, request.mode === "current" ? "current" : "candidate")];
+  const program = selected.instrument === "guitar-classic" ? 24 : 1;
+  const title = request.mode === "ab-loop"
+    ? `A/B audition · m.${target.context.measure} · ${target.context.chordIdentity}`
+    : `${selected.instrument === "guitar-classic" ? "Guitar" : "Piano"} audition · ${target.context.chordIdentity}`;
+  return {
+    title,
+    abc: [
+      "X:1",
+      `T:${title}`,
+      "M:4/4",
+      "L:1/4",
+      "Q:1/4=72",
+      "K:C",
+      `%%MIDI program ${program}`,
+      "V:Candidate name=\"Voicing audition\"",
+      `| ${measures.join(" | ")} |`,
+    ].join("\n"),
   };
 }
 

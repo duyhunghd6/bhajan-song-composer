@@ -28,11 +28,12 @@ import { autosaveComposerProject, checkpointComposerProject } from "@/app/action
 import {
   buildAccompanimentProjectPayload,
   buildInspectorIntegration,
+  buildVoicingAuditionPreview,
   createVoicingOverride,
   revalidateVoicingOverridesForSource,
 } from "./workspace/voicing-inspector-integration";
 import type { VoicingAuditionRequest, VoicingCandidate, VoicingOverrideScope } from "./ChordVoicingInspector";
-import type { InspectorIntegration } from "./workspace/voicing-inspector-integration";
+import type { InspectorIntegration, VoicingAuditionPreview } from "./workspace/voicing-inspector-integration";
 import {
   composerProjectOutboxEntries,
   enqueueComposerProjectOutbox,
@@ -62,6 +63,7 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
   const [selectedStrongBeatIndex, setSelectedStrongBeatIndex] = useState(0);
   const [projectSaveStatus, setProjectSaveStatus] = useState<"idle" | "saving" | "saved" | "conflict" | "error">("idle");
   const [projectSaveDetail, setProjectSaveDetail] = useState<string | undefined>();
+  const [voicingAuditionPreview, setVoicingAuditionPreview] = useState<VoicingAuditionPreview | null>(null);
   const projectRevisionRef = useRef<number | undefined>(undefined);
 
   const accompLayerVisibility = ws.accompanimentLayerVisibility ?? DEFAULT_ACCOMPANIMENT_LAYER_VISIBILITY;
@@ -289,10 +291,10 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
     updateState({ voicingOverrides: [...ws.voicingOverrides, override] });
   }, [updateState, ws.voicingOverrides]);
 
-  const handleVoicingAudition = useCallback((_request: VoicingAuditionRequest) => {
-    // Playback remains owned by the existing preview controller. This state is
-    // intentionally non-authoritative; a future loop adapter can consume it.
-    setProjectSaveDetail("Preview is scoped to the selected chord window.");
+  const handleVoicingAudition = useCallback((target: InspectorIntegration, request: VoicingAuditionRequest) => {
+    // The temporary one/two-measure ABC is deliberately separate from
+    // harmonyValidationAbc, so audition cannot mutate the locked source.
+    setVoicingAuditionPreview(buildVoicingAuditionPreview(target.target, request));
   }, []);
 
   if (step === "melody") {
@@ -346,9 +348,13 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
         voicingInspector={{
           targets: accompanimentInspectorTargets,
           selectedTargetIndex: selectedStrongBeatIndex,
-          onSelectTarget: setSelectedStrongBeatIndex,
+          onSelectTarget: (index) => {
+            setSelectedStrongBeatIndex(index);
+            setVoicingAuditionPreview(null);
+          },
           onApplyCandidate: handleApplyVoicing,
           onAuditionRequest: handleVoicingAudition,
+          auditionPreview: voicingAuditionPreview,
         }}
         projectPersistence={{ status: projectSaveStatus, detail: projectSaveDetail, onCheckpoint: handleProjectCheckpoint }}
       />
