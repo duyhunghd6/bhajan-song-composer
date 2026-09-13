@@ -2,6 +2,13 @@ import { type Dispatch, type SetStateAction } from "react";
 import AbcjsPlaybackController from "@/components/music-sheet/AbcjsPlaybackController";
 import type { ArrangementPipelineResult } from "@/lib/theory/arrangement-pipeline";
 import type { WorkspaceState } from "../useWorkspaceState";
+import {
+  ChordVoicingInspector,
+  type VoicingAuditionRequest,
+  type VoicingCandidate,
+  type VoicingOverrideScope,
+} from "../ChordVoicingInspector";
+import type { InspectorIntegration } from "./voicing-inspector-integration";
 import type { AccompanimentPreviewModel, ComposerPreviewRenderOptions } from "./arrangement-preview-model";
 import { LayerVisibilityControls } from "./LayerVisibilityControls";
 import AccompanimentWorkflowWizard from "../AccompanimentWorkflowWizard";
@@ -23,6 +30,18 @@ interface AccompanimentStepProps {
   getRenderOptionsFor: (abc: string, baseOptions: ComposerPreviewRenderOptions) => Record<string, unknown>;
   ws: WorkspaceState;
   updateState: (updates: Partial<WorkspaceState>) => void;
+  voicingInspector?: {
+    targets: InspectorIntegration[];
+    selectedTargetIndex: number;
+    onSelectTarget: (index: number) => void;
+    onApplyCandidate: (target: InspectorIntegration, candidate: VoicingCandidate, scope: VoicingOverrideScope) => void;
+    onAuditionRequest: (request: VoicingAuditionRequest) => void;
+  };
+  projectPersistence?: {
+    status: "idle" | "saving" | "saved" | "conflict" | "error";
+    detail?: string;
+    onCheckpoint: () => void;
+  };
 }
 
 export function AccompanimentStep({
@@ -37,6 +56,8 @@ export function AccompanimentStep({
   getRenderOptionsFor,
   ws,
   updateState,
+  voicingInspector,
+  projectPersistence,
 }: AccompanimentStepProps) {
     const {
       abc: accompanimentAbc,
@@ -122,6 +143,52 @@ export function AccompanimentStep({
                   {rawAccompanimentAbc}
                 </pre>
               </section>
+
+              {voicingInspector && voicingInspector.targets.length > 0 && (() => {
+                const target = voicingInspector.targets[voicingInspector.selectedTargetIndex] ?? voicingInspector.targets[0];
+                if (!target) return null;
+                return (
+                  <section className="mt-6 rounded-2xl border border-zinc-200 bg-white/70 p-4 dark:border-zinc-800 dark:bg-zinc-950/50">
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Strong-beat voicing</h2>
+                        <p className="text-xs text-zinc-600 dark:text-zinc-300">Choose a realization of the locked harmony; this never edits the chord progression.</p>
+                      </div>
+                      <label className="text-sm text-zinc-700 dark:text-zinc-200">
+                        Strong beat
+                        <select
+                          value={voicingInspector.selectedTargetIndex}
+                          onChange={(event) => voicingInspector.onSelectTarget(Number(event.target.value))}
+                          className="ml-2 rounded border border-zinc-300 bg-white px-2 py-1 dark:border-zinc-700 dark:bg-zinc-950"
+                          aria-label="Selected strong beat"
+                        >
+                          {voicingInspector.targets.map((candidate, index) => (
+                            <option key={candidate.target.context.chordWindowId} value={index}>
+                              m.{candidate.target.context.measure} · {candidate.target.context.chordIdentity}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                    <ChordVoicingInspector
+                      context={target.target.context}
+                      candidates={target.candidates}
+                      onAuditionRequest={voicingInspector.onAuditionRequest}
+                      onApplyCandidate={(candidate, scope) => voicingInspector.onApplyCandidate(target, candidate, scope)}
+                    />
+                  </section>
+                );
+              })()}
+
+              {projectPersistence && (
+                <section className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-sm dark:border-zinc-800 dark:bg-zinc-950/50" aria-live="polite">
+                  <span>
+                    Project: <strong>{projectPersistence.status === "saving" ? "Saving" : projectPersistence.status === "saved" ? "Saved" : projectPersistence.status === "conflict" ? "Conflict saved for review" : projectPersistence.status === "error" ? "Save failed" : "Ready"}</strong>
+                    {projectPersistence.detail ? ` · ${projectPersistence.detail}` : ""}
+                  </span>
+                  <button type="button" onClick={projectPersistence.onCheckpoint} className="rounded border px-3 py-1.5 text-sm">Save checkpoint</button>
+                </section>
+              )}
             </>
           )}
         />

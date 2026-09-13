@@ -10,6 +10,7 @@ import {
 } from "@/lib/theory/accompaniment-workflow";
 import type { FillDensityMode } from "@/lib/theory/fingerstyle-arranger/fill-opportunities";
 import type { SkillLevel } from "@/lib/theory/fingerstyle-arranger/fingerstyle-constraints";
+import type { VoicingOverride } from "@/lib/theory/voicing-override";
 import { getComposerWorkspaceStorageKey } from "./workspace/storage";
 import { serializeForStorage } from "./workspace/storage-pruning";
 
@@ -62,6 +63,8 @@ export interface WorkspaceState {
   accompanimentLayerVisibility: Record<string, boolean>;
   accompanimentLayerVolumes: Record<string, number>;
   fingerstyleGenerationSettings: FingerstyleGenerationSettings;
+  /** Source-bound decisions; never modifies the selected harmony snapshot. */
+  voicingOverrides: VoicingOverride[];
 }
 
 export const DEFAULT_WORKSPACE_STATE: WorkspaceState = {
@@ -81,6 +84,7 @@ export const DEFAULT_WORKSPACE_STATE: WorkspaceState = {
   accompanimentLayerVisibility: DEFAULT_ACCOMPANIMENT_LAYER_VISIBILITY,
   accompanimentLayerVolumes: DEFAULT_LAYER_VOLUMES,
   fingerstyleGenerationSettings: DEFAULT_FINGERSTYLE_GENERATION_SETTINGS,
+  voicingOverrides: [],
 };
 
 export function useWorkspaceState(slug: string) {

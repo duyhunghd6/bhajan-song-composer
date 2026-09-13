@@ -24,6 +24,20 @@ import {
   getComposerMelodyStorageKey,
 } from "./workspace/storage";
 import { ExportStep } from "./workspace/export/ExportStep";
+import { autosaveComposerProject, checkpointComposerProject } from "@/app/actions/composer-project";
+import {
+  buildAccompanimentProjectPayload,
+  buildInspectorIntegration,
+  createVoicingOverride,
+  revalidateVoicingOverridesForSource,
+} from "./workspace/voicing-inspector-integration";
+import type { VoicingAuditionRequest, VoicingCandidate, VoicingOverrideScope } from "./ChordVoicingInspector";
+import type { InspectorIntegration } from "./workspace/voicing-inspector-integration";
+import {
+  composerProjectOutboxEntries,
+  enqueueComposerProjectOutbox,
+  removeComposerProjectOutboxEntry,
+} from "./workspace/composer-project-outbox";
 
 interface ComposerStepWorkspaceProps {
   slug: string;
@@ -45,6 +59,10 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
   const [layerVisibility, setLayerVisibility] = useState<Record<string, boolean>>(DEFAULT_HARMONY_LAYER_VISIBILITY);
   const [layerVolumes, setLayerVolumes] = useState<Record<string, number>>(DEFAULT_LAYER_VOLUMES);
   const previousHarmonyValidationAbc = useRef<string | null | undefined>(undefined);
+  const [selectedStrongBeatIndex, setSelectedStrongBeatIndex] = useState(0);
+  const [projectSaveStatus, setProjectSaveStatus] = useState<"idle" | "saving" | "saved" | "conflict" | "error">("idle");
+  const [projectSaveDetail, setProjectSaveDetail] = useState<string | undefined>();
+  const projectRevisionRef = useRef<number | undefined>(undefined);
 
   const accompLayerVisibility = ws.accompanimentLayerVisibility ?? DEFAULT_ACCOMPANIMENT_LAYER_VISIBILITY;
   const accompLayerVolumes = ws.accompanimentLayerVolumes ?? DEFAULT_LAYER_VOLUMES;
@@ -116,6 +134,25 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
 
   const { pipeline, harmonyValidationAbc, sourceGraph } = previewModel;
 
+  const accompanimentInspectorTargets = useMemo(() => {
+    if (!harmonyValidationAbc || !pipeline) return [];
+    return pipeline.harmonization.measures.map((measure) => buildInspectorIntegration({
+      chordSymbol: measure.chord.name,
+      measureIndex: measure.measureIndex,
+      measureCount: pipeline.harmonization.measures.length,
+      strongBeatNotes: measure.strongBeatNotes,
+      sourceAbc: harmonyValidationAbc,
+      profileName: ws.accompanimentWorkflow?.guitarProfileHint ?? undefined,
+      overrides: ws.voicingOverrides,
+    }));
+  }, [harmonyValidationAbc, pipeline, ws.accompanimentWorkflow?.guitarProfileHint, ws.voicingOverrides]);
+
+  useEffect(() => {
+    if (selectedStrongBeatIndex < accompanimentInspectorTargets.length) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- a source change can reduce the immutable harmony's measure count.
+    setSelectedStrongBeatIndex(0);
+  }, [accompanimentInspectorTargets.length, selectedStrongBeatIndex]);
+
   useEffect(() => {
     if (!isWorkspaceHydrated) return;
     if (previousHarmonyValidationAbc.current === undefined) {
@@ -125,13 +162,16 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
     if (previousHarmonyValidationAbc.current === harmonyValidationAbc) return;
 
     previousHarmonyValidationAbc.current = harmonyValidationAbc;
-    updateState(buildHarmonyValidationBranchResetState(ws));
+    updateState({
+      ...buildHarmonyValidationBranchResetState(ws),
+      voicingOverrides: revalidateVoicingOverridesForSource(ws.voicingOverrides, harmonyValidationAbc ?? activeAbc),
+    });
     try {
       window.localStorage.removeItem(getComposerFingerstyleMeasuresStorageKey(slug));
     } catch (error) {
       console.error("Failed to clear stale fingerstyle measures", error);
     }
-  }, [harmonyValidationAbc, isWorkspaceHydrated, slug, updateState, ws]);
+  }, [activeAbc, harmonyValidationAbc, isWorkspaceHydrated, slug, updateState, ws]);
 
   const handleRestoreHarmony = useCallback(() => {
     const originalMelodyAbc = initialMelodyAbc ?? DEFAULT_ABC;
@@ -156,6 +196,104 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
     }));
   }, [setAccompLayerVisibility, slug, ws, updateState]);
   const getRenderOptionsFor = previewModel.getRenderOptionsFor;
+
+  const projectId = useMemo(() => `composer-${slug.replace(/[^a-zA-Z0-9_-]/g, "-")}`, [slug]);
+  const projectPayload = useMemo(() => buildAccompanimentProjectPayload({
+    slug,
+    activeAbc,
+    branchSourceAbc: harmonyValidationAbc,
+    workspace: ws,
+  }), [activeAbc, harmonyValidationAbc, slug, ws]);
+
+  const flushProjectOutbox = useCallback(async () => {
+    for (const entry of composerProjectOutboxEntries(window.localStorage)) {
+      try {
+        const result = entry.kind === "checkpoint"
+          ? await checkpointComposerProject({ ...entry.request, checkpointName: entry.request.checkpointName ?? "Recovered checkpoint" })
+          : await autosaveComposerProject(entry.request);
+        projectRevisionRef.current = result.revision;
+        removeComposerProjectOutboxEntry(window.localStorage, entry.id);
+        setProjectSaveStatus(result.status);
+        setProjectSaveDetail(result.status === "conflict" ? "A queued offline revision was retained for review." : `Revision ${result.revision}`);
+      } catch {
+        // Keep the entry for the next online event; localStorage is an outbox,
+        // never a replacement for the repository authority.
+        break;
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!hasMounted) return;
+    const onOnline = () => { void flushProjectOutbox(); };
+    window.addEventListener("online", onOnline);
+    if (navigator.onLine) void flushProjectOutbox();
+    return () => window.removeEventListener("online", onOnline);
+  }, [flushProjectOutbox, hasMounted]);
+
+  useEffect(() => {
+    if (!hasMounted || !isWorkspaceHydrated || step !== "accompaniment") return;
+    const timer = window.setTimeout(() => {
+      setProjectSaveStatus("saving");
+      const request = {
+        projectId,
+        title: `${slug} arrangement`,
+        baseRevision: projectRevisionRef.current,
+        payload: projectPayload,
+      };
+      void autosaveComposerProject(request).then((result) => {
+        projectRevisionRef.current = result.revision;
+        setProjectSaveStatus(result.status);
+        setProjectSaveDetail(result.status === "conflict" ? "A separate offline revision was retained." : `Revision ${result.revision}`);
+      }).catch((error: unknown) => {
+        setProjectSaveStatus("error");
+        const queued = enqueueComposerProjectOutbox(window.localStorage, {
+          id: `autosave-${Date.now()}`,
+          kind: "autosave",
+          request,
+        });
+        setProjectSaveDetail(queued ? "Queued locally and will retry when online." : error instanceof Error ? error.message : "Unable to reach durable Project storage.");
+      });
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [hasMounted, isWorkspaceHydrated, projectId, projectPayload, slug, step]);
+
+  const handleProjectCheckpoint = useCallback(() => {
+    setProjectSaveStatus("saving");
+    const request = {
+      projectId,
+      title: `${slug} arrangement`,
+      baseRevision: projectRevisionRef.current,
+      payload: projectPayload,
+      checkpointName: `Voicing checkpoint ${new Date().toLocaleString()}`,
+    };
+    void checkpointComposerProject(request).then((result) => {
+      projectRevisionRef.current = result.revision;
+      setProjectSaveStatus(result.status);
+      setProjectSaveDetail(result.status === "conflict" ? "Checkpoint conflict retained for review." : `Checkpoint revision ${result.revision}`);
+    }).catch((error: unknown) => {
+      setProjectSaveStatus("error");
+      const queued = enqueueComposerProjectOutbox(window.localStorage, {
+        id: `checkpoint-${Date.now()}`,
+        kind: "checkpoint",
+        request,
+      });
+      setProjectSaveDetail(queued ? "Checkpoint queued locally and will retry when online." : error instanceof Error ? error.message : "Unable to save checkpoint.");
+    });
+  }, [projectId, projectPayload, slug]);
+
+  const handleApplyVoicing = useCallback((target: InspectorIntegration, candidate: VoicingCandidate, scope: VoicingOverrideScope) => {
+    const override = createVoicingOverride({ target: target.target, inspectorCandidate: candidate, scope });
+    // Appending retains previous revisions/decisions for audit. It never changes
+    // `harmonyValidationAbc`, the immutable source supplied to the branch.
+    updateState({ voicingOverrides: [...ws.voicingOverrides, override] });
+  }, [updateState, ws.voicingOverrides]);
+
+  const handleVoicingAudition = useCallback((_request: VoicingAuditionRequest) => {
+    // Playback remains owned by the existing preview controller. This state is
+    // intentionally non-authoritative; a future loop adapter can consume it.
+    setProjectSaveDetail("Preview is scoped to the selected chord window.");
+  }, []);
 
   if (step === "melody") {
     return (
@@ -205,6 +343,14 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
         getRenderOptionsFor={getRenderOptionsFor}
         ws={ws}
         updateState={updateState}
+        voicingInspector={{
+          targets: accompanimentInspectorTargets,
+          selectedTargetIndex: selectedStrongBeatIndex,
+          onSelectTarget: setSelectedStrongBeatIndex,
+          onApplyCandidate: handleApplyVoicing,
+          onAuditionRequest: handleVoicingAudition,
+        }}
+        projectPersistence={{ status: projectSaveStatus, detail: projectSaveDetail, onCheckpoint: handleProjectCheckpoint }}
       />
     );
   }
