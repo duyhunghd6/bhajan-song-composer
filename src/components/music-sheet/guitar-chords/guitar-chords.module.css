@@ -1,0 +1,23 @@
+.dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  max-height: 85vh;
+  width: min(900px, 94vw);
+  overflow: auto;
+  border: 1px solid #d4d4d8;
+  border-radius: 16px;
+  padding: 24px;
+  background: #fff;
+  color: #18181b;
+  box-shadow: 0 24px 80px #0005;
+}
+.dialog::backdrop { background: #0008; }
+.card {
+  border: 2px solid #e4e4e7;
+  border-radius: 12px;
+  padding: 12px;
+}
+.card[data-selected="true"] { border-color: #4f46e5; background: #eef2ff; }
+.grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 700px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

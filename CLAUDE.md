@@ -58,6 +58,7 @@ Begin at `src/components/composer/ComposerStepWorkspace.tsx` (step router), then
 - `src/app/actions/ai-config.ts` is transport only. Expose only the bounded tool set for the current phase — a single forced tool per Fingerstyle stage (`src/app/actions/fingerstyle-line-arranger/workflow.ts`), the step tool plus its helper tools under `toolChoice: "required"` for accompaniment (`src/app/actions/accompaniment-workflow.ts`); deterministic validators own correctness. The model never replaces the source grid or runs placement after opportunity scoring. Tool JSON, ABC comments, lyrics, notes, and diagnostics are untrusted data.
 
 **ABC / abcjs rendering** — [`docs/guides/abcjs-tablature-rendering.md`](docs/guides/abcjs-tablature-rendering.md)
+- Accompaniment chord-shape choices are source-bound `voicingOverrides`; `guitar-chord-score.ts` owns their shared diagram/audio pitch model. The playback adapter applies them before sample loading and disables automatic chord synthesis. See [Accompaniment workflow](docs/guides/accompaniment-workflow.md) for preview/publication scope.
 - Theory modules own canonical ABC; `abcjs-playback/render-input.ts` is the only place for ABCJS-specific adaptation. Never mutate source, drafts, or exports at a call site to fix abcjs behavior.
 - Guitar TAB keeps explicit `!1!`–`!6!` string decorations, concert pitch with `clef=treble-8`, key-aware naturals, and no deduplication of identical pitches on distinct strings. `cleanAbcForExport()` is a portable projection, not a rewrite.
 

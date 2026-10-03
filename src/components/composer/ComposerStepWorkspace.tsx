@@ -33,6 +33,7 @@ import {
   revalidateVoicingOverridesForSource,
 } from "./workspace/voicing-inspector-integration";
 import type { VoicingAuditionRequest, VoicingCandidate, VoicingOverrideScope } from "./ChordVoicingInspector";
+import { buildGuitarChordScore } from "@/lib/theory/guitar-chord-score";
 import type { InspectorIntegration, VoicingAuditionPreview } from "./workspace/voicing-inspector-integration";
 import {
   composerProjectOutboxEntries,
@@ -138,11 +139,12 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
 
   const accompanimentInspectorTargets = useMemo(() => {
     if (!harmonyValidationAbc || !pipeline) return [];
-    return pipeline.harmonization.measures.map((measure) => buildInspectorIntegration({
-      chordSymbol: measure.chord.name,
-      measureIndex: measure.measureIndex,
+    return buildGuitarChordScore(harmonyValidationAbc, harmonyValidationAbc, ws.voicingOverrides).occurrences.map((occurrence) => buildInspectorIntegration({
+      chordSymbol: occurrence.symbol,
+      measureIndex: occurrence.measureIndex,
+      windowRange: occurrence.range,
       measureCount: pipeline.harmonization.measures.length,
-      strongBeatNotes: measure.strongBeatNotes,
+      strongBeatNotes: pipeline.harmonization.measures.find((measure) => measure.measureIndex === occurrence.measureIndex)?.strongBeatNotes ?? [],
       sourceAbc: harmonyValidationAbc,
       profileName: ws.accompanimentWorkflow?.guitarProfileHint ?? undefined,
       overrides: ws.voicingOverrides,

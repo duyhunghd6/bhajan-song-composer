@@ -69,6 +69,8 @@ export interface SynthType {
   stop(): void;
   seek(position: number, units?: ProgressUnit): void;
   getIsRunning?: () => boolean;
+  /** abcjs exposes this only after `prime()` has created an audible buffer. */
+  getAudioBuffer?: () => unknown;
 }
 
 /**
@@ -117,4 +119,7 @@ export interface AbcjsPlaybackControllerProps {
   allowPdfDownload?: boolean;
   /** Decorative timeline positions overlaid after abcjs lays out the score. */
   visualMarkers?: AbcjsVisualMarker[];
+  /** Projects audio before soundfont samples are loaded. */
+  prepareAudio?: (visualObj: VisualObj) => VisualObj;
+  onScoreRendered?: (container: HTMLDivElement, visualObj: VisualObj) => void | (() => void);
 }

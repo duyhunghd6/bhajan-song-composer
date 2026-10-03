@@ -1,6 +1,6 @@
 import { Chord, Note } from "@tonaljs/tonal";
 import type { ComposerProjectPayload, JsonValue } from "@/lib/composer-project";
-import { getGuitarVoicings } from "@/lib/theory/guitar-voicings";
+import { guitarChordShapes } from "@/lib/theory/guitar-chord-score";
 import { scientificPitchToAbc } from "@/lib/theory/fingerstyle-arranger/time-slice-abc-renderer";
 import {
   type GuitarVoicingCandidate,
@@ -11,6 +11,7 @@ import {
   type VoicingOverrideScope,
   type VoicingWindowRange,
   revalidateVoicingOverride,
+  selectNarrowestApplicableOverride,
 } from "@/lib/theory/voicing-override";
 import { fingerprintAccompanimentSource } from "@/lib/theory/accompaniment-workflow";
 import type {
@@ -72,7 +73,7 @@ function guitarCandidates(
   identity: VoicingChordIdentity,
   currentOverride: VoicingOverride | undefined,
 ): Array<{ inspector: InspectorCandidate; domain: GuitarVoicingCandidate }> {
-  return getGuitarVoicings(chordSymbol).slice(0, 8).map((voicing, index) => {
+  return guitarChordShapes(chordSymbol).map((voicing, index) => {
     const fretted = voicing.frets.filter((fret): fret is number => typeof fret === "number" && fret > 0);
     const positionFret = fretted.length ? Math.min(...fretted) : 0;
     const span = fretted.length ? Math.max(...fretted) - positionFret : 0;
@@ -89,7 +90,7 @@ function guitarCandidates(
       register: { lowestMidi: Math.min(...sounding.map((note) => toMidi(note, 40))), highestMidi: Math.max(...sounding.map((note) => toMidi(note, 64))) },
       transitionCost: span + (voicing.barre ? 2 : 0),
       validation: candidateValidation(physical, "Fret span exceeds the compact-shape review limit."),
-      shapeLabel: voicing.barre ? `Barre at fret ${voicing.barre.fret}` : positionFret === 0 ? "Open / compact shape" : `Compact shape at fret ${positionFret}`,
+      shapeLabel: voicing.label,
       positionFret,
       frets: voicing.frets,
       strings: voicing.frets.flatMap((fret, stringIndex) => fret === "X" ? [] : [6 - stringIndex]),
@@ -172,20 +173,23 @@ export function buildInspectorIntegration(input: {
   chordSymbol: string;
   measureIndex: number;
   measureCount: number;
+  windowRange?: VoicingWindowRange;
   strongBeatNotes: string[];
   sourceAbc: string;
   profileName?: string;
   overrides: readonly VoicingOverride[];
 }): InspectorIntegration {
-  const chordWindowId = `m${input.measureIndex + 1}-beat1-${normalizedChordSymbol(input.chordSymbol)}`;
+  const chordWindowId = input.windowRange?.chordWindowId ?? `m${input.measureIndex + 1}-beat1-${normalizedChordSymbol(input.chordSymbol)}`;
+  const windowRange = input.windowRange ?? range("chord-window", input.measureIndex, input.measureIndex, chordWindowId);
   const identity: VoicingChordIdentity = {
     symbol: input.chordSymbol,
     normalizedSymbol: normalizedChordSymbol(input.chordSymbol),
     chordWindowIds: [chordWindowId],
   };
   const sourceRevisionId = fingerprintAccompanimentSource(input.sourceAbc);
-  const currentGuitar = input.overrides.find((override) => override.instrument === "guitar-classic" && override.status === "valid" && override.baseChordIdentity.normalizedSymbol === identity.normalizedSymbol);
-  const currentPiano = input.overrides.find((override) => override.instrument === "piano" && override.status === "valid" && override.baseChordIdentity.normalizedSymbol === identity.normalizedSymbol);
+  const currentOverrides = input.overrides.filter((override) => override.sourceRevisionId === sourceRevisionId);
+  const currentGuitar = selectNarrowestApplicableOverride(currentOverrides, "guitar-classic", windowRange, identity);
+  const currentPiano = selectNarrowestApplicableOverride(currentOverrides, "piano", windowRange, identity);
   const guitar = guitarCandidates(input.chordSymbol, identity, currentGuitar);
   const piano = pianoCandidates(input.chordSymbol, identity, currentPiano);
   const phraseStart = Math.floor(input.measureIndex / 2) * 2;
@@ -194,13 +198,13 @@ export function buildInspectorIntegration(input: {
     context: {
       chordWindowId,
       measure: input.measureIndex + 1,
-      beat: 1,
+      beat: windowRange.start.beat,
       chordIdentity: input.chordSymbol,
       singer: { activity: input.strongBeatNotes.length ? "attack" : "rest", note: input.strongBeatNotes[0] },
       profileName: input.profileName,
     },
     chordIdentity: identity,
-    windowRange: range("chord-window", input.measureIndex, input.measureIndex, chordWindowId),
+    windowRange,
     phraseRange: range("phrase", phraseStart, phraseEnd, chordWindowId),
     sectionRange: range("section", 0, Math.max(0, input.measureCount - 1), chordWindowId),
     sourceRevisionId,

@@ -1,4 +1,5 @@
 import { type Dispatch, type SetStateAction } from "react";
+import GuitarChordAccompaniment from "@/components/music-sheet/guitar-chords/GuitarChordAccompaniment";
 import AbcjsPlaybackController from "@/components/music-sheet/AbcjsPlaybackController";
 import type { ArrangementPipelineResult } from "@/lib/theory/arrangement-pipeline";
 import type { WorkspaceState } from "../useWorkspaceState";
@@ -125,7 +126,11 @@ export function AccompanimentStep({
                   Bounded preview
                 </span>
               </div>
-              <AbcjsPlaybackController
+              <GuitarChordAccompaniment
+                sourceAbc={branchSourceAbc ?? activeAbc}
+                overrides={ws.voicingOverrides}
+                onOverridesChange={(voicingOverrides) => updateState({ voicingOverrides })}
+                chordVolume={accompLayerVolumes.ChordProgression ?? 100}
                 abcString={accompanimentAbc}
                 title={appliedWorkflowStep ? `Resulting ABC Staff Preview: Step ${appliedWorkflowStep.label}` : "Accompaniment Music Sheet"}
                 canvasId="composer-accompaniment-preview"
@@ -187,6 +192,7 @@ export function AccompanimentStep({
                             title={voicingInspector.auditionPreview.title}
                             canvasId={`composer-voicing-audition-${target.target.context.chordWindowId}`}
                             controls
+                            synthOptions={{ chordsOff: true }}
                             showLoopControls={false}
                             allowPdfDownload={false}
                             minWidthClassName="min-w-[320px]"

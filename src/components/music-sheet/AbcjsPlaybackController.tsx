@@ -15,6 +15,7 @@ import {
 } from "./playback-registry";
 import { postProcessBeats, postProcessChords, postProcessVisualMarkers, parseAbcTempo } from "./abcjs-playback/abc-rendering";
 import { prepareAbcjsRenderInput, renderPreparedAbc } from "./abcjs-playback/render-input";
+import { isSynthReadyForPlayback } from "./abcjs-playback/synth-readiness";
 import { AbcjsPlaybackControls } from "./abcjs-playback/AbcjsPlaybackControls";
 import { AbcjsPlaybackStyles } from "./abcjs-playback/AbcjsPlaybackStyles";
 import type {
@@ -46,6 +47,8 @@ export default function AbcjsPlaybackController({
   showExactRenderAbcCopy = false,
   allowPdfDownload = true,
   visualMarkers,
+  prepareAudio,
+  onScoreRendered,
 }: AbcjsPlaybackControllerProps) {
   const generatedId = useId().replace(/:/g, "");
   const resolvedCanvasId = canvasId ?? `music-sheet-canvas-${generatedId}`;
@@ -64,6 +67,8 @@ export default function AbcjsPlaybackController({
   const [loopStartMeasure, setLoopStartMeasure] = useState(1);
   const [loopEndMeasure, setLoopEndMeasure] = useState(4);
   const synthRef = useRef<SynthType | null>(null);
+  const synthGenerationRef = useRef(0);
+  const synthInitializationRef = useRef<Promise<SynthType | null> | null>(null);
   const visualObjRef = useRef<VisualObj | null>(null);
   const timingCallbacksRef = useRef<TimingCallbacksType | null>(null);
   const activeNoteElementsRef = useRef<HTMLElement[]>([]);
@@ -243,6 +248,8 @@ export default function AbcjsPlaybackController({
     [clearActiveNoteHighlight, onPlaybackCursor]
   );
   const stopSynthPlayback = useCallback(() => {
+    synthGenerationRef.current++;
+    synthInitializationRef.current = null;
     if (synthRef.current) {
       try {
         synthRef.current.stop();
@@ -263,20 +270,34 @@ export default function AbcjsPlaybackController({
     releasePlayback(resolvedCanvasId);
   }, [setPlaybackState, stopSynthPlayback, resolvedCanvasId]);
   const initSynth = useCallback(async () => {
+    if (synthRef.current && isSynthReadyForPlayback(synthRef.current)) {
+      return synthRef.current;
+    }
+    if (synthRef.current) {
+      try {
+        synthRef.current.stop();
+      } catch {
+        // An unprimed synth has no sources to stop.
+      }
+      synthRef.current = null;
+    }
+    if (synthInitializationRef.current) return synthInitializationRef.current;
     if (!abcjsModule || !visualObjRef.current) return null;
-    try {
-      const win = window as Window & { webkitAudioContext?: typeof AudioContext };
-      if (typeof window !== "undefined" && (window.AudioContext || win.webkitAudioContext)) {
+
+    const generation = synthGenerationRef.current;
+    const initialization = (async () => {
+      try {
+        const win = window as Window & { webkitAudioContext?: typeof AudioContext };
+        if (typeof window === "undefined" || (!window.AudioContext && !win.webkitAudioContext)) return null;
         const AudioContextClass = window.AudioContext || win.webkitAudioContext;
         if (!AudioContextClass) return null;
         const audioContext = new AudioContextClass();
         const CreateSynth = (abcjsModule.synth as { CreateSynth: new () => SynthType }).CreateSynth;
         const synth = new CreateSynth();
-        synthRef.current = synth;
         await synth.init({
-          visualObj: visualObjRef.current,
+          visualObj: prepareAudio ? prepareAudio(visualObjRef.current!) : visualObjRef.current!,
           audioContext,
-          millisecondsPerMeasure: visualObjRef.current.millisecondsPerMeasure?.(tempo),
+          millisecondsPerMeasure: visualObjRef.current!.millisecondsPerMeasure?.(tempo),
           options: {
             qpm: tempo,
             ...synthOptions,
@@ -293,52 +314,67 @@ export default function AbcjsPlaybackController({
           },
         });
         await synth.prime();
+        if (generation !== synthGenerationRef.current || !isSynthReadyForPlayback(synth)) return null;
+        synthRef.current = synth;
         return synth;
+      } catch (err) {
+        console.error("Error initializing synth:", err);
+        return null;
       }
-    } catch (err) {
-      console.error("Error initializing synth:", err);
+    })();
+
+    synthInitializationRef.current = initialization;
+    try {
+      return await initialization;
+    } finally {
+      if (synthInitializationRef.current === initialization) {
+        synthInitializationRef.current = null;
+      }
     }
-    return null;
-  }, [abcjsModule, clearActiveNoteHighlight, setPlaybackState, synthOptions, tempo]);
+  }, [abcjsModule, clearActiveNoteHighlight, setPlaybackState, synthOptions, tempo, prepareAudio]);
   const playSynth = async () => {
     if (isPlaying) return;
     // Stop any other controller that is currently playing
     claimPlayback(resolvedCanvasId);
     try {
       let synth = synthRef.current;
-      if (!synth) {
+      if (!isSynthReadyForPlayback(synth)) {
         synth = await initSynth();
       }
-      if (synth) {
-        // Determine the resume position
-        const resuming = isPausedRef.current;
-        const resumeSeconds = resuming ? pausedSecondsRef.current : 0;
-        isPausedRef.current = false;
+      if (!synth) {
+        setPlaybackState(false);
+        releasePlayback(resolvedCanvasId);
+        return;
+      }
+      // Determine the resume position
+      const resuming = isPausedRef.current;
+      const resumeSeconds = resuming ? pausedSecondsRef.current : 0;
+      isPausedRef.current = false;
 
-        if (resuming && resumeSeconds > 0) {
-          // Resume from the paused position
-          synth.seek(resumeSeconds, "seconds");
-          timingCallbacksRef.current?.setProgress(resumeSeconds, "seconds");
-          timingCallbacksRef.current?.start(resumeSeconds, "seconds");
-        } else if (loopMode === "range") {
-          synth.seek(loopStartSeconds, "seconds");
-          timingCallbacksRef.current?.setProgress(loopStartSeconds, "seconds");
-          timingCallbacksRef.current?.start(loopStartSeconds, "seconds");
+      if (resuming && resumeSeconds > 0) {
+        // Resume from the paused position
+        synth.seek(resumeSeconds, "seconds");
+        timingCallbacksRef.current?.setProgress(resumeSeconds, "seconds");
+        timingCallbacksRef.current?.start(resumeSeconds, "seconds");
+      } else if (loopMode === "range") {
+        synth.seek(loopStartSeconds, "seconds");
+        timingCallbacksRef.current?.setProgress(loopStartSeconds, "seconds");
+        timingCallbacksRef.current?.start(loopStartSeconds, "seconds");
+      } else {
+        timingCallbacksRef.current?.start();
+      }
+      try {
+        synth.start();
+        setPlaybackState(true);
+      } catch (startErr: unknown) {
+        const message = startErr instanceof Error ? startErr.message : String(startErr);
+        if (message.includes("onended") || message.includes("undefined")) {
+          console.warn("abcjs synth.start() failed: Sequence is likely empty (only rests). Playback gracefully skipped.");
+          stopSynthPlayback();
+          setPlaybackState(false);
+          releasePlayback(resolvedCanvasId);
         } else {
-          timingCallbacksRef.current?.start();
-        }
-        try {
-          synth.start();
-          setPlaybackState(true);
-        } catch (startErr: unknown) {
-          const message = startErr instanceof Error ? startErr.message : String(startErr);
-          if (message.includes("onended") || message.includes("undefined")) {
-            console.warn("abcjs synth.start() failed: Sequence is likely empty (only rests). Playback gracefully skipped.");
-            setPlaybackState(false);
-            releasePlayback(resolvedCanvasId);
-          } else {
-            throw startErr;
-          }
+          throw startErr;
         }
       }
     } catch (err) {
@@ -400,11 +436,16 @@ export default function AbcjsPlaybackController({
       pausedSecondsRef.current = 0;
       try {
         let synth = synthRef.current;
-        const wasRunning = Boolean(synth?.getIsRunning?.());
-        if (!synth) {
+        if (!isSynthReadyForPlayback(synth)) {
           synth = await initSynth();
         }
-        if (!synth) return;
+        if (!synth) {
+          clearActiveNoteHighlight();
+          setPlaybackState(false);
+          releasePlayback(resolvedCanvasId);
+          return;
+        }
+        const wasRunning = Boolean(synth.getIsRunning?.());
         if (wasRunning) {
           // Suppress the onEnded callback that fires when we seek mid-play
           suppressNextEndedRef.current = true;
@@ -421,8 +462,10 @@ export default function AbcjsPlaybackController({
             const message = startErr instanceof Error ? startErr.message : String(startErr);
             if (message.includes("onended") || message.includes("undefined")) {
               console.warn("abcjs synth.start() failed from note click: Sequence could not start. Playback gracefully skipped.");
+              stopSynthPlayback();
               setPlaybackState(false);
               releasePlayback(resolvedCanvasId);
+              return;
             } else {
               throw startErr;
             }
@@ -434,7 +477,7 @@ export default function AbcjsPlaybackController({
         releasePlayback(resolvedCanvasId);
       }
     },
-    [highlightTimingEvent, initSynth, setPlaybackState, resolvedCanvasId]
+    [clearActiveNoteHighlight, highlightTimingEvent, initSynth, setPlaybackState, stopSynthPlayback, resolvedCanvasId]
   );
   const handleNoteClick = useCallback(
     (abcElement: AbcElement, _tuneNumber: number, _classes: string, analysis?: ClickListenerAnalysis) => {
@@ -466,7 +509,10 @@ export default function AbcjsPlaybackController({
     let nextDuration = 0;
     let nextMillisecondsPerMeasure = 2000;
     let stateTimeoutId: number | null = null;
+    let cleanupScore: void | (() => void);
     const stopRenderedPlayback = () => {
+      synthGenerationRef.current++;
+      synthInitializationRef.current = null;
       if (synthRef.current) {
         try {
           synthRef.current.stop();
@@ -519,6 +565,7 @@ export default function AbcjsPlaybackController({
           timingCallbacksRef.current = null;
         };
       }
+      cleanupScore = onScoreRendered?.(canvas, visualObj[0]);
       visualObjRef.current = visualObj[0];
       timingCallbacksRef.current = new abcjsModule.TimingCallbacks(visualObj[0], {
         qpm: tempo,
@@ -566,14 +613,17 @@ export default function AbcjsPlaybackController({
     }
     return () => {
       if (stateTimeoutId !== null) window.clearTimeout(stateTimeoutId);
+      cleanupScore?.();
       stopRenderedPlayback();
       timingCallbacksRef.current = null;
     };
-  }, [abcjsModule, finalAbcString, clearActiveNoteHighlight, handleNoteClick, highlightTimingEvent, loopEndMeasure, loopMode, loopStartMeasure, onPlaybackCursor, renderOptions, setPlaybackState, tempo, useContainerWidth, containerWidth, visualMarkers]);
+  }, [abcjsModule, finalAbcString, clearActiveNoteHighlight, handleNoteClick, highlightTimingEvent, loopEndMeasure, loopMode, loopStartMeasure, onPlaybackCursor, renderOptions, setPlaybackState, tempo, useContainerWidth, containerWidth, visualMarkers, onScoreRendered]);
 
   // Register this instance with the global playback registry for exclusive playback
   useEffect(() => {
     registerPlayback(resolvedCanvasId, () => {
+      synthGenerationRef.current++;
+      synthInitializationRef.current = null;
       // External stop: called by the registry when another instance claims playback
       if (synthRef.current) {
         try {
@@ -598,6 +648,8 @@ export default function AbcjsPlaybackController({
   // Invalidate synth when synthOptions change so next play uses updated voicesOff/chordsOff
   const synthOptionsKey = JSON.stringify(synthOptions ?? {});
   useEffect(() => {
+    synthGenerationRef.current++;
+    synthInitializationRef.current = null;
     if (synthRef.current) {
       try {
         synthRef.current.stop();

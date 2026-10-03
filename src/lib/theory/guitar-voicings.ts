@@ -15,6 +15,11 @@ function getDbSuffix(parsed: ReturnType<typeof Chord.get>): string {
   const symbol = parsed.symbol;
   const quality = parsed.quality;
 
+  // Dominants have Major quality in Tonal, but need their seventh/extensions.
+  for (const suffix of ["7b5", "7b9", "7#9", "7", "9", "11", "13"]) {
+    if (aliases.includes(suffix)) return suffix;
+  }
+
   if (symbol.includes("sus4")) return "sus4";
   if (symbol.includes("sus2")) return "sus2";
 
@@ -249,7 +254,7 @@ export function generateAlgorithmicVoicings(chordSymbol: string): GuitarVoicing[
   return uniqueVoicings;
 }
 
-export function getGuitarVoicings(chordSymbol: string): GuitarVoicing[] {
+export function getGuitarVoicings(chordSymbol: string, options: { databaseOnly?: boolean } = {}): GuitarVoicing[] {
   const parsed = Chord.get(chordSymbol);
   if (parsed.empty || !parsed.tonic) return [];
 
@@ -281,7 +286,7 @@ export function getGuitarVoicings(chordSymbol: string): GuitarVoicing[] {
 
           const barredStrings = [];
           for (let i = 0; i < 6; i++) {
-             if (frets[i] === barreActualFret || (typeof frets[i] === "number" && frets[i] > barreActualFret)) {
+             if (frets[i] === barreActualFret && (!pos.fingers || pos.fingers[i] === 1)) {
                barredStrings.push(6 - i);
              }
           }
@@ -290,7 +295,7 @@ export function getGuitarVoicings(chordSymbol: string): GuitarVoicing[] {
              barre = {
                fret: barreActualFret,
                fromString: Math.max(...barredStrings),
-               toString: 1
+               toString: Math.min(...barredStrings)
              };
           }
         }
@@ -304,6 +309,8 @@ export function getGuitarVoicings(chordSymbol: string): GuitarVoicing[] {
       });
     }
   }
+
+  if (options.databaseOnly) return voicings;
 
   // Hardcode 5 (power chords) if not found in db
   if (voicings.length === 0 && parsed.symbol.endsWith("5")) {

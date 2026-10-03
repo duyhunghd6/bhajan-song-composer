@@ -46,6 +46,7 @@ Music notation playback lives under `src/components/music-sheet/`.
 - `abcjs-playback/render-input.ts` resolves the exact ABC sent to abcjs, including render-only Guitar forcing, abcjs single-note decoration adaptation, and key/meter/name overrides.
 - `abcjs-playback/AbcjsPlaybackControls.tsx` contains transport, metadata override, tempo, and loop-range controls.
 - `abcjs-playback/AbcjsPlaybackStyles.tsx` contains the scoped styles applied to rendered abcjs output.
+- `guitar-chords/GuitarChordAccompaniment.tsx` adds the accompaniment chord-shape picker, audition, and SVG diagrams. It uses source-bound `voicingOverrides`; `src/lib/theory/guitar-chord-score.ts` resolves the first voice’s chord windows and projects physical string/fret pitches into guitar audio before sample loading. The controller’s `prepareAudio` and `onScoreRendered` hooks keep these projections local to accompaniment playback.
 
 The playback module is intentionally a client-side adapter around abcjs. Callers pass ABC text and optional render/synth settings; the implementation owns abcjs rendering, synth lifecycle, click-to-play, cursor events, and visual post-processing. Render-boundary and Guitar TAB string-mapping rules are in [docs/guides/abcjs-tablature-rendering.md](docs/guides/abcjs-tablature-rendering.md).
 
