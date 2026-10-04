@@ -8,7 +8,7 @@ This guide is the source of truth for **how ABC reaches abcjs** and for the Guit
 
 - Theory modules own canonical/generated arrangement ABC. `src/components/music-sheet/AbcjsPlaybackController.tsx` is the playback adapter, and `abcjs-playback/render-input.ts` is the final transient path: `caller ABC → ABCJS-only adaptation → abcjs.renderAbc`.
 - Do not mutate canonical source, persisted drafts, or export data at a component call site to compensate for abcjs layout/playback behavior. Keep key/meter overrides, hidden voice names, inert-grace sanitization, and Guitar string forcing within the render boundary.
-- Callers pass ABC text and render/synth options; the adapter owns abcjs rendering, synth lifecycle, click-to-play, cursor events, and visual post-processing (`abcjs-playback/abc-rendering.ts`: tempo parsing, beat indicators, lyrics, tablature staff spacing).
+- Callers pass ABC text and render/synth options; the adapter owns abcjs rendering, synth lifecycle, score-to-source selection, cursor events, and visual post-processing (`abcjs-playback/abc-rendering.ts`: tempo parsing, beat indicators, lyrics, tablature staff spacing).
 
 ## 2. Enabling a TAB staff
 <!-- beads-id: br-guide-abcjs-tablature-s02 -->
@@ -51,7 +51,14 @@ abcjs assigns strings by a lowest-fret heuristic unless told otherwise. Guitar T
 
 `cleanAbcForExport()` in `src/lib/theory/abc-layer-visibility.ts` is a portable-export projection used when exporting or copying ABC to the clipboard: it strips all `!N!` string decorations (which other software shows as fingering numbers) and normalizes `clef=treble-8` to `clef=treble` so third-party viewers render the staff correctly. It is not a canonical rewrite.
 
-## 5. Related
+## 5. Source link between ABC text and the score
+<!-- beads-id: br-guide-abcjs-tablature-s06 -->
+
+- abcjs reports `startChar`/`endChar` against the **rendered** string, while editors select against the caller's ABC. `abcjs-playback/source-map.ts` aligns the two strings so render adaptations (key/meter/name overrides, inert-grace sanitization, string forcing) never shift a highlight; never compare raw abcjs offsets with caller offsets.
+- `abcjs-playback/source-selection.ts` indexes engraved elements by caller-ABC range after every render and toggles the preview-only `abcjs-source-selected` class. `abcjs-playback/lyric-alignment.ts` maps a caret in a `w:` line to its note with the ABC 2.1 syllable rules (`-`, `_`, `*`, `|`), because abcjs records no source position per syllable.
+- The controller's `sourceSelection` / `onSourceSelect` props carry the link. Clicking a score element, or pressing Enter on it, only selects; audio starts exclusively from the Play control. The Melody editor (`src/components/composer/abc-editor/AbcSourceEditor.tsx`, CodeMirror 6) feeds its selection in and selects the reported range.
+
+## 6. Related
 <!-- beads-id: br-guide-abcjs-tablature-s05 -->
 
 - [TimeGrid Conversion Guide § Guitar ABC rules](./timegrid-conversion-guide.md) — how TimeGrid events are projected to forced-string Guitar ABC.

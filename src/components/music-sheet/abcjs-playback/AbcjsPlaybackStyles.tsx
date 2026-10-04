@@ -1,9 +1,21 @@
 export function AbcjsPlaybackStyles({ resolvedCanvasId }: { resolvedCanvasId: string }) {
   return (
     <style>{`
+        #${resolvedCanvasId} [data-score-item]:focus {
+          outline: 2px solid #4f46e5;
+          outline-offset: 4px;
+        }
+        #${resolvedCanvasId}:focus-visible { outline: 2px solid #4f46e5; outline-offset: -2px; }
         #${resolvedCanvasId} .abcjs-note,
         #${resolvedCanvasId} .abcjs-chord {
           cursor: pointer;
+        }
+
+        /* Source-linked selection; the playback highlight below wins while playing. */
+        #${resolvedCanvasId} .abcjs-source-selected,
+        #${resolvedCanvasId} .abcjs-source-selected * {
+          fill: #4f46e5 !important;
+          stroke: #4f46e5 !important;
         }
 
         #${resolvedCanvasId} .abcjs-note-active,

@@ -1,4 +1,5 @@
 import type { MusicSheetPlaybackCursorEvent } from "../playback-cursor";
+import type { SourceRange } from "./source-map";
 export type { MusicSheetPlaybackCursorEvent } from "../playback-cursor";
 
 export type ProgressUnit = "seconds" | "beats" | "percent";
@@ -98,6 +99,9 @@ export interface AbcjsVisualMarker {
 }
 
 export interface AbcjsPlaybackControllerProps {
+  /** Opt-in canonical note editing and context actions for Score Workspace. */
+  renderScore?: (score: import("react").ReactNode, playback: { isPlaying: boolean; togglePlayback: () => void }) => import("react").ReactNode;
+  scoreEditing?: import("../score-workspace/note-interactions").ScoreEditingOptions;
   abcString: string;
   title?: string;
   description?: string;
@@ -112,6 +116,8 @@ export interface AbcjsPlaybackControllerProps {
   synthOptions?: AbcjsPlaybackSynthOptions;
   onPlaybackCursor?: (event: MusicSheetPlaybackCursorEvent | null) => void;
   useContainerWidth?: boolean;
+  /** Responsive notation size relative to the available staff width; audio/source stay unchanged. */
+  notationScale?: number;
   hideVoiceNames?: boolean;
   /** Show a copy action for the exact ABC string passed to abcjs.renderAbc(). */
   showExactRenderAbcCopy?: boolean;
@@ -122,4 +128,11 @@ export interface AbcjsPlaybackControllerProps {
   /** Projects audio before soundfont samples are loaded. */
   prepareAudio?: (visualObj: VisualObj) => VisualObj;
   onScoreRendered?: (container: HTMLDivElement, visualObj: VisualObj) => void | (() => void);
+  /**
+   * Selection in `abcString` offsets to highlight in the score (preview-only).
+   * Omit to let score clicks keep their own selection.
+   */
+  sourceSelection?: SourceRange | null;
+  /** Clicking (or Enter on) a score element reports its `abcString` range; it never starts playback. */
+  onSourceSelect?: (range: SourceRange) => void;
 }

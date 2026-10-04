@@ -1,12 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import type { KeyboardEvent } from "react";
-import AbcjsPlaybackController from "@/components/music-sheet/AbcjsPlaybackController";
+import { Button } from "@/components/ui/Button";
+
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import styles from "./workspace/studio.module.css";
+import type { ReactNode } from "react";
+import AbcjsPlaybackController, { type SourceRange } from "@/components/music-sheet/AbcjsPlaybackController";
+import AbcSourceEditor, { type AbcSourceEditorHandle } from "./abc-editor/AbcSourceEditor";
 import { validateAbcNotation, type AbcValidationEdit } from "@/app/actions/abc-validation";
 
 const DEFAULT_STORAGE_KEY = "bhajan-song-composer:abc-editor:draft";
-const MAX_HISTORY = 100;
 
 export const DEFAULT_ABC = `X:1
 T:New Bhajan Arrangement
@@ -16,13 +20,9 @@ Q:1/4=120
 K:Em
 |: E2 E2 G2 A2 | B4 B2 A2 | G2 A2 B2 G2 | E8 :|`;
 
-type EditorHistory = {
-  past: string[];
-  present: string;
-  future: string[];
-};
-
 interface AbcEditorProps {
+  studio?: boolean;
+  studioActions?: ReactNode;
   initialAbc?: string;
   storageKey?: string;
   manageStorage?: boolean;
@@ -32,6 +32,8 @@ interface AbcEditorProps {
 }
 
 export default function AbcEditor({
+  studio = false,
+  studioActions,
   initialAbc = DEFAULT_ABC,
   storageKey = DEFAULT_STORAGE_KEY,
   manageStorage = true,
@@ -39,11 +41,12 @@ export default function AbcEditor({
   value,
   onChange,
 }: AbcEditorProps) {
-  const [history, setHistory] = useState<EditorHistory>({
-    past: [],
-    present: value ?? initialAbc,
-    future: [],
-  });
+  // Undo/redo history lives in CodeMirror; this is the current text only.
+  const [text, setText] = useState(value ?? initialAbc);
+  const [historyState, setHistoryState] = useState({ canUndo: false, canRedo: false });
+  // Source selection drives the score highlight; score clicks write it back.
+  const [sourceSelection, setSourceSelection] = useState<SourceRange | null>(null);
+  const editorRef = useRef<AbcSourceEditorHandle>(null);
   const [storageStatus, setStorageStatus] = useState(
     manageStorage ? "Draft saves locally in this browser." : "Draft persistence is managed by the Composer workspace."
   );
@@ -52,8 +55,7 @@ export default function AbcEditor({
   const [validationFeedback, setValidationFeedback] = useState<string | null>(null);
   const [validationEdits, setValidationEdits] = useState<AbcValidationEdit[] | null>(null);
 
-  const canUndo = history.past.length > 0;
-  const canRedo = history.future.length > 0;
+  const { canUndo, canRedo } = historyState;
   const previewRenderOptions = useMemo(
     () => ({
       staffwidth: 720,
@@ -70,29 +72,19 @@ export default function AbcEditor({
 
   const suggestedAbcPreview = useMemo(() => {
     if (!validationEdits) return null;
-    let nextAbc = history.present;
+    let nextAbc = text;
     for (const edit of validationEdits) {
       if (edit.originalLines) {
         nextAbc = nextAbc.replace(edit.originalLines, edit.newLines || "");
       }
     }
     return nextAbc;
-  }, [history.present, validationEdits]);
+  }, [text, validationEdits]);
 
   useEffect(() => {
     if (value === undefined) return;
 
-    const timeoutId = window.setTimeout(() => {
-      setHistory((current) => {
-        if (current.present === value) return current;
-
-        return {
-          past: [...current.past, current.present].slice(-MAX_HISTORY),
-          present: value,
-          future: [],
-        };
-      });
-    }, 0);
+    const timeoutId = window.setTimeout(() => setText(value), 0);
 
     return () => window.clearTimeout(timeoutId);
   }, [value]);
@@ -104,7 +96,7 @@ export default function AbcEditor({
       try {
         const savedDraft = window.localStorage.getItem(storageKey);
         if (savedDraft) {
-          setHistory({ past: [], present: savedDraft, future: [] });
+          setText(savedDraft);
           setStorageStatus("Loaded a saved draft from this browser.");
           onChange?.(savedDraft);
         }
@@ -124,7 +116,7 @@ export default function AbcEditor({
 
     const timeoutId = window.setTimeout(() => {
       try {
-        window.localStorage.setItem(storageKey, history.present);
+        window.localStorage.setItem(storageKey, text);
         setStorageStatus("Draft saved locally in this browser.");
       } catch (err) {
         console.error("Error saving ABC editor draft:", err);
@@ -133,52 +125,15 @@ export default function AbcEditor({
     }, 0);
 
     return () => window.clearTimeout(timeoutId);
-  }, [hasLoadedStorage, history.present, storageKey, manageStorage]);
+  }, [hasLoadedStorage, text, storageKey, manageStorage]);
 
   const commitText = useCallback((nextText: string) => {
-    setHistory((current) => {
-      if (nextText === current.present) return current;
-
-      return {
-        past: [...current.past, current.present].slice(-MAX_HISTORY),
-        present: nextText,
-        future: [],
-      };
-    });
+    setText(nextText);
     onChange?.(nextText);
   }, [onChange]);
 
-  const undo = useCallback(() => {
-    if (history.past.length === 0) return;
-
-    const previous = history.past[history.past.length - 1];
-    setHistory((current) => {
-      if (current.past.length === 0) return current;
-
-      return {
-        past: current.past.slice(0, -1),
-        present: previous,
-        future: [current.present, ...current.future].slice(0, MAX_HISTORY),
-      };
-    });
-    onChange?.(previous);
-  }, [history.past, onChange]);
-
-  const redo = useCallback(() => {
-    if (history.future.length === 0) return;
-
-    const next = history.future[0];
-    setHistory((current) => {
-      if (current.future.length === 0) return current;
-
-      return {
-        past: [...current.past, current.present].slice(-MAX_HISTORY),
-        present: next,
-        future: current.future.slice(1),
-      };
-    });
-    onChange?.(next);
-  }, [history.future, onChange]);
+  const undo = () => editorRef.current?.undo();
+  const redo = () => editorRef.current?.redo();
 
   const resetToSample = () => {
     commitText(initialAbc);
@@ -196,36 +151,12 @@ export default function AbcEditor({
     }
   };
 
-  const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    const isModifierPressed = event.metaKey || event.ctrlKey;
-    const key = event.key.toLowerCase();
-
-    if (!isModifierPressed) return;
-
-    if (key === "z" && event.shiftKey) {
-      event.preventDefault();
-      redo();
-      return;
-    }
-
-    if (key === "z") {
-      event.preventDefault();
-      undo();
-      return;
-    }
-
-    if (key === "y") {
-      event.preventDefault();
-      redo();
-    }
-  };
-
   const handleValidate = async () => {
     try {
       setIsValidating(true);
       setValidationFeedback(null);
       setValidationEdits(null);
-      const result = await validateAbcNotation(history.present);
+      const result = await validateAbcNotation(text);
       setValidationFeedback(result.feedback);
       setValidationEdits(result.edits);
     } catch (err) {
@@ -250,111 +181,124 @@ export default function AbcEditor({
   };
 
   return (
-    <section className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-md overflow-hidden">
-      <div className="flex flex-wrap gap-4 items-center justify-between border-b border-zinc-100 dark:border-zinc-800 p-5">
+    <section className={studio ? styles.editor : "w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-md overflow-hidden"}>
+      <div className={studio ? styles.editorToolbar : "flex flex-wrap gap-4 items-center justify-between border-b border-zinc-100 dark:border-zinc-800 p-5"}>
         <div>
-          <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">{title}</h2>
+          {studio ? <h1 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Melody editor</h1> : <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">{title}</h2>}
           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            Type ABC notation and preview the rendered staff in real time.
+            {studio ? "Changes appear in your score as you type." : "Type ABC notation and preview the rendered staff in real time."}
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <button
+          <Button variant="secondary" size="sm"
             id="abc-editor-undo"
             type="button"
             onClick={undo}
             disabled={!canUndo}
-            className="px-3 py-2 text-xs font-semibold rounded-xl border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+
           >
             Undo
-          </button>
-          <button
+          </Button>
+          <Button variant="secondary" size="sm"
             id="abc-editor-redo"
             type="button"
             onClick={redo}
             disabled={!canRedo}
-            className="px-3 py-2 text-xs font-semibold rounded-xl border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+
           >
             Redo
-          </button>
-          <button
+          </Button>
+          <details className={styles.editorTools}><summary>More actions</summary><div>
+          <Button variant="danger" size="sm"
             id="abc-editor-reset-sample"
             type="button"
             onClick={resetToSample}
-            className="px-3 py-2 text-xs font-semibold rounded-xl bg-amber-500 hover:bg-amber-600 text-white shadow-sm transition-all cursor-pointer"
+
           >
             Reset sample
-          </button>
-          <button
+          </Button>
+          <Button variant="danger" size="sm"
             id="abc-editor-clear-draft"
             type="button"
             onClick={clearSavedDraft}
-            className="px-3 py-2 text-xs font-semibold rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 transition-all cursor-pointer"
+
           >
             Clear draft
-          </button>
+          </Button>
+          </div></details>
         </div>
+        {studio && studioActions}
       </div>
 
-      <div className="abc-editor-responsive-grid border-b border-zinc-100 dark:border-zinc-800">
-        <div className="abc-editor-source-panel min-w-0 space-y-3 p-5 border-r border-zinc-100 dark:border-zinc-800">
+      <div className={studio ? styles.editorGrid : "abc-editor-responsive-grid border-b border-zinc-100 dark:border-zinc-800"}>
+        <div className={studio ? styles.source : "abc-editor-source-panel min-w-0 space-y-3 p-5 border-r border-zinc-100 dark:border-zinc-800"}>
           <div className="flex items-center justify-between gap-3">
-            <label
-              htmlFor="abc-editor-input"
+            <span
+              id="abc-editor-label"
               className="text-sm font-semibold text-zinc-900 dark:text-zinc-100"
             >
               ABC source
-            </label>
+            </span>
             <span className="text-[11px] text-zinc-400 dark:text-zinc-500">
               Cmd/Ctrl+Z undo · Cmd/Ctrl+Shift+Z redo
             </span>
           </div>
 
-          <textarea
+          <AbcSourceEditor
+            ref={editorRef}
             id="abc-editor-input"
-            value={history.present}
-            onChange={(event) => commitText(event.target.value)}
-            onKeyDown={handleKeyDown}
-            spellCheck={false}
-            className="abc-editor-textarea min-h-[420px] w-full resize-y rounded-xl border border-zinc-200 bg-zinc-50/70 p-4 font-mono text-sm leading-6 text-zinc-900 shadow-inner placeholder:text-zinc-400 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-amber-500 dark:border-zinc-800 dark:bg-zinc-950/70 dark:text-zinc-100"
-            placeholder="X:1&#10;T:My Bhajan&#10;M:4/4&#10;K:C&#10;C D E F | G A B c |"
+            ariaLabelledBy="abc-editor-label"
+            value={text}
+            onChange={commitText}
+            onSelectionChange={setSourceSelection}
+            onHistoryChange={setHistoryState}
+            className={studio ? styles.sourceEditor : "abc-editor-textarea"}
+            placeholder={"X:1\nT:My Bhajan\nM:4/4\nK:C\nC D E F | G A B c |"}
           />
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">{storageStatus}</p>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">{studio && !manageStorage ? "Edit the notation, then listen to check your changes." : storageStatus}</p>
 
-          <button
+          <Button variant="secondary" size="md"
             type="button"
             onClick={handleValidate}
             disabled={isValidating}
-            className="w-full mt-2 py-3 px-4 font-semibold rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:hover:bg-indigo-900/50 dark:text-indigo-300 transition-all cursor-pointer disabled:opacity-50"
+            className="mt-2"
           >
             {isValidating ? "Validating..." : "Validate ABCNotation"}
-          </button>
+          </Button>
         </div>
 
-        <div className="min-w-0 space-y-3 p-5">
+        <div className={studio ? styles.preview : "min-w-0 space-y-3 p-5"}>
+          {!studio && (
           <div className="flex items-center justify-between gap-3">
             <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-              Music Sheet (ABCJS rendering)
+              {studio ? "Your score" : "Music Sheet (ABCJS rendering)"}
             </h3>
             <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
-              Bounded preview
+              {studio ? "Live preview" : "Bounded preview"}
             </span>
           </div>
+          )}
 
           <AbcjsPlaybackController
-            abcString={history.present}
+            abcString={text}
             title="Editor Music Sheet Preview"
             canvasId="abc-editor-preview"
-            minWidthClassName="min-w-[520px] max-w-[760px]"
+            useContainerWidth={studio}
+            notationScale={studio ? 0.7 : 1}
+            hideVoiceNames={studio}
+            showExactRenderAbcCopy={studio}
+            minWidthClassName={studio ? "min-w-[520px]" : "min-w-[520px] max-w-[760px]"}
             sheetViewportClassName="max-h-[min(72vh,780px)] overflow-auto p-4"
             renderOptions={previewRenderOptions}
+            sourceSelection={sourceSelection}
+            onSourceSelect={(range) => editorRef.current?.selectRange(range)}
           />
         </div>
       </div>
 
       {validationFeedback && (
-        <div className="bg-indigo-50/30 dark:bg-indigo-950/30">
+        <div className={studio ? styles.validation : "bg-indigo-50/30 dark:bg-indigo-950/30"}>
           <div className="p-5 border-b border-indigo-100 dark:border-indigo-900/50">
             <h4 className="text-sm font-semibold text-indigo-900 dark:text-indigo-100 mb-2">AI Suggestion</h4>
             <p className="text-sm text-indigo-800 dark:text-indigo-200 mb-4 whitespace-pre-wrap">
@@ -385,20 +329,20 @@ export default function AbcEditor({
             )}
             {validationEdits && (
               <div className="flex flex-wrap items-center gap-2">
-                <button
+                <Button variant="primary" size="sm"
                   type="button"
                   onClick={applySuggestion}
-                  className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-all cursor-pointer"
+
                 >
                   Apply Suggestion
-                </button>
-                <button
+                </Button>
+                <Button variant="ghost" size="sm"
                   type="button"
                   onClick={dismissSuggestion}
-                  className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-indigo-100 hover:bg-indigo-200 text-indigo-700 dark:bg-indigo-900/40 dark:hover:bg-indigo-900/60 dark:text-indigo-300 transition-all cursor-pointer"
+
                 >
                   Dismiss
-                </button>
+                </Button>
               </div>
             )}
           </div>

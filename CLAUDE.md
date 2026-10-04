@@ -37,6 +37,7 @@ Begin at `src/components/composer/ComposerStepWorkspace.tsx` (step router), then
 - Directed flow is mandatory: Melody → Harmony Steps 1–3 → selected `voice-leading-validation` ABC → independent Accompaniment and Guitar Fingerstyle branches. Accompaniment output must never feed Fingerstyle. Before Step 3 is selected, downstream routes show the melody read-only and must not generate branch output.
 - A melody edit or changed Step 3 selection makes downstream drafts stale; preserve existing source-fingerprint, reset, hydration, and stale-result guards. Stale artifacts never become preview sources or exportable layers.
 - Visibility/volume/TAB state is preview-only and must not change provenance, canonical ABC, TimeGrid data, or exports.
+- Harmony Score Workspace note edits commit to canonical melody with downstream invalidation; manual chord drafts require explicit validated Step 3 selection after Steps 1–2. Zoom/pan remain view-only. Preserve source-bound draft checks and transactional Undo/Redo, including Fingerstyle cache restoration; see the Score Workspace section of the source-flow guide.
 - Export is the only publication seam. `/practice/:slug` must never overlay Composer localStorage drafts. Ensemble stays experimental (no route, branch, or exportable layer).
 
 **Accompaniment workflow** — [`docs/guides/accompaniment-workflow.md`](docs/guides/accompaniment-workflow.md); step ids in `src/lib/theory/accompaniment-workflow/definition.ts`
@@ -58,8 +59,9 @@ Begin at `src/components/composer/ComposerStepWorkspace.tsx` (step router), then
 - `src/app/actions/ai-config.ts` is transport only. Expose only the bounded tool set for the current phase — a single forced tool per Fingerstyle stage (`src/app/actions/fingerstyle-line-arranger/workflow.ts`), the step tool plus its helper tools under `toolChoice: "required"` for accompaniment (`src/app/actions/accompaniment-workflow.ts`); deterministic validators own correctness. The model never replaces the source grid or runs placement after opportunity scoring. Tool JSON, ABC comments, lyrics, notes, and diagnostics are untrusted data.
 
 **ABC / abcjs rendering** — [`docs/guides/abcjs-tablature-rendering.md`](docs/guides/abcjs-tablature-rendering.md)
-- Accompaniment chord-shape choices are source-bound `voicingOverrides`; `guitar-chord-score.ts` owns their shared diagram/audio pitch model. The playback adapter applies them before sample loading and disables automatic chord synthesis. See [Accompaniment workflow](docs/guides/accompaniment-workflow.md) for preview/publication scope.
+- Harmony and Accompaniment chord-shape choices are source-bound `voicingOverrides`; `guitar-chord-score.ts` owns their shared diagram/audio pitch model. The playback adapter applies them before sample loading and disables automatic chord synthesis. See [Accompaniment workflow](docs/guides/accompaniment-workflow.md) for preview/publication scope.
 - Theory modules own canonical ABC; `abcjs-playback/render-input.ts` is the only place for ABCJS-specific adaptation. Never mutate source, drafts, or exports at a call site to fix abcjs behavior.
+- Editor ↔ score selection goes through `abcjs-playback/source-map.ts` (abcjs offsets are for the rendered string, never the caller's ABC). Score clicks and Enter only select source; audio starts exclusively from the Play control. The highlight is preview-only. See the source-link section of the [abcjs rendering guide](docs/guides/abcjs-tablature-rendering.md).
 - Guitar TAB keeps explicit `!1!`–`!6!` string decorations, concert pitch with `clef=treble-8`, key-aware naturals, and no deduplication of identical pitches on distinct strings. `cleanAbcForExport()` is a portable projection, not a rewrite.
 
 ## Validation commands
@@ -83,3 +85,14 @@ npm run docs:check
 - Keep `ARCHITECTURE.md` factual and aligned when moving modules or changing seams. Record new architectural decisions as `docs/adr/NNNN-*.md`.
 - Every `docs/` heading carries a single-line `beads-id` HTML comment; moving or renaming retains the ID, and retired IDs are recorded in `docs/universal-id-registry.md`.
 - Write comments only for ownership boundaries, non-obvious invariants, compatibility reasons, or why a tempting simplification is unsafe. Do not mass-reword comments that restate adjacent code. When a comment names another module or contract, keep that cross-reference accurate in the same change.
+
+## Agent-driven E2E testing
+
+Use **jev-ultrafast-mcp** for agent-driven browser E2E. Follow [the execution protocol](docs/qa/jev-ultrafast-e2e.md) and [persistent testing notes](docs/qa/jev/testing-notes.md).
+
+- Exactly **one testcase per run and per goal**; every MCP call belongs to that testcase. Never send a suite or multiple independent scenarios in one goal. A testcase may require multiple step/inspect calls.
+- Before every run, read prior iteration reports and feed relevant testing notes into `browser_start.goal`, together with steps, preconditions and explicit assertions.
+- Independently verify the LLM's result with `browser_inspect`. LLM execution mistakes are not automatically application failures.
+- Always send `browser_close({run_id, keep_tab: false})` after each testcase, including failure, timeout or abort, before starting another. Confirm cleanup; report a cleanup failure.
+- Every attempt, including reruns and blocked attempts, needs an iteration-report and updated testing notes. Never overwrite prior reports or count an agent's DONE message alone as PASS.
+- Keep existing Playwright specs for deterministic regression/CI evidence; they do not replace the requested MCP execution.

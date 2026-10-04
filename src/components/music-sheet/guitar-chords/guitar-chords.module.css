@@ -16,8 +16,11 @@
 .card {
   border: 2px solid #e4e4e7;
   border-radius: 12px;
-  padding: 12px;
+  padding: 10px;
+  cursor: pointer;
 }
 .card[data-selected="true"] { border-color: #4f46e5; background: #eef2ff; }
 .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 @media (max-width: 700px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+.card:focus-visible { outline: 2px solid #4f46e5; outline-offset: 3px; }

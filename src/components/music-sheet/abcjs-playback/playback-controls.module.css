@@ -1,0 +1,11 @@
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--ds-space-1) var(--ds-space-2); padding: var(--ds-space-1) var(--ds-space-2); background: var(--ds-surface); color: var(--ds-text); border-bottom: var(--ds-border-width) solid var(--ds-border); font-size: var(--ds-font-sm); }
+.transport, .buttons, .settings, .metadata, .tempo, .range { display: flex; align-items: center; gap: var(--ds-space-1); }
+.transport { gap: var(--ds-space-2); }
+.settings { flex-wrap: wrap; justify-content: flex-end; margin-left: auto; }
+.metadata { flex-wrap: wrap; }
+.metadata label { display: flex; align-items: center; gap: var(--ds-space-1); color: var(--ds-text-muted); font-size: var(--ds-font-xs); }
+.time { font-family: var(--font-geist-mono), monospace; color: var(--ds-text-muted); font-size: var(--ds-font-xs); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tempo { font-size: var(--ds-font-xs); color: var(--ds-text-muted); }
+.tempo strong { min-width: 24px; text-align: center; color: var(--ds-accent-text); font-variant-numeric: tabular-nums; }
+.range { flex-wrap: wrap; font-size: var(--ds-font-xs); color: var(--ds-text-muted); }
+.range input { width: 56px; }

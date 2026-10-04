@@ -1,0 +1,48 @@
+.editor {
+  --line: var(--ds-border);
+  --surface: var(--ds-surface);
+  --muted: var(--ds-text-muted);
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 16px;
+  align-items: start;
+}
+.editorToolbar { grid-column: 1; grid-row: 1; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--ds-space-3); padding: var(--ds-space-4); border: 1px solid var(--line); border-radius: 12px 12px 0 0; background: var(--surface); }
+.editorToolbar h2 { font-size: var(--ds-font-title); font-weight: 600; }
+.editorToolbar p { font-size: var(--ds-font-md); }
+.editorTools { position: relative; font-size: var(--ds-font-sm); }
+.editorTools summary { min-height: max(var(--ds-control-sm), var(--ds-hit-min)); padding: var(--ds-space-1) var(--ds-space-2); cursor: pointer; color: var(--ds-text-muted); border-radius: 8px; }
+.editorTools > div { position: absolute; right: 0; top: 100%; z-index: 10; display: flex; flex-direction: column; gap: 8px; min-width: 160px; padding: 12px; border: 1px solid var(--ds-border); border-radius: var(--ds-radius-panel); background: var(--surface); box-shadow: var(--ds-shadow-panel); }
+.editorGrid { display: contents; }
+.source, .preview { min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+.source > div:first-child { flex-wrap: wrap; }
+.source textarea { height: min(62vh, 660px); min-height: 360px; border-radius: var(--ds-radius-panel); font-size: var(--ds-font-md); line-height: 1.85; tab-size: 2; }
+.source > p { font-size: var(--ds-font-xs); line-height: 1.7; }
+.source .sourceEditor { height: min(62vh, 660px); min-height: 360px; border-radius: var(--ds-radius-panel); }
+.source .sourceEditor :global(.cm-scroller) { font-size: var(--ds-font-md); line-height: 1.85; }
+
+.editor :is(button, summary, textarea):focus-visible { outline: var(--ds-focus-width) solid var(--ds-focus); outline-offset: var(--ds-focus-offset); }
+.prerequisite { padding: 26px 24px; display: flex; flex-direction: column; align-items: start; gap: 18px; }
+.prerequisite h3 { font-size: 21px; font-weight: 600; line-height: 1.4; letter-spacing: -.025em; }
+.prerequisite p { color: var(--muted); font-size: var(--ds-font-body); line-height: 1.85; }
+.eyebrow { color: var(--ds-accent-text); font-size: 10px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; }
+.prerequisite .hint { font-size: var(--ds-font-sm); }
+
+@media (max-width: 1023px) { .source textarea, .source .sourceEditor { height: 360px; } }
+@media (max-width: 540px) { .editorToolbar { align-items: start; } .source textarea, .source .sourceEditor { min-height: 280px; height: 320px; } }
+
+.source { grid-column: 1; grid-row: 2; padding: var(--ds-space-4); border: 1px solid var(--line); border-top: 0; border-radius: 0 0 12px 12px; background: var(--surface); }
+.preview { grid-column: 2; grid-row: 1 / span 3; }
+.validation { grid-column: 1; grid-row: 3; min-width: 0; margin-top: 16px; border: 1px solid var(--line); border-radius: var(--ds-radius-panel); overflow: hidden; }
+.validation > div, .validation > div > div { min-width: 0; }
+.validation :global(.abc-editor-responsive-grid) { display: block; }
+.validation :global(.abc-editor-textarea) { min-height: 200px; }
+
+@media (max-width: 900px) {
+  .editor { grid-template-columns: minmax(0, 1fr); }
+  .preview { grid-column: 1; grid-row: 1; margin-bottom: 16px; }
+  .editorToolbar { grid-row: 2; }
+  .source { grid-row: 3; }
+  .validation { grid-row: 4; }
+}
