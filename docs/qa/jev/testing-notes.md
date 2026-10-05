@@ -125,3 +125,8 @@ Compact-toolbar deterministic checks: seven layout/gate cases, five keyboard/pla
 <!-- beads-id: br-qa-jev-notes-flat-staff -->
 
 [Attempt 1](iterations/20261005T040000Z-HARMONY-FLAT-STAFF-01-attempt-1-iteration-report.md): browser_start returned `no close frame received or sent`, without a run ID. No inspect or addressed close possible. Immediate read-only CDP inventory showed no Composer tabs; cleanup resolved by absence. BLOCKED by transport, not application failure. Separate Playwright checks pass for one Harmony player frame, borderless embedded score workspace, one scroll viewport, retained controls, focus frame restoration and mobile page width. Focus the Scrollable score before Escape when exiting focus mode. Screenshots inspected; no MCP PASS claimed.
+
+## HARMONY-REFRESH-01 — idle stability
+<!-- beads-id: br-qa-jev-notes-refresh -->
+
+[Attempt 1](iterations/20261005T082013Z-HARMONY-REFRESH-01-attempt-1-iteration-report.md): startup returned `no close frame received or sent` without a run ID; inspect/addressed close unavailable. CDP inventory showed no Composer tabs, resolving cleanup by absence. MCP BLOCKED, no PASS. Separate deterministic probe reproduced HMR WebSocket failures on LAN origin and a reload. Allow the LAN hostname in Next.js allowedDevOrigins; origin-free curl alone misses this bug. Observe navigation and WebSocket failures independently when rerunning; do not edit the existing Ganesha draft.
