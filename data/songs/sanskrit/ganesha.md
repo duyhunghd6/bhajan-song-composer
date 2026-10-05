@@ -1,22 +1,29 @@
 ---
-title: "Ganesha, Ganesha"
-slug: "ganesha"
-language: "sanskrit"
-category: "praise"
-key: "C"
-timeSignature: "4/4"
+title: 'Ganesha, Ganesha'
+slug: ganesha
+language: sanskrit
+category: praise
+key: C
+timeSignature: 4/4
 videos:
-  - type: "full-performance"
-    url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
-    label: "Full Performance"
+  - type: full-performance
+    url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
+    label: Full Performance
     default: true
 abcNotations:
-  - type: "melody"
-    label: "Melody Music Sheet"
+  - type: melody
+    label: Melody Music Sheet
     default: true
-tags: ["bhajan", "sanskrit", "ganesha"]
-composer: "Traditional"
-contributors: ["community"]
+  - type: accompaniment
+    label: Accompaniment Arrangement
+    default: false
+tags:
+  - bhajan
+  - sanskrit
+  - ganesha
+composer: Traditional
+contributors:
+  - community
 ---
 
 ## Lyrics

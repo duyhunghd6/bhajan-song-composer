@@ -72,6 +72,7 @@ export default function SongEditList({ songs }: SongEditListProps) {
       ) : (
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {filteredSongs.map((song) => {
+            const metadataHref = `/compose?edit=${song.meta.slug}`;
             const hasVideo = song.meta.videos && song.meta.videos.length > 0;
             const hasBackingTrack =
               song.meta.videos?.some((v) => v.type === "backing-track") ||
@@ -128,73 +129,75 @@ export default function SongEditList({ songs }: SongEditListProps) {
                     <p className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">
                       Available Resources
                     </p>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                      Choose a resource to edit it or add a new layer. Guitar and Piano open their Layer 2 lane after Harmony is validated.
+                    </p>
                     <div className="flex flex-wrap gap-1.5">
-                      {/* Video */}
-                      <span
-                        data-indicator="video"
-                        className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs border transition-all ${
-                          hasVideo
-                            ? "bg-rose-50 text-rose-700 border-rose-100 dark:bg-rose-950/20 dark:text-rose-300 dark:border-rose-900/45 opacity-100 font-medium"
-                            : "bg-zinc-50 text-zinc-400 border-zinc-100 dark:bg-zinc-950/20 dark:text-zinc-600 dark:border-zinc-900/45 opacity-40"
-                        }`}
-                      >
-                        📹 Video
-                      </span>
-
-                      {/* Backing Track */}
-                      <span
-                        data-indicator="backing-track"
-                        className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs border transition-all ${
-                          hasBackingTrack
-                            ? "bg-emerald-50 text-emerald-700 border-emerald-100 dark:bg-emerald-950/20 dark:text-emerald-300 dark:border-emerald-900/45 opacity-100 font-medium"
-                            : "bg-zinc-50 text-zinc-400 border-zinc-100 dark:bg-zinc-950/20 dark:text-zinc-600 dark:border-zinc-900/45 opacity-40"
-                        }`}
-                      >
-                        🎹 BT
-                      </span>
-
-                      {/* Melody */}
-                      <span
-                        data-indicator="melody"
-                        className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs border transition-all ${
-                          hasMelody
-                            ? "bg-indigo-50 text-indigo-700 border-indigo-100 dark:bg-indigo-950/20 dark:text-indigo-300 dark:border-indigo-900/45 opacity-100 font-medium"
-                            : "bg-zinc-50 text-zinc-400 border-zinc-100 dark:bg-zinc-950/20 dark:text-zinc-600 dark:border-zinc-900/45 opacity-40"
-                        }`}
-                      >
-                        🎼 Melody
-                      </span>
-
-                      {/* Guitar */}
-                      <span
-                        data-indicator="guitar"
-                        className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs border transition-all ${
-                          hasGuitar
-                            ? "bg-amber-50 text-amber-700 border-amber-100 dark:bg-amber-950/20 dark:text-amber-300 dark:border-amber-900/45 opacity-100 font-medium"
-                            : "bg-zinc-50 text-zinc-400 border-zinc-100 dark:bg-zinc-950/20 dark:text-zinc-600 dark:border-zinc-900/45 opacity-40"
-                        }`}
-                      >
-                        🎸 Guitar
-                      </span>
-
-                      {/* Piano */}
-                      <span
-                        data-indicator="piano"
-                        className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs border transition-all ${
-                          hasPiano
-                            ? "bg-cyan-50 text-cyan-700 border-cyan-100 dark:bg-cyan-950/20 dark:text-cyan-300 dark:border-cyan-900/45 opacity-100 font-medium"
-                            : "bg-zinc-50 text-zinc-400 border-zinc-100 dark:bg-zinc-950/20 dark:text-zinc-600 dark:border-zinc-900/45 opacity-40"
-                        }`}
-                      >
-                        🎹 Piano
-                      </span>
+                      {[
+                        {
+                          id: "video",
+                          icon: "📹",
+                          label: "Video",
+                          available: hasVideo,
+                          href: `${metadataHref}#video-resources`,
+                          availableClass: "bg-rose-50 text-rose-700 border-rose-100 dark:bg-rose-950/20 dark:text-rose-300 dark:border-rose-900/45",
+                        },
+                        {
+                          id: "backing-track",
+                          icon: "🎹",
+                          label: "BT",
+                          available: hasBackingTrack,
+                          href: `${metadataHref}#notation-resources`,
+                          availableClass: "bg-emerald-50 text-emerald-700 border-emerald-100 dark:bg-emerald-950/20 dark:text-emerald-300 dark:border-emerald-900/45",
+                        },
+                        {
+                          id: "melody",
+                          icon: "🎼",
+                          label: "Melody",
+                          available: hasMelody,
+                          href: `/compose/${song.meta.slug}/melody`,
+                          availableClass: "bg-indigo-50 text-indigo-700 border-indigo-100 dark:bg-indigo-950/20 dark:text-indigo-300 dark:border-indigo-900/45",
+                        },
+                        {
+                          id: "guitar",
+                          icon: "🎸",
+                          label: "Guitar",
+                          available: hasGuitar,
+                          href: `/compose/${song.meta.slug}/accompaniment?instrument=guitar-classic`,
+                          availableClass: "bg-amber-50 text-amber-700 border-amber-100 dark:bg-amber-950/20 dark:text-amber-300 dark:border-amber-900/45",
+                        },
+                        {
+                          id: "piano",
+                          icon: "🎹",
+                          label: "Piano",
+                          available: hasPiano,
+                          href: `/compose/${song.meta.slug}/accompaniment?instrument=piano`,
+                          availableClass: "bg-cyan-50 text-cyan-700 border-cyan-100 dark:bg-cyan-950/20 dark:text-cyan-300 dark:border-cyan-900/45",
+                        },
+                      ].map((resource) => (
+                        <Link
+                          key={resource.id}
+                          data-indicator={resource.id}
+                          href={resource.href}
+                          aria-label={`${resource.available ? "Edit" : "Add"} ${resource.label} for ${song.meta.title}`}
+                          className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-xs transition-all focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-1 hover:-translate-y-px hover:shadow-sm ${
+                            resource.available
+                              ? `${resource.availableClass} font-medium`
+                              : "border-zinc-100 bg-zinc-50 text-zinc-500 dark:border-zinc-900/45 dark:bg-zinc-950/20 dark:text-zinc-500"
+                          }`}
+                        >
+                          <span aria-hidden="true">{resource.icon}</span>
+                          {resource.label}
+                          <span className="sr-only"> — {resource.available ? "Edit" : "Add"}</span>
+                        </Link>
+                      ))}
                     </div>
                   </div>
                 </div>
 
                 <div className="mt-5 border-t border-zinc-100 dark:border-zinc-800 pt-4 flex justify-end">
                   <Link
-                    href={`/compose?edit=${song.meta.slug}`}
+                    href={metadataHref}
                     className="edit-song-btn w-full sm:w-auto text-center inline-flex items-center justify-center px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-800 hover:border-amber-500 text-zinc-700 dark:text-zinc-200 hover:text-white hover:bg-amber-500 transition-all font-semibold text-xs cursor-pointer shadow-sm"
                   >
                     Edit Song

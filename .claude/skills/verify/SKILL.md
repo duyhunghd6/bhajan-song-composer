@@ -4,8 +4,8 @@ Use this when verifying runtime behavior in the bhajan-song-composer app.
 
 ## App launch
 
-- The app runs with `npm run dev` on port `9994`.
-- If `npm run dev` fails with `EADDRINUSE`, check `http://localhost:9994`; an existing dev server may already be running and can be used for verification.
+- The app runs with `npm run dev` on port `9974`.
+- If `npm run dev` fails with `EADDRINUSE`, check `http://localhost:9974`; an existing dev server may already be running and can be used for verification.
 - Dynamic compose routes are constrained by `generateStaticParams()` because the project uses static export. Use `/compose/new-bhajan-arrangement/<step>` for a guaranteed generated composer route.
 
 ## Browser verification
@@ -18,7 +18,7 @@ const { chromium } = require('playwright');
 (async () => {
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage({ viewport: { width: 1440, height: 1400 } });
-  await page.goto('http://localhost:9994/compose/new-bhajan-arrangement/accompaniment', { waitUntil: 'networkidle' });
+  await page.goto('http://localhost:9974/compose/new-bhajan-arrangement/accompaniment', { waitUntil: 'networkidle' });
   // Drive the visible UI with locators and capture body text/screenshots.
   await browser.close();
 })();

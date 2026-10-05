@@ -1,0 +1,369 @@
+{
+  "schemaVersion": 1,
+  "id": "composer-e2e-07-branch-local-1791092931304-763ppe",
+  "title": "e2e-07-branch-local-1791092931304-763ppe arrangement",
+  "createdAt": "2026-10-04T05:48:52.097Z",
+  "updatedAt": "2026-10-04T05:48:52.097Z",
+  "headRevisionId": "revision-0",
+  "headRevision": 0,
+  "revisions": [
+    {
+      "id": "revision-0",
+      "revision": 0,
+      "kind": "initial",
+      "createdAt": "2026-10-04T05:48:52.097Z",
+      "parentRevisionId": null,
+      "payloadRef": {
+        "storage": "inline-json",
+        "contentType": "application/json",
+        "sha256": "697d7c702a9921f267dcf30128a9d09c11625e71b048c9634f881ceef9090de0",
+        "value": {
+          "song": {
+            "slug": "e2e-07-branch-local-1791092931304-763ppe",
+            "sourceRevisionId": "4dc0cca7",
+            "sourceFingerprint": "4dc0cca7",
+            "metadata": {
+              "activeStep": "accompaniment",
+              "harmonySourceLocked": true
+            }
+          },
+          "steps": {
+            "accompaniment": {
+              "input": {
+                "sourceAbc": "X:1\nT:Four-Four Gap C Major\nM:4/4\nL:1/4\nQ:1/4=84\nK:C\n|: \"C\"c e g e | \"G\"d2 z2 | \"F\"f e d c | \"C\"c4 :|",
+                "activeAbc": "X:1\nT:Four-Four Gap C Major\nM:4/4\nL:1/4\nQ:1/4=84\nK:C\n|: \"C\"c e g e | \"G\"d2 z2 | \"F\"f e d c | \"C\"c4 :|",
+                "branchSourceAbc": "X:1\nT:Four-Four Gap C Major\nM:4/4\nL:1/4\nQ:1/4=84\nK:C\n|: \"C\"c e g e | \"G\"d2 z2 | \"F\"f e d c | \"C\"c4 :|",
+                "setup": {
+                  "style": "accompaniment",
+                  "instruments": [
+                    {
+                      "id": "guitar-classic",
+                      "enabled": true,
+                      "order": 0,
+                      "roleNote": "bottom/foundation priority; acoustic steel-string guitar with arpeggiated/staggered notes and no block-chord clutter."
+                    }
+                  ]
+                }
+              },
+              "runs": [
+                {
+                  "id": "kb-run-1",
+                  "input": {
+                    "stepId": "key-beats",
+                    "requestPrompt": "Detect key and beats",
+                    "userNote": ""
+                  },
+                  "rawOutput": null,
+                  "normalizedOutput": [
+                    {
+                      "id": "kb-opt-1",
+                      "label": "Key & Meter Detection",
+                      "summary": "4/4 meter in key of C",
+                      "justification": "Meter and strong beats verified against melody.",
+                      "data": {
+                        "meter": "4/4",
+                        "key": "C"
+                      },
+                      "warnings": [],
+                      "validationNotes": [
+                        "Meter verified."
+                      ]
+                    }
+                  ],
+                  "diagnostics": null,
+                  "selectedOptionId": "kb-opt-1"
+                },
+                {
+                  "id": "chords-run-1",
+                  "input": {
+                    "stepId": "chord-roles-progression",
+                    "requestPrompt": "Generate chord progression",
+                    "userNote": ""
+                  },
+                  "rawOutput": null,
+                  "normalizedOutput": [
+                    {
+                      "id": "chords-opt-1",
+                      "label": "Harmonic Progression",
+                      "summary": "C - G - F - C",
+                      "justification": "Harmonic cadence matching phrases.",
+                      "data": {
+                        "chordWindows": [
+                          {
+                            "measureIndex": 1,
+                            "startBeat": 1,
+                            "endBeat": 5,
+                            "startSubdivision": 1,
+                            "endSubdivision": 16,
+                            "chord": "C",
+                            "root": "C",
+                            "quality": "major"
+                          },
+                          {
+                            "measureIndex": 2,
+                            "startBeat": 1,
+                            "endBeat": 5,
+                            "startSubdivision": 1,
+                            "endSubdivision": 16,
+                            "chord": "G",
+                            "root": "G",
+                            "quality": "major"
+                          },
+                          {
+                            "measureIndex": 3,
+                            "startBeat": 1,
+                            "endBeat": 5,
+                            "startSubdivision": 1,
+                            "endSubdivision": 16,
+                            "chord": "F",
+                            "root": "F",
+                            "quality": "major"
+                          },
+                          {
+                            "measureIndex": 4,
+                            "startBeat": 1,
+                            "endBeat": 5,
+                            "startSubdivision": 1,
+                            "endSubdivision": 16,
+                            "chord": "C",
+                            "root": "C",
+                            "quality": "major"
+                          }
+                        ]
+                      },
+                      "warnings": [],
+                      "validationNotes": [
+                        "Chord progression verified."
+                      ]
+                    }
+                  ],
+                  "diagnostics": null,
+                  "selectedOptionId": "chords-opt-1"
+                },
+                {
+                  "id": "step3-run-1",
+                  "input": {
+                    "stepId": "voice-leading-validation",
+                    "requestPrompt": "Validate voice-leading and snapshot",
+                    "userNote": ""
+                  },
+                  "rawOutput": null,
+                  "normalizedOutput": [
+                    {
+                      "id": "step3-c-maj-functional-v1",
+                      "label": "Validated Harmony (four-four-gap-c-major)",
+                      "summary": "Approved Harmony Snapshot: 4dc0cca7",
+                      "justification": "Preserves locked melody bytes and ensures voice-leading clearance.",
+                      "data": {
+                        "validatedAbc": "X:1\nT:Four-Four Gap C Major\nM:4/4\nL:1/4\nQ:1/4=84\nK:C\n|: \"C\"c e g e | \"G\"d2 z2 | \"F\"f e d c | \"C\"c4 :|",
+                        "harmonizedAbc": "X:1\nT:Four-Four Gap C Major\nM:4/4\nL:1/4\nQ:1/4=84\nK:C\n|: \"C\"c e g e | \"G\"d2 z2 | \"F\"f e d c | \"C\"c4 :|",
+                        "sourceFingerprint": "4dc0cca7"
+                      },
+                      "warnings": [],
+                      "validationNotes": [
+                        "Validated voice-leading and harmonic alignment."
+                      ]
+                    }
+                  ],
+                  "diagnostics": null,
+                  "selectedOptionId": "step3-c-maj-functional-v1"
+                }
+              ]
+            }
+          },
+          "decisions": {
+            "voicingOverrides": [],
+            "accompanimentWorkflow": {
+              "version": 9,
+              "sourceAbc": "X:1\nT:Four-Four Gap C Major\nM:4/4\nL:1/4\nQ:1/4=84\nK:C\n|: \"C\"c e g e | \"G\"d2 z2 | \"F\"f e d c | \"C\"c4 :|",
+              "sourceAbcFingerprint": "4dc0cca7",
+              "currentStepId": "guitar-comping-profile",
+              "steps": {
+                "key-beats": {
+                  "runs": [
+                    {
+                      "id": "kb-run-1",
+                      "createdAt": "2026-10-04T05:48:51.305Z",
+                      "stepId": "key-beats",
+                      "requestPrompt": "Detect key and beats",
+                      "userNote": "",
+                      "options": [
+                        {
+                          "id": "kb-opt-1",
+                          "label": "Key & Meter Detection",
+                          "summary": "4/4 meter in key of C",
+                          "justification": "Meter and strong beats verified against melody.",
+                          "data": {
+                            "meter": "4/4",
+                            "key": "C"
+                          },
+                          "warnings": [],
+                          "validationNotes": [
+                            "Meter verified."
+                          ]
+                        }
+                      ]
+                    }
+                  ],
+                  "activeRunId": "kb-run-1",
+                  "selectedOptionId": "kb-opt-1",
+                  "selectedAt": "2026-10-04T05:48:51.305Z",
+                  "promptNote": ""
+                },
+                "chord-roles-progression": {
+                  "runs": [
+                    {
+                      "id": "chords-run-1",
+                      "createdAt": "2026-10-04T05:48:51.305Z",
+                      "stepId": "chord-roles-progression",
+                      "requestPrompt": "Generate chord progression",
+                      "userNote": "",
+                      "options": [
+                        {
+                          "id": "chords-opt-1",
+                          "label": "Harmonic Progression",
+                          "summary": "C - G - F - C",
+                          "justification": "Harmonic cadence matching phrases.",
+                          "data": {
+                            "chordWindows": [
+                              {
+                                "measureIndex": 1,
+                                "startBeat": 1,
+                                "endBeat": 5,
+                                "startSubdivision": 1,
+                                "endSubdivision": 16,
+                                "chord": "C",
+                                "root": "C",
+                                "quality": "major"
+                              },
+                              {
+                                "measureIndex": 2,
+                                "startBeat": 1,
+                                "endBeat": 5,
+                                "startSubdivision": 1,
+                                "endSubdivision": 16,
+                                "chord": "G",
+                                "root": "G",
+                                "quality": "major"
+                              },
+                              {
+                                "measureIndex": 3,
+                                "startBeat": 1,
+                                "endBeat": 5,
+                                "startSubdivision": 1,
+                                "endSubdivision": 16,
+                                "chord": "F",
+                                "root": "F",
+                                "quality": "major"
+                              },
+                              {
+                                "measureIndex": 4,
+                                "startBeat": 1,
+                                "endBeat": 5,
+                                "startSubdivision": 1,
+                                "endSubdivision": 16,
+                                "chord": "C",
+                                "root": "C",
+                                "quality": "major"
+                              }
+                            ]
+                          },
+                          "warnings": [],
+                          "validationNotes": [
+                            "Chord progression verified."
+                          ]
+                        }
+                      ]
+                    }
+                  ],
+                  "activeRunId": "chords-run-1",
+                  "selectedOptionId": "chords-opt-1",
+                  "selectedAt": "2026-10-04T05:48:51.305Z",
+                  "promptNote": ""
+                },
+                "voice-leading-validation": {
+                  "runs": [
+                    {
+                      "id": "step3-run-1",
+                      "createdAt": "2026-10-04T05:48:51.305Z",
+                      "stepId": "voice-leading-validation",
+                      "requestPrompt": "Validate voice-leading and snapshot",
+                      "userNote": "",
+                      "options": [
+                        {
+                          "id": "step3-c-maj-functional-v1",
+                          "label": "Validated Harmony (four-four-gap-c-major)",
+                          "summary": "Approved Harmony Snapshot: 4dc0cca7",
+                          "justification": "Preserves locked melody bytes and ensures voice-leading clearance.",
+                          "data": {
+                            "validatedAbc": "X:1\nT:Four-Four Gap C Major\nM:4/4\nL:1/4\nQ:1/4=84\nK:C\n|: \"C\"c e g e | \"G\"d2 z2 | \"F\"f e d c | \"C\"c4 :|",
+                            "harmonizedAbc": "X:1\nT:Four-Four Gap C Major\nM:4/4\nL:1/4\nQ:1/4=84\nK:C\n|: \"C\"c e g e | \"G\"d2 z2 | \"F\"f e d c | \"C\"c4 :|",
+                            "sourceFingerprint": "4dc0cca7"
+                          },
+                          "warnings": [],
+                          "validationNotes": [
+                            "Validated voice-leading and harmonic alignment."
+                          ]
+                        }
+                      ]
+                    }
+                  ],
+                  "activeRunId": "step3-run-1",
+                  "selectedOptionId": "step3-c-maj-functional-v1",
+                  "selectedAt": "2026-10-04T05:48:51.305Z",
+                  "promptNote": ""
+                },
+                "guitar-comping-profile": {
+                  "runs": [],
+                  "activeRunId": null,
+                  "selectedOptionId": null,
+                  "selectedAt": null,
+                  "promptNote": ""
+                },
+                "guitar-voicing-bass": {
+                  "runs": [],
+                  "activeRunId": null,
+                  "selectedOptionId": null,
+                  "selectedAt": null,
+                  "promptNote": ""
+                },
+                "guitar-classic-abc-notation": {
+                  "runs": [],
+                  "activeRunId": null,
+                  "selectedOptionId": null,
+                  "selectedAt": null,
+                  "promptNote": ""
+                }
+              },
+              "guitarProfileHint": null,
+              "setup": {
+                "style": "accompaniment",
+                "instruments": [
+                  {
+                    "id": "guitar-classic",
+                    "enabled": true,
+                    "order": 0,
+                    "roleNote": "bottom/foundation priority; acoustic steel-string guitar with arpeggiated/staggered notes and no block-chord clutter."
+                  }
+                ]
+              },
+              "enabledStepIds": [
+                "key-beats",
+                "chord-roles-progression",
+                "voice-leading-validation",
+                "guitar-comping-profile",
+                "guitar-voicing-bass",
+                "guitar-classic-abc-notation"
+              ]
+            }
+          },
+          "artifacts": []
+        }
+      },
+      "lineage": {
+        "sourceRevisionId": "4dc0cca7",
+        "sourceFingerprint": "4dc0cca7"
+      }
+    }
+  ]
+}

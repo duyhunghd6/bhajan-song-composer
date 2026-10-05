@@ -289,7 +289,7 @@ export default function SongForm({
             />
           </div>
 
-          <div className="space-y-3">
+          <div id="video-resources" className="scroll-mt-6 space-y-3">
             <div className="flex items-center justify-between gap-3">
               <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                 YouTube video resources
@@ -356,7 +356,7 @@ export default function SongForm({
             </div>
           </div>
 
-          <div className="space-y-3">
+          <div id="notation-resources" className="scroll-mt-6 space-y-3">
             <div className="flex items-center justify-between gap-3">
               <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                 ABC notation layers

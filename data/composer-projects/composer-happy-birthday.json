@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "id": "composer-happy-birthday",
+  "title": "happy-birthday arrangement",
+  "createdAt": "2026-09-14T12:11:46.742Z",
+  "updatedAt": "2026-10-04T06:15:46.160Z",
+  "headRevisionId": "revision-1",
+  "headRevision": 1,
+  "revisions": [
+    {
+      "id": "revision-0",
+      "revision": 0,
+      "kind": "initial",
+      "createdAt": "2026-09-14T12:11:46.742Z",
+      "parentRevisionId": null,
+      "payloadRef": {
+        "storage": "inline-json",
+        "contentType": "application/json",
+        "sha256": "e458bda62f4fd659fcc89ac4c17ad93dcf31b8a9281c69b19aeaad945aaf969d",
+        "value": {
+          "song": {
+            "slug": "happy-birthday",
+            "sourceRevisionId": "96369db8",
+            "sourceFingerprint": "96369db8",
+            "metadata": {
+              "activeStep": "accompaniment",
+              "harmonySourceLocked": false
+            }
+          },
+          "steps": {
+            "accompaniment": {
+              "input": {
+                "sourceAbc": "X: 1\nT: Happy Birthday To You\nC: Traditional\nM: 3/4\nL: 1/4\nK: G\nD/2D/2 | \"G\"E D G | \"D\"F2 D/2D/2 | \"D7\"E D A | \"G\"G2 D/2D/2 | \nw: Hap-py birth-day to you! Hap-py birth-day to you! Hap-py \n\"G\"d B G | \"C\"F E c/2c/2 | \"G\"B G \"D7\"A | \"G\"G2 |]\nw: birth-day dear [Name] _ Hap-py birth-day to you!\n",
+                "activeAbc": "X: 1\nT: Happy Birthday To You\nC: Traditional\nM: 3/4\nL: 1/4\nK: G\nD/2D/2 | \"G\"E D G | \"D\"F2 D/2D/2 | \"D7\"E D A | \"G\"G2 D/2D/2 | \nw: Hap-py birth-day to you! Hap-py birth-day to you! Hap-py \n\"G\"d B G | \"C\"F E c/2c/2 | \"G\"B G \"D7\"A | \"G\"G2 |]\nw: birth-day dear [Name] _ Hap-py birth-day to you!\n",
+                "branchSourceAbc": null,
+                "setup": null
+              },
+              "runs": []
+            }
+          },
+          "decisions": {
+            "voicingOverrides": [],
+            "accompanimentWorkflow": null
+          },
+          "artifacts": []
+        }
+      },
+      "lineage": {
+        "sourceRevisionId": "96369db8",
+        "sourceFingerprint": "96369db8"
+      }
+    },
+    {
+      "id": "revision-1",
+      "revision": 1,
+      "kind": "autosave",
+      "createdAt": "2026-10-04T06:15:46.160Z",
+      "parentRevisionId": "revision-0",
+      "payloadRef": {
+        "storage": "inline-json",
+        "contentType": "application/json",
+        "sha256": "e458bda62f4fd659fcc89ac4c17ad93dcf31b8a9281c69b19aeaad945aaf969d",
+        "value": {
+          "song": {
+            "slug": "happy-birthday",
+            "sourceRevisionId": "96369db8",
+            "sourceFingerprint": "96369db8",
+            "metadata": {
+              "activeStep": "accompaniment",
+              "harmonySourceLocked": false
+            }
+          },
+          "steps": {
+            "accompaniment": {
+              "input": {
+                "sourceAbc": "X: 1\nT: Happy Birthday To You\nC: Traditional\nM: 3/4\nL: 1/4\nK: G\nD/2D/2 | \"G\"E D G | \"D\"F2 D/2D/2 | \"D7\"E D A | \"G\"G2 D/2D/2 | \nw: Hap-py birth-day to you! Hap-py birth-day to you! Hap-py \n\"G\"d B G | \"C\"F E c/2c/2 | \"G\"B G \"D7\"A | \"G\"G2 |]\nw: birth-day dear [Name] _ Hap-py birth-day to you!\n",
+                "activeAbc": "X: 1\nT: Happy Birthday To You\nC: Traditional\nM: 3/4\nL: 1/4\nK: G\nD/2D/2 | \"G\"E D G | \"D\"F2 D/2D/2 | \"D7\"E D A | \"G\"G2 D/2D/2 | \nw: Hap-py birth-day to you! Hap-py birth-day to you! Hap-py \n\"G\"d B G | \"C\"F E c/2c/2 | \"G\"B G \"D7\"A | \"G\"G2 |]\nw: birth-day dear [Name] _ Hap-py birth-day to you!\n",
+                "branchSourceAbc": null,
+                "setup": null
+              },
+              "runs": []
+            }
+          },
+          "decisions": {
+            "voicingOverrides": [],
+            "accompanimentWorkflow": null
+          },
+          "artifacts": []
+        }
+      },
+      "lineage": {
+        "sourceRevisionId": "96369db8",
+        "sourceFingerprint": "96369db8"
+      }
+    }
+  ]
+}

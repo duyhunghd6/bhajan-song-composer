@@ -49,10 +49,28 @@ cd bhajan-song-composer
 pnpm install
 
 # Run the development server
-pnpm dev
+npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+Open [http://localhost:9974](http://localhost:9974) in your browser.
+
+This project uses Next.js. The development and production server port is configured in the `dev` and `start` scripts in `package.json`; Playwright uses the same port in `playwright.config.ts`.
+
+### Gemini LLM configuration
+
+Set these server-side variables in `.env` (ignored by Git):
+
+```dotenv
+AI_API_URL=https://generativelanguage.googleapis.com/v1beta/openai
+AI_API_KEY_BASE64=<base64-encoded Gemini API key>
+AI_MODEL=gemini-3.8-flash
+```
+
+The existing OpenAI-compatible transport decodes `AI_API_KEY_BASE64` on the server and sends the key as a Bearer token to `/chat/completions`, using [Google's OpenAI compatibility endpoint](https://ai.google.dev/gemini-api/docs/openai). No Gemini-specific SDK is required. Base64 is an encoding, not encryption; keep the file private and never use a `NEXT_PUBLIC_` prefix for the key.
+
+`AI_API_KEY_BASE64` takes precedence over the legacy plain-text `AI_API_KEY`; invalid base64 fails before sending a request. Existing plain-text environment configuration and the `ai-config.json` fallback remain supported. Next.js gives `.env.local` priority over `.env`, so remove conflicting AI variables there and restart `npm run dev` after changing credentials.
+
+Run `npm run test:ai:connection` to test real API calls through the existing transport (uses API quota). It checks forced function calling, then a two-turn local tool loop with final validation, without printing credentials.
 
 ### Build for Production
 

@@ -17,7 +17,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const ROOT_DOCS = ["README.md", "CLAUDE.md", "CONTEXT.md", "ARCHITECTURE.md"];
+const ROOT_DOCS = ["README.md", "CLAUDE.md", "AGENTS.md", "CONTEXT.md", "ARCHITECTURE.md"];
 const DOCS_DIR = "docs";
 // Skill docs link into docs/guides. They are vendored and use paths relative to their own
 // folder, so they get a links-only scan that flags only links leaving the skill directory.

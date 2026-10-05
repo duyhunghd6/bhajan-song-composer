@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "id": "composer-e2e-04-invalid-melody-1791092972181-4fnkfc",
+  "title": "e2e-04-invalid-melody-1791092972181-4fnkfc arrangement",
+  "createdAt": "2026-10-04T05:49:33.045Z",
+  "updatedAt": "2026-10-04T05:49:33.045Z",
+  "headRevisionId": "revision-0",
+  "headRevision": 0,
+  "revisions": [
+    {
+      "id": "revision-0",
+      "revision": 0,
+      "kind": "initial",
+      "createdAt": "2026-10-04T05:49:33.045Z",
+      "parentRevisionId": null,
+      "payloadRef": {
+        "storage": "inline-json",
+        "contentType": "application/json",
+        "sha256": "08c8928b9f5f661d6773d1b63e82a32deb66066d58cff9ad429f70d19c6087ec",
+        "value": {
+          "song": {
+            "slug": "e2e-04-invalid-melody-1791092972181-4fnkfc",
+            "sourceRevisionId": "f163735c",
+            "sourceFingerprint": "f163735c",
+            "metadata": {
+              "activeStep": "accompaniment",
+              "harmonySourceLocked": false
+            }
+          },
+          "steps": {
+            "accompaniment": {
+              "input": {
+                "sourceAbc": "X:9\nT:Invalid ABC Syntax\nM:broken/meter\nL:1/4\nK:C\n|: [C broken syntax %%% !@#$ not closed",
+                "activeAbc": "X:9\nT:Invalid ABC Syntax\nM:broken/meter\nL:1/4\nK:C\n|: [C broken syntax %%% !@#$ not closed",
+                "branchSourceAbc": null,
+                "setup": null
+              },
+              "runs": []
+            }
+          },
+          "decisions": {
+            "voicingOverrides": [],
+            "accompanimentWorkflow": null
+          },
+          "artifacts": []
+        }
+      },
+      "lineage": {
+        "sourceRevisionId": "f163735c",
+        "sourceFingerprint": "f163735c"
+      }
+    }
+  ]
+}

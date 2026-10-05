@@ -1,0 +1,59 @@
+X:1
+T:Ganesha, Ganesha
+L:1/8
+M:4/4
+Q:1/2=120
+K:G
+%%score (Melody) (GuitarSupport)
+V:Melody name="Melody" stem=up
+V:GuitarSupport clef=treble name="Guitar Classic Support" stem=down
+%%MIDI program 24
+% Staff system 1: Melody and visible instruments share this measure range.
+[V:Melody] "Em" B, |: "Em" E E2 F GF E B, | "Em" E E2 F GF E2 | "Am" B2 A2 G2 A2 | "Em" E E3- E2 z B, |
+w: Ga-|ne- sha Ga- ne- * sha Ga-|ne- sha Ga- ne- * sha|Jay jay Shri Ga-|ne- sha! _ Ga|
+[V:GuitarSupport] g/2 E/2 |: g b E e' g b B e | g b E e' g b B e | a c' A e' a c' e A | g b E e' g b B e |
+% Staff system 2: Melody and visible instruments share this measure range.
+[V:Melody] "Em" E E2 F GF E B, | "Em" E E2 F GF E2 | "Am" B2 A2 G2 A2 | "Em" E E3- E2 B,2 |
+w: ne- sha Ga- ne- * sha Ga-|ne- sha Ga- ne- * sha|Jay jay Shri Ga-|ne- sha _ 1.Su-|
+w: |||* * * 2.Lam-|
+w: |||* * * 3.Dhumra-|
+[V:GuitarSupport] g b E e' g b B e | g b E e' g b B e | a c' A e' a c' e A | g b E e' g b B e |
+% Staff system 3: Melody and visible instruments share this measure range.
+[V:Melody] E3 "D" E3 D D | "Em" E3 B,3 B,2 | E3 "D" E3 D D | "Em" E3 B,3- B,2 |
+w: mu- kha E- ka-|dan- ta Su-|mu- kha E- ka-|dan- ta _|
+w: bo- dar Vi- *|ka- ta Lam-|bo- dar Vi- *|ka- ta _|
+w: ke- tu Ga- na-|dya- ksha Dhumra-|ke- tu Ga- na-|dya- ksha _|
+[V:GuitarSupport] g b E f' a' d d'' A | g b E e' g b B e | g b E a d' d f' d | g b E e' g b B e |
+% Staff system 4: Melody and visible instruments share this measure range.
+[V:Melody] "C" G F2 E- E2 F F | "Am" G A2 F- "B7" F4 | "C" G F2 E- E2 F F | "Am" G A2 F- "B7" F2 F F |
+w: Ka- pi- la _ Ga- ja-|kar- na- ka _|Ka- pi- la _ Ga- ja-|kar- na- ka _ Ga- ja-|
+w: Vigh- na- na- * sha _|Ga- na- dhip _|Vigh- na- na _ sha _|Ga- na- dhip _ O _|
+w: Ba- la- chan- * dra Ga-|ja- na- na _|Ba- la- chan- dra Ga-|na- na na _ Ga- *|
+[V:GuitarSupport] g c' c e' g c' e c | a c' A e b ^d' F B | g c' c e' g c' e c | a c' A e b ^d' F B |
+% Staff system 5: Melody and visible instruments share this measure range.
+[V:Melody] "Am" G A2 F- "B7" F z F F | "Am" G A2 B- "B7" B4- |[1,2 B4 B2 z B, :|[3 B4 B2 z2 || "Em" S E E3- E2 z2 |
+w: kar- na- kar _ Ga- ja-|kar- na- ka _|_ _ Ga-| _ _ | ne- sha! _|
+w: Ga- na- dhip _ O _|Ga- na- dhip _|_ _ Ga-|
+w: ja- na- na _ Ga- *|ja- na- na _|
+[V:GuitarSupport] a c' A e b ^d' F B | a c' A e b ^d' F B |[1,2 b ^d' F f' b ^d' B f :|[3 b ^d' F f' b ^d' B f || g b E e' g b B e |
+% Staff system 6: Melody and visible instruments share this measure range.
+[V:Melody] "Am" B2 A2 G2 A2 | "Em" E E3- E2 z2 | "Am" B2 A2 G2 A2 | "E" B B3- !fermata!B4 |]
+w: Jay jay Shri Ga-|ne-sha! _|Jay jay Shri Ga-|ne- sha! _|
+[V:GuitarSupport] a c' A e' a c' e A | g b E e' g b B e | a c' A e' a c' e A | ^g b E e' ^g b B e |]
+
+% --- Human-in-the-loop Accompaniment Workflow Applied ---
+% ABCNotation applied after Step 6: Guitar Classic ABCNotation & Music Sheet
+% Latest selected option: Guitar Classic Support Music Sheet
+% Selected workflow decisions:
+% Step 1 Key, Scale, Cadence & Strong Beats: G major, primary strong beats
+% Summary: Keep G major; stress phrase cadences and beat 1 over every bar.
+% Step 2 Chord Roles & Progression: Devotional Em–Am with B7 cadences
+% Summary: Keep the existing bhajan loop, using B7→Em for phrase closure.
+% Step 3 Voice-leading & Harmonized ABC Validation: Smooth devotional cadence
+% Summary: Keep melody exact; clarify Em–Am motion and B7 cadence support.
+% Step 4 Guitar Classic Comping Profile: Open-position devotional PIMA
+% Summary: Sparse treble-led arpeggio with root/fifth pinches on strong beats.
+% Step 5 Guitar Classic Voicing & Bass Plan: Open PIMA root–fifth anchors
+% Summary: Open Em/Am/D/C/E shapes; beat-1 pinches and restrained fifths.
+% Step 6 Guitar Classic ABCNotation & Music Sheet: Guitar Classic Support Music Sheet
+% Summary: Devotional PIMA Arpeggio realized 210 chord-support events from 26 selected anchors across 27 source measures.

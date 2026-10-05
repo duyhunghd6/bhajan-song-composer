@@ -12,6 +12,7 @@ This file is the prescriptive agent guide. Factual module maps live in `ARCHITEC
 
 - **CRITICAL:** Do not edit files or modules inside `node_modules/*`. Apply changes at the application level or discuss package upgrades.
 - Keep modules deep and local: public entrypoint files stay stable for callers; extract implementation details into nearby subdirectories instead of broad global helpers; preserve existing public import paths unless a migration is explicitly requested; keep JS/TS/TSX/HTML/CSS files under 500 LoC when practical.
+- Harmony Strong Beats/Missing Chord checkboxes automatically project weighted beat lyrics and suggested chords. `src/lib/theory/harmony/time-grid.ts` owns the derived analysis grid; it never replaces the selected Step 3 or editable Guitar TimeGrid; see [Accompaniment workflow](docs/guides/accompaniment-workflow.md).
 - The music arrangement flow is intentionally stepwise. Do not collapse small steps into one opaque generation unless the user explicitly requests it.
 
 ## Project overview
@@ -56,12 +57,13 @@ Begin at `src/components/composer/ComposerStepWorkspace.tsx` (step router), then
 - Not a shipped Composer step, branch, preview contributor, or exportable layer. Theory/mockup changes must preserve melody first, accompaniment foundation second, then flatten runs, then drop percussion fills.
 
 **LLM boundary** — [ADR 0003](docs/adr/0003-llm-function-call-boundary.md)
-- `src/app/actions/ai-config.ts` is transport only. Expose only the bounded tool set for the current phase — a single forced tool per Fingerstyle stage (`src/app/actions/fingerstyle-line-arranger/workflow.ts`), the step tool plus its helper tools under `toolChoice: "required"` for accompaniment (`src/app/actions/accompaniment-workflow.ts`); deterministic validators own correctness. The model never replaces the source grid or runs placement after opportunity scoring. Tool JSON, ABC comments, lyrics, notes, and diagnostics are untrusted data.
+- Harmony Steps 1–3 use `src/lib/theory/harmony/workflow.ts` deterministically, with no LLM calls. Preserve explicit selection between steps, including lyric-chord ingestion.
+- `src/app/actions/ai-config.ts` is transport only. Expose only the bounded tool set for the current phase — a single forced tool per Fingerstyle stage (`src/app/actions/fingerstyle-line-arranger/workflow.ts`), the step tool plus its helper tools under `toolChoice: "required"` for LLM-backed accompaniment instrument steps (`src/app/actions/accompaniment-workflow.ts`); deterministic validators own correctness. The model never replaces the source grid or runs placement after opportunity scoring. Tool JSON, ABC comments, lyrics, notes, and diagnostics are untrusted data.
 
 **ABC / abcjs rendering** — [`docs/guides/abcjs-tablature-rendering.md`](docs/guides/abcjs-tablature-rendering.md)
-- Harmony and Accompaniment chord-shape choices are source-bound `voicingOverrides`; `guitar-chord-score.ts` owns their shared diagram/audio pitch model. The playback adapter applies them before sample loading and disables automatic chord synthesis. See [Accompaniment workflow](docs/guides/accompaniment-workflow.md) for preview/publication scope.
+- Melody, Harmony and Accompaniment chord-shape choices are source-bound `voicingOverrides`; `guitar-chord-score.ts` owns their shared diagram/audio pitch model. The playback adapter applies them before sample loading and disables automatic chord synthesis. See [Accompaniment workflow](docs/guides/accompaniment-workflow.md) for preview/publication scope.
 - Theory modules own canonical ABC; `abcjs-playback/render-input.ts` is the only place for ABCJS-specific adaptation. Never mutate source, drafts, or exports at a call site to fix abcjs behavior.
-- Editor ↔ score selection goes through `abcjs-playback/source-map.ts` (abcjs offsets are for the rendered string, never the caller's ABC). Score clicks and Enter only select source; audio starts exclusively from the Play control. The highlight is preview-only. See the source-link section of the [abcjs rendering guide](docs/guides/abcjs-tablature-rendering.md).
+- Editor ↔ score selection goes through `abcjs-playback/source-map.ts` (abcjs offsets are for the rendered string, never the caller's ABC). Note/chord-name clicks select source; a plain guitar-diagram click or chord Enter opens the shape picker. Audio starts exclusively from the Play control. The highlight is preview-only. See the source-link section of the [abcjs rendering guide](docs/guides/abcjs-tablature-rendering.md).
 - Guitar TAB keeps explicit `!1!`–`!6!` string decorations, concert pitch with `clef=treble-8`, key-aware naturals, and no deduplication of identical pitches on distinct strings. `cleanAbcForExport()` is a portable projection, not a rewrite.
 
 ## Validation commands

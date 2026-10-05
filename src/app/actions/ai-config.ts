@@ -116,9 +116,19 @@ function withinContextBudget(
 }
 
 export async function readAiConfig(): Promise<AiConfig> {
+  const encodedApiKey = process.env.AI_API_KEY_BASE64;
+  let apiKey = process.env.AI_API_KEY;
+  if (encodedApiKey !== undefined) {
+    const decoded = Buffer.from(encodedApiKey, "base64");
+    if (!encodedApiKey || decoded.toString("base64") !== encodedApiKey ||
+      !/^[\x21-\x7e]+$/.test(decoded.toString("utf-8"))) {
+      throw new Error("AI_API_KEY_BASE64 must contain a valid base64-encoded API key.");
+    }
+    apiKey = decoded.toString("utf-8");
+  }
   const envConfig = {
     url: process.env.AI_API_URL,
-    apiKey: process.env.AI_API_KEY,
+    apiKey,
     model: process.env.AI_MODEL,
   };
 
