@@ -13,11 +13,21 @@
 }
 .score { min-width: 0; grid-column: 2; grid-row: 1; }
 .tools { min-width: 0; grid-column: 1; grid-row: 1; border: 1px solid var(--line); border-radius: var(--ds-radius-panel); background: var(--surface); padding: var(--ds-space-4); }
-.toolHeading { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+.toolHeading { display: flex; flex-direction: row; align-items: center; gap: 10px; min-width: 0; }
 .toolHeading h1 { font-size: var(--ds-font-title); font-weight: var(--ds-weight-strong); }
-.editLink { margin-top: var(--ds-space-2); }
+.editLink { margin-left: auto; flex: 0 0 auto; width: 36px; min-width: 36px; padding: 0; }
+.dataDisclosures { padding: 0 var(--ds-space-4) var(--ds-space-4); }
+.assistantFooter { border-top: 1px solid var(--line); }
 .tools .disclosure summary span { display: none; }
-.tools .mixer > div { grid-template-columns: minmax(0, 1fr) !important; }
+.tools .disclosure { padding: 8px 2px; }
+.tools .mixer { padding-top: 6px; }
+.tools .mixer > div { grid-template-columns: minmax(0, 1fr) !important; gap: 4px; }
+.tools .mixer > div > div { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; padding: 4px 6px; }
+.tools .mixer > div > div > div { min-width: 0; gap: 5px; }
+.tools .mixer > div > div > div span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tools .mixer > div > div > label { display: flex; align-items: center; gap: 6px; margin-top: 0; line-height: 1; }
+.tools .mixer > div > div > label > span { flex: 0 0 28px; }
+.tools .mixer > div > div > label > input { margin-top: 0; }
 .tools pre { padding: 10px; max-height: 340px; overflow-wrap: anywhere; }
 .assistantHeading h2 { font-size: var(--ds-font-title); font-weight: var(--ds-weight-strong); letter-spacing: -.02em; }
 .assistantHeading p { color: var(--muted); font-size: var(--ds-font-sm); margin-top: 5px; line-height: 1.6; }
@@ -27,6 +37,7 @@
 .spark { display: grid; place-items: center; width: 36px; height: 36px; background: var(--ds-accent-soft); color: var(--ds-accent-text); border-radius: var(--ds-radius-panel); font-size: 22px; }
 .wizard { padding: var(--ds-space-4); display: flex; flex-direction: column; gap: 20px; }
 .wizard > div:first-child:has(> h3) { display: none; }
+.wizard > div.flex.flex-wrap > div:first-child:has(> h3) { display: none; }
 .wizard > section { padding: 0; border: 0; border-radius: 0; background: transparent; }
 .wizard > section > div:first-child h4 { font-size: var(--ds-font-title); line-height: 1.5; font-weight: var(--ds-weight-strong); }
 .wizard > section > div:first-child p { margin-top: 8px; line-height: 1.8; font-size: var(--ds-font-md); }
@@ -36,6 +47,14 @@
 .steps button { min-width: 0; }
 .steps button span { font-size: var(--ds-font-sm); line-height: var(--ds-leading-body); font-weight: var(--ds-weight-strong); }
 .steps button p { font-size: var(--ds-font-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stepAccordion { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+.stepAccordionItem { border-bottom: 1px solid var(--line); }
+.stepAccordionButton { width: 100%; min-height: 48px; padding: 9px 2px; display: flex; align-items: center; justify-content: space-between; gap: 12px; text-align: left; color: var(--ink); }
+.stepAccordionButton > span:first-child { display: flex; flex-direction: column; gap: 2px; }
+.stepAccordionButton strong { font-size: var(--ds-font-sm); }
+.stepAccordionButton small { color: var(--muted); font-size: var(--ds-font-xs); }
+.stepAccordionButton:disabled { opacity: .55; cursor: not-allowed; }
+.stepAccordionDescription { padding: 0 24px 12px 2px; color: var(--muted); font-size: var(--ds-font-xs); line-height: 1.6; }
 .disclosure { border-bottom: 1px solid var(--line); padding: 18px 2px; }
 .disclosure summary { cursor: pointer; font-size: var(--ds-font-md); font-weight: 500; min-height: max(var(--ds-control-sm), var(--ds-hit-min)); }
 .disclosure summary span { margin-left: 14px; font-size: var(--ds-font-sm); font-weight: 400; color: var(--muted); }

@@ -73,6 +73,7 @@ interface WorkflowStepGridProps {
   steps: AccompanimentWorkflowStepDefinition[];
   session: AccompanimentWorkflowSession | null;
   activeStepId: AccompanimentWorkflowStepId;
+  expandedStepId?: AccompanimentWorkflowStepId | null;
   compact?: boolean;
   onStepClick: (stepId: AccompanimentWorkflowStepId) => void;
 }
@@ -89,7 +90,32 @@ function ScopeBadge({ scope, className = "px-2 py-0.5" }: { scope: Accompaniment
   );
 }
 
-function WorkflowStepGrid({ steps, session, activeStepId, onStepClick, compact }: WorkflowStepGridProps) {
+function WorkflowStepGrid({ steps, session, activeStepId, expandedStepId = activeStepId, onStepClick, compact }: WorkflowStepGridProps) {
+  if (compact && steps.every((step) => step.scope === "shared")) {
+    return (
+      <div className={harmonyStyles.stepAccordion}>
+        {steps.map((step) => {
+          const complete = session ? isAccompanimentWorkflowStepComplete(session, step.id) : false;
+          const unlocked = session ? isAccompanimentWorkflowStepUnlocked(session, step.id) : true;
+          const selected = session ? getSelectedWorkflowOption(session, step.id) : null;
+          const expanded = expandedStepId === step.id;
+          return (
+            <section className={harmonyStyles.stepAccordionItem} key={step.id}>
+              <button className={harmonyStyles.stepAccordionButton} type="button"
+                aria-expanded={expanded} disabled={session ? !unlocked : false}
+                onClick={() => {
+                  onStepClick(step.id);
+                }}>
+                <span><strong>{step.index}. {step.shortLabel}</strong><small>{selected?.label ?? (complete ? "Selected" : session ? (unlocked ? "Ready" : "Locked") : "Ready")}</small></span>
+                <span aria-hidden="true">{expanded ? "−" : "+"}</span>
+              </button>
+              {expanded && <p className={harmonyStyles.stepAccordionDescription}>{step.description}</p>}
+            </section>
+          );
+        })}
+      </div>
+    );
+  }
   return (
     <div className={compact ? harmonyStyles.steps : "grid gap-2 sm:grid-cols-2 xl:grid-cols-3"}>
       {steps.map((step) => {
@@ -202,6 +228,15 @@ export default function AccompanimentWorkflowWizard({
       ? session.currentStepId
       : filteredSteps[0]?.id ?? "key-beats"
   );
+  const [expandedStepId, setExpandedStepId] = useState<AccompanimentWorkflowStepId | null>(activeStepId);
+  const selectAccordionStep = (stepId: AccompanimentWorkflowStepId) => {
+    if (expandedStepId === stepId) {
+      setExpandedStepId(null);
+      return;
+    }
+    setActiveStepId(stepId);
+    setExpandedStepId(stepId);
+  };
   const [userNotes, setUserNotes] = useState<Partial<Record<AccompanimentWorkflowStepId, string>>>({});
   const [savedNoteStepId, setSavedNoteStepId] = useState<AccompanimentWorkflowStepId | null>(null);
   const [generatingStepId, setGeneratingStepId] = useState<AccompanimentWorkflowStepId | null>(null);
@@ -397,7 +432,8 @@ export default function AccompanimentWorkflowWizard({
           steps={filteredSteps}
           session={null}
           activeStepId={activeStep?.id ?? activeStepId}
-          onStepClick={setActiveStepId}
+          expandedStepId={expandedStepId}
+          onStepClick={selectAccordionStep}
         />
         {activeStep && (
           <section className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/50">
@@ -453,20 +489,23 @@ export default function AccompanimentWorkflowWizard({
 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
+          <div className="flex items-center gap-2">
           <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 font-sans">
             {mode === "harmony" ? "Build your harmony" : mode === "guitar" ? "Step-by-step Guitar Fingerstyle Workflow" : (presentation === "studio" ? "Shape your accompaniment" : "Step-by-step AI Accompaniment Workflow")}
           </h3>
-          <p className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
-            {mode === "harmony"
-              ? "Generate suggestions, then select a result to unlock the next step."
-              : mode === "guitar"
+          {mode === "harmony" && <Button variant="danger" size="sm" type="button" onClick={() => {
+            if (onReset) onReset(); else beginWorkflow(session.setup);
+          }}>Reset</Button>}
+          </div>
+          {mode !== "harmony" && <p className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
+            {mode === "guitar"
                 ? workflowComplete
                   ? `Workflow complete: all ${filteredSteps.length} guitar review points selected and applied.`
                   : `${filteredSteps.length} review points for the guitar arrangement.`
                 : workflowComplete
                   ? `Workflow complete: all ${filteredSteps.length} enabled accompaniment review point${filteredSteps.length === 1 ? "" : "s"} selected and applied to the result preview.`
                   : (presentation === "studio" ? "Choose a playing style, refine voicings, then create the score." : `${filteredSteps.length} review points: shared harmonic foundation first, then enabled instrument branches.`)}
-          </p>
+          </p>}
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           {branchScopes.map((scope) => hasWorkflowStepResults(session, ACCOMPANIMENT_WORKFLOW_BRANCH_STEP_IDS[scope]) && (
@@ -479,7 +518,7 @@ export default function AccompanimentWorkflowWizard({
               Clear {BRANCH_LABELS[scope]} Result Set
             </Button>
           ))}
-          <Button variant="danger" size="sm"
+          {mode !== "harmony" && <Button variant="danger" size="sm"
             type="button"
             onClick={() => {
               if (onReset) {
@@ -491,7 +530,7 @@ export default function AccompanimentWorkflowWizard({
 
           >
             Reset
-          </Button>
+          </Button>}
         </div>
       </div>
 
@@ -500,7 +539,8 @@ export default function AccompanimentWorkflowWizard({
         steps={filteredSteps}
         session={session}
         activeStepId={activeStepId}
-        onStepClick={setActiveStepId}
+        expandedStepId={expandedStepId}
+        onStepClick={selectAccordionStep}
       />
 
       {workflowComplete && mode === "accompaniment" && (
@@ -509,7 +549,7 @@ export default function AccompanimentWorkflowWizard({
         </p>
       )}
 
-      {activeStep ? (
+      {activeStep && (!compactPresentation || expandedStepId === activeStep.id) ? (
         <section className="space-y-3 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/50">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>

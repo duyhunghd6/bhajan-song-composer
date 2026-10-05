@@ -138,33 +138,15 @@ export function HarmonyStep({
               onVisibilityChange={setLayerVisibility}
               volumes={layerVolumes}
               onVolumeChange={setLayerVolumes}
+              iconVisibility
             />
           </div>
         </details>
       </aside>
 
       <aside className={styles.assistant} aria-label="Harmony assistant">
-        <div className={styles.assistantHeading}>
-          <span className={styles.spark} aria-hidden="true">✦</span>
-          <div><h2>Harmony assistant</h2><p>Three steps. You make the choices.</p></div>
-        </div>
         <div className={styles.panelBody}>
-          <div className={styles.toolHeading}>
-            <h1>Harmony</h1>
-            <span className={styles.status} aria-live="polite">
-              {draft ? "Manual draft" : harmonyPreview.harmonyStepComplete ? "Harmony validated" : "Source melody"}
-            </span>
-          </div>
-          <Link href={`/compose/${slug}/melody`} className={buttonStyles({ variant: "ghost", size: "sm", className: styles.editLink })}>← Edit melody</Link>
           {draft && <Button type="button" onClick={publishDraft}>Validate & select manual harmony</Button>}
-          <details className={styles.disclosure}>
-            <summary>ABC notation <span>Current layers · score & playback</span></summary>
-            <pre aria-label="Harmony playback ABC" className="mt-4 max-h-64 overflow-auto whitespace-pre-wrap rounded-lg bg-zinc-100 p-4 font-mono text-xs leading-6 text-zinc-600 dark:bg-zinc-950 dark:text-zinc-400">{scoreAbc}</pre>
-          </details>
-          <details className={styles.disclosure}>
-            <summary>TimeGrid JSON <span>Harmony analysis</span></summary>
-            <pre aria-label="Harmony TimeGrid JSON" className="mt-4 max-h-64 overflow-auto p-3 text-xs">{JSON.stringify(projection.timeGrid, null, 2)}</pre>
-          </details>
           {projection.issues.length > 0 && <p role="status" className="p-3 text-sm text-zinc-500">{projection.issues.join(" ")}</p>}
           {hasMounted && initialMelodyAbc && melodyAbc !== initialMelodyAbc && (
             <Button variant="danger" size="sm" type="button" onClick={restoreOriginal} className="mt-4">↺ Reset Original Melody</Button>
@@ -186,6 +168,27 @@ export function HarmonyStep({
           ) : (
             <p>Next: add accompaniment after choosing your validated harmony in step 3.</p>
           )}
+        </div>
+        <div className={styles.dataDisclosures}>
+          <details className={styles.disclosure}>
+            <summary>ABC notation <span>Current layers · score & playback</span></summary>
+            <pre aria-label="Harmony playback ABC" className="mt-4 max-h-64 overflow-auto whitespace-pre-wrap rounded-lg bg-zinc-100 p-4 font-mono text-xs leading-6 text-zinc-600 dark:bg-zinc-950 dark:text-zinc-400">{scoreAbc}</pre>
+          </details>
+          <details className={styles.disclosure}>
+            <summary>TimeGrid JSON <span>Harmony analysis</span></summary>
+            <pre aria-label="Harmony TimeGrid JSON" className="mt-4 max-h-64 overflow-auto p-3 text-xs">{JSON.stringify(projection.timeGrid, null, 2)}</pre>
+          </details>
+        </div>
+        <div className={`${styles.panelBody} ${styles.assistantFooter}`}>
+          <div className={styles.toolHeading}>
+            <h1>Harmony</h1>
+            <span className={styles.status} aria-live="polite">
+              {draft ? "Manual draft" : harmonyPreview.harmonyStepComplete ? "Harmony validated" : "Source melody"}
+            </span>
+            <Link href={`/compose/${slug}/melody`} aria-label="Edit melody" title="Edit melody" className={buttonStyles({ variant: "ghost", size: "sm", className: styles.editLink })}>
+              <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+            </Link>
+          </div>
         </div>
       </aside>
     </div>
