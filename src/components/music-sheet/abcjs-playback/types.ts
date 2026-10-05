@@ -100,7 +100,7 @@ export interface AbcjsVisualMarker {
 
 export interface AbcjsPlaybackControllerProps {
   /** Opt-in canonical note editing and context actions for Score Workspace. */
-  renderScore?: (score: import("react").ReactNode, playback: { isPlaying: boolean; togglePlayback: () => void }) => import("react").ReactNode;
+  renderScore?: (score: import("react").ReactNode, playback: { isPlaying: boolean; togglePlayback: () => void; controllerSlot: HTMLDivElement | null }) => import("react").ReactNode;
   scoreEditing?: import("../score-workspace/note-interactions").ScoreEditingOptions;
   abcString: string;
   title?: string;

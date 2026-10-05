@@ -456,6 +456,9 @@ export function convertAbcToTimeSliceGrid(
 
   const totalMeasures = finalMelodyMeasures.length;
   const measuresList: TimeSliceMeasure[] = [];
+  // ABC chord symbols are stateful lead-sheet annotations: a chord remains
+  // active until a later inline chord replaces it, including across barlines.
+  let carriedInlineChord: string | null = null;
 
   const keyLine = abcString.split(/\r?\n/).find(line => line.trim().startsWith("K:"));
   const key = keyLine ? keyLine.substring(2).trim().split(/\s/)[0] : "Em";
@@ -464,8 +467,9 @@ export function convertAbcToTimeSliceGrid(
     const measureStr = finalMelodyMeasures[measureIndex];
     const lyricStr = finalLyricMeasures[measureIndex];
     const beatWeightStr = finalBeatWeightMeasures[measureIndex];
-    const defaultChord = chords[measureIndex] || chords[chords.length - 1] || "C";
     const measureChords = extractChordsFromMeasure(measureStr);
+    const fallbackChord = chords[measureIndex] || chords[chords.length - 1] || null;
+    const defaultChord = carriedInlineChord || fallbackChord || "C";
 
     const getChordAtStep = (stepIdx: number): string => {
       const stepOnset = stepIdx * (unitsPerBeat / stepsPerBeat);
@@ -604,6 +608,10 @@ export function convertAbcToTimeSliceGrid(
         beatWeight: beatWeightStr,
       }
     });
+
+    if (measureChords.length > 0) {
+      carriedInlineChord = measureChords[measureChords.length - 1].chord;
+    }
   }
 
   return measuresList;

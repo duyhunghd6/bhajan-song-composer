@@ -12,6 +12,7 @@ This index tells you which document owns which topic. Root-level files (`README.
 | [`product/PLAN.md`](./product/PLAN.md) | Product | Implementation plan; plan elements `satisfies` PRD sections. |
 | [`product/PRD-to-PLAN-statematrix.md`](./product/PRD-to-PLAN-statematrix.md) | Product | Requirements traceability matrix and plan child state. |
 | [`product/use-cases-guitar-piano-singer-accompaniment.md`](./product/use-cases-guitar-piano-singer-accompaniment.md) | Product | Vietnamese use cases for the primary Guitar Classic and Piano singer-accompaniment workflow. |
+| [`qa/e2e-qa-plan-singer-accompaniment.md`](./qa/e2e-qa-plan-singer-accompaniment.md) | Quality | E2E/QA release strategy for the primary accompaniment workflow, including deterministic dummy LLM responses. |
 | [`adr/`](./adr/) | Decisions — append-only | Architecture decision records: [0001 publication & Practice](./adr/0001-composer-publication-and-practice.md), [0002 TimeGrid authority](./adr/0002-fingerstyle-timegrid-authority.md), [0003 LLM function-call boundary](./adr/0003-llm-function-call-boundary.md). |
 | [`guides/composer-source-flow.md`](./guides/composer-source-flow.md) | Domain contract — changes with code | Directed source flow, invalidation, authority/projection matrix, visibility guardrails, Export/Practice. |
 | [`guides/accompaniment-workflow.md`](./guides/accompaniment-workflow.md) | Domain contract | Accompaniment wizard: shared Steps 1–3, Guitar Classic / Harmonium / Djembe branches, gating, rules, code references. |
@@ -21,6 +22,7 @@ This index tells you which document owns which topic. Root-level files (`README.
 | [`guides/timegrid-conversion-guide.md`](./guides/timegrid-conversion-guide.md) | Domain contract | TimeGrid model, locked facts, edit operations, validation, ABC/ASCII projection, persistence and v3 interchange. |
 | [`guides/abcjs-tablature-rendering.md`](./guides/abcjs-tablature-rendering.md) | Domain contract | abcjs render boundary, TAB option, `!N!` string forcing, octave/key rules, export portability. |
 | [`theory/guitar-arpeggiation-theory.md`](./theory/guitar-arpeggiation-theory.md) | Theory reference (Vietnamese) | Arpeggiation patterns, bass protocol, voice leading, worked ABC example, chord-tone reference system. |
+| [`design/design-system.md`](./design/design-system.md) | Design contract | Semantic color/spacing/type tokens, button dimensions, variants and accessibility. |
 | [`design/UI.md`](./design/UI.md) | Design spec | Navigation graph, page layouts, UX flows, responsiveness. |
 | [`design/guitar-piano-singer-accompaniment-system-design.md`](./design/guitar-piano-singer-accompaniment-system-design.md) | Design analysis | Vietnamese target system design for Guitar Classic and Piano singer accompaniment. |
 | [`design/guitar-piano-singer-accompaniment-low-fi-ui.md`](./design/guitar-piano-singer-accompaniment-low-fi-ui.md) | Design spec | Vietnamese low-fi wireframes and widescreen baseline for the primary accompaniment workflow. |
@@ -70,3 +72,8 @@ python .agents/skills/agenticse-gmind-universal-id-agentmem/scripts/extract_ids.
 ```
 
 It validates comment syntax and the single-line rule. `npm run docs:check` runs it and additionally audits ID uniqueness and that every `satisfies` target resolves to an active ID.
+
+## Agent-driven browser QA
+<!-- beads-id: br-docs-index-jev -->
+
+[jev-ultrafast-mcp execution protocol](qa/jev-ultrafast-e2e.md) owns single-testcase runs, explicit tab cleanup, independent verdicts, iteration reports and persistent testing notes.

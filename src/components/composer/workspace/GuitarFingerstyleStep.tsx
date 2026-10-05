@@ -1,3 +1,6 @@
+import { Button, buttonStyles } from "@/components/ui/Button";
+import Link from "next/link";
+import styles from "./harmony.module.css";
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import AbcjsPlaybackController from "@/components/music-sheet/AbcjsPlaybackController";
@@ -10,7 +13,7 @@ import {
   createFingerstyleLineGenerationCoordinator,
   mergeGeneratedFingerstyleLineMeasures,
 } from "./fingerstyle-line-measures";
-import { COMPOSER_PREVIEW_RENDER_OPTIONS } from "./preview";
+import { COMPOSER_PREVIEW_RENDER_OPTIONS, COMPOSER_STAFF_PLAYBACK_PROPS } from "./preview";
 import { LayerVisibilityControls } from "./LayerVisibilityControls";
 import { applyAbcLayerVisibility, applyAbcLayerVolumes, extractAbcLayerVisibilityItems, isAbcLayerVisible, ABC_LAYER_IDS, cleanAbcForExport } from "@/lib/theory/abc-layer-visibility";
 import { getArrangementRenderOptionsFor, buildArrangementSynthOptions } from "./arrangement-preview-model";
@@ -360,30 +363,55 @@ export function GuitarFingerstyleStep({
 
   if (!workflowAppliedMusicAbc.trim()) {
     return (
-      <div className="space-y-4">
-        <section className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
-          <h2 className="font-bold">Harmony validation required</h2>
-          <p className="mt-1 leading-5">Select an option in Harmony step 3, Validate Harmony, before creating a Guitar Fingerstyle TimeGrid.</p>
+      <div className={`${styles.workspace} ${styles.rightWorkspace}`}>
+        <section className={styles.score} aria-label="Original melody reference">
+          <AbcjsPlaybackController abcString={activeAbc} title="Original Melody Reference" canvasId="composer-fingerstyle-prerequisite" {...COMPOSER_STAFF_PLAYBACK_PROPS} renderOptions={COMPOSER_PREVIEW_RENDER_OPTIONS} />
         </section>
-        <section className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950/50">
-          <h3 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-100">Original melody reference</h3>
-          <AbcjsPlaybackController abcString={activeAbc} title="Original Melody Reference" canvasId="composer-fingerstyle-prerequisite" renderOptions={COMPOSER_PREVIEW_RENDER_OPTIONS} />
-        </section>
+        <aside className={styles.assistant} aria-label="Fingerstyle assistant">
+          <div className={styles.assistantHeading}><h1>Guitar Fingerstyle</h1></div>
+          <div className={styles.panelBody}>
+            <h2 className="font-semibold">Harmony validation required</h2>
+            <p className="my-4 text-sm leading-6 text-zinc-500 dark:text-zinc-400">Select an option in Harmony step 3, Validate Harmony, before creating a Guitar Fingerstyle TimeGrid.</p>
+            <Link className={buttonStyles({ variant: "primary" })} href={`/compose/${slug}/harmony`}>Choose your harmony →</Link>
+          </div>
+        </aside>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950/60">
-        <div className="flex items-center justify-between gap-2 mb-4">
-          <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">AI Guitar Fingerstyle — Line by Line</h2>
-        </div>
-        <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-4">
-          Generate the arrangement line by line. Each line sees previous context and the next melody entrance while deterministic scoring exposes every legal fill choice.
-        </p>
+    <div className={`${styles.workspace} ${styles.fingerstyleWorkspace}`}>
+      <section className={styles.score} aria-label="Master fingerstyle score preview">
+            {isFingerstyleReady ? (
+              <AbcjsPlaybackController
+                abcString={masterAbc}
+                title="Master Fingerstyle Arrangement"
+                canvasId="composer-master-guitar-preview"
+                {...COMPOSER_STAFF_PLAYBACK_PROPS}
+                renderOptions={getArrangementRenderOptionsFor(masterAbc, COMPOSER_PREVIEW_RENDER_OPTIONS, masterTabEnabled)}
+                synthOptions={buildArrangementSynthOptions(accompLayerVisibility, masterAbc)}
+              />
+            ) : (
+              <div className="flex min-h-32 items-center justify-center text-sm text-zinc-500">
+                Restoring the saved fingerstyle arrangement…
+              </div>
+            )}
+      </section>
+      <aside className={styles.tools} aria-label="Fingerstyle tools">
+        <div className={styles.toolHeading}><h1>Guitar Fingerstyle</h1></div>
+        <Link href={`/compose/${slug}/harmony`} className={buttonStyles({ variant: "ghost", size: "sm", className: styles.editLink })}>← Review harmony</Link>
 
-        <div className="mb-6 grid gap-3 rounded-xl border border-zinc-200 bg-white p-3 sm:grid-cols-2 dark:border-zinc-800 dark:bg-zinc-900/60">
+        <details className={styles.disclosure} open><summary>Layers & volume</summary><div className={styles.mixer}>
+          <LayerVisibilityControls
+            items={masterLayerVisibilityItems}
+            visibility={accompLayerVisibility}
+            onVisibilityChange={setAccompLayerVisibility}
+            volumes={accompLayerVolumes}
+            onVolumeChange={setAccompLayerVolumes}
+          />
+        </div></details>
+        <details className={styles.disclosure} open><summary>Playing settings</summary><div className="pt-4">
+        <div className="grid gap-3 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900/60">
           <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
             Player skill
             <select
@@ -421,12 +449,14 @@ export function GuitarFingerstyleStep({
               <option value="many">Many</option>
             </select>
           </label>
-          <p className="text-[11px] text-zinc-500 sm:col-span-2">
+          <details className="text-[11px] text-zinc-500"><summary className="cursor-pointer">About skill & density</summary><p className="mt-2">
             Skill limits discretionary accompaniment and fills, including frets, hand span, and notes per figure. The authoritative melody is never transposed; a labelled melody-only fret exception is used when its exact pitch requires one. Density independently controls how many scored windows may be selected. Existing lines are not regenerated when these settings change.
-          </p>
+          </p></details>
         </div>
 
-        <section className="mb-6 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900/60">
+        </div></details>
+
+        <details className={styles.disclosure}><summary>TimeGrid import & export</summary><div className="pt-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Canonical TimeGrid JSON</h3>
@@ -434,8 +464,8 @@ export function GuitarFingerstyleStep({
             </div>
             <div className="flex flex-wrap gap-2">
               <CopyButton label="Copy TimeGrid JSON" text={timeGridDocumentJson} />
-              <button type="button" onClick={downloadTimeGridDocument} disabled={!timeGridDocumentJson} className="rounded-lg bg-zinc-100 px-2 py-1 text-[11px] font-medium text-zinc-700 hover:bg-zinc-200 disabled:opacity-50 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700">Download JSON</button>
-              <button type="button" onClick={() => timeGridFileInputRef.current?.click()} disabled={generatingLineIndexes.size > 0} className="rounded-lg bg-zinc-100 px-2 py-1 text-[11px] font-medium text-zinc-700 hover:bg-zinc-200 disabled:opacity-50 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700">Choose JSON</button>
+              <Button variant="ghost" size="sm" type="button" onClick={downloadTimeGridDocument} disabled={!timeGridDocumentJson} >Download JSON</Button>
+              <Button variant="secondary" size="sm" type="button" onClick={() => timeGridFileInputRef.current?.click()} disabled={generatingLineIndexes.size > 0} >Choose JSON</Button>
               <input ref={timeGridFileInputRef} type="file" accept="application/json,.json" className="hidden" disabled={generatingLineIndexes.size > 0} onChange={(event) => void importTimeGridFile(event.target.files?.[0])} />
             </div>
           </div>
@@ -449,26 +479,12 @@ export function GuitarFingerstyleStep({
           />
           <div className="mt-2 flex items-center justify-between gap-2">
             <p className="text-[11px] text-zinc-500">Only compatible tablature is applied. Source melody, timing, chords, and barlines remain locked to the workflow source.</p>
-            <button type="button" onClick={() => applyTimeGridDocument(timeGridJson)} disabled={generatingLineIndexes.size > 0 || !timeGridJson.trim()} className="rounded-lg bg-indigo-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">Import JSON</button>
+            <Button variant="primary" size="sm" type="button" onClick={() => applyTimeGridDocument(timeGridJson)} disabled={generatingLineIndexes.size > 0 || !timeGridJson.trim()} >Import JSON</Button>
           </div>
           {timeGridMessage && <p className="mt-2 text-[11px] text-indigo-700 dark:text-indigo-300">{timeGridMessage}</p>}
-        </section>
-
-        <section className="mb-4">
-          <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 mb-2 font-sans">Layer Visibility</h2>
-          <LayerVisibilityControls
-            items={masterLayerVisibilityItems}
-            visibility={accompLayerVisibility}
-            onVisibilityChange={setAccompLayerVisibility}
-            volumes={accompLayerVolumes}
-            onVolumeChange={setAccompLayerVolumes}
-          />
-        </section>
-
-        <div className="mb-4">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Master Playback</h3>
-            <div className="flex items-center gap-2">
+        </div></details>
+        <details className={styles.disclosure}><summary>Copy notation</summary>
+            <div className="flex flex-wrap items-center gap-2 pt-4">
               {masterAbc && (
                 <CopyButton label="Copy ABCJS ABC" text={masterAbcjsRenderInput} />
               )}
@@ -479,35 +495,15 @@ export function GuitarFingerstyleStep({
                 <CopyAsciiGuitarTabButton label="Copy ASCII-GuitarTab" text={masterAsciiGuitarTab} />
               )}
             </div>
-          </div>
-          <div className="border border-zinc-200 dark:border-zinc-800 rounded-xl bg-white dark:bg-zinc-900/50 p-2 overflow-hidden">
-            {isFingerstyleReady ? (
-              <AbcjsPlaybackController
-                abcString={masterAbc}
-                title="Master Fingerstyle Arrangement"
-                canvasId="composer-master-guitar-preview"
-                minWidthClassName="min-w-[520px]"
-                sheetViewportClassName="max-h-[800px] overflow-auto"
-                useContainerWidth={true}
-                hideVoiceNames={true}
-                showExactRenderAbcCopy={true}
-                renderOptions={getArrangementRenderOptionsFor(masterAbc, COMPOSER_PREVIEW_RENDER_OPTIONS, masterTabEnabled)}
-                synthOptions={buildArrangementSynthOptions(accompLayerVisibility, masterAbc)}
-              />
-            ) : (
-              <div className="flex min-h-32 items-center justify-center text-sm text-zinc-500">
-                Restoring the saved fingerstyle arrangement…
-              </div>
-            )}
-          </div>
-        </div>
-      </section>
-
-      {/* Line cards */}
-      <div className="space-y-6">
+        </details>
+      </aside>
+      <aside className={styles.assistant} aria-label="Fingerstyle line workflow">
+        <div className={styles.assistantHeading}><div><h2>Arrange line by line</h2><p>Generate, listen, and choose each line.</p></div></div>
+        <div className={styles.panelBody}>
         {lineGroups.map((lineMeasures, lineGroupIdx) => (
+          <details key={`line-${lineMeasures[0]?.lineIndex ?? lineGroupIdx}`} className={styles.lineDisclosure} open={lineGroupIdx === 0}>
+            <summary>Line {lineGroupIdx + 1} · measures {lineMeasures[0]?.measure}–{lineMeasures.at(-1)?.measure}</summary>
           <FingerstyleLineCard
-            key={`line-${lineMeasures[0]?.lineIndex ?? lineGroupIdx}`}
             songSlug={slug}
             sourceFingerprint={sourceFingerprint}
             lineIndex={lineMeasures[0]?.lineIndex ?? lineGroupIdx}
@@ -528,9 +524,13 @@ export function GuitarFingerstyleStep({
               release: releaseGeneration,
               apply: applyGeneratedMeasures,
             }}
+            compact
           />
+          </details>
         ))}
-      </div>
+        </div>
+        <div className={styles.nextStep}><Link className={buttonStyles({ variant: "primary" })} href={`/compose/${slug}/review`}>Review & export →</Link></div>
+      </aside>
     </div>
   );
 }
@@ -544,10 +544,10 @@ function CopyButton({ label, text }: { label: string; text: string }) {
   }, [text]);
 
   return (
-    <button
+    <Button variant="ghost" size="sm"
       type="button"
       onClick={handleCopy}
-      className="flex items-center gap-1 text-[10px] text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded cursor-pointer whitespace-nowrap"
+
     >
       {copied ? (
         <span className="text-emerald-600 dark:text-emerald-400 font-medium">Copied!</span>
@@ -559,7 +559,7 @@ function CopyButton({ label, text }: { label: string; text: string }) {
           <span>{label}</span>
         </>
       )}
-    </button>
+    </Button>
   );
 }
 
@@ -572,10 +572,10 @@ export function CopyAsciiGuitarTabButton({ label, text }: { label: string; text:
   }, [text]);
 
   return (
-    <button
+    <Button variant="ghost" size="sm"
       type="button"
       onClick={handleCopy}
-      className="flex items-center gap-1 text-[10px] text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded cursor-pointer whitespace-nowrap"
+
     >
       {copied ? (
         <span className="text-emerald-600 dark:text-emerald-400 font-medium">Copied!</span>
@@ -587,6 +587,6 @@ export function CopyAsciiGuitarTabButton({ label, text }: { label: string; text:
           <span>{label}</span>
         </>
       )}
-    </button>
+    </Button>
   );
 }

@@ -59,6 +59,29 @@ describe("guitar chord score realization", () => {
     expect(score.occurrences.map((item) => item.symbol)).toEqual(["Em", "N.C.", "Am"]);
     expect(audio(score.carrierAbc).tracks[0].filter((event) => event.cmd === "note" && event.start! >= 1 && event.start! < 3)).toEqual([]);
   });
+  it("plays every selected string when a support window contains only a chord placeholder pitch", () => {
+    const source = 'X:1\nM:4/4\nL:1/4\n%%score Melody GuitarSupport\nK:C\nV:Melody\n"Em" E4 |\nV:GuitarSupport\n%%MIDI program 24\nE2 E2 |';
+    const initial = buildGuitarChordScore(source, source);
+    const alternate = guitarChordShapes("Em").find((shape) => shape.frets.join(",") === "0,2,2,4,5,3")!;
+    expect(alternate.midi[0]).toBe(initial.occurrences[0].selected!.midi[0]);
+    const changed = buildGuitarChordScore(source, source, [createGuitarChordOverride(initial, initial.occurrences[0], alternate)]);
+    for (const score of [initial, changed]) {
+      const notes = realizeGuitarChordAudio(audio(source), score).tracks[1].filter((event) => event.cmd === "note");
+      for (const start of [0, 0.5]) {
+        expect(notes.filter((event) => event.start === start).map((event) => event.pitch)).toEqual(score.occurrences[0].selected!.midi);
+      }
+      expect(notes.every((event) => event.duration === 0.5 && event.instrument === 24)).toBe(true);
+    }
+  });
+  it("changes a repeated support pitch when the chosen shape moves the bass to another octave", () => {
+    const source = 'X:1\nM:4/4\nL:1/4\n%%score Melody GuitarSupport\nK:C\nV:Melody\n"Em" E4 |\nV:GuitarSupport\n%%MIDI program 24\nE E E E |';
+    const initial = buildGuitarChordScore(source, source);
+    const barre = guitarChordShapes("Em").find((shape) => shape.frets.join(",") === "X,7,9,9,8,7")!;
+    const changed = buildGuitarChordScore(source, source, [createGuitarChordOverride(initial, initial.occurrences[0], barre)]);
+    const pitches = (score: typeof initial) => realizeGuitarChordAudio(audio(source), score).tracks[1].filter((event) => event.cmd === "note").map((event) => event.pitch);
+    expect(pitches(initial)).toEqual(Array(4).fill(initial.occurrences[0].selected!.midi).flat());
+    expect(pitches(changed)).toEqual(Array(4).fill(barre.midi).flat());
+  });
   it("preserves the rhythm of an existing support voice without doubling the accompaniment", () => {
     const source = 'X:1\nM:4/4\nL:1/4\n%%score Melody GuitarSupport\nK:C\nV:Melody\n"Em" E4 |\nV:GuitarSupport\n%%MIDI program 25\nC, E G c |';
     const score = buildGuitarChordScore(source, source);

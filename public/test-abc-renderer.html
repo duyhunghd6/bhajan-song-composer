@@ -44,7 +44,12 @@
             border-radius: 8px;
             box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
             overflow-x: auto;
+            min-width: 0;
+            max-height: 72vh;
+            overflow-y: auto;
+            scrollbar-width: none;
         }
+        .abc-container::-webkit-scrollbar { display: none; }
 
         /* ----- Styles from AbcjsPlaybackStyles.tsx ----- */
         #paper .abcjs-note,
@@ -207,7 +212,8 @@ w: BEAT_INDICATOR_LINE_4
             const options = {
                 add_classes: true,
                 responsive: "resize",
-                staffwidth: 900
+                staffwidth: document.getElementById("paper").clientWidth,
+                wrap: { minSpacing: 1.7, maxSpacing: 2.5, preferredMeasuresPerLine: 4, lastLineLimit: 0.6 }
             };
 
             if (enableTab) {
@@ -393,6 +399,19 @@ w: BEAT_INDICATOR_LINE_4
 
         // Render initially
         renderSong();
+        let lastPaperWidth = document.getElementById("paper").clientWidth;
+        new ResizeObserver(() => {
+            const width = document.getElementById("paper").clientWidth;
+            if (width === lastPaperWidth) return;
+            lastPaperWidth = width;
+            requestAnimationFrame(renderSong);
+        }).observe(document.getElementById("paper"));
+        document.querySelector(".abc-container").addEventListener("wheel", (event) => {
+            if (!event.shiftKey) return;
+            event.preventDefault();
+            const scale = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? event.currentTarget.clientWidth : 1;
+            event.currentTarget.scrollLeft += (event.deltaX || event.deltaY) * scale;
+        }, { passive: false });
     </script>
 </body>
 </html>

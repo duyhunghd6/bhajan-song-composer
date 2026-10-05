@@ -1,5 +1,8 @@
 # Bhajan Song Composer — User Interface Specification
+
 <!-- beads-id: br-ds-ui-document | satisfies: br-prd01-s2 -->
+
+Implemented Composer control colors, sizes and variants follow the [Design System](design-system.md).
 
 This document details the user interface (UI) architecture, layout structure, screen connectivity, and user experience flows for the **Bhajan Song Composer** web application. 
 
@@ -8,6 +11,7 @@ It is designed to satisfy the playback and composition requirements outlined in 
 ---
 
 ## 1. Application Navigation Graph
+
 <!-- beads-id: br-ds-ui-navigation-graph | satisfies: br-prd01-s6, br-prd01-s7, br-prd01-s54 -->
 
 The application follows a clean, responsive web flow divided into three primary zones: the **Playback Hub**, the **Composer Workstation**, and the **Mockup / PoC Gates** (for isolated testing of agentic AI workflows).
@@ -73,21 +77,26 @@ graph TD
 
 Route inventory as of 2026-09-13 (`src/app/`):
 
-| Zone | Route | Source | Note |
-|:---|:---|:---|:---|
-| Playback Hub | `/`, `/[language]`, `/[language]/[slug]`, `/edit` | `page.tsx`, `[language]/…`, `edit/page.tsx` | `/edit` links to `/compose?edit={slug}` |
-| Composer | `/compose`, `/compose/[slug]/[step]` | `compose/page.tsx`, `compose/[slug]/[step]/page.tsx` | steps: `melody`, `harmony`, `accompaniment`, `guitar-fingerstyle`, `review` (Export) |
-| Practice | `/practice/[slug]` | `practice/[slug]/` | published notation only |
-| Mockup gates | `/mockups`, `/mockups/arrangement-pipeline`, `/mockups/fingerstyle-engine`, `/mockups/ensemble-expansion`, `/mockups/visual-instruments`, `/mockups/beats` | `mockups/…` | `arrangement`, `fingerstyle`, `ensemble` re-export the long-form pages; `/mockups/piano` is linked from the hub but has no page yet |
-| Dev harness | `/test-beats`, `/test-tab`, `/test-timegrid-to-abcnotation`, `/test-conversion-ascii-guitar-tab` | `test-*/page.tsx` | not part of the product navigation |
+
+| Zone         | Route                                                                                                                                                      | Source                                               | Note                                                                                                                                |
+| :------------ | :---------------------------------------------------------------------------------------------------------------------------------------------------------- | :---------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------- |
+| Playback Hub | `/`, `/[language]`, `/[language]/[slug]`, `/edit`                                                                                                          | `page.tsx`, `[language]/…`, `edit/page.tsx`          | `/edit` links to `/compose?edit={slug}`                                                                                             |
+| Composer     | `/compose`, `/compose/[slug]/[step]`                                                                                                                       | `compose/page.tsx`, `compose/[slug]/[step]/page.tsx` | steps: `melody`, `harmony`, `accompaniment`, `guitar-fingerstyle`, `review` (Export)                                                |
+| Practice     | `/practice/[slug]`                                                                                                                                         | `practice/[slug]/`                                   | published notation only                                                                                                             |
+| Mockup gates | `/mockups`, `/mockups/arrangement-pipeline`, `/mockups/fingerstyle-engine`, `/mockups/ensemble-expansion`, `/mockups/visual-instruments`, `/mockups/beats` | `mockups/…`                                          | `arrangement`, `fingerstyle`, `ensemble` re-export the long-form pages; `/mockups/piano` is linked from the hub but has no page yet |
+| Dev harness  | `/test-beats`, `/test-tab`, `/test-timegrid-to-abcnotation`, `/test-conversion-ascii-guitar-tab`                                                           | `test-*/page.tsx`                                    | not part of the product navigation                                                                                                  |
+
 
 ---
 
 ## 2. Page Layout Architectures
+
 <!-- beads-id: br-ds-ui-layout -->
 
 ### 2.1 Song Playback Page Layout
+
 <!-- beads-id: br-ds-ui-playback-page | satisfies: br-prd01-s6 -->
+
 The playback screen is optimized for double-medium split playback: users can watch video-based reference material or interact with dynamic, MIDI-synthesized sheet music.
 
 ```
@@ -122,14 +131,17 @@ The playback screen is optimized for double-medium split playback: users can wat
 ```
 
 ### 2.2 Workstation Route-Based Layout
+
 <!-- beads-id: br-ds-ui-workstation-layout | satisfies: br-prd01-s7 -->
 
 To prevent UI clutter and to empower **Agentic AI Coding**, the Composer Workstation is split into dedicated child-UIs using Next.js subroutes (`/compose/[slug]/[step]`). The dedicated Guitar Fingerstyle route is a sibling downstream of Harmony rather than an accompaniment substep.
 
-A monolithic screen containing all these features would be an anti-pattern. By decoupling the pipeline into distinct routes, each UI is small, state is localized, and AI agents can reason about one workflow at a time. The Workstation uses a compact checkpoint strip for Layers & Navigation so step progress remains visible without consuming the left side of the canvas.
+A monolithic screen containing all these features would be an anti-pattern. By decoupling the pipeline into distinct routes, each UI is small, state is localized, and AI agents can reason about one workflow at a time. The Workstation uses a compact checkpoint strip for Layers &amp; Navigation so step progress remains visible without consuming the left side of the canvas.
 
 #### 2.2.1 Step 1: Melody Input (`/compose/[slug]/melody`)
+
 <!-- beads-id: br-ds-ui-melody-input | satisfies: br-prd01-s7 -->
+
 Focus: Inputting the foundational Treble Clef ABC notation.
 
 ```
@@ -159,7 +171,9 @@ Focus: Inputting the foundational Treble Clef ABC notation.
 ```
 
 #### 2.2.2 Step 2: Harmonization (`/compose/[slug]/harmony`)
+
 <!-- beads-id: br-ds-ui-harmonization | satisfies: br-prd01-s8, br-prd01-s9, br-prd01-s10 -->
+
 Focus: AI Theory Assistant generating chord progressions and refining them with a real-time preview and virtual instruments.
 
 ```
@@ -197,10 +211,13 @@ Focus: AI Theory Assistant generating chord progressions and refining them with 
 | [ Back ]                                                        [ Save & Next ]  |
 +----------------------------------------------------------------------------------+
 ```
+
 *(Note: Ghosted Background Layers allow the user to see the Melody notes faintly behind the active Chord track).*
 
 #### 2.2.3 Step 3: Accompaniment (`/compose/[slug]/accompaniment`)
+
 <!-- beads-id: br-ds-ui-accompaniment | satisfies: br-prd01-s31 -->
+
 Focus: combined accompaniment planning from the selected Harmony Step 3 (`voice-leading-validation`) ABC.
 
 ```
@@ -223,11 +240,13 @@ Focus: combined accompaniment planning from the selected Harmony Step 3 (`voice-
 ```
 
 #### 2.2.4 Dedicated Guitar Fingerstyle (`/compose/[slug]/guitar-fingerstyle`)
+
 <!-- beads-id: br-ds-ui-guitar-fingerstyle | satisfies: br-prd01-s33, br-prd01-s38, br-prd01-s59 -->
 
 This independent sibling route compiles the selected `voice-leading-validation` ABC into the meter-aware TimeGrid. It owns skill and fill-density settings, physical validation, generated Guitar ABC, and ASCII-GuitarTab; it never consumes accompaniment output.
 
 #### 2.2.5 Step 4: Export to Practice (`/compose/[slug]/review`)
+
 <!-- beads-id: br-ds-ui-export-practice | satisfies: br-prd01-s7, br-prd01-s58 -->
 
 Export is the durable handoff from Composer drafts to Practice (the only Showcase). It lists source-current Melody, Validated Harmony, Accompaniment, and Guitar Fingerstyle layers. The user selects exactly which layers to publish; unselected notation files and the Markdown Lyrics/Notes body remain unchanged.
@@ -246,13 +265,17 @@ Export is the durable handoff from Composer drafts to Practice (the only Showcas
 > Ensemble remains a mockup/experimental workflow and has no Composer route in the active product flow.
 
 ### 2.3 Reusable Shared Components
+
 <!-- beads-id: br-ds-ui-shared-components | satisfies: br-prd01-s6 -->
 
 #### 2.3.1 Universal ABCJS Playback Controller
+
 <!-- beads-id: br-ds-ui-abcjs-playback-controller | satisfies: br-prd01-s6 -->
+
 To maintain consistency across the Playback Hub, Composer Workstation, and Mockup Gates, the music rendering and playback controls must be abstracted into a single, highly reusable React component (e.g., `<AbcjsPlaybackController />`).
 
-**Features & Capabilities:**
+**Features &amp; Capabilities:**
+
 - **Rendering Engine:** Uses `abcjs` to render raw ABC notation into responsive SVG staves.
 - **Playback Controls:** 
   - **Start / Stop:** Toggle MIDI synthesis and audio playback.
@@ -264,10 +287,13 @@ To maintain consistency across the Playback Hub, Composer Workstation, and Mocku
 ---
 
 ## 3. Core User Experience Flows
+
 <!-- beads-id: br-ds-ui-user-flows -->
 
-### 3.1 Flow 1: Playback & Practice Flow (Learner/Practitioner)
+### 3.1 Flow 1: Playback &amp; Practice Flow (Learner/Practitioner)
+
 <!-- beads-id: br-ds-ui-playback-practice-flow | satisfies: br-prd01-s6 -->
+
 This flow guides a practitioner through finding, listening to, and learning chords or finger placements for a devotional song.
 
 ```mermaid
@@ -300,8 +326,10 @@ sequenceDiagram
 
 ---
 
-### 3.2 Flow 2: Composition & Upward Construction Flow (Composer)
+### 3.2 Flow 2: Composition &amp; Upward Construction Flow (Composer)
+
 <!-- beads-id: br-ds-ui-composition-flow | satisfies: br-prd01-s7, br-prd01-s29, br-prd01-s57 -->
+
 This flow details how a composer moves chronologically through the arrangement pipeline, passing through the dedicated child-UIs.
 
 ```mermaid
@@ -347,8 +375,10 @@ sequenceDiagram
 
 ---
 
-### 3.3 Flow 3: Dedicated Guitar Fingerstyle Compression & Playability Tuning
+### 3.3 Flow 3: Dedicated Guitar Fingerstyle Compression &amp; Playability Tuning
+
 <!-- beads-id: br-ds-ui-fingerstyle-flow | satisfies: br-prd01-s35, br-prd01-s36, br-prd01-s37, br-prd01-s38 -->
+
 This flow highlights the interaction between the downward compression algorithm and physical constraints on `/compose/[slug]/guitar-fingerstyle`. The route independently starts from the selected `voice-leading-validation` ABC; `/compose/[slug]/accompaniment` output is not an input.
 
 ```mermaid
@@ -381,21 +411,24 @@ sequenceDiagram
 ---
 
 ## 4. Layout States and Responsiveness Guidelines
+
 <!-- beads-id: br-ds-ui-responsive-layout | satisfies: br-prd01-s6, br-prd01-s7, br-prd01-s57 -->
 
-1. **Desktop View (>= 1024px)**:
-   - Workstation child-UIs use a compact top checkpoint strip for Layers & Navigation instead of a persistent 20% sidebar, keeping the main canvas readable.
-   - The checkpoint strip shows one-line progress for Metadata plus the five composer steps, highlighting complete, current, and pending states.
-   - Standard desktop and laptop widths keep the ABC Editor stacked above the Music Staff Playback when horizontal space would make either panel cramped.
-2. **Very Wide / QHD View (extra-wide canvas, e.g. >= 1536px)**:
-   - Step 1 Melody may split the main canvas into two readable panels: ABC Notation Editor on the left and Music Staff Playback on the right.
-   - The Music Staff Playback must use a bounded width and height, with internal scrolling when needed, so abcjs does not stretch the first line too wide to read.
-   - ABCJS render options should prefer wrapped staff systems, typically around four measures per line, so the user can read at least the first page or first half-page comfortably.
+1. **Desktop View (&gt;= 1024px)**:
+  - Workstation child-UIs use a compact top checkpoint strip for Layers &amp; Navigation instead of a persistent 20% sidebar, keeping the main canvas readable.
+  - The checkpoint strip shows one-line progress for Metadata plus the five composer steps, highlighting complete, current, and pending states.
+  - Standard desktop and laptop widths keep the ABC Editor stacked above the Music Staff Playback when horizontal space would make either panel cramped.
+2. **Very Wide / QHD View (extra-wide canvas, e.g. &gt;= 1536px)**:
+  - Step 1 Melody may split the main canvas into two readable panels: ABC Notation Editor on the left and Music Staff Playback on the right.
+  - ABCJS notation on Composer, Practice, playback, and test/mockup pages reflows to the score column's measured width when the window or surrounding layout resizes. Do not impose a fixed canvas minimum that creates horizontal overflow.
+  - Keep score scrolling inside its viewport. Hide scrollbar tracks while preserving mouse-wheel vertical navigation and Shift + wheel horizontal navigation when zoom or content requires it. Provide direct Fit, zoom-in, and zoom-out controls.
+  - ABCJS render options should prefer wrapped staff systems, typically around four measures per line, so the user can read at least the first page or first half-page comfortably.
 3. **Tablet View (768px - 1023px)**:
-   - Composer content stays as a single-column flow: ABC source on top, Music Staff Playback below.
-   - Textareas in the ABC Editor scale down font sizes to `text-xs` for clarity where needed.
-4. **Mobile View (< 768px)**:
-   - The grid collapses into a single vertical stack.
-   - Layers & Navigation remains a compact checkpoint block at the top rather than a sidebar or tall drawer.
-   - Input fields and textareas occupy `100%` viewport width.
-   - Music staff, Fretboard, and Keyboard SVGs enable horizontal scrolling (`overflow-x-auto`) to keep notation and key grids readable.
+  - Composer content stays as a single-column flow: ABC source on top, Music Staff Playback below.
+  - Textareas in the ABC Editor scale down font sizes to `text-xs` for clarity where needed.
+4. **Mobile View (&lt; 768px)**:
+  - The grid collapses into a single vertical stack.
+  - Layers &amp; Navigation remains a compact checkpoint block at the top rather than a sidebar or tall drawer.
+  - Input fields and textareas occupy `100%` viewport width.
+  - Music staff notation reflows to the available width and does not widen the page. Keep horizontal navigation inside the score viewport for deliberate zoomed-in inspection; do not show persistent scrollbar tracks.
+  - Fretboard and Keyboard SVGs may use contained horizontal scrolling to keep notation and key grids readable.

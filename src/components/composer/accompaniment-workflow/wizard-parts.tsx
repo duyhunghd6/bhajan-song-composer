@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/Button";
 import { useState } from "react";
 
 import {
@@ -12,8 +13,6 @@ import {
 export const SCOPE_CLASS: Record<AccompanimentWorkflowScope, string> = {
   shared: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900/70 dark:bg-sky-950/40 dark:text-sky-300",
   guitar: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/70 dark:bg-amber-950/40 dark:text-amber-300",
-  harmonium: "border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-900/70 dark:bg-orange-950/40 dark:text-orange-300",
-  djembe: "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/40 dark:text-rose-300",
 };
 
 function llmLogStatusClass(status: AccompanimentWorkflowLlmLogEntry["status"]): string {
@@ -79,13 +78,13 @@ export function LlmCallLogPanel({ logs }: { logs: AccompanimentWorkflowLlmLogEnt
             </span>
           )}
           {recentLogs.length > 2 && (
-            <button
+            <Button variant="ghost" size="sm"
               type="button"
               onClick={() => setExpanded((current) => !current)}
-              className="rounded-md border border-zinc-200 px-2 py-1 text-[10px] font-bold text-zinc-600 transition hover:border-amber-300 hover:text-amber-700 dark:border-zinc-800 dark:text-zinc-300 dark:hover:text-amber-300"
+
             >
               {expanded ? "Collapse" : "Expand to 20"}
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -155,7 +154,7 @@ export function RunOptionList({
   if (runs.length === 0) {
     return (
       <p className="rounded-xl border border-dashed border-zinc-300 p-3 text-xs text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
-        No LLM output stored for this step yet. Generate options to begin this human review point.
+        No results stored for this step yet. Generate options to begin this human review point.
       </p>
     );
   }
@@ -172,15 +171,11 @@ export function RunOptionList({
             {run.options.map((option) => {
               const isSelected = stepState.activeRunId === run.id && stepState.selectedOptionId === option.id;
               return (
-                <button
+                <Button variant="choice" size="md" aria-pressed={isSelected}
                   key={`${run.id}-${option.id}`}
                   type="button"
                   onClick={() => onSelect(option, run.id)}
-                  className={`rounded-xl border p-3 text-left transition-all focus:outline-none focus:ring-2 focus:ring-amber-500/50 ${
-                    isSelected
-                      ? "border-amber-400 bg-amber-500/10 shadow-sm"
-                      : "border-zinc-200 bg-zinc-50 hover:border-amber-300/60 dark:border-zinc-800 dark:bg-zinc-900/50"
-                  }`}
+
                 >
                   <div className="flex items-center justify-between gap-2">
                     <h4 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">{option.label}</h4>
@@ -198,7 +193,7 @@ export function RunOptionList({
                       {option.validationNotes.map((note) => <li key={note}>{note}</li>)}
                     </ul>
                   )}
-                </button>
+                </Button>
               );
             })}
           </div>
@@ -216,5 +211,4 @@ export function RunOptionList({
     </div>
   );
 }
-
 

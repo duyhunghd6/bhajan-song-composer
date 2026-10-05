@@ -12,6 +12,7 @@ function formatTime(totalSeconds: number) {
 
 interface AbcjsPlaybackControlsProps {
   actions?: ReactNode;
+  viewportTools?: ReactNode;
   controls: boolean;
   showLoopControls: boolean;
   isPlaying: boolean;
@@ -39,6 +40,7 @@ interface AbcjsPlaybackControlsProps {
 
 export function AbcjsPlaybackControls({
   actions,
+  viewportTools,
   controls,
   showLoopControls,
   isPlaying,
@@ -118,6 +120,7 @@ export function AbcjsPlaybackControls({
           {/* Right: Metadata dropdowns, BPM, & Loop range sliders */}
           <div className={styles.settings}>
             {actions}
+            {viewportTools}
             {controls && (
               <div className={styles.metadata} title="Sheet Metadata Overrides">
                 <label >

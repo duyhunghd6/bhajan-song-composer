@@ -1,0 +1,6 @@
+{
+  "id": "invalid-meter-abc",
+  "sourceAbc": "X:8\nT:Invalid Meter Source\nM:4/4\nL:1/4\nK:C\n\"C\"C D E | \"G\"G A B c d | \"C\"C4 |",
+  "expectedError": "meter-error",
+  "description": "Measure 1 contains 3 beats and measure 2 contains 5 beats in declared 4/4 meter."
+}

@@ -34,7 +34,7 @@ export function exactNoteSourceRange(source: string, prepared: string, range: So
 export function attachNoteInteractions(canvas: HTMLElement, prepared: string, source: string, timings: NoteTimingEvent[], options: ScoreEditingOptions, select: (start: number, end: number) => void, playFrom: (seconds: number) => void, pause: () => void, visualObj: VisualObj) {
   const cleanups: (() => void)[] = [];
   const status = document.createElement('div'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
-  status.className = 'mb-2 text-xs text-zinc-600'; status.textContent = 'Select a note to inspect pitch, duration and measure.';
+  status.className = 'mb-2 text-xs text-zinc-600'; status.hidden = true;
   canvas.parentElement?.insertBefore(status, canvas);
   let menu: HTMLElement | null = null;
   const close = () => { menu?.remove(); menu = null; };
@@ -69,7 +69,11 @@ export function attachNoteInteractions(canvas: HTMLElement, prepared: string, so
     const note = engraving.engraver?.staffgroups?.flatMap(group => group.voices?.flatMap(voice => voice.children ?? []) ?? []).find(child => child.elemset?.some(node => node === element || node.contains(element) || element.contains(node)))?.abcelem;
     const timing = eventTiming && note ? { ...eventTiming, startChar: note.startChar, endChar: note.endChar, midiPitches: note.midiPitches } : eventTiming;
     if (!timing || timing.startChar === undefined || timing.endChar === undefined) return;
+    element.dataset.scoreSourceStart = String(timing.startChar);
+    element.dataset.scoreSourceEnd = String(timing.endChar);
+    cleanups.push(() => { delete element.dataset.scoreSourceStart; delete element.dataset.scoreSourceEnd; });
     const inspect = () => {
+      status.hidden = false;
       const range = timing.startChar !== undefined && timing.endChar !== undefined ? trimSourceRange(prepared, { start: timing.startChar, end: timing.endChar }) : null;
       const token = range ? prepared.slice(range.start, range.end).match(/[_^=]{0,2}[A-Ga-g][,']*\d*(?:\/+\d*)?/)?.[0] : null;
       const measure = (timing as NoteTimingEvent & { measureNumber?: number }).measureNumber;
@@ -117,7 +121,7 @@ export function attachNoteInteractions(canvas: HTMLElement, prepared: string, so
     let drag: { y: number; id: number } | null = null;
     let tooltip: HTMLElement | null = null;
     let ghost: Element | null = null;
-    const clearDrag = () => { if (drag) element.releasePointerCapture?.(drag.id); drag = null; tooltip?.remove(); tooltip = null; ghost?.remove(); ghost = null; };
+    const clearDrag = () => { if (drag) element.releasePointerCapture?.(drag.id); drag = null; canvas.removeAttribute('data-score-note-dragging'); tooltip?.remove(); tooltip = null; ghost?.remove(); ghost = null; };
     const escape = (event: KeyboardEvent) => { if (event.key === 'Escape' && drag) { event.preventDefault(); event.stopPropagation(); clearDrag(); } };
     const move = (event: PointerEvent) => {
       if (!drag) return;
@@ -131,8 +135,10 @@ export function attachNoteInteractions(canvas: HTMLElement, prepared: string, so
       tooltip.textContent = `${label} · Escape cancels`; tooltip.style.left = `${event.clientX + 12}px`; tooltip.style.top = `${event.clientY - 28}px`;
     };
     const down = (event: PointerEvent) => {
-      if (options.mode !== 'edit' || event.defaultPrevented || canvas.closest('[data-score-hand="true"], [data-score-panning="true"]') || event.button !== 0 || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+      if (options.mode !== 'edit' || event.defaultPrevented || canvas.closest('[data-score-hand="true"], [data-score-panning="true"]') || event.button !== 0 || !event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
       inspect(); pause();
+      event.preventDefault();
+      canvas.setAttribute('data-score-note-dragging', 'true');
       drag = { y: event.clientY, id: event.pointerId }; element.setPointerCapture?.(event.pointerId); event.stopPropagation();
     };
     const up = (event: PointerEvent) => {
@@ -143,10 +149,20 @@ export function attachNoteInteractions(canvas: HTMLElement, prepared: string, so
       if (steps) { event.preventDefault(); event.stopPropagation(); commit(timing, { kind: 'steps', steps }); }
     };
     const cancel = clearDrag;
-    element.addEventListener('pointermove', move); document.addEventListener('keydown', escape); element.addEventListener('contextmenu', context); element.addEventListener('keydown', key); element.addEventListener('pointerdown', down); element.addEventListener('pointerup', up); element.addEventListener('pointercancel', cancel);
-    cleanups.push(() => { clearDrag(); element.removeEventListener('pointermove', move); document.removeEventListener('keydown', escape); element.removeEventListener('contextmenu', context); element.removeEventListener('keydown', key); element.removeEventListener('pointerdown', down); element.removeEventListener('pointerup', up); element.removeEventListener('pointercancel', cancel); });
+    element.addEventListener('pointermove', move); document.addEventListener('keydown', escape); element.addEventListener('contextmenu', context); element.addEventListener('keydown', key); element.addEventListener('pointerdown', down); element.addEventListener('pointerup', up); element.addEventListener('pointercancel', cancel); element.addEventListener('lostpointercapture', cancel);
+    cleanups.push(() => { clearDrag(); element.removeEventListener('pointermove', move); document.removeEventListener('keydown', escape); element.removeEventListener('contextmenu', context); element.removeEventListener('keydown', key); element.removeEventListener('pointerdown', down); element.removeEventListener('pointerup', up); element.removeEventListener('pointercancel', cancel); element.removeEventListener('lostpointercapture', cancel); });
   });
   const outside = (event: PointerEvent) => { if (menu && !menu.contains(event.target as Node)) close(); };
+  const workspace = canvas.closest('[data-score-workspace-viewport]');
+  const selectSingle = (event: Event) => {
+    if ((event as CustomEvent<{ transient?: boolean }>).detail?.transient) return;
+    const selected = canvas.querySelectorAll<HTMLElement>('[data-score-marquee-selected="true"]');
+    if (selected.length !== 1) return;
+    const start = selected[0].dataset.scoreSourceStart;
+    const end = selected[0].dataset.scoreSourceEnd;
+    if (start !== undefined && end !== undefined) select(Number(start), Number(end));
+  };
+  workspace?.addEventListener('score-workspace-selection-change', selectSingle);
   document.addEventListener('pointerdown', outside);
-  return () => { close(); status.remove(); document.removeEventListener('pointerdown', outside); cleanups.forEach(cleanup => cleanup()); };
+  return () => { close(); status.remove(); workspace?.removeEventListener('score-workspace-selection-change', selectSingle); document.removeEventListener('pointerdown', outside); cleanups.forEach(cleanup => cleanup()); };
 }

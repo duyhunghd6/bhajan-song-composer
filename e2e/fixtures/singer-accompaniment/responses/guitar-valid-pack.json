@@ -1,0 +1,26 @@
+{
+  "id": "fixture-guitar-valid-pack-v1",
+  "object": "chat.completion",
+  "created": 1773440000,
+  "model": "gpt-4o",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_guitar_valid_01",
+            "type": "function",
+            "function": {
+              "name": "submit_arrangement_candidates",
+              "arguments": "{\"packId\":\"pack-guitar-valid-v1\",\"targetInstrument\":\"guitar-classic\",\"candidateCount\":3,\"options\":[{\"optionId\":\"guitar-pima-arpeggio\",\"targetInstrument\":\"guitar-classic\",\"label\":\"Devotional PIMA Arpeggio\",\"rationale\":\"Gentle alternating bass with staggered inner tones supporting vocal entry.\",\"diversityLabel\":\"Texture: Arpeggio / Register: Open Low / Bass: Alternating\",\"decisionMap\":[{\"measure\":1,\"technique\":\"arpeggio\",\"voicing\":\"open-c\",\"density\":\"medium\"},{\"measure\":2,\"technique\":\"arpeggio\",\"voicing\":\"open-g\",\"density\":\"medium\"},{\"measure\":3,\"technique\":\"arpeggio\",\"voicing\":\"barre-f\",\"density\":\"medium\"},{\"measure\":4,\"technique\":\"sustain\",\"voicing\":\"open-c\",\"density\":\"low\"}],\"abc\":\"V:GuitarSupport clef=treble-8\\n[C,E] G, C E | [G,,D] B, D G | [F,,C] A, C F | [C,E]4 |\",\"eventHints\":{\"guitarVoicings\":[{\"measure\":1,\"beat\":1,\"chord\":\"C\",\"frets\":\"x32010\"},{\"measure\":2,\"beat\":1,\"chord\":\"G\",\"frets\":\"320003\"},{\"measure\":3,\"beat\":1,\"chord\":\"F\",\"frets\":\"133211\"},{\"measure\":4,\"beat\":1,\"chord\":\"C\",\"frets\":\"x32010\"}]}},{\"optionId\":\"guitar-pinch-arpeggio\",\"targetInstrument\":\"guitar-classic\",\"label\":\"Devotional Pinch Support\",\"rationale\":\"Root-and-fifth pinch on downbeats with melodic fill during measure 2 gap.\",\"diversityLabel\":\"Texture: Pinch / Register: Mid Register / Bass: Root-Fifth\",\"decisionMap\":[{\"measure\":1,\"technique\":\"pinch\",\"voicing\":\"mid-c\",\"density\":\"medium\"},{\"measure\":2,\"technique\":\"pinch-fill\",\"voicing\":\"open-g\",\"density\":\"high\"},{\"measure\":3,\"technique\":\"pinch\",\"voicing\":\"barre-f\",\"density\":\"medium\"},{\"measure\":4,\"technique\":\"sustain\",\"voicing\":\"mid-c\",\"density\":\"low\"}],\"abc\":\"V:GuitarSupport clef=treble-8\\n[C,G] E G E | [G,,B] D G B | [F,,A] C F A | [C,G]4 |\",\"eventHints\":{\"guitarVoicings\":[{\"measure\":1,\"beat\":1,\"chord\":\"C\",\"frets\":\"x3555x\"},{\"measure\":2,\"beat\":1,\"chord\":\"G\",\"frets\":\"355433\"},{\"measure\":3,\"beat\":1,\"chord\":\"F\",\"frets\":\"133211\"},{\"measure\":4,\"beat\":1,\"chord\":\"C\",\"frets\":\"x3555x\"}]}},{\"optionId\":\"guitar-bhajan-strum\",\"targetInstrument\":\"guitar-classic\",\"label\":\"Bhajan Measured Strum\",\"rationale\":\"Full measured comping strokes with downbeat emphasis and quiet release on vocal holds.\",\"diversityLabel\":\"Texture: Strum / Register: Full Fretboard / Density: High\",\"decisionMap\":[{\"measure\":1,\"technique\":\"strum\",\"voicing\":\"open-c\",\"density\":\"high\"},{\"measure\":2,\"technique\":\"strum\",\"voicing\":\"open-g\",\"density\":\"high\"},{\"measure\":3,\"technique\":\"strum\",\"voicing\":\"barre-f\",\"density\":\"high\"},{\"measure\":4,\"technique\":\"strum-ring\",\"voicing\":\"open-c\",\"density\":\"low\"}],\"abc\":\"V:GuitarSupport clef=treble-8\\n[C,E,G,c]2 [C,E,G,c]2 | [G,,D,G,B]2 [G,,D,G,B]2 | [F,,C,F,A]2 [F,,C,F,A]2 | [C,E,G,c]4 |\",\"eventHints\":{\"guitarVoicings\":[{\"measure\":1,\"beat\":1,\"chord\":\"C\",\"frets\":\"x32010\"},{\"measure\":2,\"beat\":1,\"chord\":\"G\",\"frets\":\"320003\"},{\"measure\":3,\"beat\":1,\"chord\":\"F\",\"frets\":\"133211\"},{\"measure\":4,\"beat\":1,\"chord\":\"C\",\"frets\":\"x32010\"}]}}]}"
+            }
+          }
+        ]
+      },
+      "finish_reason": "tool_calls"
+    }
+  ]
+}

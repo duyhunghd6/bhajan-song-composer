@@ -1,0 +1,113 @@
+{
+  "id": "no-safe-gap",
+  "step3OptionId": "step3-no-safe-gap-v1",
+  "sourceAbc": "X:5\nT:No Safe Gap Continuous Lyrics\nM:4/4\nL:1/8\nQ:1/4=84\nK:C\n\"C\"c d e f g e c e | \"G\"d e f d B c d B | \"Am\"c d e c A B c A | \"C\"c2 c2 c4 |",
+  "sourceFingerprint": "92bcd457",
+  "meter": "4/4",
+  "meterFamily": "4/4",
+  "tempo": 84,
+  "key": "C",
+  "scale": "major",
+  "measureCount": 4,
+  "chordWindows": [
+    {
+      "measureIndex": 1,
+      "startBeat": 1,
+      "endBeat": 5,
+      "startSubdivision": 1,
+      "endSubdivision": 16,
+      "chord": "C",
+      "root": "C",
+      "quality": "major"
+    },
+    {
+      "measureIndex": 2,
+      "startBeat": 1,
+      "endBeat": 5,
+      "startSubdivision": 1,
+      "endSubdivision": 16,
+      "chord": "G",
+      "root": "G",
+      "quality": "major"
+    },
+    {
+      "measureIndex": 3,
+      "startBeat": 1,
+      "endBeat": 5,
+      "startSubdivision": 1,
+      "endSubdivision": 16,
+      "chord": "Am",
+      "root": "A",
+      "quality": "minor"
+    },
+    {
+      "measureIndex": 4,
+      "startBeat": 1,
+      "endBeat": 5,
+      "startSubdivision": 1,
+      "endSubdivision": 16,
+      "chord": "C",
+      "root": "C",
+      "quality": "major"
+    }
+  ],
+  "melodyActivity": {
+    "continuousLyric": true,
+    "activeOnsetsCount": 27,
+    "gaps": []
+  },
+  "phrases": [
+    {
+      "phraseIndex": 1,
+      "startMeasure": 1,
+      "endMeasure": 2,
+      "cadenceMeasure": 2,
+      "cadenceBeat": 4,
+      "cadenceType": "half",
+      "targetChord": "G"
+    },
+    {
+      "phraseIndex": 2,
+      "startMeasure": 3,
+      "endMeasure": 4,
+      "cadenceMeasure": 4,
+      "cadenceBeat": 4,
+      "cadenceType": "authentic",
+      "targetChord": "C"
+    }
+  ],
+  "registerMap": [
+    {
+      "measureIndex": 1,
+      "lowestPitch": "C4",
+      "highestPitch": "G4",
+      "lowestMidi": 60,
+      "highestMidi": 67,
+      "register": "middle"
+    },
+    {
+      "measureIndex": 2,
+      "lowestPitch": "B3",
+      "highestPitch": "F4",
+      "lowestMidi": 59,
+      "highestMidi": 65,
+      "register": "middle"
+    },
+    {
+      "measureIndex": 3,
+      "lowestPitch": "A3",
+      "highestPitch": "E4",
+      "lowestMidi": 57,
+      "highestMidi": 64,
+      "register": "middle"
+    },
+    {
+      "measureIndex": 4,
+      "lowestPitch": "C4",
+      "highestPitch": "C4",
+      "lowestMidi": 60,
+      "highestMidi": 60,
+      "register": "middle"
+    }
+  ]
+}

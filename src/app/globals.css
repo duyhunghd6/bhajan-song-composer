@@ -1,11 +1,26 @@
-@import "tailwindcss";
+@import "tailwindcss" source("../");
+@import "../styles/design-tokens.css";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: var(--ds-canvas);
+  --foreground: var(--ds-text);
 }
 
 @theme inline {
+  --color-surface: var(--ds-surface);
+  --color-surface-muted: var(--ds-surface-muted);
+  --color-content: var(--ds-text);
+  --color-muted: var(--ds-text-muted);
+  --color-line: var(--ds-border);
+  --color-accent: var(--ds-accent);
+  --color-accent-soft: var(--ds-accent-soft);
+  --color-accent-text: var(--ds-accent-text);
+  --color-danger: var(--ds-danger);
+  --color-danger-soft: var(--ds-danger-soft);
+  --color-success: var(--ds-success);
+  --color-success-soft: var(--ds-success-soft);
+  --color-info: var(--ds-info);
+  --color-info-soft: var(--ds-info-soft);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
@@ -14,8 +29,8 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: var(--ds-canvas);
+    --foreground: var(--ds-text);
   }
 }
 
@@ -29,6 +44,18 @@ body {
 .composer-step-responsive-grid {
   display: grid;
   gap: 0;
+}
+
+@media (min-width: 1024px) {
+  .composer-accompaniment-workflow-header {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .composer-accompaniment-workflow-steps {
+    justify-content: flex-end;
+    padding-bottom: 0;
+  }
 }
 
 @media (min-width: 1280px) {

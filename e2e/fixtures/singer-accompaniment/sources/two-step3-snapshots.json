@@ -1,0 +1,248 @@
+{
+  "id": "two-step3-snapshots",
+  "sourceAbc": "X:10\nT:Two Step 3 Snapshots\nM:4/4\nL:1/4\nQ:1/4=80\nK:C\nc e g e | d2 B2 | f a c' a | g4 |",
+  "snapshotA": {
+    "id": "two-step3-snapshots-a",
+    "step3OptionId": "step3-choice-a-functional",
+    "sourceAbc": "X:10\nT:Two Step 3 Snapshots - Option A\nM:4/4\nL:1/4\nQ:1/4=80\nK:C\n\"C\"c e g e | \"G\"d2 B2 | \"F\"f a c' a | \"C\"g4 |",
+    "sourceFingerprint": "ff5f3d3f",
+    "meter": "4/4",
+    "meterFamily": "4/4",
+    "tempo": 80,
+    "key": "C",
+    "scale": "major",
+    "measureCount": 4,
+    "chordWindows": [
+      {
+        "measureIndex": 1,
+        "startBeat": 1,
+        "endBeat": 5,
+        "startSubdivision": 1,
+        "endSubdivision": 16,
+        "chord": "C",
+        "root": "C",
+        "quality": "major"
+      },
+      {
+        "measureIndex": 2,
+        "startBeat": 1,
+        "endBeat": 5,
+        "startSubdivision": 1,
+        "endSubdivision": 16,
+        "chord": "G",
+        "root": "G",
+        "quality": "major"
+      },
+      {
+        "measureIndex": 3,
+        "startBeat": 1,
+        "endBeat": 5,
+        "startSubdivision": 1,
+        "endSubdivision": 16,
+        "chord": "F",
+        "root": "F",
+        "quality": "major"
+      },
+      {
+        "measureIndex": 4,
+        "startBeat": 1,
+        "endBeat": 5,
+        "startSubdivision": 1,
+        "endSubdivision": 16,
+        "chord": "C",
+        "root": "C",
+        "quality": "major"
+      }
+    ],
+    "melodyActivity": {
+      "continuousLyric": false,
+      "activeOnsetsCount": 8,
+      "gaps": [
+        {
+          "measureIndex": 2,
+          "startBeat": 3,
+          "endBeat": 5,
+          "durationBeats": 2,
+          "safeForFill": true,
+          "resumedBy": "f"
+        }
+      ]
+    },
+    "phrases": [
+      {
+        "phraseIndex": 1,
+        "startMeasure": 1,
+        "endMeasure": 2,
+        "cadenceMeasure": 2,
+        "cadenceBeat": 3,
+        "cadenceType": "half",
+        "targetChord": "G"
+      },
+      {
+        "phraseIndex": 2,
+        "startMeasure": 3,
+        "endMeasure": 4,
+        "cadenceMeasure": 4,
+        "cadenceBeat": 4,
+        "cadenceType": "authentic",
+        "targetChord": "C"
+      }
+    ],
+    "registerMap": [
+      {
+        "measureIndex": 1,
+        "lowestPitch": "C4",
+        "highestPitch": "G4",
+        "lowestMidi": 60,
+        "highestMidi": 67,
+        "register": "middle"
+      },
+      {
+        "measureIndex": 2,
+        "lowestPitch": "B3",
+        "highestPitch": "D4",
+        "lowestMidi": 59,
+        "highestMidi": 62,
+        "register": "middle"
+      },
+      {
+        "measureIndex": 3,
+        "lowestPitch": "F4",
+        "highestPitch": "C5",
+        "lowestMidi": 65,
+        "highestMidi": 72,
+        "register": "high"
+      },
+      {
+        "measureIndex": 4,
+        "lowestPitch": "G4",
+        "highestPitch": "G4",
+        "lowestMidi": 67,
+        "highestMidi": 67,
+        "register": "middle"
+      }
+    ]
+  },
+  "snapshotB": {
+    "id": "two-step3-snapshots-b",
+    "step3OptionId": "step3-choice-b-devotional",
+    "sourceAbc": "X:10\nT:Two Step 3 Snapshots - Option B\nM:4/4\nL:1/4\nQ:1/4=80\nK:C\n\"C\"c e g e | \"Em\"d2 B2 | \"Am\"f a c' a | \"G\"g4 |",
+    "sourceFingerprint": "3af3b4d7",
+    "meter": "4/4",
+    "meterFamily": "4/4",
+    "tempo": 80,
+    "key": "C",
+    "scale": "major",
+    "measureCount": 4,
+    "chordWindows": [
+      {
+        "measureIndex": 1,
+        "startBeat": 1,
+        "endBeat": 5,
+        "startSubdivision": 1,
+        "endSubdivision": 16,
+        "chord": "C",
+        "root": "C",
+        "quality": "major"
+      },
+      {
+        "measureIndex": 2,
+        "startBeat": 1,
+        "endBeat": 5,
+        "startSubdivision": 1,
+        "endSubdivision": 16,
+        "chord": "Em",
+        "root": "E",
+        "quality": "minor"
+      },
+      {
+        "measureIndex": 3,
+        "startBeat": 1,
+        "endBeat": 5,
+        "startSubdivision": 1,
+        "endSubdivision": 16,
+        "chord": "Am",
+        "root": "A",
+        "quality": "minor"
+      },
+      {
+        "measureIndex": 4,
+        "startBeat": 1,
+        "endBeat": 5,
+        "startSubdivision": 1,
+        "endSubdivision": 16,
+        "chord": "G",
+        "root": "G",
+        "quality": "major"
+      }
+    ],
+    "melodyActivity": {
+      "continuousLyric": false,
+      "activeOnsetsCount": 8,
+      "gaps": [
+        {
+          "measureIndex": 2,
+          "startBeat": 3,
+          "endBeat": 5,
+          "durationBeats": 2,
+          "safeForFill": true,
+          "resumedBy": "f"
+        }
+      ]
+    },
+    "phrases": [
+      {
+        "phraseIndex": 1,
+        "startMeasure": 1,
+        "endMeasure": 2,
+        "cadenceMeasure": 2,
+        "cadenceBeat": 3,
+        "cadenceType": "half",
+        "targetChord": "Em"
+      },
+      {
+        "phraseIndex": 2,
+        "startMeasure": 3,
+        "endMeasure": 4,
+        "cadenceMeasure": 4,
+        "cadenceBeat": 4,
+        "cadenceType": "authentic",
+        "targetChord": "G"
+      }
+    ],
+    "registerMap": [
+      {
+        "measureIndex": 1,
+        "lowestPitch": "C4",
+        "highestPitch": "G4",
+        "lowestMidi": 60,
+        "highestMidi": 67,
+        "register": "middle"
+      },
+      {
+        "measureIndex": 2,
+        "lowestPitch": "B3",
+        "highestPitch": "D4",
+        "lowestMidi": 59,
+        "highestMidi": 62,
+        "register": "middle"
+      },
+      {
+        "measureIndex": 3,
+        "lowestPitch": "F4",
+        "highestPitch": "C5",
+        "lowestMidi": 65,
+        "highestMidi": 72,
+        "register": "high"
+      },
+      {
+        "measureIndex": 4,
+        "lowestPitch": "G4",
+        "highestPitch": "G4",
+        "lowestMidi": 67,
+        "highestMidi": 67,
+        "register": "middle"
+      }
+    ]
+  }
+}

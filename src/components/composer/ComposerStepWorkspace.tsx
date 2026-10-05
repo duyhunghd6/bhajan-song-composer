@@ -1,6 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type SetStateAction } from "react";
+import Link from "next/link";
+import { buttonStyles } from "@/components/ui/Button";
+import { useSearchParams } from "next/navigation";
 import {
   DEFAULT_ACCOMPANIMENT_LAYER_VISIBILITY,
   DEFAULT_HARMONY_LAYER_VISIBILITY,
@@ -48,6 +51,11 @@ interface ComposerStepWorkspaceProps {
 }
 
 export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: ComposerStepWorkspaceProps) {
+  const searchParams = useSearchParams();
+  const requestedInstrument = searchParams.get("instrument");
+  const selectedAccompanimentInstrument = requestedInstrument === "piano" || requestedInstrument === "guitar-classic"
+    ? requestedInstrument
+    : null;
   // Always initialize with the server-safe value to avoid hydration mismatch.
   // localStorage restoration happens in useEffect below.
   const [melodyAbc, setMelodyAbc] = useState(initialMelodyAbc ?? DEFAULT_ABC);
@@ -303,12 +311,16 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
     return (
       <div className="space-y-5">
         <AbcEditor
+          studio
+          studioActions={<Link className={buttonStyles({ variant: "primary" })} href={`/compose/${slug}/harmony`}>Continue to harmony →</Link>}
           title="ABC Notation Editor"
           value={melodyAbc}
           initialAbc={initialMelodyAbc ?? DEFAULT_ABC}
           storageKey={getComposerMelodyStorageKey(slug)}
           manageStorage={false}
           onChange={setMelodyAbc}
+          voicingOverrides={ws.voicingOverrides}
+          onVoicingOverridesChange={(voicingOverrides) => updateState({ voicingOverrides })}
         />
       </div>
     );
@@ -317,10 +329,12 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
   if (step === "harmony") {
     return (
       <HarmonyStep
+        slug={slug}
         melodyAbc={melodyAbc}
         initialMelodyAbc={initialMelodyAbc}
         hasMounted={hasMounted}
         pipeline={pipeline}
+        sourceAbc={harmonyValidationAbc ?? activeAbc}
         harmonyPreview={previewModel.harmony}
         layerVisibility={layerVisibility}
         setLayerVisibility={setLayerVisibility}
@@ -329,6 +343,14 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
         ws={ws}
         updateState={updateState}
         onRestore={handleRestoreHarmony}
+        onScoreTransaction={(nextMelody, nextWorkspace, fingerstyleCache) => {
+          previousHarmonyValidationAbc.current = undefined;
+          setMelodyAbc(nextMelody);
+          updateState(nextWorkspace);
+          const key = getComposerFingerstyleMeasuresStorageKey(slug);
+          if (fingerstyleCache === null) window.localStorage.removeItem(key);
+          else window.localStorage.setItem(key, fingerstyleCache);
+        }}
       />
     );
   }
@@ -336,6 +358,8 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
   if (step === "accompaniment") {
     return (
       <AccompanimentStep
+        slug={slug}
+        selectedInstrument={selectedAccompanimentInstrument}
         activeAbc={activeAbc}
         branchSourceAbc={harmonyValidationAbc}
         pipeline={pipeline}

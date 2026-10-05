@@ -22,7 +22,7 @@ export const COMPOSER_STEPS = [
     number: 3,
     label: "Accompaniment",
     title: "Step 3: Accompaniment",
-    focus: "Build devotional Guitar Classic, Harmonium, and Djembe support from validated harmony.",
+    focus: "Build devotional acoustic steel-string Guitar support from validated harmony.",
     backLabel: "Back to Harmony",
     nextLabel: "Save & Continue",
   },

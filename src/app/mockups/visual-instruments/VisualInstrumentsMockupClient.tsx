@@ -221,7 +221,7 @@ export default function VisualInstrumentsMockupClient() {
                 title="Music Staff Playback Cursor"
                 description="The cursor callback powers the visible guitar and piano state below. Clicking notes also moves the cursor."
                 onPlaybackCursor={handlePlaybackCursor}
-                minWidthClassName="min-w-[520px]"
+                minWidthClassName="min-w-0"
               />
               <StatePanel
                 cursor={playbackCursor}
@@ -265,7 +265,7 @@ export default function VisualInstrumentsMockupClient() {
                 title="Playback Driver for Note Markers"
                 description="This staff now drives the active marker frame. Press Play or click notes to update guitar and piano markers."
                 onPlaybackCursor={handlePlaybackCursor}
-                minWidthClassName="min-w-[520px]"
+                minWidthClassName="min-w-0"
               />
               <StatePanel
                 cursor={playbackCursor}
@@ -336,7 +336,7 @@ export default function VisualInstrumentsMockupClient() {
                   title="Practice Staff"
                   description="Teacher mode keeps the notation visible while explaining what each marker means."
                   onPlaybackCursor={handlePlaybackCursor}
-                  minWidthClassName="min-w-[520px]"
+                  minWidthClassName="min-w-0"
                 />
                 <StatePanel
                   cursor={playbackCursor}

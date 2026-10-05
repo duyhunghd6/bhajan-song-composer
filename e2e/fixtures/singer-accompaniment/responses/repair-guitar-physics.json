@@ -1,0 +1,26 @@
+{
+  "id": "fixture-repair-guitar-physics-v1",
+  "object": "chat.completion",
+  "created": 1773440005,
+  "model": "gpt-4o",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_repair_guitar_01",
+            "type": "function",
+            "function": {
+              "name": "submit_arrangement_candidates",
+              "arguments": "{\"packId\":\"pack-repair-guitar-v1\",\"targetInstrument\":\"guitar-classic\",\"candidateCount\":1,\"options\":[{\"optionId\":\"guitar-repaired-physics-v1\",\"parentOptionId\":\"guitar-stretch-opt-1\",\"repairScope\":{\"measures\":[3],\"flaggedRule\":\"guitar-physics-stretch\",\"diagnosticMessage\":\"Impossible fret reach at M3/B1 repaired to first-position barre.\"},\"targetInstrument\":\"guitar-classic\",\"label\":\"Repaired Guitar Support (M3 Playable)\",\"rationale\":\"Scoped repair targeting flagged measure 3: shifted high fret reach to playable 1st-position F barre, keeping measures 1, 2, and 4 completely unchanged.\",\"diversityLabel\":\"Repair: Fret Span Resolved / Scoped: Measure 3 Only\",\"decisionMap\":[{\"measure\":1,\"technique\":\"arpeggio\",\"preserved\":true},{\"measure\":2,\"technique\":\"arpeggio\",\"preserved\":true},{\"measure\":3,\"technique\":\"barre-repaired\",\"fretSpan\":3},{\"measure\":4,\"technique\":\"sustain\",\"preserved\":true}],\"abc\":\"V:GuitarSupport clef=treble-8\\n[C,E] G, C E | [G,,D] B, D G | [F,,C] A, C F | [C,E]4 |\",\"eventHints\":{\"guitarVoicings\":[{\"measure\":1,\"beat\":1,\"chord\":\"C\",\"frets\":\"x32010\"},{\"measure\":2,\"beat\":1,\"chord\":\"G\",\"frets\":\"320003\"},{\"measure\":3,\"beat\":1,\"chord\":\"F\",\"frets\":\"133211\"},{\"measure\":4,\"beat\":1,\"chord\":\"C\",\"frets\":\"x32010\"}]}}]}"
+            }
+          }
+        ]
+      },
+      "finish_reason": "tool_calls"
+    }
+  ]
+}

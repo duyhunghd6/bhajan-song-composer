@@ -119,6 +119,22 @@ w: Ha-ri Bol _`;
       });
     });
 
+    it("carries the most recent inline chord across chordless measures", () => {
+      const abc = `X:1
+T:Carried chords
+M:4/4
+L:1/4
+K:Em
+[V:Melody] "Em"E F G A | B "D"c d e | F G A B |`;
+
+      const measures = convertAbcToTimeSliceGrid(abc, []);
+
+      expect(measures[0].grid.every(step => step.chord === "Em")).toBe(true);
+      expect(measures[1].grid.slice(0, 4).every(step => step.chord === "Em")).toBe(true);
+      expect(measures[1].grid.slice(4).every(step => step.chord === "D")).toBe(true);
+      expect(measures[2].grid.every(step => step.chord === "D")).toBe(true);
+    });
+
     it("treats only the opening sparse measure as pickup padding", () => {
       const measures = convertAbcToTimeSliceGrid(
         `X:1\nM:4/4\nL:1/8\nK:Em\n[V:Melody] | E | E |`,

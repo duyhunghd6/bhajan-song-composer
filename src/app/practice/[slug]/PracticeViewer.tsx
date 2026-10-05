@@ -146,8 +146,8 @@ export default function PracticeViewer({ initialAbc, metadata, selectedNotation,
             abcString={practiceAbc}
             title={`${metadata.title} Practice Sheet`}
             canvasId={`practice-viewer-${metadata.slug}-${selectedNotation.type}`}
-            minWidthClassName="min-w-[520px]"
-            sheetViewportClassName="max-h-[min(80vh,900px)] overflow-auto p-4"
+            minWidthClassName="min-w-0"
+            sheetViewportClassName="p-4"
             renderOptions={renderOptions}
           />
         )}

@@ -1,5 +1,6 @@
 "use server";
 
+import { generateHarmonyWorkflowStep, isAlgorithmicHarmonyStep } from "@/lib/theory/harmony/workflow";
 import fs from "fs/promises";
 import path from "path";
 import {
@@ -13,13 +14,9 @@ import {
   break_measures_line,
   buildAccompanimentWorkflowPrompt,
   buildAccompanimentWorkflowToolSchema,
-  buildAddStrongBeatIconsToolSchema,
   buildBreakMeasuresLineToolSchema,
-  buildConsolidatedChordIngestionPrompt,
-  buildConsolidatedChordIngestionToolSchema,
   buildQueryGuitarVoicingsToolSchema,
   convertGuitarClassicEventsToAbc,
-  extractLyricChordAnnotations,
   GUITAR_CLASSIC_COMPING_PROFILES,
   isGuitarClassicCompingProfileId,
   realizeGuitarClassicAccompaniment,
@@ -41,16 +38,10 @@ import {
   type AccompanimentWorkflowSetup,
   type AccompanimentWorkflowStepId,
 } from "@/lib/theory/accompaniment-workflow";
-import {
-  addStrongBeatIconsToAbcNotation,
-  type StrongBeatEmphasis,
-  type StrongBeatIconGenerationResult,
-} from "@/lib/theory/abc-beat-annotations";
 import { query_guitar_voicings } from "@/lib/theory/guitar-voicings";
-import { buildAbcDurationContext } from "@/lib/theory/abc-duration";
+import { validateHarmonyTimelineAbc } from "@/lib/theory/accompaniment-workflow/harmony-validation";
 import {
   assignActiveChordsToMelodyNotes,
-  extractInlineChordEventsByMelodyMeasure,
 } from "@/lib/theory/fingerstyle-arranger/melody-chord-timeline";
 import {
   buildValidGuitarTabToolSchema,
@@ -62,11 +53,6 @@ import {
 
 interface RawWorkflowStepResult {
   options?: Array<Partial<AccompanimentWorkflowOption>>;
-}
-
-interface RawConsolidatedChordIngestionResult {
-  chordRolesProgression?: RawWorkflowStepResult;
-  voiceLeadingValidation?: RawWorkflowStepResult;
 }
 
 export interface GenerateAccompanimentWorkflowStepInput {
@@ -320,13 +306,13 @@ function buildGuitarClassicAbcNotationRun(
     ? guitarTabEventsFromOption({ data: voicingSelection.data })
     : null;
   if (!anchorEvents?.length) {
-    throw new Error("Select a Guitar Voicing option with concrete guitarTab.events before building Guitar Classic ABCNotation.");
+    throw new Error("Select a Guitar Voicing option with concrete guitarTab.events before building Guitar ABCNotation.");
   }
 
   const compingProfileId = guitarClassicCompingProfileFromSelection(profileSelection)
     ?? guitarClassicCompingProfileFromSelection(voicingSelection);
   if (!compingProfileId) {
-    throw new Error("Select a Guitar Profile with a supported arpeggio, pinch, or bhajan strum technique before building Guitar Classic ABCNotation.");
+    throw new Error("Select a Guitar Profile with a supported arpeggio, pinch, or bhajan strum technique before building Guitar ABCNotation.");
   }
 
   const realization = realizeGuitarClassicAccompaniment({
@@ -340,7 +326,7 @@ function buildGuitarClassicAbcNotationRun(
 
   const conversion = convertGuitarClassicEventsToAbc(input.sourceAbc, realization.events);
   if (!conversion.abc) {
-    throw new Error(conversion.errors.join(" ") || "The realized Guitar Classic accompaniment cannot be converted to ABCNotation.");
+    throw new Error(conversion.errors.join(" ") || "The realized Guitar accompaniment cannot be converted to ABCNotation.");
   }
 
   return makeRun({
@@ -349,7 +335,7 @@ function buildGuitarClassicAbcNotationRun(
     userNote: input.userNote,
     options: [{
       id: "guitar-classic-support-abc",
-      label: "Guitar Classic Support Music Sheet",
+      label: "Guitar Support Music Sheet",
       summary: `${GUITAR_CLASSIC_COMPING_PROFILES[compingProfileId].label} realized ${conversion.renderedEventCount} chord-support events from ${realization.sourceAnchorCount} selected anchors across ${conversion.measureCount} source measures.`,
       justification: "The selected Guitar Profile supplies the rhythmic technique while the selected Guitar Voicing anchors determine the fretboard context; Step 6 deterministically materializes the complete chord texture.",
       data: {
@@ -362,7 +348,7 @@ function buildGuitarClassicAbcNotationRun(
         sourceStepId: "guitar-voicing-bass",
       },
       warnings: [],
-      validationNotes: ["Standard notation support voice created from the selected Guitar Profile; Guitar TAB remains exclusive to the dedicated Fingerstyle route."],
+      validationNotes: ["Standard notation support voice created for the default acoustic steel-string Guitar; Guitar TAB remains exclusive to the dedicated Fingerstyle route."],
     }],
     rawResult: { deterministic: true, realization, conversion },
   });
@@ -372,8 +358,8 @@ function stringValue(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
-function isGuitarValidationProfileId(value: unknown): value is "guitar-classic" | "standard-six-string" {
-  return value === "guitar-classic" || value === "standard-six-string";
+function isGuitarValidationProfileId(value: unknown): value is "guitar-classic" | "guitar-acoustic" | "standard-six-string" {
+  return value === "guitar-classic" || value === "guitar-acoustic" || value === "standard-six-string";
 }
 
 function guitarTabObjectFromData(data: Record<string, unknown> | null): Record<string, unknown> | null {
@@ -388,7 +374,7 @@ function profileFromSetup(setupInput?: Partial<AccompanimentWorkflowSetup> | nul
   const guitar = orderedAccompanimentInstruments(setup).find((instrument) =>
     instrument.enabled && instrument.id === "guitar-classic"
   );
-  return guitar ? "guitar-classic" : "standard-six-string";
+  return guitar ? "guitar-acoustic" : "standard-six-string";
 }
 
 function guitarTabValidationOptionsFromOption(
@@ -432,8 +418,8 @@ function validateGuitarWorkflowResult(
   const options = Array.isArray(result.options) ? result.options.slice(0, 5) : [];
   const validations: Array<{ optionId: string; validation: GuitarTabValidationResult }> = [];
   const messages: string[] = [];
-  if (!toolEvidence.queriedVoicings) messages.push("Call query_guitar_voicings before finalizing Guitar Classic fretting.");
-  if (!toolEvidence.validatedTab) messages.push("Call valid_guitar_tab on the proposed Guitar Classic events before finalizing.");
+  if (!toolEvidence.queriedVoicings) messages.push("Call query_guitar_voicings before finalizing acoustic steel-string Guitar fretting.");
+  if (!toolEvidence.validatedTab) messages.push("Call valid_guitar_tab on the proposed acoustic steel-string Guitar events before finalizing.");
 
   if (options.length === 0) {
     return { valid: false, message: "Final guitar workflow output contained no options." };
@@ -475,90 +461,6 @@ function validateGuitarWorkflowResult(
   };
 }
 
-function isStrongBeatEmphasis(value: unknown): value is StrongBeatEmphasis {
-  return value === "all-metric-beats" || value === "primary-strong-beats" || value === "downbeats-only";
-}
-
-function makeAddStrongBeatIconsLocalTool(sourceAbc: string, onCalled?: (result: StrongBeatIconGenerationResult) => void) {
-  return {
-    name: "add_strong_beat_icons",
-    execute: (args: unknown) => {
-      const emphasis = isStrongBeatEmphasis((args as { emphasis?: unknown }).emphasis)
-        ? (args as { emphasis: StrongBeatEmphasis }).emphasis
-        : "all-metric-beats";
-      const result = addStrongBeatIconsToAbcNotation({ abcNotation: sourceAbc, emphasis });
-      onCalled?.(result);
-      return result;
-    },
-  };
-}
-
-const STRONG_BEAT_LLM_DISALLOWED_DATA_KEYS = [
-  "annotatedAbc",
-  "abcNotation",
-  "strongBeatDirectives",
-  "abc",
-  "harmonizedAbc",
-  "validatedAbc",
-  "chordAnnotatedAbc",
-] as const;
-
-function validateStrongBeatWorkflowResult(input: {
-  raw: unknown;
-  localToolCalled: boolean;
-  localResults: StrongBeatIconGenerationResult[];
-}): ToolLoopValidationResult {
-  const result = input.raw as RawWorkflowStepResult;
-  const options = Array.isArray(result.options) ? result.options.slice(0, 5) : [];
-  const messages: string[] = [];
-  const successfulLocalEmphases = new Set(
-    input.localResults
-      .filter((result) => result.valid)
-      .map((result) => result.emphasis)
-  );
-
-  if (options.length === 0) {
-    return { valid: false, message: "Final Strong Beats workflow output contained no options." };
-  }
-
-  if (!input.localToolCalled) {
-    messages.push("Call add_strong_beat_icons before calling generate_strong_beat_targets so beat icons are computed by the local algorithm as beat-only w: lyric rows.");
-  }
-
-  for (const [index, option] of options.entries()) {
-    const optionId = normalizeId(option.id, `option-${index + 1}`);
-    const data = optionData(option);
-    const emphasis = data?.strongBeatEmphasis;
-
-    if (!isStrongBeatEmphasis(emphasis)) {
-      messages.push(`${optionId} is missing data.strongBeatEmphasis. The Strong Beats final payload should include only the emphasis direction.`);
-    } else if (!successfulLocalEmphases.has(emphasis)) {
-      messages.push(`${optionId} uses strongBeatEmphasis="${emphasis}" but add_strong_beat_icons was not called successfully for that emphasis.`);
-    }
-
-    for (const key of STRONG_BEAT_LLM_DISALLOWED_DATA_KEYS) {
-      if (data && key in data) {
-        messages.push(`${optionId} must not include data.${key}. Strong Beat ABC notation and directives are generated locally as beat-only w: lyric rows after the final LLM payload.`);
-      }
-    }
-  }
-
-  return {
-    valid: messages.length === 0,
-    message: messages.join("\n"),
-    toolResult: {
-      valid: messages.length === 0,
-      issues: messages,
-      localResults: input.localResults.map((result) => ({
-        emphasis: result.emphasis,
-        valid: result.valid,
-        directiveCount: result.strongBeatDirectives.length,
-        issues: result.issues,
-      })),
-    },
-  };
-}
-
 const ABC_WORKFLOW_STEP_IDS = new Set<AccompanimentWorkflowStepId>(["chord-roles-progression", "voice-leading-validation"]);
 const ABC_OPTION_DATA_KEYS = ["harmonizedAbc", "validatedAbc", "chordAnnotatedAbc", "abc"] as const;
 
@@ -574,11 +476,6 @@ function playableAbcFromData(data: Record<string, unknown>): string | null {
     if (typeof value === "string" && value.trim()) return value;
   }
   return null;
-}
-
-function isStrongMetricBeat(beat: number, meter: { numerator: number; denominator: number }): boolean {
-  if (Math.abs(beat - 1) < 0.001) return true;
-  return meter.numerator === 4 && meter.denominator === 4 && Math.abs(beat - 3) < 0.001;
 }
 
 function deriveNoteChordAssignments(data: Record<string, unknown>): Record<string, unknown> {
@@ -655,18 +552,7 @@ function validateHarmonyTimeline(raw: unknown): ToolLoopValidationResult {
       const abc = data[key];
       if (typeof abc !== "string" || !abc.trim()) continue;
 
-      if (extractInlineChordEventsByMelodyMeasure(abc).flat().length === 0) {
-        messages.push(`${optionId}.${key} has no valid inline chord events.`);
-        continue;
-      }
-
-      const meter = buildAbcDurationContext(abc).meter;
-      for (const assignment of assignActiveChordsToMelodyNotes(abc)) {
-        if (!isStrongMetricBeat(assignment.beat, meter) || assignment.chord) continue;
-        messages.push(
-          `${optionId}.${key} measure ${assignment.measureIndex + 1} beat ${assignment.beat} note ${assignment.token} has no active chord.`,
-        );
-      }
+      messages.push(...validateHarmonyTimelineAbc(abc).map((message) => `${optionId}.${key} ${message}`));
     }
   }
 
@@ -710,22 +596,6 @@ function normalizeGuitarTabOptionData(data: Record<string, unknown>): Record<str
   };
 }
 
-function normalizeStrongBeatOptionData(data: Record<string, unknown>, sourceAbc: string): Record<string, unknown> {
-  const emphasis = isStrongBeatEmphasis(data.strongBeatEmphasis) ? data.strongBeatEmphasis : "all-metric-beats";
-  const localResult = addStrongBeatIconsToAbcNotation({ abcNotation: sourceAbc, emphasis });
-  const safeData = { ...data };
-
-  for (const key of STRONG_BEAT_LLM_DISALLOWED_DATA_KEYS) {
-    delete safeData[key];
-  }
-
-  return {
-    ...safeData,
-    strongBeatEmphasis: emphasis,
-    strongBeatDirectives: localResult.strongBeatDirectives,
-  };
-}
-
 function normalizeOptions(raw: unknown, sourceAbc: string, stepId?: AccompanimentWorkflowStepId): AccompanimentWorkflowOption[] {
   const result = raw as RawWorkflowStepResult;
   const options = Array.isArray(result.options) ? result.options.slice(0, 2) : [];
@@ -738,9 +608,7 @@ function normalizeOptions(raw: unknown, sourceAbc: string, stepId?: Accompanimen
     const data = option.data && typeof option.data === "object" && !Array.isArray(option.data)
       ? normalizeWorkflowOptionDataLineBreaks(option.data, sourceAbc)
       : {};
-    const normalizedData = stepId === "key-beats"
-      ? normalizeStrongBeatOptionData(data, sourceAbc)
-      : stepId && ABC_WORKFLOW_STEP_IDS.has(stepId)
+    const normalizedData = stepId && ABC_WORKFLOW_STEP_IDS.has(stepId)
         ? deriveNoteChordAssignments(data)
         : stepId && isGuitarTabValidationWorkflowStep(stepId)
           ? normalizeGuitarTabOptionData(data)
@@ -818,6 +686,7 @@ export async function generateAccompanimentWorkflowStep(
   input: GenerateAccompanimentWorkflowStepInput
 ): Promise<AccompanimentWorkflowRun> {
   try {
+    if (isAlgorithmicHarmonyStep(input.stepId)) return generateHarmonyWorkflowStep(input);
     if (input.stepId === "guitar-classic-abc-notation") {
       return buildGuitarClassicAbcNotationRun(input);
     }
@@ -834,33 +703,11 @@ export async function generateAccompanimentWorkflowStep(
     });
     let rawResult: unknown;
 
-    if (input.stepId === "key-beats") {
-      let strongBeatToolCalled = false;
-      const strongBeatResults: StrongBeatIconGenerationResult[] = [];
-      rawResult = await requestOpenAiCompatibleToolLoop({
-        systemPrompt: `${systemPrompt} For the Key & Beats step, choose emphasis direction. Call add_strong_beat_icons for each emphasis before the final tool. Final payload must include only strongBeatEmphasis.`,
-        userPrompt: requestPrompt,
-        tools: [buildAddStrongBeatIconsToolSchema(), toolSchema],
-        finalToolName: toolName,
-        localTools: [makeAddStrongBeatIconsLocalTool(input.sourceAbc, (result) => {
-          strongBeatToolCalled = true;
-          strongBeatResults.push(result);
-        })],
-        validateFinalResult: (args) => validateStrongBeatWorkflowResult({
-          raw: args,
-          localToolCalled: strongBeatToolCalled,
-          localResults: strongBeatResults,
-        }),
-        temperature: 0.25,
-        maxIterations: MAX_TOOL_LOOP_ITERATIONS,
-        maxValidationAttempts: MAX_VALIDATION_REPAIR_ATTEMPTS,
-        onDiagnostic,
-      });
-    } else if (isGuitarTabValidationWorkflowStep(input.stepId)) {
+    if (isGuitarTabValidationWorkflowStep(input.stepId)) {
       let queriedVoicings = false;
       let validatedTab = false;
       rawResult = await requestOpenAiCompatibleToolLoop({
-        systemPrompt: `${systemPrompt} For Guitar Classic singer-support steps, call query_guitar_voicings before concrete fretting and valid_guitar_tab on the exact proposed events; both calls are required before final output. Use compact timed tab keys (m/t/d/b/n/s/f/r/sid) and include data.guitarTab.compingProfileId. Step 4 selects devotional-pima-arpeggio, devotional-pinch-arpeggio, or bhajan-strum with a representative sample. Step 5 retains that profile and plans bounded voicing/root-fifth/transition anchors, not a full texture. Step 6 deterministically makes the treble-led accompaniment: strings 4-6 are restrained structural bass, strings 1-3 carry most PIMA/pinch motion, walking bass is optional transition material, and pinches are bass-plus-treble on metric strong beats. Ensure unique string/source assignment and one-left-hand reach.`,
+        systemPrompt: `${systemPrompt} For acoustic steel-string Guitar singer-support steps, call query_guitar_voicings before concrete fretting and valid_guitar_tab on the exact proposed events; both calls are required before final output. Use compact timed tab keys (m/t/d/b/n/s/f/r/sid) and include data.guitarTab.compingProfileId. Step 4 selects devotional-pima-arpeggio, devotional-pinch-arpeggio, or bhajan-strum with a representative sample. Step 5 retains that profile and plans bounded voicing/root-fifth/transition anchors, not a full texture. Step 6 deterministically makes the treble-led accompaniment: strings 4-6 are restrained structural bass, strings 1-3 carry most PIMA/pinch motion, walking bass is optional transition material, and pinches are bass-plus-treble on metric strong beats. Ensure unique string/source assignment and one-left-hand reach.`,
         userPrompt: requestPrompt,
         tools: [buildValidGuitarTabToolSchema(), buildQueryGuitarVoicingsToolSchema(), toolSchema],
         finalToolName: toolName,
@@ -880,7 +727,7 @@ export async function generateAccompanimentWorkflowStep(
             name: "query_guitar_voicings",
             execute: (args) => {
               queriedVoicings = true;
-              const { chord, melody_pitch, target_position } = args as any;
+              const { chord, melody_pitch, target_position } = args as { chord: Parameters<typeof query_guitar_voicings>[0]; melody_pitch: Parameters<typeof query_guitar_voicings>[1]; target_position: Parameters<typeof query_guitar_voicings>[2] };
               return query_guitar_voicings(chord, melody_pitch, target_position);
             }
           }
@@ -959,91 +806,7 @@ export async function generateAccompanimentWorkflowStep(
 export async function generateConsolidatedChordIngestionWorkflowSteps(
   input: Omit<GenerateAccompanimentWorkflowStepInput, "stepId">
 ): Promise<AccompanimentWorkflowRun[]> {
-  try {
-    const lyricChordAnnotations = extractLyricChordAnnotations(input.sourceAbc);
-    if (lyricChordAnnotations.length === 0) {
-      throw new Error("No chord annotations were found in ABC lyric lines.");
-    }
-
-    const requestPrompt = buildConsolidatedChordIngestionPrompt(input);
-    const diagnostics = createDiagnosticState("consolidated-chord-ingestion");
-    const onDiagnostic = makeDiagnosticRecorder({
-      state: diagnostics,
-      stepId: "consolidated-chord-ingestion",
-      promptSummary: `consolidated-chord-ingestion: ${input.metadata.key} ${input.metadata.timeSignature}`,
-    });
-    let breakToolCalled = false;
-    const rawResult = await requestOpenAiCompatibleToolLoop({
-      systemPrompt: "You are an expert bhajan music arranger. Ingest lyric chord annotations and return chord roles/progression and voice-leading validation in one tool call. Call break_measures_line before the final tool.",
-      userPrompt: requestPrompt,
-      tools: [buildBreakMeasuresLineToolSchema(), buildConsolidatedChordIngestionToolSchema()],
-      finalToolName: "generate_consolidated_chord_ingestion",
-      localTools: [makeBreakMeasuresLineLocalTool(input.sourceAbc, () => { breakToolCalled = true; })],
-      validateFinalResult: (args) => {
-        const result = args as RawConsolidatedChordIngestionResult;
-        const progression = validateWorkflowAbcLineBreaks({
-          raw: result.chordRolesProgression,
-          sourceAbc: input.sourceAbc,
-          requireBreakToolCall: true,
-          breakToolCalled,
-          requireAbcField: true,
-        });
-        const voiceLeading = validateWorkflowAbcLineBreaks({
-          raw: result.voiceLeadingValidation,
-          sourceAbc: input.sourceAbc,
-          requireBreakToolCall: true,
-          breakToolCalled,
-          requireAbcField: true,
-        });
-        const progressionTimeline = validateHarmonyTimeline(result.chordRolesProgression);
-        const voiceLeadingTimeline = validateHarmonyTimeline(result.voiceLeadingValidation);
-        const valid = progression.valid && voiceLeading.valid && progressionTimeline.valid && voiceLeadingTimeline.valid;
-        const issues = [
-          progression.message,
-          voiceLeading.message,
-          progressionTimeline.message,
-          voiceLeadingTimeline.message,
-        ].filter(Boolean);
-        return {
-          valid,
-          message: issues.join("\n"),
-          toolResult: {
-            valid,
-            issues,
-            chordRolesProgression: progression.toolResult,
-            voiceLeadingValidation: voiceLeading.toolResult,
-            chordRolesTimeline: progressionTimeline.toolResult,
-            voiceLeadingTimeline: voiceLeadingTimeline.toolResult,
-          },
-        };
-      },
-      temperature: 0.2,
-      maxIterations: MAX_TOOL_LOOP_ITERATIONS,
-      maxValidationAttempts: MAX_VALIDATION_REPAIR_ATTEMPTS,
-      onDiagnostic,
-    });
-    const result = rawResult as RawConsolidatedChordIngestionResult;
-
-    return [
-      makeRun({
-        stepId: "chord-roles-progression",
-        requestPrompt,
-        userNote: input.userNote,
-        options: normalizeOptions(result.chordRolesProgression, input.sourceAbc, "chord-roles-progression"),
-        rawResult: result.chordRolesProgression,
-        diagnostics,
-      }),
-      makeRun({
-        stepId: "voice-leading-validation",
-        requestPrompt,
-        userNote: input.userNote,
-        options: normalizeOptions(result.voiceLeadingValidation, input.sourceAbc, "voice-leading-validation"),
-        rawResult: result.voiceLeadingValidation,
-        diagnostics,
-      }),
-    ];
-  } catch (error) {
-    console.error("Error during consolidated chord ingestion workflow generation:", error);
-    throw new Error(error instanceof Error ? error.message : "An unknown error occurred during consolidated chord ingestion workflow generation.");
-  }
+  const chords = generateHarmonyWorkflowStep({ ...input, stepId: "chord-roles-progression" });
+  // Selection is explicit: callers must select Step 2 before requesting validation.
+  return [chords];
 }

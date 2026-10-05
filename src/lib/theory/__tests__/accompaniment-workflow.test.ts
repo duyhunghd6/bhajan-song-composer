@@ -22,12 +22,9 @@ K:C
 | C2 E2 G2 c2 |`;
 
 describe("accompaniment workflow", () => {
-  it("offers only Guitar Classic, Harmonium, and Djembe", () => {
-    expect(Object.keys(ACCOMPANIMENT_INSTRUMENT_LABELS)).toEqual([
-      "guitar-classic",
-      "indian-harmonium",
-      "djembe",
-    ]);
+  it("offers only Guitar", () => {
+    expect(Object.keys(ACCOMPANIMENT_INSTRUMENT_LABELS)).toEqual(["guitar-classic"]);
+    expect(ACCOMPANIMENT_INSTRUMENT_LABELS["guitar-classic"]).toBe("Guitar");
     expect(ACCOMPANIMENT_WORKFLOW_STEP_IDS).toEqual([
       "key-beats",
       "chord-roles-progression",
@@ -35,17 +32,13 @@ describe("accompaniment workflow", () => {
       "guitar-comping-profile",
       "guitar-voicing-bass",
       "guitar-classic-abc-notation",
-      "harmonium-drone-register",
-      "harmonium-chord-voicing-validation",
-      "djembe-groove-interlock",
-      "djembe-fill-validation",
     ]);
   });
 
   it("plans retained instrument branches in setup order", () => {
     const setup = getDefaultAccompanimentWorkflowSetup();
     expect(getEnabledAccompanimentWorkflowStepIds(setup)).toEqual(ACCOMPANIMENT_WORKFLOW_STEP_IDS);
-    expect(getVisibleAccompanimentWorkflowSteps(createAccompanimentWorkflowSession(sampleAbc, setup))).toHaveLength(10);
+    expect(getVisibleAccompanimentWorkflowSteps(createAccompanimentWorkflowSession(sampleAbc, setup))).toHaveLength(6);
   });
 
   it("normalizes persisted Solo/Fingerstyle setup to combined accompaniment", () => {
@@ -55,7 +48,7 @@ describe("accompaniment workflow", () => {
     } as never);
 
     expect(setup.style).toBe("accompaniment");
-    expect(setup.instruments.find((instrument) => instrument.id === "djembe")?.enabled).toBe(true);
+    expect(setup.instruments).toEqual([{ id: "guitar-classic", enabled: false, order: 0, roleNote: expect.any(String) }]);
   });
 
   it("drops removed instruments and steps while restoring persisted sessions", () => {
@@ -74,10 +67,8 @@ describe("accompaniment workflow", () => {
       },
       steps: {},
     });
-    expect(restored?.version).toBe(8);
-    expect(restored?.setup.instruments.map((instrument) => instrument.id)).toEqual([
-      "guitar-classic", "indian-harmonium", "djembe",
-    ]);
+    expect(restored?.version).toBe(9);
+    expect(restored?.setup.instruments.map((instrument) => instrument.id)).toEqual(["guitar-classic"]);
     expect(restored?.enabledStepIds).not.toContain("piano-comping-bass");
   });
 
@@ -115,16 +106,16 @@ describe("accompaniment workflow", () => {
 
   it("never names removed instruments in generated workflow prompts", () => {
     const prompt = buildAccompanimentWorkflowPrompt({
-      stepId: "djembe-groove-interlock",
+      stepId: "guitar-comping-profile",
       sourceAbc: sampleAbc,
       metadata: { key: "C", scale: "major", timeSignature: "4/4" },
       previousSelections: [],
       setup: normalizeAccompanimentWorkflowSetup({
         style: "accompaniment",
         instruments: [{ id: "djembe", enabled: true, order: 0 }],
-      }),
+      } as never),
     });
-    expect(prompt).toContain("Djembe");
-    expect(prompt).not.toMatch(/Piano|Flute|Violin|Acoustic/i);
+    expect(prompt).toContain("acoustic steel-string Guitar");
+    expect(prompt).not.toMatch(/Djembe|Harmonium|Piano|Flute|Violin/i);
   });
 });

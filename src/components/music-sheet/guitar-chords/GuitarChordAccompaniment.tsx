@@ -46,6 +46,7 @@ export default function GuitarChordAccompaniment({ sourceAbc, overrides, onOverr
   const [auditionError, setAuditionError] = useState("");
   const [listeningId, setListeningId] = useState<string | null>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const backdropPress = useRef(false);
   const auditionRef = useRef<InstanceType<typeof abcjs.synth.CreateSynth> | null>(null);
   const contextRef = useRef<AudioContext | null>(null);
   const auditionVersion = useRef(0);
@@ -121,7 +122,7 @@ export default function GuitarChordAccompaniment({ sourceAbc, overrides, onOverr
   };
   return <>
     <AbcjsPlaybackController {...props} synthOptions={guitarSynthOptions} prepareAudio={prepareAudio} onScoreRendered={onScoreRendered} />
-    {score.occurrences.length > 0 && <p className="px-4 py-2 text-xs text-zinc-500">Click a chord name or diagram to choose a guitar shape. Playback follows the selected strings and frets.</p>}
+    {score.occurrences.length > 0 && <p className="px-4 py-2 text-xs text-zinc-500">{props.renderScore ? "Click a guitar diagram to choose a shape. Click a chord name to select it; double-click or press Enter to open its picker. Right-click for chord actions." : "Click a chord name or diagram to choose a guitar shape."} Playback follows the selected strings and frets.</p>}
     {contextMenu && contextChord && createPortal(<div ref={menuRef} role="menu" aria-label={`${contextChord.symbol} chord actions`} tabIndex={-1}
       onKeyDown={(event) => {
         if (event.key === "Escape") { event.preventDefault(); setContextMenu(null); return; }
@@ -141,7 +142,18 @@ export default function GuitarChordAccompaniment({ sourceAbc, overrides, onOverr
         <Button type="button" role="menuitem" variant="danger" onClick={() => { onChordEdit(contextChord, null); setContextMenu(null); }}>Remove chord</Button>
       </>}
     </div>, document.body)}
-    <dialog ref={dialogRef} onCancel={close} onClose={close} className={styles.dialog} onKeyDown={(event) => {
+    <dialog ref={dialogRef} onCancel={close} onClose={close} className={styles.dialog}
+      onPointerDown={(event) => {
+        const box = event.currentTarget.getBoundingClientRect();
+        backdropPress.current = event.target === event.currentTarget && (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom);
+      }}
+      onClick={(event) => {
+        const box = event.currentTarget.getBoundingClientRect();
+        const outside = event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom;
+        if (backdropPress.current && event.target === event.currentTarget && outside) close();
+        backdropPress.current = false;
+      }} onKeyDown={(event) => {
+      if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); close(); return; }
       if (event.key === "Enter" && pendingShape && event.target === event.currentTarget) { event.preventDefault(); choose(pendingShape); }
     }} aria-labelledby={`guitar-picker-${auditionId}`}>
       {selected && <>

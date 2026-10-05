@@ -1,0 +1,26 @@
+{
+  "id": "fixture-soft-exception-v1",
+  "object": "chat.completion",
+  "created": 1773440007,
+  "model": "gpt-4o",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_soft_exception_01",
+            "type": "function",
+            "function": {
+              "name": "submit_arrangement_candidates",
+              "arguments": "{\"packId\":\"pack-soft-exception-v1\",\"targetInstrument\":\"guitar-classic\",\"candidateCount\":3,\"options\":[{\"optionId\":\"guitar-soft-exception-sus4\",\"targetInstrument\":\"guitar-classic\",\"label\":\"Devotional Suspended Color (Review Required)\",\"rationale\":\"Uses open Csus4 and open fifth drone to evoke a meditative mood, intentionally omitting the major third on downbeats with explicit rationale.\",\"diversityLabel\":\"Texture: Ambient Drone / Voicing: Sus4 / Exception: Third Omission\",\"decisionMap\":[{\"measure\":1,\"technique\":\"drone\",\"voicing\":\"csus4-open\"},{\"measure\":2,\"technique\":\"drone\",\"voicing\":\"gsus4-open\"},{\"measure\":3,\"technique\":\"drone\",\"voicing\":\"fsus2-open\"},{\"measure\":4,\"technique\":\"sustain\",\"voicing\":\"c5-power\"}],\"abc\":\"V:GuitarSupport clef=treble-8\\n[C,F] G, C F | [G,,C] D G C | [F,,C] G, C F | [C,G]4 |\",\"declaredSoftRuleTradeOffs\":[{\"rule\":\"third-retention\",\"rationale\":\"Intentional suspended 4th and open fifth drone for meditative devotional mood\",\"status\":\"review\"}]},{\"optionId\":\"guitar-standard-pima\",\"targetInstrument\":\"guitar-classic\",\"label\":\"Standard Devotional PIMA\",\"rationale\":\"Conventional devotional arpeggio retaining all thirds and fifths normally.\",\"diversityLabel\":\"Texture: Arpeggio / Status: Fully Valid\",\"decisionMap\":[{\"measure\":1,\"technique\":\"arpeggio\"},{\"measure\":2,\"technique\":\"arpeggio\"},{\"measure\":3,\"technique\":\"arpeggio\"},{\"measure\":4,\"technique\":\"sustain\"}],\"abc\":\"V:GuitarSupport clef=treble-8\\n[C,E] G, C E | [G,,D] B, D G | [F,,C] A, C F | [C,E]4 |\"},{\"optionId\":\"guitar-standard-pinch\",\"targetInstrument\":\"guitar-classic\",\"label\":\"Standard Devotional Pinch\",\"rationale\":\"Standard pinch pattern preserving all harmonic guide tones and third intervals.\",\"diversityLabel\":\"Texture: Pinch / Status: Fully Valid\",\"decisionMap\":[{\"measure\":1,\"technique\":\"pinch\"},{\"measure\":2,\"technique\":\"pinch\"},{\"measure\":3,\"technique\":\"pinch\"},{\"measure\":4,\"technique\":\"sustain\"}],\"abc\":\"V:GuitarSupport clef=treble-8\\n[C,G] E G E | [G,,B] D G B | [F,,A] C F A | [C,G]4 |\"}]}"
+            }
+          }
+        ]
+      },
+      "finish_reason": "tool_calls"
+    }
+  ]
+}

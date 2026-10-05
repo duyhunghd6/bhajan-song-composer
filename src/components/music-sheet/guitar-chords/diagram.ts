@@ -2,8 +2,8 @@ import { primaryVoiceElements, type GuitarChordScore, type GuitarChordShape, typ
 import { isAbcChordSymbol } from "@/lib/theory/abc-chord-symbol";
 
 const NS = "http://www.w3.org/2000/svg";
-const SCORE_DIAGRAM_WIDTH = 32.2;
-const SCORE_DIAGRAM_HEIGHT = 34.3;
+const SCORE_DIAGRAM_WIDTH = 44;
+const SCORE_DIAGRAM_HEIGHT = 42;
 const SCORE_DIAGRAM_SPACING = SCORE_DIAGRAM_HEIGHT + 5;
 
 /** Geometry is shared by the score and picker; only trusted numeric shape data is emitted. */
@@ -49,6 +49,18 @@ export function attachGuitarChordDiagrams(container: HTMLDivElement, tune: Guita
     const svg = chordText.ownerSVGElement;
     if (!wrapper || !svg) continue;
     const box = chordText.getBBox();
+    const hitArea = document.createElementNS(NS, "rect");
+    const hitWidth = Math.max(48, box.width + 16);
+    const hitHeight = Math.max(32, box.height + 12);
+    hitArea.setAttribute("x", String(box.x + box.width / 2 - hitWidth / 2));
+    hitArea.setAttribute("y", String(box.y + box.height / 2 - hitHeight / 2));
+    hitArea.setAttribute("width", String(hitWidth));
+    hitArea.setAttribute("height", String(hitHeight));
+    hitArea.setAttribute("rx", "5");
+    hitArea.setAttribute("class", "guitar-chord-hit-area");
+    hitArea.setAttribute("fill", "transparent");
+    hitArea.setAttribute("stroke", "transparent");
+    chordText.parentNode?.insertBefore(hitArea, chordText);
     const row = rows.get(wrapper) ?? { bottom: 0, lanes: 0, rights: [] };
     const left = Math.max(0, box.x + box.width / 2 - SCORE_DIAGRAM_WIDTH / 2);
     let lane = row.rights.findIndex((right) => right + 5 <= left);
@@ -62,15 +74,26 @@ export function attachGuitarChordDiagrams(container: HTMLDivElement, tune: Guita
     diagram.setAttribute("width", String(SCORE_DIAGRAM_WIDTH));
     diagram.setAttribute("height", String(SCORE_DIAGRAM_HEIGHT));
     diagram.setAttribute("viewBox", "0 0 84 88");
-    if (occurrence.selected) diagram.innerHTML = guitarDiagramMarkup(occurrence.selected);
+    diagram.setAttribute("data-guitar-chord-diagram", "true");
+    // SVG whitespace must be clickable too, not just strings and finger dots.
+    diagram.innerHTML = '<rect width="84" height="88" fill="transparent" stroke="none" style="fill:transparent!important;stroke:none!important" pointer-events="all"/>';
+    if (occurrence.selected) diagram.innerHTML += guitarDiagramMarkup(occurrence.selected);
     wrapper.appendChild(diagram);
-    for (const target of [chordText, diagram]) {
+    for (const target of [hitArea, chordText, diagram]) {
       target.setAttribute("data-guitar-chord", occurrence.id);
       target.setAttribute("role", "button");
       target.setAttribute("tabindex", "0");
       target.setAttribute("aria-label", `Choose guitar shape for ${occurrence.symbol}, measure ${occurrence.measureIndex + 1}, beat ${occurrence.beat}`);
       target.style.cursor = "pointer";
-      const click = (event: Event) => { event.preventDefault(); event.stopPropagation(); target.focus({ preventScroll: true }); onSelect(occurrence.id); };
+      const click = (event: Event) => {
+        event.preventDefault(); event.stopPropagation(); target.focus({ preventScroll: true });
+        // Workspace pointer clicks select; a double-click or Enter opens its inspector.
+        if (event instanceof MouseEvent && event.type === "click" && target.closest('[data-score-workspace-viewport]')) {
+          if (event.shiftKey || event.metaKey || event.ctrlKey) return;
+          if (target !== diagram && event.detail < 2) return;
+        }
+        onSelect(occurrence.id);
+      };
       const keydown = (event: Event) => {
         if ((event as KeyboardEvent).key === "Enter" || (event as KeyboardEvent).key === " ") click(event);
       };
@@ -95,7 +118,15 @@ export function attachGuitarChordDiagrams(container: HTMLDivElement, tune: Guita
   for (const svg of Array.from(container.querySelectorAll("svg.abcjs-svg, svg[role='img']"))) {
     let extra = 0;
     for (const wrapper of Array.from(svg.querySelectorAll(".abcjs-staff-wrapper"))) {
-      extra += (rows.get(wrapper)?.lanes ?? 0) * SCORE_DIAGRAM_SPACING;
+      const diagramSpace = (rows.get(wrapper)?.lanes ?? 0) * SCORE_DIAGRAM_SPACING;
+      // Tempo shares the chord's vertical lane in abcjs. Keep it above the
+      // newly reserved diagram space while moving the complete staff together.
+      if (diagramSpace) {
+        for (const tempo of Array.from(wrapper.querySelectorAll("g.abcjs-tempo"))) {
+          tempo.setAttribute("transform", `translate(0 ${-diagramSpace}) ${tempo.getAttribute("transform") ?? ""}`);
+        }
+      }
+      extra += diagramSpace;
       wrapper.setAttribute("transform", `translate(0 ${extra}) ${wrapper.getAttribute("transform") ?? ""}`);
     }
     const viewBox = svg.getAttribute("viewBox")?.split(/\s+/).map(Number);

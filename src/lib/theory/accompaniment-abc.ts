@@ -283,7 +283,7 @@ function isGuitarLeftHandVoiceLine(voiceLine: string): boolean {
 function getFriendlyVoiceName(voiceId: string): string {
   const normalized = voiceId.toLowerCase();
   if (normalized === "melody") return "Melody";
-  if (normalized === "guitarsupport") return "Guitar Classic Support";
+  if (normalized === "guitarsupport") return "Guitar Support";
   if (normalized.includes("guitar")) return "Guitar";
   if (normalized === "harmonium") return "Indian Harmonium";
   if (normalized === "djembe") return "Djembe";
@@ -316,7 +316,7 @@ function normalizeMidiDirectives(voiceLine: string, directives: string[]): strin
   }
 
   if (voiceLine.startsWith("V:Guitar")) {
-    return ["%%MIDI program 24", ...nonProgramDirectives];
+    return ["%%MIDI program 25", ...nonProgramDirectives];
   }
 
   return directives;
@@ -860,4 +860,3 @@ export function buildAccompanimentAbc({
     visibleVoiceNames,
   };
 }
-

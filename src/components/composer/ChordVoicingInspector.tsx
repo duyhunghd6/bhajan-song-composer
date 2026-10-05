@@ -1,5 +1,8 @@
 "use client";
 
+import { Button } from "@/components/ui/Button";
+
+
 import { useState } from "react";
 
 /** The only ranges that a beat-level voicing edit is allowed to target. */
@@ -277,9 +280,9 @@ export function ChordVoicingInspector({
       </div>
 
       <div className="mt-3 flex flex-wrap gap-2" aria-label="Voicing audition controls">
-        <button type="button" onClick={() => requestAudition("current")} disabled={!currentCandidateId} className="rounded border px-3 py-1.5 text-sm disabled:opacity-50">Play current</button>
-        <button type="button" onClick={() => requestAudition("candidate")} disabled={!model.selectedCandidate} className="rounded border px-3 py-1.5 text-sm disabled:opacity-50">Play candidate</button>
-        <button type="button" onClick={() => requestAudition("ab-loop")} disabled={!currentCandidateId || !model.selectedCandidate} className="rounded border px-3 py-1.5 text-sm disabled:opacity-50">A/B loop {loopLabel}</button>
+        <Button variant="secondary" size="sm" type="button" onClick={() => requestAudition("current")} disabled={!currentCandidateId} >Play current</Button>
+        <Button variant="secondary" size="sm" type="button" onClick={() => requestAudition("candidate")} disabled={!model.selectedCandidate} >Play candidate</Button>
+        <Button variant="secondary" size="sm" type="button" onClick={() => requestAudition("ab-loop")} disabled={!currentCandidateId || !model.selectedCandidate} >A/B loop {loopLabel}</Button>
       </div>
       <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-300" aria-live="polite">
         A: {model.currentCandidate?.label ?? "—"} · B: {model.selectedCandidate?.label ?? "—"} · {auditionMode === "idle" ? "Ready to audition" : `Auditioning ${auditionMode}`}
@@ -291,8 +294,8 @@ export function ChordVoicingInspector({
       </div>
 
       <footer className="mt-4 flex flex-wrap gap-2 border-t border-zinc-200 pt-3 dark:border-zinc-800">
-        <button type="button" onClick={() => model.selectedCandidate && onApplyCandidate?.(model.selectedCandidate, scope)} disabled={!canApply} className="rounded bg-amber-500 px-3 py-1.5 text-sm font-medium text-zinc-950 disabled:opacity-50">Apply voicing</button>
-        {onResetOverride && <button type="button" onClick={onResetOverride} className="rounded border px-3 py-1.5 text-sm">Reset override</button>}
+        <Button variant="primary" size="md" type="button" onClick={() => model.selectedCandidate && onApplyCandidate?.(model.selectedCandidate, scope)} disabled={!canApply} >Apply voicing</Button>
+        {onResetOverride && <Button variant="danger" size="sm" type="button" onClick={onResetOverride} >Reset override</Button>}
       </footer>
     </aside>
   );

@@ -1,0 +1,122 @@
+{
+  "id": "six-eight-devotional-a-minor",
+  "step3OptionId": "step3-a-min-devotional-v1",
+  "sourceAbc": "X:2\nT:Six-Eight Devotional A Minor\nM:6/8\nL:1/8\nQ:3/8=60\nK:Am\n\"Am\"A,2 B, C2 D | \"Em\"E3 E2 z | \"Dm\"D2 C B,2 A, | \"Am\"A,3- A,3 |",
+  "sourceFingerprint": "8bdd3a42",
+  "meter": "6/8",
+  "meterFamily": "6/8",
+  "tempo": 60,
+  "key": "Am",
+  "scale": "minor",
+  "measureCount": 4,
+  "chordWindows": [
+    {
+      "measureIndex": 1,
+      "startBeat": 1,
+      "endBeat": 3,
+      "startSubdivision": 1,
+      "endSubdivision": 12,
+      "chord": "Am",
+      "root": "A",
+      "quality": "minor"
+    },
+    {
+      "measureIndex": 2,
+      "startBeat": 1,
+      "endBeat": 3,
+      "startSubdivision": 1,
+      "endSubdivision": 12,
+      "chord": "Em",
+      "root": "E",
+      "quality": "minor"
+    },
+    {
+      "measureIndex": 3,
+      "startBeat": 1,
+      "endBeat": 3,
+      "startSubdivision": 1,
+      "endSubdivision": 12,
+      "chord": "Dm",
+      "root": "D",
+      "quality": "minor"
+    },
+    {
+      "measureIndex": 4,
+      "startBeat": 1,
+      "endBeat": 3,
+      "startSubdivision": 1,
+      "endSubdivision": 12,
+      "chord": "Am",
+      "root": "A",
+      "quality": "minor"
+    }
+  ],
+  "melodyActivity": {
+    "continuousLyric": false,
+    "activeOnsetsCount": 8,
+    "gaps": [
+      {
+        "measureIndex": 2,
+        "startBeat": 2,
+        "endBeat": 3,
+        "durationBeats": 1,
+        "safeForFill": true,
+        "resumedBy": "D"
+      }
+    ]
+  },
+  "phrases": [
+    {
+      "phraseIndex": 1,
+      "startMeasure": 1,
+      "endMeasure": 2,
+      "cadenceMeasure": 2,
+      "cadenceBeat": 2,
+      "cadenceType": "half",
+      "targetChord": "Em"
+    },
+    {
+      "phraseIndex": 2,
+      "startMeasure": 3,
+      "endMeasure": 4,
+      "cadenceMeasure": 4,
+      "cadenceBeat": 2,
+      "cadenceType": "authentic",
+      "targetChord": "Am"
+    }
+  ],
+  "registerMap": [
+    {
+      "measureIndex": 1,
+      "lowestPitch": "A2",
+      "highestPitch": "D3",
+      "lowestMidi": 45,
+      "highestMidi": 50,
+      "register": "low"
+    },
+    {
+      "measureIndex": 2,
+      "lowestPitch": "E3",
+      "highestPitch": "E3",
+      "lowestMidi": 52,
+      "highestMidi": 52,
+      "register": "low"
+    },
+    {
+      "measureIndex": 3,
+      "lowestPitch": "A2",
+      "highestPitch": "D3",
+      "lowestMidi": 45,
+      "highestMidi": 50,
+      "register": "low"
+    },
+    {
+      "measureIndex": 4,
+      "lowestPitch": "A2",
+      "highestPitch": "A2",
+      "lowestMidi": 45,
+      "highestMidi": 45,
+      "register": "low"
+    }
+  ]
+}

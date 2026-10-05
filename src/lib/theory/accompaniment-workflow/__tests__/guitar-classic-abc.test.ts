@@ -20,8 +20,8 @@ describe("convertGuitarClassicEventsToAbc", () => {
 
     expect(result.errors).toEqual([]);
     expect(result.renderedEventCount).toBe(4);
-    expect(result.abc).toContain('V:GuitarSupport clef=treble-8 name="Guitar Classic Support"');
-    expect(result.abc).toContain("%%MIDI program 24");
+    expect(result.abc).toContain('V:GuitarSupport clef=treble-8 name="Guitar Support"');
+    expect(result.abc).toContain("%%MIDI program 25");
     expect(result.abc).toContain("!6!E2 !5!B2 !3!g2 z2");
     expect(result.abc).toContain("!5!B4");
     expect(result.abc).toContain("!6!");

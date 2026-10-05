@@ -1,0 +1,122 @@
+{
+  "id": "four-four-gap-c-major",
+  "step3OptionId": "step3-c-maj-functional-v1",
+  "sourceAbc": "X:1\nT:Four-Four Gap C Major\nM:4/4\nL:1/4\nQ:1/4=84\nK:C\n|: \"C\"c e g e | \"G\"d2 z2 | \"F\"f e d c | \"C\"c4 :|",
+  "sourceFingerprint": "4dc0cca7",
+  "meter": "4/4",
+  "meterFamily": "4/4",
+  "tempo": 84,
+  "key": "C",
+  "scale": "major",
+  "measureCount": 4,
+  "chordWindows": [
+    {
+      "measureIndex": 1,
+      "startBeat": 1,
+      "endBeat": 5,
+      "startSubdivision": 1,
+      "endSubdivision": 16,
+      "chord": "C",
+      "root": "C",
+      "quality": "major"
+    },
+    {
+      "measureIndex": 2,
+      "startBeat": 1,
+      "endBeat": 5,
+      "startSubdivision": 1,
+      "endSubdivision": 16,
+      "chord": "G",
+      "root": "G",
+      "quality": "major"
+    },
+    {
+      "measureIndex": 3,
+      "startBeat": 1,
+      "endBeat": 5,
+      "startSubdivision": 1,
+      "endSubdivision": 16,
+      "chord": "F",
+      "root": "F",
+      "quality": "major"
+    },
+    {
+      "measureIndex": 4,
+      "startBeat": 1,
+      "endBeat": 5,
+      "startSubdivision": 1,
+      "endSubdivision": 16,
+      "chord": "C",
+      "root": "C",
+      "quality": "major"
+    }
+  ],
+  "melodyActivity": {
+    "continuousLyric": false,
+    "activeOnsetsCount": 10,
+    "gaps": [
+      {
+        "measureIndex": 2,
+        "startBeat": 3,
+        "endBeat": 5,
+        "durationBeats": 2,
+        "safeForFill": true,
+        "resumedBy": "f"
+      }
+    ]
+  },
+  "phrases": [
+    {
+      "phraseIndex": 1,
+      "startMeasure": 1,
+      "endMeasure": 2,
+      "cadenceMeasure": 2,
+      "cadenceBeat": 3,
+      "cadenceType": "half",
+      "targetChord": "G"
+    },
+    {
+      "phraseIndex": 2,
+      "startMeasure": 3,
+      "endMeasure": 4,
+      "cadenceMeasure": 4,
+      "cadenceBeat": 4,
+      "cadenceType": "authentic",
+      "targetChord": "C"
+    }
+  ],
+  "registerMap": [
+    {
+      "measureIndex": 1,
+      "lowestPitch": "C4",
+      "highestPitch": "G4",
+      "lowestMidi": 60,
+      "highestMidi": 67,
+      "register": "middle"
+    },
+    {
+      "measureIndex": 2,
+      "lowestPitch": "D4",
+      "highestPitch": "D4",
+      "lowestMidi": 62,
+      "highestMidi": 62,
+      "register": "middle"
+    },
+    {
+      "measureIndex": 3,
+      "lowestPitch": "C4",
+      "highestPitch": "F4",
+      "lowestMidi": 60,
+      "highestMidi": 65,
+      "register": "middle"
+    },
+    {
+      "measureIndex": 4,
+      "lowestPitch": "C4",
+      "highestPitch": "C4",
+      "lowestMidi": 60,
+      "highestMidi": 60,
+      "register": "middle"
+    }
+  ]
+}

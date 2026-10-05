@@ -1,13 +1,17 @@
 "use client";
 
+import { Button, buttonStyles } from "@/components/ui/Button";
+
+
 import Link from "next/link";
+import styles from "../harmony.module.css";
 import { useMemo, useState, useTransition } from "react";
 import AbcjsPlaybackController from "@/components/music-sheet/AbcjsPlaybackController";
 import { publishArrangement } from "@/app/actions/publish-arrangement";
 import { cleanAbcForExport } from "@/lib/theory/abc-layer-visibility";
 import type { ComposerPublishedNotationType } from "@/lib/songs/composer-notation";
 import type { ArrangementSourceGraph } from "../arrangement-source/arrangement-source-graph";
-import { COMPOSER_PREVIEW_RENDER_OPTIONS, ComposerNotationPreviewLayout } from "../preview";
+import { COMPOSER_PREVIEW_RENDER_OPTIONS, COMPOSER_STAFF_PLAYBACK_PROPS } from "../preview";
 
 interface ExportStepProps {
   slug: string;
@@ -54,12 +58,20 @@ export function ExportStep({ slug, sourceGraph, previewAbc, getRenderOptionsFor 
   };
 
   return (
-    <ComposerNotationPreviewLayout
-      source={(
-        <section className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950/50">
+    <div className={`${styles.workspace} ${styles.rightWorkspace}`}>
+      <section className={styles.score} aria-label="Arrangement preview">
+          <AbcjsPlaybackController
+            abcString={previewAbc}
+            title="Export Music Playback Controller"
+            canvasId="composer-export-preview"
+            {...COMPOSER_STAFF_PLAYBACK_PROPS}
+            renderOptions={getRenderOptionsFor(previewAbc, COMPOSER_PREVIEW_RENDER_OPTIONS)}
+          />
+      </section>
+        <aside className={styles.assistant} aria-label="Export tools"><div className={styles.panelBody}>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 font-sans">Export selected notation layers</h2>
+              <h1 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Export selected notation layers</h1>
               <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
                 Choose the validated layers to publish. Composer drafts stay local until this step succeeds.
               </p>
@@ -100,42 +112,22 @@ export function ExportStep({ slug, sourceGraph, previewAbc, getRenderOptionsFor 
           </div>
 
           <div className="mt-4 flex flex-wrap items-center gap-3">
-            <button
+            <Button variant="primary" size="md"
               type="button"
               onClick={publishSelectedLayers}
               disabled={selectedLayers.length === 0 || isPending}
-              className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+
             >
               {isPending ? "Publishing…" : `Publish ${selectedLayers.length || "selected"} layer${selectedLayers.length === 1 ? "" : "s"}`}
-            </button>
+            </Button>
             {practiceHref && (
-              <Link href={practiceHref} className="rounded-xl border border-emerald-600 px-4 py-2 text-sm font-bold text-emerald-700 dark:text-emerald-300">
+              <Link href={practiceHref} className={buttonStyles()}>
                 Open Practice
               </Link>
             )}
           </div>
           {publishStatus && <p className="mt-3 text-sm text-zinc-700 dark:text-zinc-300" role="status">{publishStatus}</p>}
-        </section>
-      )}
-      preview={(
-        <section>
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <div>
-              <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 font-sans">Arrangement preview</h3>
-              <p className="text-xs text-zinc-600 dark:text-zinc-400">Preview may combine branches; publishing remains explicit per layer.</p>
-            </div>
-            <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 font-sans">Bounded preview</span>
-          </div>
-          <AbcjsPlaybackController
-            abcString={previewAbc}
-            title="Export Music Playback Controller"
-            canvasId="composer-export-preview"
-            minWidthClassName="min-w-[520px] max-w-[760px]"
-            sheetViewportClassName="max-h-[min(76vh,780px)] overflow-auto p-4"
-            renderOptions={getRenderOptionsFor(previewAbc, COMPOSER_PREVIEW_RENDER_OPTIONS)}
-          />
-        </section>
-      )}
-    />
+        </div></aside>
+    </div>
   );
 }

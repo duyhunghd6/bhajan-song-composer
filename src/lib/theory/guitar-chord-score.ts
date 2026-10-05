@@ -221,8 +221,8 @@ export function realizeGuitarChordAudio(base: GuitarAudioSequence, score: Guitar
   const tracks = base.tracks.map((track) => track.map((event) => ({ ...event })));
   const guitarIndices = score.guitarVoiceIndices.filter((index) => tracks[index]);
   if (guitarIndices.length) {
-    // Existing support retains its picking rhythm. Each attack is projected onto
-    // the selected strings, rather than adding a second guitar accompaniment.
+    // Existing support retains its picking rhythm. Pitch ranks within each chord window map to
+    // the selected strings; nearest-pitch mapping can make different shapes identical.
     for (const index of guitarIndices) {
       const usedAtAttack = new Map<number, Set<GuitarAudioEvent>>();
       tracks[index] = tracks[index].flatMap((event) => {
@@ -232,10 +232,25 @@ export function realizeGuitarChordAudio(base: GuitarAudioSequence, score: Guitar
         usedAtAttack.set(event.start, used);
         const sounding = guitarNotes.filter((note) => !used.has(note) && note.start! <= event.start! + 1e-7 && note.start! + note.duration! > event.start! + 1e-7);
         if (!sounding.length) return [];
-        const nearest = sounding.reduce((best, note) => Math.abs(note.pitch! - event.pitch!) < Math.abs(best.pitch! - event.pitch!) ? note : best);
-        used.add(nearest);
-        return [{ ...event, pitch: nearest.pitch, instrument: 24,
-          duration: Math.min(event.duration ?? 0, nearest.start! + nearest.duration! - event.start) }];
+        const windowStart = sounding[0].start!;
+        const windowEnd = windowStart + sounding[0].duration!;
+        const sourcePitches = [...new Set(base.tracks[index].filter((note) => note.cmd === "note"
+          && note.start! >= windowStart - 1e-7 && note.start! < windowEnd - 1e-7).map((note) => note.pitch!))].sort((a, b) => a - b);
+        const strings = guitarNotes.filter((note) => note.start === windowStart).sort((a, b) => a.pitch! - b.pitch!);
+        // A single-pitch support window is a chord placeholder. Keeping only its
+        // bass makes shapes with the same lowest string audibly identical.
+        if (sourcePitches.length === 1) {
+          sounding.forEach((note) => used.add(note));
+          return sounding.map((note) => ({ ...event, pitch: note.pitch, instrument: 24,
+            duration: Math.min(event.duration ?? 0, note.start! + note.duration! - event.start!) }));
+        }
+        const rank = sourcePitches.indexOf(event.pitch);
+        const stringIndex = sourcePitches.length > 1 ? Math.round(rank / (sourcePitches.length - 1) * (strings.length - 1)) : 0;
+        const target = strings[stringIndex];
+        const assigned = sounding.reduce((best, note) => Math.abs(note.pitch! - target.pitch!) < Math.abs(best.pitch! - target.pitch!) ? note : best);
+        used.add(assigned);
+        return [{ ...event, pitch: assigned.pitch, instrument: 24,
+          duration: Math.min(event.duration ?? 0, assigned.start! + assigned.duration! - event.start) }];
       });
     }
   } else {

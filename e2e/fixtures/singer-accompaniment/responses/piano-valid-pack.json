@@ -1,0 +1,26 @@
+{
+  "id": "fixture-piano-valid-pack-v1",
+  "object": "chat.completion",
+  "created": 1773440001,
+  "model": "gpt-4o",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_piano_valid_01",
+            "type": "function",
+            "function": {
+              "name": "submit_arrangement_candidates",
+              "arguments": "{\"packId\":\"pack-piano-valid-v1\",\"targetInstrument\":\"piano\",\"candidateCount\":3,\"options\":[{\"optionId\":\"piano-ballad-arpeggio\",\"targetInstrument\":\"piano\",\"label\":\"Pop/Ballad 1-5-10 Arpeggio\",\"rationale\":\"Flowing 1-5-10 arpeggiation in LH foundation with quiet guide tones and safe melodic gap passing fill.\",\"diversityLabel\":\"Texture: Arpeggio / Foundation: 1-5-10 / RH: Guide Tones\",\"decisionMap\":[{\"measure\":1,\"foundation\":\"1-5-10\",\"rhRole\":\"guide-tones\",\"pedal\":\"down-flush\"},{\"measure\":2,\"foundation\":\"1-5-10\",\"rhRole\":\"passing-fill\",\"pedal\":\"down-flush\"},{\"measure\":3,\"foundation\":\"1-5-10\",\"rhRole\":\"guide-tones\",\"pedal\":\"down-flush\"},{\"measure\":4,\"foundation\":\"1-5-8\",\"rhRole\":\"resolution\",\"pedal\":\"up\"}],\"abc\":\"V:RH clef=treble\\n[E G]4 | [D G]2 z2 | [F A]4 | [E G]4 |\\nV:LH clef=bass\\nC, G, C2 | G,, D, G,2 | F,, C, F,2 | C,4 |\",\"eventHints\":{\"pedalEvents\":[{\"measure\":1,\"beat\":1,\"type\":\"pedal-down\"},{\"measure\":2,\"beat\":1,\"type\":\"pedal-flush\"},{\"measure\":3,\"beat\":1,\"type\":\"pedal-flush\"},{\"measure\":4,\"beat\":4,\"type\":\"pedal-up\"}]}},{\"optionId\":\"piano-devotional-chords\",\"targetInstrument\":\"piano\",\"label\":\"Devotional Close Harmony\",\"rationale\":\"Warm solid 1-5-8 foundation in bass with smooth close inversions in right hand and sustained pedal.\",\"diversityLabel\":\"Texture: Block / Foundation: 1-5-8 / RH: Inversions\",\"decisionMap\":[{\"measure\":1,\"foundation\":\"1-5-8\",\"rhRole\":\"inversion-close\",\"pedal\":\"sustained\"},{\"measure\":2,\"foundation\":\"1-5-8\",\"rhRole\":\"inversion-close\",\"pedal\":\"sustained\"},{\"measure\":3,\"foundation\":\"1-5-8\",\"rhRole\":\"inversion-close\",\"pedal\":\"sustained\"},{\"measure\":4,\"foundation\":\"1-5-8\",\"rhRole\":\"resolution\",\"pedal\":\"up\"}],\"abc\":\"V:RH clef=treble\\n[G c e]4 | [G B d]4 | [A c f]4 | [G c e]4 |\\nV:LH clef=bass\\n[C, G,]4 | [G,, D,]4 | [F,, C,]4 | [C, G,]4 |\",\"eventHints\":{\"pedalEvents\":[{\"measure\":1,\"beat\":1,\"type\":\"pedal-down\"},{\"measure\":2,\"beat\":1,\"type\":\"pedal-flush\"},{\"measure\":3,\"beat\":1,\"type\":\"pedal-flush\"},{\"measure\":4,\"beat\":4,\"type\":\"pedal-up\"}]}},{\"optionId\":\"piano-syncopated-comp\",\"targetInstrument\":\"piano\",\"label\":\"Rhythmic Comping & Articulated Pedal\",\"rationale\":\"Measured syncopated comping stabs below vocal register with clean pedal flushes on chord changes.\",\"diversityLabel\":\"Texture: Syncopated / Fill: Melodic Gap Fill / Pedal: Articulated\",\"decisionMap\":[{\"measure\":1,\"foundation\":\"staccato-bass\",\"rhRole\":\"syncopated-stab\",\"pedal\":\"articulated\"},{\"measure\":2,\"foundation\":\"staccato-bass\",\"rhRole\":\"gap-fill\",\"pedal\":\"articulated\"},{\"measure\":3,\"foundation\":\"staccato-bass\",\"rhRole\":\"syncopated-stab\",\"pedal\":\"articulated\"},{\"measure\":4,\"foundation\":\"root-hold\",\"rhRole\":\"resolution\",\"pedal\":\"up\"}],\"abc\":\"V:RH clef=treble\\nz [E G] z [E G] | [D G]2 z2 | z [F A] z [F A] | [E G]4 |\\nV:LH clef=bass\\nC,2 G,,2 | G,,2 B,,2 | F,,2 C,2 | C,4 |\",\"eventHints\":{\"pedalEvents\":[{\"measure\":1,\"beat\":1,\"type\":\"pedal-down\"},{\"measure\":2,\"beat\":1,\"type\":\"pedal-flush\"},{\"measure\":3,\"beat\":1,\"type\":\"pedal-flush\"},{\"measure\":4,\"beat\":4,\"type\":\"pedal-up\"}]}}]}"
+            }
+          }
+        ]
+      },
+      "finish_reason": "tool_calls"
+    }
+  ]
+}

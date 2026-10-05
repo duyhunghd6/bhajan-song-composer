@@ -1,0 +1,6 @@
+{
+  "id": "invalid-abc",
+  "sourceAbc": "X:9\nT:Invalid ABC Syntax\nM:broken/meter\nL:1/4\nK:C\n|: [C broken syntax %%% !@#$ not closed",
+  "expectedError": "syntax-error",
+  "description": "Malformed ABC syntax with invalid meter header and unclosed bracket syntax error."
+}

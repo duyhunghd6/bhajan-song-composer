@@ -156,7 +156,7 @@ export function LayerStackPreview({ abc, visibleCount }: { abc: string; visibleC
             canvasId="layer-stack-preview"
             controls={false}
             showLoopControls={false}
-            minWidthClassName="min-w-[520px]"
+            minWidthClassName="min-w-0"
           />
         )}
       </div>

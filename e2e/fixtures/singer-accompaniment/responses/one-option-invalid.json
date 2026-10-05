@@ -1,0 +1,26 @@
+{
+  "id": "fixture-one-option-invalid-v1",
+  "object": "chat.completion",
+  "created": 1773440004,
+  "model": "gpt-4o",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_one_invalid_01",
+            "type": "function",
+            "function": {
+              "name": "submit_arrangement_candidates",
+              "arguments": "{\"packId\":\"pack-one-invalid-v1\",\"targetInstrument\":\"guitar-classic\",\"candidateCount\":3,\"options\":[{\"optionId\":\"guitar-timing-fail\",\"targetInstrument\":\"guitar-classic\",\"label\":\"Invalid Timing Option\",\"rationale\":\"Erroneous candidate with overfilled measure 2 violating 4/4 meter bounds.\",\"diversityLabel\":\"Texture: Arpeggio / Status: Timing Invalid\",\"decisionMap\":[{\"measure\":1,\"technique\":\"arpeggio\"},{\"measure\":2,\"technique\":\"arpeggio-overfilled\"},{\"measure\":3,\"technique\":\"arpeggio\"},{\"measure\":4,\"technique\":\"sustain\"}],\"abc\":\"V:GuitarSupport clef=treble-8\\n[C,E] G, C E | [G,,D] B, D G B | [F,,C] A, C F | [C,E]4 |\"},{\"optionId\":\"guitar-valid-pinch\",\"targetInstrument\":\"guitar-classic\",\"label\":\"Valid Pinch Support\",\"rationale\":\"Balanced pinch-based texture preserving exact 4/4 meter alignment.\",\"diversityLabel\":\"Texture: Pinch / Status: Valid\",\"decisionMap\":[{\"measure\":1,\"technique\":\"pinch\"},{\"measure\":2,\"technique\":\"pinch\"},{\"measure\":3,\"technique\":\"pinch\"},{\"measure\":4,\"technique\":\"sustain\"}],\"abc\":\"V:GuitarSupport clef=treble-8\\n[C,G] E G E | [G,,B] D G B | [F,,A] C F A | [C,G]4 |\"},{\"optionId\":\"guitar-valid-strum\",\"targetInstrument\":\"guitar-classic\",\"label\":\"Valid Strum Support\",\"rationale\":\"Clean measured strumming pattern adhering to all metric and voice-leading rules.\",\"diversityLabel\":\"Texture: Strum / Status: Valid\",\"decisionMap\":[{\"measure\":1,\"technique\":\"strum\"},{\"measure\":2,\"technique\":\"strum\"},{\"measure\":3,\"technique\":\"strum\"},{\"measure\":4,\"technique\":\"strum\"}],\"abc\":\"V:GuitarSupport clef=treble-8\\n[C,E,G,c]2 [C,E,G,c]2 | [G,,D,G,B]2 [G,,D,G,B]2 | [F,,C,F,A]2 [F,,C,F,A]2 | [C,E,G,c]4 |\"}]}"
+            }
+          }
+        ]
+      },
+      "finish_reason": "tool_calls"
+    }
+  ]
+}

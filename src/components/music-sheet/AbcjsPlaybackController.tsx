@@ -1,4 +1,5 @@
 "use client";
+import { ScoreViewport } from "./score-workspace/ScoreViewport";
 import { noteEditKeepsRhythm, retainedScorePosition } from "./score-workspace/note-transport";
 import { attachNoteInteractions } from "./score-workspace/note-interactions";
 import { useCallback, useEffect, useEffectEvent, useMemo, useId, useRef, useState } from "react";
@@ -42,13 +43,13 @@ export default function AbcjsPlaybackController({
   controls = true,
   showLoopControls = controls,
   canvasId,
-  minWidthClassName = "min-w-[600px]",
+  minWidthClassName = "min-w-0",
   paperClassName = "bg-white",
-  sheetViewportClassName = "overflow-x-auto p-4",
+  sheetViewportClassName = "p-4",
   renderOptions,
   synthOptions,
   onPlaybackCursor,
-  useContainerWidth = false,
+  useContainerWidth = true,
   notationScale = 1,
   hideVoiceNames = false,
   showExactRenderAbcCopy = false,
@@ -97,6 +98,7 @@ export default function AbcjsPlaybackController({
   const [containerWidth, setContainerWidth] = useState<number | null>(null);
   const [exactRenderCopyStatus, setExactRenderCopyStatus] = useState<"idle" | "copied">("idle");
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  const [controllerSlot, setControllerSlot] = useState<HTMLDivElement | null>(null);
 
   const handleDownloadPdf = useCallback(async () => {
     if (!containerRef.current || !abcjsModule) return;
@@ -176,7 +178,8 @@ export default function AbcjsPlaybackController({
     const updateWidth = () => {
       const parent = containerRef.current?.parentElement;
       if (parent) {
-        const width = parent.clientWidth;
+        const style = window.getComputedStyle(parent);
+        const width = Math.max(1, parent.clientWidth - parseFloat(style.paddingLeft || "0") - parseFloat(style.paddingRight || "0"));
         if (width && width > 0) {
           setContainerWidth(width);
         }
@@ -549,6 +552,7 @@ export default function AbcjsPlaybackController({
       canvas.innerHTML = "";
       const mergedRenderOptions = {
         responsive: "resize" as const,
+        wrap: { minSpacing: 1.7, maxSpacing: 2.5, preferredMeasuresPerLine: 4, lastLineLimit: 0.6 },
         add_classes: true,
         stafftopmargin: 0,
         paddingbottom: 30,
@@ -690,6 +694,7 @@ export default function AbcjsPlaybackController({
       {(controls || showLoopControls) && (
         <AbcjsPlaybackControls
           actions={scoreActions}
+          viewportTools={<div ref={setControllerSlot} className="flex items-center gap-1" />}
           controls={controls}
           showLoopControls={showLoopControls}
           isPlaying={isPlaying}
@@ -715,8 +720,8 @@ export default function AbcjsPlaybackController({
           setLoopEndMeasure={setLoopEndMeasure}
         />
       )}
-      {!controls && !showLoopControls && scoreActions && (
-        <div data-ui-tone="inverse" className="flex justify-end bg-surface p-1">{scoreActions}</div>
+      {!controls && !showLoopControls && (
+        <div data-ui-tone="inverse" className="flex flex-wrap justify-end gap-1 bg-surface p-1">{scoreActions}<div ref={setControllerSlot} className="flex items-center gap-1" /></div>
       )}
       {renderError && (
         <div
@@ -726,7 +731,9 @@ export default function AbcjsPlaybackController({
           {renderError}
         </div>
       )}
-      {renderScore ? renderScore(scoreSurface, { isPlaying, togglePlayback: toggleWorkspacePlayback }) : scoreSurface}
+      {renderScore ? renderScore(scoreSurface, { isPlaying, togglePlayback: toggleWorkspacePlayback, controllerSlot }) : (
+        <ScoreViewport embedded height="auto" controllerSlot={controllerSlot} label={title}>{scoreSurface}</ScoreViewport>
+      )}
       <AbcjsPlaybackStyles resolvedCanvasId={resolvedCanvasId} />
     </div>
   );

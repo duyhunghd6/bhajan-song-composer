@@ -7,6 +7,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import styles from "./workspace/studio.module.css";
 import type { ReactNode } from "react";
 import AbcjsPlaybackController, { type SourceRange } from "@/components/music-sheet/AbcjsPlaybackController";
+import GuitarChordAccompaniment from "@/components/music-sheet/guitar-chords/GuitarChordAccompaniment";
+import type { VoicingOverride } from "@/lib/theory/voicing-override";
 import AbcSourceEditor, { type AbcSourceEditorHandle } from "./abc-editor/AbcSourceEditor";
 import { validateAbcNotation, type AbcValidationEdit } from "@/app/actions/abc-validation";
 
@@ -29,6 +31,8 @@ interface AbcEditorProps {
   title?: string;
   value?: string;
   onChange?: (abc: string) => void;
+  voicingOverrides?: VoicingOverride[];
+  onVoicingOverridesChange?: (overrides: VoicingOverride[]) => void;
 }
 
 export default function AbcEditor({
@@ -40,9 +44,12 @@ export default function AbcEditor({
   title = "ABC Notation Editor",
   value,
   onChange,
+  voicingOverrides,
+  onVoicingOverridesChange,
 }: AbcEditorProps) {
   // Undo/redo history lives in CodeMirror; this is the current text only.
   const [text, setText] = useState(value ?? initialAbc);
+  const [localVoicingOverrides, setLocalVoicingOverrides] = useState<VoicingOverride[]>([]);
   const [historyState, setHistoryState] = useState({ canUndo: false, canRedo: false });
   // Source selection drives the score highlight; score clicks write it back.
   const [sourceSelection, setSourceSelection] = useState<SourceRange | null>(null);
@@ -280,7 +287,10 @@ export default function AbcEditor({
           </div>
           )}
 
-          <AbcjsPlaybackController
+          <GuitarChordAccompaniment
+            sourceAbc={text}
+            overrides={voicingOverrides ?? localVoicingOverrides}
+            onOverridesChange={onVoicingOverridesChange ?? setLocalVoicingOverrides}
             abcString={text}
             title="Editor Music Sheet Preview"
             canvasId="abc-editor-preview"
@@ -288,8 +298,8 @@ export default function AbcEditor({
             notationScale={studio ? 0.7 : 1}
             hideVoiceNames={studio}
             showExactRenderAbcCopy={studio}
-            minWidthClassName={studio ? "min-w-[520px]" : "min-w-[520px] max-w-[760px]"}
-            sheetViewportClassName="max-h-[min(72vh,780px)] overflow-auto p-4"
+            minWidthClassName="min-w-0"
+            sheetViewportClassName="p-4"
             renderOptions={previewRenderOptions}
             sourceSelection={sourceSelection}
             onSourceSelect={(range) => editorRef.current?.selectRange(range)}
@@ -372,8 +382,8 @@ export default function AbcEditor({
                   abcString={suggestedAbcPreview}
                   title="Changed Editor Music Sheet Preview"
                   canvasId="abc-editor-preview-suggested"
-                  minWidthClassName="min-w-[520px] max-w-[760px]"
-                  sheetViewportClassName="max-h-[min(72vh,780px)] overflow-auto p-4"
+                  minWidthClassName="min-w-0"
+                  sheetViewportClassName="p-4"
                   renderOptions={previewRenderOptions}
                 />
               </div>

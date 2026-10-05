@@ -1,0 +1,133 @@
+{
+  "id": "split-window-four-four",
+  "step3OptionId": "step3-split-window-v1",
+  "sourceAbc": "X:3\nT:Split Window Four Four\nM:4/4\nL:1/4\nQ:1/4=80\nK:C\n\"C\"E2 G2 | \"C\"G2 \"G\"D2 | \"F\"A2 \"G\"B2 | \"C\"c4 |",
+  "sourceFingerprint": "71a90624",
+  "meter": "4/4",
+  "meterFamily": "4/4",
+  "tempo": 80,
+  "key": "C",
+  "scale": "major",
+  "measureCount": 4,
+  "chordWindows": [
+    {
+      "measureIndex": 1,
+      "startBeat": 1,
+      "endBeat": 5,
+      "startSubdivision": 1,
+      "endSubdivision": 16,
+      "chord": "C",
+      "root": "C",
+      "quality": "major"
+    },
+    {
+      "measureIndex": 2,
+      "startBeat": 1,
+      "endBeat": 3,
+      "startSubdivision": 1,
+      "endSubdivision": 8,
+      "chord": "C",
+      "root": "C",
+      "quality": "major"
+    },
+    {
+      "measureIndex": 2,
+      "startBeat": 3,
+      "endBeat": 5,
+      "startSubdivision": 9,
+      "endSubdivision": 16,
+      "chord": "G",
+      "root": "G",
+      "quality": "major"
+    },
+    {
+      "measureIndex": 3,
+      "startBeat": 1,
+      "endBeat": 3,
+      "startSubdivision": 1,
+      "endSubdivision": 8,
+      "chord": "F",
+      "root": "F",
+      "quality": "major"
+    },
+    {
+      "measureIndex": 3,
+      "startBeat": 3,
+      "endBeat": 5,
+      "startSubdivision": 9,
+      "endSubdivision": 16,
+      "chord": "G",
+      "root": "G",
+      "quality": "major"
+    },
+    {
+      "measureIndex": 4,
+      "startBeat": 1,
+      "endBeat": 5,
+      "startSubdivision": 1,
+      "endSubdivision": 16,
+      "chord": "C",
+      "root": "C",
+      "quality": "major"
+    }
+  ],
+  "melodyActivity": {
+    "continuousLyric": false,
+    "activeOnsetsCount": 7,
+    "gaps": []
+  },
+  "phrases": [
+    {
+      "phraseIndex": 1,
+      "startMeasure": 1,
+      "endMeasure": 2,
+      "cadenceMeasure": 2,
+      "cadenceBeat": 3,
+      "cadenceType": "half",
+      "targetChord": "G"
+    },
+    {
+      "phraseIndex": 2,
+      "startMeasure": 3,
+      "endMeasure": 4,
+      "cadenceMeasure": 4,
+      "cadenceBeat": 4,
+      "cadenceType": "authentic",
+      "targetChord": "C"
+    }
+  ],
+  "registerMap": [
+    {
+      "measureIndex": 1,
+      "lowestPitch": "E4",
+      "highestPitch": "G4",
+      "lowestMidi": 64,
+      "highestMidi": 67,
+      "register": "middle"
+    },
+    {
+      "measureIndex": 2,
+      "lowestPitch": "D4",
+      "highestPitch": "G4",
+      "lowestMidi": 62,
+      "highestMidi": 67,
+      "register": "middle"
+    },
+    {
+      "measureIndex": 3,
+      "lowestPitch": "A4",
+      "highestPitch": "B4",
+      "lowestMidi": 69,
+      "highestMidi": 71,
+      "register": "middle"
+    },
+    {
+      "measureIndex": 4,
+      "lowestPitch": "c5",
+      "highestPitch": "c5",
+      "lowestMidi": 72,
+      "highestMidi": 72,
+      "register": "middle"
+    }
+  ]
+}

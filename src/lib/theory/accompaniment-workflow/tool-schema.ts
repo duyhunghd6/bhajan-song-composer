@@ -29,8 +29,8 @@ function buildGuitarTabDataProperty() {
     properties: {
       profileId: {
         type: "string",
-        enum: ["guitar-classic", "standard-six-string"],
-        description: "Guitar profile for fret range validation.",
+        enum: ["guitar-acoustic", "guitar-classic", "standard-six-string"],
+        description: "Guitar profile for fret range validation. Use guitar-acoustic for the default steel-string guitar.",
       },
       voicingProfileId: {
         type: "string",
@@ -40,7 +40,7 @@ function buildGuitarTabDataProperty() {
       compingProfileId: {
         type: "string",
         enum: [...GUITAR_CLASSIC_COMPING_PROFILE_IDS],
-        description: "Selected Step 4 Guitar Classic realization technique.",
+        description: "Selected Step 4 Guitar realization technique.",
       },
       events: {
         type: "array",
@@ -104,7 +104,7 @@ function buildWorkflowOptionDataProperty(stepId?: AccompanimentWorkflowStepId) {
   if (isGuitarTabValidationWorkflowStep(stepId ?? "key-beats")) {
     return {
       type: "object",
-      description: "Step-specific Guitar Classic data with a representative sample (Step 4) or structural voicing/bass anchors (Step 5); compact events use m/t/d/b/n/s/f/r/sid.",
+      description: "Step-specific acoustic steel-string Guitar data with a representative sample (Step 4) or structural voicing/bass anchors (Step 5); compact events use m/t/d/b/n/s/f/r/sid.",
       additionalProperties: true,
       properties: {
         guitarTab: buildGuitarTabDataProperty(),

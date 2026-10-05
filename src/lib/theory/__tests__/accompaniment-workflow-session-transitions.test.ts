@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  ACCOMPANIMENT_WORKFLOW_BRANCH_STEP_IDS,
   createAccompanimentWorkflowSession,
   getNextUncompletedWorkflowStepId,
   selectOption,
@@ -19,7 +18,7 @@ function option(id: string): AccompanimentWorkflowOption {
 }
 
 describe("accompaniment workflow session transitions", () => {
-  it("only schedules enabled retained branches", () => {
+  it("ignores removed instrument branches", () => {
     const session = createAccompanimentWorkflowSession(sampleAbc, {
       style: "accompaniment",
       instruments: [
@@ -27,11 +26,9 @@ describe("accompaniment workflow session transitions", () => {
         { id: "indian-harmonium", enabled: true, order: 1 },
         { id: "djembe", enabled: true, order: 2 },
       ],
-    });
+    } as never);
     expect(session.enabledStepIds).toEqual([
       "key-beats", "chord-roles-progression", "voice-leading-validation",
-      ...ACCOMPANIMENT_WORKFLOW_BRANCH_STEP_IDS.harmonium,
-      ...ACCOMPANIMENT_WORKFLOW_BRANCH_STEP_IDS.djembe,
     ]);
   });
 

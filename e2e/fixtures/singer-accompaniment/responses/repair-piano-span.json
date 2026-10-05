@@ -1,0 +1,26 @@
+{
+  "id": "fixture-repair-piano-span-v1",
+  "object": "chat.completion",
+  "created": 1773440006,
+  "model": "gpt-4o",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_repair_piano_01",
+            "type": "function",
+            "function": {
+              "name": "submit_arrangement_candidates",
+              "arguments": "{\"packId\":\"pack-repair-piano-v1\",\"targetInstrument\":\"piano\",\"candidateCount\":1,\"options\":[{\"optionId\":\"piano-repaired-span-v1\",\"parentOptionId\":\"piano-collision-opt-1\",\"repairScope\":{\"measures\":[2],\"flaggedRule\":\"piano-hand-span-collision\",\"diagnosticMessage\":\"Hand span exceeding major tenth and LH/RH collision repaired by shifting RH voicing up and thinning duplicated root.\"},\"targetInstrument\":\"piano\",\"label\":\"Repaired Piano Accompaniment (Span Resolved)\",\"rationale\":\"Scoped repair for measure 2: shifted RH to middle inversion [G B d] to clear LH register and reduced hand span to an octave, preserving all passing measures.\",\"diversityLabel\":\"Repair: Hand Span & Collision Cleared / Scoped: Measure 2 Only\",\"decisionMap\":[{\"measure\":1,\"foundation\":\"1-5-8\",\"preserved\":true},{\"measure\":2,\"foundation\":\"root-fifth\",\"rhVoicing\":\"shifted-up\",\"span\":\"octave\"},{\"measure\":3,\"foundation\":\"1-5-8\",\"preserved\":true},{\"measure\":4,\"foundation\":\"1-5-8\",\"preserved\":true}],\"abc\":\"V:RH clef=treble\\n[E G]4 | [G B d]4 | [F A]4 | [E G]4 |\\nV:LH clef=bass\\n[C, G,]4 | [G,, D,]4 | [F,, C,]4 | [C, G,]4 |\",\"eventHints\":{\"pedalEvents\":[{\"measure\":1,\"beat\":1,\"type\":\"pedal-down\"},{\"measure\":2,\"beat\":1,\"type\":\"pedal-flush\"},{\"measure\":3,\"beat\":1,\"type\":\"pedal-flush\"},{\"measure\":4,\"beat\":4,\"type\":\"pedal-up\"}]}}]}"
+            }
+          }
+        ]
+      },
+      "finish_reason": "tool_calls"
+    }
+  ]
+}

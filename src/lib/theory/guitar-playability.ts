@@ -41,7 +41,7 @@ export const GUITAR_PLAYABILITY_PROFILES: Record<GuitarPlayabilityProfileId, Gui
   },
   "guitar-acoustic": {
     id: "guitar-acoustic",
-    label: "Guitar Acoustic",
+    label: "Guitar Acoustic (Steel Strings)",
     maxFret: 20,
     maxFretStretch: MAX_FRET_STRETCH,
     maxFrettingFingerCount: 4,

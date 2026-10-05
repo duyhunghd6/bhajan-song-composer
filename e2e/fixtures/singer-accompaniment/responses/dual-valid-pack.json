@@ -1,0 +1,54 @@
+{
+  "guitar": {
+    "id": "fixture-dual-guitar-pack-v1",
+    "object": "chat.completion",
+    "created": 1773440002,
+    "model": "gpt-4o",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": null,
+          "tool_calls": [
+            {
+              "id": "call_dual_guitar_01",
+              "type": "function",
+              "function": {
+                "name": "submit_arrangement_candidates",
+                "arguments": "{\"packId\":\"pack-dual-guitar-v1\",\"targetInstrument\":\"guitar-classic\",\"candidateCount\":3,\"options\":[{\"optionId\":\"dual-guitar-opt-1\",\"targetInstrument\":\"guitar-classic\",\"label\":\"Guitar Devotional Flow\",\"rationale\":\"Independent guitar branch: gentle arpeggiated movement supporting singer lead.\",\"diversityLabel\":\"Texture: Arpeggio / Level: Beginner\",\"decisionMap\":[{\"measure\":1,\"technique\":\"arpeggio\"},{\"measure\":2,\"technique\":\"arpeggio\"},{\"measure\":3,\"technique\":\"arpeggio\"},{\"measure\":4,\"technique\":\"sustain\"}],\"abc\":\"V:GuitarSupport clef=treble-8\\n[C,E] G, C E | [G,,D] B, D G | [F,,C] A, C F | [C,E]4 |\"},{\"optionId\":\"dual-guitar-opt-2\",\"targetInstrument\":\"guitar-classic\",\"label\":\"Guitar Pinch Focus\",\"rationale\":\"Independent guitar branch: downbeat pinch with rhythmic vitality.\",\"diversityLabel\":\"Texture: Pinch / Level: Intermediate\",\"decisionMap\":[{\"measure\":1,\"technique\":\"pinch\"},{\"measure\":2,\"technique\":\"pinch\"},{\"measure\":3,\"technique\":\"pinch\"},{\"measure\":4,\"technique\":\"sustain\"}],\"abc\":\"V:GuitarSupport clef=treble-8\\n[C,G] E G E | [G,,B] D G B | [F,,A] C F A | [C,G]4 |\"},{\"optionId\":\"dual-guitar-opt-3\",\"targetInstrument\":\"guitar-classic\",\"label\":\"Guitar Warm Strum\",\"rationale\":\"Independent guitar branch: full-bodied bhajan chord comping.\",\"diversityLabel\":\"Texture: Strum / Level: Intermediate\",\"decisionMap\":[{\"measure\":1,\"technique\":\"strum\"},{\"measure\":2,\"technique\":\"strum\"},{\"measure\":3,\"technique\":\"strum\"},{\"measure\":4,\"technique\":\"strum\"}],\"abc\":\"V:GuitarSupport clef=treble-8\\n[C,E,G,c]2 [C,E,G,c]2 | [G,,D,G,B]2 [G,,D,G,B]2 | [F,,C,F,A]2 [F,,C,F,A]2 | [C,E,G,c]4 |\"}]}"
+              }
+            }
+          ]
+        },
+        "finish_reason": "tool_calls"
+      }
+    ]
+  },
+  "piano": {
+    "id": "fixture-dual-piano-pack-v1",
+    "object": "chat.completion",
+    "created": 1773440003,
+    "model": "gpt-4o",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": null,
+          "tool_calls": [
+            {
+              "id": "call_dual_piano_01",
+              "type": "function",
+              "function": {
+                "name": "submit_arrangement_candidates",
+                "arguments": "{\"packId\":\"pack-dual-piano-v1\",\"targetInstrument\":\"piano\",\"candidateCount\":3,\"options\":[{\"optionId\":\"dual-piano-opt-1\",\"targetInstrument\":\"piano\",\"label\":\"Piano Ballad Foundation\",\"rationale\":\"Independent piano branch: LH 1-5-10 foundation and calm RH chord guidance.\",\"diversityLabel\":\"Texture: Arpeggio / Register: C2-C4\",\"decisionMap\":[{\"measure\":1,\"foundation\":\"1-5-10\"},{\"measure\":2,\"foundation\":\"1-5-10\"},{\"measure\":3,\"foundation\":\"1-5-10\"},{\"measure\":4,\"foundation\":\"1-5-8\"}],\"abc\":\"V:RH clef=treble\\n[E G]4 | [D G]2 z2 | [F A]4 | [E G]4 |\\nV:LH clef=bass\\nC, G, C2 | G,, D, G,2 | F,, C, F,2 | C,4 |\"},{\"optionId\":\"dual-piano-opt-2\",\"targetInstrument\":\"piano\",\"label\":\"Piano Close Meditation\",\"rationale\":\"Independent piano branch: close harmony block voicings with sustain pedal.\",\"diversityLabel\":\"Texture: Block / Register: C3-C5\",\"decisionMap\":[{\"measure\":1,\"foundation\":\"1-5-8\"},{\"measure\":2,\"foundation\":\"1-5-8\"},{\"measure\":3,\"foundation\":\"1-5-8\"},{\"measure\":4,\"foundation\":\"1-5-8\"}],\"abc\":\"V:RH clef=treble\\n[G c e]4 | [G B d]4 | [A c f]4 | [G c e]4 |\\nV:LH clef=bass\\n[C, G,]4 | [G,, D,]4 | [F,, C,]4 | [C, G,]4 |\"},{\"optionId\":\"dual-piano-opt-3\",\"targetInstrument\":\"piano\",\"label\":\"Piano Light Comping\",\"rationale\":\"Independent piano branch: rhythmic comping stabs with clear chord articulations.\",\"diversityLabel\":\"Texture: Syncopated / Register: Mid\",\"decisionMap\":[{\"measure\":1,\"foundation\":\"staccato\"},{\"measure\":2,\"foundation\":\"staccato\"},{\"measure\":3,\"foundation\":\"staccato\"},{\"measure\":4,\"foundation\":\"root\"}],\"abc\":\"V:RH clef=treble\\nz [E G] z [E G] | [D G]2 z2 | z [F A] z [F A] | [E G]4 |\\nV:LH clef=bass\\nC,2 G,,2 | G,,2 B,,2 | F,,2 C,2 | C,4 |\"}]}"
+              }
+            }
+          ]
+        },
+        "finish_reason": "tool_calls"
+      }
+    ]
+  }
+}

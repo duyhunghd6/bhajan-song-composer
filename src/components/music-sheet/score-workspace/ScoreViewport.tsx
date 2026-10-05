@@ -4,6 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNo
 import { createPortal } from "react-dom";
 import { anchoredScroll, clampScoreZoom, fitScoreZoom, wheelZoomDelta } from "./viewport-geometry";
 import styles from "./viewport.module.css";
+import { useScoreMarquee } from "./viewport-marquee";
 import { Button } from "../../ui/Button";
 
 export interface ScoreViewportProps {
@@ -14,14 +15,17 @@ export interface ScoreViewportProps {
   className?: string;
   label?: string;
   scoreWidth?: number;
+  controllerSlot?: HTMLElement | null;
+  embedded?: boolean;
 }
 
 function isInput(target: EventTarget | null) {
   return target instanceof Element && !!target.closest("input, textarea, select, button, [contenteditable='true'], [role='textbox']");
 }
 
-export function ScoreViewport({ children, toolbar, focusToolbar, height = 560, className = "", label = "Score workspace", scoreWidth = 900 }: ScoreViewportProps) {
+export function ScoreViewport({ children, height = 560, className = "", label = "Score workspace", scoreWidth, controllerSlot, embedded = false }: ScoreViewportProps) {
   const viewport = useRef<HTMLDivElement>(null);
+  const marquee = useScoreMarquee(viewport);
   const content = useRef<HTMLDivElement>(null);
   const root = useRef<HTMLElement>(null);
   const focusButton = useRef<HTMLButtonElement>(null);
@@ -30,6 +34,7 @@ export function ScoreViewport({ children, toolbar, focusToolbar, height = 560, c
   const zoomRef = useRef(1);
   const [zoom, setZoom] = useState(1);
   const [size, setSize] = useState({ width: 1, height: 1 });
+  const [availableWidth, setAvailableWidth] = useState(0);
   const [hand, setHand] = useState(false);
   const [space, setSpace] = useState(false);
   const spaceRef = useRef(false);
@@ -38,6 +43,7 @@ export function ScoreViewport({ children, toolbar, focusToolbar, height = 560, c
   const [focus, setFocus] = useState(false);
   const drag = useRef<{ x: number; y: number; left: number; top: number; pointer: number; moved: boolean; button: number } | null>(null);
   const suppressClick = useRef(false);
+  const allowDoubleClick = useRef(false);
   const cancelPan = useCallback(() => {
     const active = drag.current;
     if (active && viewport.current?.hasPointerCapture(active.pointer)) viewport.current.releasePointerCapture(active.pointer);
@@ -48,18 +54,29 @@ export function ScoreViewport({ children, toolbar, focusToolbar, height = 560, c
     setDragging(false);
   }, []);
   const pendingScroll = useRef<{ left: number; top: number } | null>(null);
+  const inset = embedded && !focus ? 0 : 16;
+
+  useLayoutEffect(() => {
+    const element = viewport.current;
+    if (!element) return;
+    const measure = () => setAvailableWidth(Math.max(1, element.clientWidth - inset * 2));
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [inset]);
 
   const changeZoom = useCallback((value: number, x?: number, y?: number) => {
     const element = viewport.current;
     if (!element) return;
     const next = clampScoreZoom(value);
     pendingScroll.current = {
-      left: anchoredScroll(element.scrollLeft, (x ?? element.clientWidth / 2) - 16, zoomRef.current, next),
-      top: anchoredScroll(element.scrollTop, (y ?? element.clientHeight / 2) - 16, zoomRef.current, next),
+      left: anchoredScroll(element.scrollLeft, (x ?? element.clientWidth / 2) - inset, zoomRef.current, next),
+      top: anchoredScroll(element.scrollTop, (y ?? element.clientHeight / 2) - inset, zoomRef.current, next),
     };
     zoomRef.current = next;
     setZoom(next);
-  }, []);
+  }, [inset]);
 
   useLayoutEffect(() => {
     if (pendingScroll.current && viewport.current) {
@@ -88,9 +105,10 @@ export function ScoreViewport({ children, toolbar, focusToolbar, height = 560, c
         const rect = element.getBoundingClientRect();
         const delta = wheelZoomDelta(event.deltaY, event.deltaMode, element.clientHeight);
         changeZoom(zoomRef.current * Math.exp(-Math.max(-1000, Math.min(1000, delta)) * 0.002), event.clientX - rect.left, event.clientY - rect.top);
-      } else if (event.shiftKey && event.deltaY !== 0) {
+      } else if (event.shiftKey) {
         event.preventDefault();
-        element.scrollLeft += event.deltaY + event.deltaX;
+        // Some browsers already translate Shift+wheel into deltaX.
+        element.scrollLeft += wheelZoomDelta(event.deltaX || event.deltaY, event.deltaMode, element.clientWidth);
       }
     };
     element.addEventListener("wheel", wheel, { passive: false });
@@ -153,11 +171,14 @@ export function ScoreViewport({ children, toolbar, focusToolbar, height = 560, c
   }, [contextMenu]);
 
   return (
-    <section ref={root} data-score-workspace-viewport data-score-panning={dragging || undefined} data-score-hand={hand || space || undefined} aria-label={label} className={`${styles.workspace} ${focus ? styles.focus : ""} ${className}`}
+    <section ref={root} data-score-workspace-viewport data-score-panning={dragging || undefined} data-score-marquee-active={marquee.active || undefined} data-score-selection-owned={marquee.owned || undefined} data-score-hand={hand || space || undefined} aria-label={label} className={`${styles.workspace} ${embedded && !focus ? styles.embedded : ""} ${focus ? styles.focus : ""} ${className}`}
       onKeyDownCapture={(event) => {
         if (event.key === "Escape") {
           if ((event.target as Element).closest("[role='dialog'], dialog, [aria-modal='true']")) return;
+          if (event.currentTarget.querySelector('[data-score-note-dragging="true"]')) return;
+          if (marquee.cancel()) { event.preventDefault(); event.stopPropagation(); suppressClick.current = true; return; }
           if (drag.current || spaceRef.current) { event.stopPropagation(); cancelPan(); return; }
+          if (marquee.clear()) { event.preventDefault(); event.stopPropagation(); return; }
           if (focus) { event.stopPropagation(); setFocus(false); focusButton.current?.focus(); }
           return;
         }
@@ -168,19 +189,19 @@ export function ScoreViewport({ children, toolbar, focusToolbar, height = 560, c
         spaceRef.current = true;
         setSpace(true);
       }}>
-      <div className={styles.toolbar}>
-        <div className={styles.slot}>{toolbar}{focus && focusToolbar}</div>
-        <Button size="sm" aria-label="Zoom out" onClick={() => changeZoom(zoomRef.current / 1.2)}>−</Button>
-        <output className={styles.zoom} aria-label="Score zoom">{Math.round(zoom * 100)}%</output>
-        <Button size="sm" aria-label="Zoom in" onClick={() => changeZoom(zoomRef.current * 1.2)}>+</Button>
-        <Button size="sm" onClick={() => changeZoom(fitScoreZoom(viewport.current?.clientWidth ?? 1, size.width))}>Fit width</Button>
-        <Button size="sm" onClick={() => changeZoom(1)}>Reset zoom</Button>
-        <Button size="sm" aria-pressed={hand} onClick={() => setHand(!hand)}>Hand</Button>
-        <Button ref={focusButton} size="sm" aria-pressed={focus} onClick={() => setFocus(!focus)}>{focus ? "Exit focus" : "Focus mode"}</Button>
-      </div>
-      <div ref={viewport} tabIndex={0} aria-label="Scrollable score" style={{ height }}
+      {controllerSlot && createPortal(<div className={styles.toolbar}>
+        <Button size="sm" aria-label="Zoom out" title="Zoom out" onClick={() => changeZoom(zoomRef.current / 1.2)}>−</Button>
+        <Button size="sm" aria-label="Score zoom" title="Score view actions" aria-haspopup="menu" onClick={(event) => {
+          const rect = event.currentTarget.getBoundingClientRect();
+          setContextMenu({ x: Math.max(8, Math.min(rect.left, window.innerWidth - 228)), y: Math.max(8, Math.min(rect.bottom + 4, window.innerHeight - 172)) });
+        }}>{Math.round(zoom * 100)}%</Button>
+        <Button size="sm" aria-label="Zoom in" title="Zoom in" onClick={() => changeZoom(zoomRef.current * 1.2)}>+</Button>
+        <Button size="sm" aria-label="Fit score width" title="Fit score to available width" onClick={() => changeZoom(scoreWidth ? fitScoreZoom(availableWidth + 32, size.width) : 1)}>Fit</Button>
+      </div>, controllerSlot)}
+      <div ref={viewport} data-score-scroll-viewport tabIndex={0} aria-label="Scrollable score" style={{ height }}
         className={`${styles.viewport} ${hand || space ? styles.hand : ""} ${dragging ? styles.dragging : ""}`}
         onScroll={() => setContextMenu(null)}
+        onContextMenuCapture={(event) => marquee.context(event.target as Element)}
         onContextMenu={(event) => {
           if ((event.target as Element).closest(".abcjs-note, [data-guitar-chord]")) return;
           event.preventDefault();
@@ -189,10 +210,15 @@ export function ScoreViewport({ children, toolbar, focusToolbar, height = 560, c
         }}
         onPointerDownCapture={(event) => {
           suppressClick.current = false;
-          if (!(event.button === 1 || (event.button === 0 && (hand || spaceRef.current))) || isInput(event.target)) return;
+          allowDoubleClick.current = false;
+          if (isInput(event.target)) return;
           const element = event.currentTarget;
           const bounds = element.getBoundingClientRect();
           if (event.clientX >= bounds.left + element.clientWidth || event.clientY >= bounds.top + element.clientHeight) return;
+          const pan = event.button === 1 || (event.button === 0 && (hand || spaceRef.current || event.metaKey || event.ctrlKey));
+          // A plain diagram click opens its picker; modified gestures keep workspace selection/pan.
+          if (!pan && !event.shiftKey && !event.altKey && (event.target as Element).closest('[data-guitar-chord-diagram]')) return;
+          if (!pan) { marquee.down(event); return; }
           event.preventDefault();
           event.stopPropagation();
           element.focus({ preventScroll: true });
@@ -204,12 +230,13 @@ export function ScoreViewport({ children, toolbar, focusToolbar, height = 560, c
           if (isInput(event.target)) return;
           const bounds = event.currentTarget.getBoundingClientRect();
           if (event.clientX >= bounds.left + event.currentTarget.clientWidth || event.clientY >= bounds.top + event.currentTarget.clientHeight) return;
-          if (drag.current || event.button === 1 || (event.button === 0 && (hand || spaceRef.current))) {
+          if (drag.current || marquee.pending() || event.button === 1 || (event.button === 0 && (hand || spaceRef.current || event.metaKey || event.ctrlKey))) {
             event.preventDefault();
             event.stopPropagation();
           }
         }}
-        onPointerMove={(event) => {
+        onPointerMoveCapture={(event) => {
+          if (marquee.move(event)) return;
           const start = drag.current;
           if (!start || start.pointer !== event.pointerId) return;
           const dx = event.clientX - start.x;
@@ -221,26 +248,35 @@ export function ScoreViewport({ children, toolbar, focusToolbar, height = 560, c
           event.currentTarget.scrollLeft = start.left - dx;
           event.currentTarget.scrollTop = start.top - dy;
         }}
-        onPointerUp={(event) => {
+        onMouseUpCapture={(event) => {
+          if (suppressClick.current || marquee.pending()) {
+            event.preventDefault();
+            event.stopPropagation();
+          }
+        }}
+        onPointerUpCapture={(event) => {
+          const selectionGesture = marquee.up(event);
+          if (selectionGesture) { suppressClick.current = true; allowDoubleClick.current = selectionGesture === "click"; return; }
           if (drag.current?.pointer !== event.pointerId) return;
-          suppressClick.current = drag.current.moved && drag.current.button === 0;
+          suppressClick.current = drag.current.button === 0;
           drag.current = null;
           setDragging(false);
           if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
         }}
-        onLostPointerCapture={() => { drag.current = null; setDragging(false); }}
-        onPointerCancel={() => { drag.current = null; setDragging(false); }}
+        onLostPointerCapture={() => { marquee.cancel(); drag.current = null; setDragging(false); }}
+        onPointerCancel={() => { marquee.cancel(); drag.current = null; setDragging(false); }}
         onClickCapture={(event) => {
+          if (event.detail >= 2 && allowDoubleClick.current && !event.shiftKey && !event.metaKey && !event.ctrlKey && !event.altKey) { suppressClick.current = false; return; }
           if (!suppressClick.current) return;
           suppressClick.current = false;
           event.preventDefault();
           event.stopPropagation();
         }}>
+        {marquee.box && <div aria-hidden="true" className={styles.marquee} style={marquee.box} />}
         <div className={styles.surface} style={{ width: size.width * zoom, height: size.height * zoom }}>
-          <div ref={content} className={styles.content} style={{ width: scoreWidth, transform: `scale(${zoom})` }}>{children}</div>
+          <div ref={content} className={styles.content} style={{ width: scoreWidth ?? (availableWidth || "100%"), transform: `scale(${zoom})` }}>{children}</div>
         </div>
       </div>
-      <div className={styles.hint}>Scroll to navigate · Shift + scroll sideways · Ctrl/⌘ + scroll to zoom · Space + drag or middle mouse to pan</div>
       {contextMenu && createPortal(
         <div ref={menu} role="menu" aria-label="Score viewport actions" className={styles.menu} style={{ left: contextMenu.x, top: contextMenu.y }}
           onKeyDown={(event) => {
@@ -250,8 +286,9 @@ export function ScoreViewport({ children, toolbar, focusToolbar, height = 560, c
             const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
             buttons[(index + (event.key === "ArrowDown" ? 1 : buttons.length - 1)) % buttons.length]?.focus();
           }}>
-          <Button size="sm" role="menuitem" onClick={() => { changeZoom(fitScoreZoom(viewport.current?.clientWidth ?? 1, size.width)); setContextMenu(null); viewport.current?.focus(); }}>Fit width</Button>
-          <Button size="sm" role="menuitem" onClick={() => { changeZoom(1); setContextMenu(null); viewport.current?.focus(); }}>Reset zoom</Button>
+          <Button size="sm" role="menuitem" onClick={() => { changeZoom(scoreWidth ? fitScoreZoom(availableWidth + 32, size.width) : 1); setContextMenu(null); viewport.current?.focus(); }}>Fit width</Button>
+          <Button size="sm" role="menuitem" onClick={() => { changeZoom(1); setContextMenu(null); viewport.current?.focus(); }}>Reset view</Button>
+          <Button size="sm" role="menuitem" aria-pressed={hand} onClick={() => { setHand(!hand); setContextMenu(null); viewport.current?.focus(); }}>{hand ? "Exit hand mode" : "Hand mode"}</Button>
           <Button size="sm" role="menuitem" onClick={() => { setFocus(!focus); setContextMenu(null); focusButton.current?.focus(); }}>{focus ? "Exit focus" : "Focus mode"}</Button>
         </div>, document.body
       )}

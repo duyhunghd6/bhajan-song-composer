@@ -52,21 +52,22 @@ const expectedPlaybackAttributes = [
   'data-use-container-width="true"',
   'data-hide-voice-names="true"',
   'data-copy-abcjs="true"',
-  'data-min-width="min-w-[520px]"',
-  'data-viewport="max-h-[800px] overflow-auto"',
 ];
 
 describe("Composer result staff playback", () => {
   it("preserves harmony tab-aware render options with shared playback presentation", () => {
     const getRenderOptionsFor = vi.fn(() => ({ tablature: [{ instrument: "guitar" }] }));
+    const playbackAbc = `${staffAbc}\n%%MIDI program 1`;
     const markup = renderToStaticMarkup(
       <HarmonyStep
+        slug="ganesha"
         melodyAbc={staffAbc}
+        sourceAbc={staffAbc}
         hasMounted={false}
         pipeline={null}
         harmonyPreview={{
           abc: staffAbc,
-          rawAbc: `${staffAbc}\n%%MIDI program 1`,
+          rawAbc: playbackAbc,
           synthOptions: { voicesOff: [1] },
           layerVisibilityItems: [],
           harmonyStepComplete: true,
@@ -79,13 +80,16 @@ describe("Composer result staff playback", () => {
         ws={{} as never}
         updateState={noop}
         onRestore={noop}
+        onScoreTransaction={noop}
       />,
     );
 
-    expect(markup).toContain(`data-abc="${staffAbc.replace(/\n/g, "\n")}"`);
+    expect(markup).toContain(`data-abc="${playbackAbc}"`);
     expectedPlaybackAttributes.forEach((attribute) => expect(markup).toContain(attribute));
-    expect(markup).toContain('data-synth-options="{&quot;voicesOff&quot;:[1]}"');
-    expect(getRenderOptionsFor).toHaveBeenCalledWith(staffAbc, expect.objectContaining({ staffwidth: 720 }));
+    expect(markup).toContain('data-min-width="min-w-0"');
+    expect(markup).toContain('data-viewport=""');
+    expect(markup).toContain('data-synth-options="{&quot;voicesOff&quot;:[1],&quot;chordsOff&quot;:true}"');
+    expect(getRenderOptionsFor).toHaveBeenCalledWith(playbackAbc, expect.objectContaining({ staffwidth: 720 }));
     expect(markup).toContain('&quot;tablature&quot;:[{&quot;instrument&quot;:&quot;guitar&quot;}]');
   });
 
@@ -93,6 +97,8 @@ describe("Composer result staff playback", () => {
     const getRenderOptionsFor = vi.fn(() => ({ tablature: [{ instrument: "guitar" }] }));
     const markup = renderToStaticMarkup(
       <AccompanimentStep
+        slug="test-song"
+        selectedInstrument="guitar-classic"
         activeAbc={staffAbc}
         branchSourceAbc={staffAbc}
         pipeline={null}
@@ -114,6 +120,8 @@ describe("Composer result staff playback", () => {
     );
 
     expectedPlaybackAttributes.forEach((attribute) => expect(markup).toContain(attribute));
+    expect(markup).toContain('data-min-width="min-w-0"');
+    expect(markup).toContain('data-viewport=""');
     expect(getRenderOptionsFor).toHaveBeenCalledWith(staffAbc, expect.objectContaining({ staffwidth: 900 }));
     expect(markup).toContain('&quot;tablature&quot;:[{&quot;instrument&quot;:&quot;guitar&quot;}]');
   });

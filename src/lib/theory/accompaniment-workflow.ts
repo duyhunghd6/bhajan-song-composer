@@ -58,8 +58,6 @@ const LYRIC_CHORD_STRIP_PATTERN = /\[[^\]]+\]/g;
 
 const DEFAULT_INSTRUMENT_ORDER: AccompanimentInstrumentId[] = [
   "guitar-classic",
-  "indian-harmonium",
-  "djembe",
 ];
 
 const LEGACY_ENABLED_INSTRUMENTS = new Set<AccompanimentInstrumentId>(DEFAULT_INSTRUMENT_ORDER);
@@ -86,8 +84,6 @@ export function getLegacyAccompanimentWorkflowSetup(): AccompanimentWorkflowSetu
 }
 
 function instrumentScope(id: AccompanimentInstrumentId): Exclude<AccompanimentWorkflowScope, "shared"> {
-  if (id === "indian-harmonium") return "harmonium";
-  if (id === "djembe") return "djembe";
   return "guitar";
 }
 
@@ -110,9 +106,7 @@ export function defaultInstrumentRoleNote(id: AccompanimentInstrumentId, order: 
       ? "top/treble or transient color"
       : "middle comping/support lane";
 
-  if (id === "djembe") return `${altitude}; Bass (Dum) supports low transients, Tone/Slap support upper rhythmic color.`;
-  if (id === "indian-harmonium") return `${altitude}; sustain devotional drones, root-fifth anchors, and soft chordal support.`;
-  return `${altitude}; arpeggiate/stagger notes and avoid block-chord clutter.`;
+  return `${altitude}; acoustic steel-string guitar with arpeggiated/staggered notes and no block-chord clutter.`;
 }
 
 export function normalizeAccompanimentWorkflowSetup(setup?: Partial<AccompanimentWorkflowSetup> | null): AccompanimentWorkflowSetup {
@@ -334,7 +328,7 @@ export function normalizeAccompanimentWorkflowSession(value: unknown): Accompani
 
   const persistedVersion = typeof value.version === "number" ? value.version : 0;
   if (persistedVersion < ACCOMPANIMENT_WORKFLOW_VERSION) {
-    // Earlier Guitar Classic selections have only sparse physical anchors and
+    // Earlier Guitar selections have only sparse physical anchors and
     // no explicit Step 4 realization technique. Regenerate this branch rather
     // than guessing which arpeggio/strum the user intended.
     for (const stepId of ACCOMPANIMENT_WORKFLOW_BRANCH_STEP_IDS.guitar) {
@@ -986,7 +980,7 @@ export function buildAccompanimentWorkflowPrompt(input: {
     ? "\nStrong Beats: choose emphasis direction. Call add_strong_beat_icons for each emphasis direction before the final tool call. Final option.data MUST include strongBeatEmphasis only. Do not include annotatedAbc, strongBeatDirectives, measureIndex, or beatTime."
     : "";
   const guitarTabInstruction = isGuitarTabValidationWorkflowStep(input.stepId)
-    ? "\nGuitar Classic singer-support contract: option.data MUST include guitarTab with compact keys m=measure, t=grid step, d=duration, b=beat, n=note, s=string, f=fret, r=role, sid=sourceEventId. Call query_guitar_voicings before proposing concrete frets, then call valid_guitar_tab on the exact final events. Step 4 provides only a representative profile sample; Step 5 provides bounded voicing/root-fifth/transition anchors, never the full accompaniment texture. Step 6 deterministically schedules it. Strings 4–6 are restrained bass anchors (30–45% of realized PIMA/pinch note attacks); strings 1–3 provide most motion (55–70%). Never plan more than two ordinary bass-only onsets in succession. Walking bass is optional and only immediately before a real chord change. Pinch is one bass plus one treble string on a strong metric step. Rules: (1) one string per simultaneous group per source event, (2) all frets within profile range, (3) one left hand can fret the position."
+    ? "\nGuitar singer-support contract: use the default acoustic steel-string guitar. option.data MUST include guitarTab with compact keys m=measure, t=grid step, d=duration, b=beat, n=note, s=string, f=fret, r=role, sid=sourceEventId. Call query_guitar_voicings before proposing concrete frets, then call valid_guitar_tab on the exact final events. Step 4 provides only a representative profile sample; Step 5 provides bounded voicing/root-fifth/transition anchors, never the full accompaniment texture. Step 6 deterministically schedules it. Strings 4–6 are restrained bass anchors (30–45% of realized PIMA/pinch note attacks); strings 1–3 provide most motion (55–70%). Never plan more than two ordinary bass-only onsets in succession. Walking bass is optional and only immediately before a real chord change. Pinch is one bass plus one treble string on a strong metric step. Rules: (1) one string per simultaneous group per source event, (2) all frets within profile range, (3) one left hand can fret the position."
     : "";
   const guitarFingerstyleInstruction = "";
   const lyricChordInstruction = lyricChordAnnotations.length > 0 && isChordIngestionWorkflowStep(input.stepId)
@@ -995,8 +989,8 @@ export function buildAccompanimentWorkflowPrompt(input: {
   const sustainRuleInstruction = isGuitarTabValidationWorkflowStep(input.stepId)
     ? "\n- Vocal-yield rule: this is singer accompaniment, not solo fingerstyle. Structural low-register root/fifth anchors may support active melody, but do not add decorative high-register fills, unison doubles, or an independent treble melody while the vocal is active or sustaining. Use upper chord tones as quiet support between vocal phrases."
     : "";
-  const midiInstruction = "\n- Any generated Guitar Classic/Classical Guitar ABC must include `%%MIDI program 24` immediately after the Guitar voice declaration.\n- Only an exact `Guitar Left Hand` target may be retargeted to Harmonium/Reed Organ, and it must use `%%MIDI program 20`; do not change `Guitar LH Accompaniment`, `Guitar Right Hand`, or generic Guitar layers.";
-  const staffSystemInstruction = "\n- Multi-voice ABC line grouping requirement: when returning ABC with Melody plus Guitar, Harmonium, or Djembe, preserve the source Melody visual staff systems. Emit/validate each staff-system group as Melody line N, then lyric/helper rows for that Melody line, then every instrument's line N for the same measure range before moving to Melody line N+1. Do not write all Melody lines first and all accompaniment lines later when the final ABC contains multiple instruments.";
+  const midiInstruction = "\n- Any generated acoustic steel-string Guitar ABC must include `%%MIDI program 25` immediately after the Guitar voice declaration.";
+  const staffSystemInstruction = "\n- Multi-voice ABC line grouping requirement: when returning ABC with Melody plus Guitar, preserve the source Melody visual staff systems. Emit/validate each staff-system group as Melody line N, then lyric/helper rows for that Melody line, then the Guitar line N for the same measure range before moving to Melody line N+1.";
 
   let chordToneReferenceStr = "";
   if (isBranchStep && step.scope === "guitar") {

@@ -1,5 +1,17 @@
-import type { Dispatch, SetStateAction } from "react";
-import AbcjsPlaybackController from "@/components/music-sheet/AbcjsPlaybackController";
+import { Button, buttonStyles } from "@/components/ui/Button";
+import Link from "next/link";
+import styles from "./harmony.module.css";
+import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import { ScoreViewport } from "@/components/music-sheet/score-workspace/ScoreViewport";
+import { applyAbcLayerVolumes, isAbcLayerVisible } from "@/lib/theory/abc-layer-visibility";
+import { buildHarmonyLayerProjection, HARMONY_ANALYSIS_LAYERS } from "@/lib/theory/harmony/analysis-preview";
+import { fillMissingMeasureChords } from "@/lib/theory/harmony/auto-chords";
+import { editScoreChord } from "@/lib/theory/score-chord-edit";
+import { buildHarmonyValidationBranchResetState } from "./accompaniment-guitar-reset";
+import { restoreScoreHarmonyDraft, serializeScoreHarmonyDraft } from "./score-draft-storage";
+import { selectManualScoreHarmony } from "./score-harmony-selection";
+import { getComposerFingerstyleMeasuresStorageKey, getComposerSongStoragePrefix } from "./storage";
+import GuitarChordAccompaniment from "@/components/music-sheet/guitar-chords/GuitarChordAccompaniment";
 import type { ArrangementPipelineResult } from "@/lib/theory/arrangement-pipeline";
 import type { WorkspaceState } from "../useWorkspaceState";
 import AccompanimentWorkflowWizard from "../AccompanimentWorkflowWizard";
@@ -8,11 +20,12 @@ import { LayerVisibilityControls } from "./LayerVisibilityControls";
 import {
   COMPOSER_PREVIEW_RENDER_OPTIONS,
   COMPOSER_STAFF_PLAYBACK_PROPS,
-  ComposerNotationPreviewLayout,
 } from "./preview";
 
 interface HarmonyStepProps {
+  slug: string;
   melodyAbc: string;
+  sourceAbc: string;
   initialMelodyAbc?: string;
   hasMounted: boolean;
   pipeline: ArrangementPipelineResult | null;
@@ -24,10 +37,13 @@ interface HarmonyStepProps {
   ws: WorkspaceState;
   updateState: (updates: Partial<WorkspaceState>) => void;
   onRestore: () => void;
+  onScoreTransaction: (melody: string, workspace: WorkspaceState, fingerstyleCache: string | null) => void;
 }
 
 export function HarmonyStep({
+  slug,
   melodyAbc,
+  sourceAbc,
   initialMelodyAbc,
   hasMounted,
   pipeline,
@@ -39,89 +55,139 @@ export function HarmonyStep({
   ws,
   updateState,
   onRestore,
+  onScoreTransaction,
 }: HarmonyStepProps) {
+  const [mode, setMode] = useState<"explore" | "edit">("explore");
+  const [error, setError] = useState("");
+  const [storedDraft, setDraft] = useState<string | null>(null);
+  const [draftSource, setDraftSource] = useState(sourceAbc);
+  const [draftHydrated, setDraftHydrated] = useState(false);
+  const draft = draftSource === sourceAbc ? storedDraft : null;
+  const draftKey = `${getComposerSongStoragePrefix(slug)}manual-harmony-draft`;
+  useEffect(() => {
+    if (!hasMounted || draftHydrated) return;
+    const saved = restoreScoreHarmonyDraft(window.localStorage.getItem(draftKey), melodyAbc, sourceAbc);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- restore source-bound browser storage after hydration before writing it.
+    setDraft(saved); setDraftSource(sourceAbc); setDraftHydrated(true);
+  }, [hasMounted, draftHydrated, draftKey, melodyAbc, sourceAbc]);
+  useEffect(() => {
+    if (!hasMounted || !draftHydrated) return;
+    if (draft) window.localStorage.setItem(draftKey, serializeScoreHarmonyDraft(draft, melodyAbc, sourceAbc));
+    else window.localStorage.removeItem(draftKey);
+  }, [draft, draftKey, draftHydrated, hasMounted, melodyAbc, sourceAbc]);
+  type Snapshot = { melody: string; workspace: WorkspaceState; draft: string | null; draftReference: string; cache: string | null };
+  const [past, setPast] = useState<Snapshot[]>([]);
+  const [future, setFuture] = useState<Snapshot[]>([]);
+  const snapshot = (): Snapshot => ({ melody: melodyAbc, workspace: ws, draft, draftReference: sourceAbc, cache: typeof window === "undefined" ? null : window.localStorage.getItem(getComposerFingerstyleMeasuresStorageKey(slug)) });
+  const commit = (next: Snapshot) => {
+    setPast([...past, snapshot()]); setFuture([]); setDraft(next.draft); setDraftSource(next.draftReference);
+    onScoreTransaction(next.melody, next.workspace, next.cache); setError("");
+  };
+  const restore = (next: Snapshot) => { setDraft(next.draft); setDraftSource(next.draftReference); onScoreTransaction(next.melody, next.workspace, next.cache); setError(""); };
+  const restoreOriginal = () => { setDraft(null); setPast([]); setFuture([]); onRestore(); };
+  const projection = useMemo(() => buildHarmonyLayerProjection(draft ? applyAbcLayerVolumes(draft, layerVolumes) : harmonyPreview.rawAbc, layerVisibility), [draft, layerVolumes, harmonyPreview.rawAbc, layerVisibility]);
+  const scoreAbc = projection.abc;
+  const visibilityItems = [...harmonyPreview.layerVisibilityItems.filter(item => !HARMONY_ANALYSIS_LAYERS.some(layer => layer.id === item.id)), ...HARMONY_ANALYSIS_LAYERS];
+  const publishDraft = () => {
+    if (!draft) return;
+    try {
+      const reset = buildHarmonyValidationBranchResetState(ws);
+      const workflow = selectManualScoreHarmony(reset.accompanimentWorkflow ?? ws.accompanimentWorkflow, draft, sourceAbc);
+      commit({ melody: melodyAbc, workspace: { ...ws, ...reset, accompanimentWorkflow: workflow, voicingOverrides: [] }, draft: null, draftReference: sourceAbc, cache: null });
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to validate manual harmony."); }
+  };
   return (
-    <div className="space-y-6">
-      <ComposerNotationPreviewLayout
-        source={
-          <>
-            <section className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950/60">
-              <div className="flex items-center justify-between gap-2 mb-4">
-                <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 font-sans">AI Harmonization Workflow</h2>
-                <div className="flex items-center gap-1.5">
-                  {hasMounted && initialMelodyAbc && melodyAbc !== initialMelodyAbc && (
-                    <button
-                      type="button"
-                      onClick={onRestore}
-                      title="Reset Original Melody"
-                      className="inline-flex items-center gap-1 rounded-lg border border-rose-400/30 bg-rose-500/10 px-2.5 py-1.5 text-xs font-bold text-rose-600 transition hover:bg-rose-500/20 dark:text-rose-400"
-                    >
-                      <span className="text-sm">↺</span>
-                      <span className="hidden sm:inline font-sans">Reset Original Melody</span>
-                    </button>
-                  )}
-                </div>
-              </div>
+    <div className={styles.workspace} onKeyDown={(event) => {
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "z" || (event.target as HTMLElement).closest("input, textarea, [contenteditable=true]")) return;
+      event.preventDefault();
+      if (event.shiftKey && future.length) { const next = future[future.length - 1]; setFuture(future.slice(0, -1)); setPast([...past, snapshot()]); restore(next); }
+      else if (!event.shiftKey && past.length) { const next = past[past.length - 1]; setPast(past.slice(0, -1)); setFuture([...future, snapshot()]); restore(next); }
+    }}>
+      <section className={styles.score} aria-label="Harmony score preview">
+        <GuitarChordAccompaniment
+          renderScore={(score, playback) => <ScoreViewport embedded controllerSlot={playback.controllerSlot} label="Harmony score">{score}</ScoreViewport>}
+          sourceAbc={draft ?? sourceAbc}
+          overrides={ws.voicingOverrides}
+          onOverridesChange={(voicingOverrides) => commit({ ...snapshot(), workspace: { ...ws, voicingOverrides } })}
+          scoreEditing={{ mode, sourceAbc: melodyAbc, onCommit: (abc) => commit({ melody: abc, workspace: { ...ws, ...buildHarmonyValidationBranchResetState(ws), accompanimentWorkflow: null, voicingOverrides: [] }, draft: null, draftReference: sourceAbc, cache: null }), onError: setError }}
+          onChordEdit={mode === "edit" ? (occurrence, symbol) => {
+            try { commit({ ...snapshot(), draft: editScoreChord(isAbcLayerVisible("MissingChord", layerVisibility, false) ? fillMissingMeasureChords(draft ?? sourceAbc).abc : draft ?? sourceAbc, occurrence.measureIndex, occurrence.beat, symbol) }); }
+            catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to edit chord."); }
+          } : undefined}
+          chordVolume={layerVolumes.ChordProgression ?? 100}
+          abcString={scoreAbc}
+          title="Harmonization Audio Preview"
+          canvasId="composer-harmony-preview"
+          synthOptions={harmonyPreview.synthOptions}
+          renderOptions={harmonyPreview.getRenderOptionsFor(scoreAbc, COMPOSER_PREVIEW_RENDER_OPTIONS)}
+          {...COMPOSER_STAFF_PLAYBACK_PROPS}
+          minWidthClassName="min-w-0"
+          sheetViewportClassName=""
+        />
+        {error && <p role="alert" className="p-3 text-sm text-red-700">{error}</p>}
+        <p role="status" className="p-3 text-sm text-zinc-500">{draft ? "Manual harmony draft — validate and select it before downstream generation." : !harmonyPreview.harmonyStepComplete && past.length ? "Harmony and downstream drafts are stale after melody editing. Select a newly validated Step 3." : mode === "edit" ? "Drag to select notes and chords. Cmd/Ctrl + drag pans. Option/Alt + drag a note changes pitch. Right-click for actions." : "Drag to select notes and chords. Cmd/Ctrl + drag pans. Switch to Edit to change pitches or chord symbols."}</p>
+      </section>
 
-              <AccompanimentWorkflowWizard
-                mode="harmony"
-                sourceAbc={melodyAbc}
-                metadata={{
-                  key: pipeline?.harmonization.key ?? "Unknown",
-                  scale: pipeline?.harmonization.scale ?? "Unknown",
-                  timeSignature: pipeline?.harmonization.timeSignature ?? "4/4",
-                }}
-                workflow={ws.accompanimentWorkflow}
-                workflowSetup={ws.accompanimentWorkflowSetup}
-                onWorkflowChange={(accompanimentWorkflow) => updateState({ accompanimentWorkflow })}
-                onWorkflowSetupChange={(accompanimentWorkflowSetup) => updateState({ accompanimentWorkflowSetup })}
-                onReset={onRestore}
-              />
-            </section>
-          </>
-        }
-        preview={
-          <>
-            <section className="mb-4 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950/60">
-              <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 mb-2 font-sans">Layer Visibility</h2>
-              <LayerVisibilityControls
-                items={harmonyPreview.layerVisibilityItems}
-                visibility={layerVisibility}
-                onVisibilityChange={setLayerVisibility}
-                volumes={layerVolumes}
-                onVolumeChange={setLayerVolumes}
-              />
-            </section>
+      <aside className={styles.tools} aria-label="Score tools">
+        <details className={styles.disclosure} open>
+          <summary>Layers & volume <span>Adjust what you see and hear</span></summary>
+          <div className={styles.mixer}>
+            <LayerVisibilityControls
+              items={visibilityItems}
+              visibility={layerVisibility}
+              onVisibilityChange={setLayerVisibility}
+              volumes={layerVolumes}
+              onVolumeChange={setLayerVolumes}
+            />
+          </div>
+        </details>
+      </aside>
 
-            <div>
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 font-sans">Resulting ABC Staff Preview</h3>
-                <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 font-sans">
-                  {harmonyPreview.harmonyStepComplete ? "Harmonized Melody" : "Source Melody"}
-                </span>
-              </div>
-              <AbcjsPlaybackController
-                abcString={harmonyPreview.abc}
-                title="Harmonization Audio Preview"
-                canvasId="composer-harmony-preview"
-                synthOptions={harmonyPreview.synthOptions}
-                renderOptions={harmonyPreview.getRenderOptionsFor(
-                  harmonyPreview.abc,
-                  COMPOSER_PREVIEW_RENDER_OPTIONS,
-                )}
-                {...COMPOSER_STAFF_PLAYBACK_PROPS}
-              />
-            </div>
-
-            <section className="mt-6 rounded-2xl border border-dashed border-zinc-300 bg-white/70 p-4 dark:border-zinc-700 dark:bg-zinc-950/50">
-              <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 font-sans">Current ABCNotation of the Song</h2>
-              <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap rounded-xl bg-zinc-50 p-3 text-xs leading-5 text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400 font-mono">
-                {harmonyPreview.rawAbc}
-              </pre>
-            </section>
-          </>
-        }
-      />
+      <aside className={styles.assistant} aria-label="Harmony assistant">
+        <div className={styles.assistantHeading}>
+          <span className={styles.spark} aria-hidden="true">✦</span>
+          <div><h2>Harmony assistant</h2><p>Three steps. You make the choices.</p></div>
+        </div>
+        <div className={styles.panelBody}>
+          <div className={styles.toolHeading}>
+            <h1>Harmony</h1>
+            <span className={styles.status} aria-live="polite">
+              {draft ? "Manual draft" : harmonyPreview.harmonyStepComplete ? "Harmony validated" : "Source melody"}
+            </span>
+          </div>
+          <Link href={`/compose/${slug}/melody`} className={buttonStyles({ variant: "ghost", size: "sm", className: styles.editLink })}>← Edit melody</Link>
+          {draft && <Button type="button" onClick={publishDraft}>Validate & select manual harmony</Button>}
+          <details className={styles.disclosure}>
+            <summary>ABC notation <span>Current layers · score & playback</span></summary>
+            <pre aria-label="Harmony playback ABC" className="mt-4 max-h-64 overflow-auto whitespace-pre-wrap rounded-lg bg-zinc-100 p-4 font-mono text-xs leading-6 text-zinc-600 dark:bg-zinc-950 dark:text-zinc-400">{scoreAbc}</pre>
+          </details>
+          <details className={styles.disclosure}>
+            <summary>TimeGrid JSON <span>Harmony analysis</span></summary>
+            <pre aria-label="Harmony TimeGrid JSON" className="mt-4 max-h-64 overflow-auto p-3 text-xs">{JSON.stringify(projection.timeGrid, null, 2)}</pre>
+          </details>
+          {projection.issues.length > 0 && <p role="status" className="p-3 text-sm text-zinc-500">{projection.issues.join(" ")}</p>}
+          {hasMounted && initialMelodyAbc && melodyAbc !== initialMelodyAbc && (
+            <Button variant="danger" size="sm" type="button" onClick={restoreOriginal} className="mt-4">↺ Reset Original Melody</Button>
+          )}
+        </div>
+        <AccompanimentWorkflowWizard
+          mode="harmony"
+          sourceAbc={melodyAbc}
+          metadata={{ key: pipeline?.harmonization.key ?? "Unknown", scale: pipeline?.harmonization.scale ?? "Unknown", timeSignature: pipeline?.harmonization.timeSignature ?? "4/4" }}
+          workflow={ws.accompanimentWorkflow}
+          workflowSetup={ws.accompanimentWorkflowSetup}
+          onWorkflowChange={(accompanimentWorkflow) => updateState({ accompanimentWorkflow })}
+          onWorkflowSetupChange={(accompanimentWorkflowSetup) => updateState({ accompanimentWorkflowSetup })}
+          onReset={restoreOriginal}
+        />
+        <div className={styles.nextStep}>
+          {harmonyPreview.harmonyStepComplete ? (
+            <><p>Your harmony is ready. Add instruments to bring it to life.</p><Link className={buttonStyles({ variant: "primary" })} href={`/compose/${slug}/accompaniment`}>Continue to accompaniment <span aria-hidden="true">→</span></Link></>
+          ) : (
+            <p>Next: add accompaniment after choosing your validated harmony in step 3.</p>
+          )}
+        </div>
+      </aside>
     </div>
   );
 }

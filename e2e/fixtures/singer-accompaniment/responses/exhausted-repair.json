@@ -1,0 +1,26 @@
+{
+  "id": "fixture-exhausted-repair-v1",
+  "object": "chat.completion",
+  "created": 1773440010,
+  "model": "gpt-4o",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_exhausted_repair_01",
+            "type": "function",
+            "function": {
+              "name": "submit_arrangement_candidates",
+              "arguments": "{\"packId\":\"pack-exhausted-repair-v1\",\"targetInstrument\":\"guitar-classic\",\"candidateCount\":1,\"options\":[{\"optionId\":\"guitar-exhausted-repair-opt\",\"parentOptionId\":\"guitar-stretch-opt-1\",\"repairAttempts\":3,\"repairScope\":{\"measures\":[3],\"flaggedRule\":\"guitar-physics-stretch\",\"diagnosticMessage\":\"Repair attempt 3 of 3 still contains unplayable fret stretch at M3/B1.\"},\"targetInstrument\":\"guitar-classic\",\"label\":\"Failed Repair Attempt (Max Rounds Exhausted)\",\"rationale\":\"Arranger model attempted repair 3 times, but candidate still contains physically impossible fret reach spanning 12 frets at measure 3 beat 1.\",\"diversityLabel\":\"Repair: Exhausted / Status: Blocked\",\"decisionMap\":[{\"measure\":1,\"technique\":\"arpeggio\"},{\"measure\":2,\"technique\":\"arpeggio\"},{\"measure\":3,\"technique\":\"failed-repair-stretch\"},{\"measure\":4,\"technique\":\"sustain\"}],\"abc\":\"V:GuitarSupport clef=treble-8\\n[C,E] G, C E | [G,,D] B, D G | [F,,c'] A, C F | [C,E]4 |\"}]}"
+            }
+          }
+        ]
+      },
+      "finish_reason": "tool_calls"
+    }
+  ]
+}

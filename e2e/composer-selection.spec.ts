@@ -25,6 +25,14 @@ test.describe("composer song edit dashboard and redirect", () => {
     await expect(hbCard.locator("[data-indicator='video']")).toBeVisible();
     await expect(hbCard.locator("[data-indicator='backing-track']")).toBeVisible();
     await expect(hbCard.locator("[data-indicator='melody']")).toBeVisible();
+    await expect(hbCard.locator("[data-indicator='guitar']")).toHaveAttribute(
+      "href",
+      "/compose/happy-birthday/accompaniment?instrument=guitar-classic"
+    );
+    await expect(hbCard.locator("[data-indicator='piano']")).toHaveAttribute(
+      "href",
+      "/compose/happy-birthday/accompaniment?instrument=piano"
+    );
 
     // Check search filter works
     await searchInput.fill("Namostute");
@@ -46,17 +54,18 @@ test.describe("composer song edit dashboard and redirect", () => {
     await expect(page.locator("#song-title")).toHaveValue("Happy Birthday");
     await expect(page.locator("#song-slug")).toHaveValue("happy-birthday");
     
-    // Click "Continue arrangement" to enter the step workstation
-    await page.getByRole("link", { name: "Continue arrangement" }).click();
-    await expect(page).toHaveURL(/\/compose\/happy-birthday\/melody$/);
-
-    // The ABC editor input should contain the Happy Birthday melody notation
-    const abcEditor = page.locator("#abc-editor-input");
-    await expect(abcEditor).toContainText("T: Happy Birthday To You");
-    await expect(abcEditor).toContainText("K: G");
-
-    // Check back link exists and works (using breadcrumb to go back to catalogue)
+    // Check back link exists and works (using breadcrumb to go back to catalogue).
+    // Continuing from this screen saves the song to disk, which is intentionally
+    // outside the read-only navigation coverage of this spec.
     await page.getByRole("link", { name: "Catalogue Editor" }).click();
     await expect(page).toHaveURL(/\/edit/);
+
+    // Resource chips are real controls: an unavailable Piano layer starts its focused
+    // accompaniment lane, rather than behaving like a passive status badge.
+    await hbCard.locator("[data-indicator='piano']").click();
+    await expect(page).toHaveURL(/\/compose\/happy-birthday\/accompaniment\?instrument=piano/);
+    await expect(page.getByRole("heading", { name: "Accompaniment workflow" })).toBeVisible();
+    await expect(page.getByText("Piano lane", { exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: /Harmony.*Select & validate source/i })).toBeVisible();
   });
 });

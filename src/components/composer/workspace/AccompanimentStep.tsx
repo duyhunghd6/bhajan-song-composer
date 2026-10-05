@@ -1,6 +1,10 @@
+import { Button, buttonStyles } from "@/components/ui/Button";
 import { type Dispatch, type SetStateAction } from "react";
+import Link from "next/link";
 import GuitarChordAccompaniment from "@/components/music-sheet/guitar-chords/GuitarChordAccompaniment";
 import AbcjsPlaybackController from "@/components/music-sheet/AbcjsPlaybackController";
+import styles from "./harmony.module.css";
+import studio from "./studio.module.css";
 import type { ArrangementPipelineResult } from "@/lib/theory/arrangement-pipeline";
 import type { WorkspaceState } from "../useWorkspaceState";
 import {
@@ -16,10 +20,11 @@ import AccompanimentWorkflowWizard from "../AccompanimentWorkflowWizard";
 import {
   ACCOMPANIMENT_PREVIEW_RENDER_OPTIONS,
   COMPOSER_STAFF_PLAYBACK_PROPS,
-  ComposerNotationPreviewLayout,
 } from "./preview";
 
 interface AccompanimentStepProps {
+  slug: string;
+  selectedInstrument: "guitar-classic" | "piano" | null;
   activeAbc: string;
   branchSourceAbc: string | null;
   pipeline: ArrangementPipelineResult | null;
@@ -47,6 +52,8 @@ interface AccompanimentStepProps {
 }
 
 export function AccompanimentStep({
+  slug,
+  selectedInstrument,
   activeAbc,
   branchSourceAbc,
   pipeline,
@@ -61,6 +68,7 @@ export function AccompanimentStep({
   voicingInspector,
   projectPersistence,
 }: AccompanimentStepProps) {
+
     const {
       abc: accompanimentAbc,
       rawAbc: rawAccompanimentAbc,
@@ -69,92 +77,56 @@ export function AccompanimentStep({
       hasLayerVisibilityControls,
     } = accompanimentPreview;
 
-    return (
-      <div className="space-y-6">
-        <ComposerNotationPreviewLayout
-          source={(
-            <>
-              <section className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950/60">
-                <h2 className="mb-4 text-lg font-bold text-zinc-900 dark:text-zinc-100">AI Accompaniment Generation</h2>
+    const accompanimentReady = Boolean(branchSourceAbc && appliedWorkflowStep?.id === "guitar-classic-abc-notation");
 
-                {!branchSourceAbc && (
-                  <section className="mb-4 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900/60">
-                    <h3 className="mb-2 text-sm font-semibold text-zinc-900 dark:text-zinc-100">Original melody reference</h3>
-                    <AbcjsPlaybackController
-                      abcString={activeAbc}
-                      title="Original Melody Reference"
-                      canvasId="composer-accompaniment-prerequisite"
-                      renderOptions={ACCOMPANIMENT_PREVIEW_RENDER_OPTIONS}
-                    />
-                  </section>
-                )}
-                <AccompanimentWorkflowWizard
-                  mode="accompaniment"
-                  sourceAbc={activeAbc}
-                  branchSourceAbc={branchSourceAbc}
-                  metadata={{
-                    key: pipeline?.harmonization.key ?? "Unknown",
-                    scale: pipeline?.harmonization.scale ?? "Unknown",
-                    timeSignature: pipeline?.harmonization.timeSignature ?? "4/4",
-                  }}
-                  workflow={ws.accompanimentWorkflow}
-                  workflowSetup={ws.accompanimentWorkflowSetup}
-                  onWorkflowChange={(accompanimentWorkflow) => updateState({ accompanimentWorkflow })}
-                  onWorkflowSetupChange={(accompanimentWorkflowSetup) => updateState({ accompanimentWorkflowSetup })}
-                />
-              </section>
-            </>
+    return (
+      <div className={styles.workspace}>
+        <section className={styles.score} aria-label="Accompaniment score preview">
+          <GuitarChordAccompaniment
+            sourceAbc={branchSourceAbc ?? activeAbc}
+            overrides={ws.voicingOverrides}
+            onOverridesChange={(voicingOverrides) => updateState({ voicingOverrides })}
+            chordVolume={accompLayerVolumes.ChordProgression ?? 100}
+            abcString={accompanimentAbc}
+            title={appliedWorkflowStep ? `Resulting ABC Staff Preview: Step ${appliedWorkflowStep.label}` : "Accompaniment Music Sheet"}
+            canvasId="composer-accompaniment-preview"
+            {...COMPOSER_STAFF_PLAYBACK_PROPS}
+            renderOptions={getRenderOptionsFor(accompanimentAbc, ACCOMPANIMENT_PREVIEW_RENDER_OPTIONS)}
+          />
+
+        </section>
+        <aside className={styles.tools} aria-label="Accompaniment tools">
+          <div className={styles.toolHeading}>
+            <h1>Accompaniment</h1>
+            <span className={styles.status}>{accompanimentReady ? "Accompaniment applied" : branchSourceAbc ? "Harmony ready" : "Source melody"}</span>
+          </div>
+          <Link href={`/compose/${slug}/harmony`} className={buttonStyles({ variant: "ghost", size: "sm", className: styles.editLink })}>← Review harmony</Link>
+          {hasLayerVisibilityControls && (
+            <details className={styles.disclosure} open><summary>Layers & volume <span>Adjust what you see and hear</span></summary>
+              <div className={styles.mixer}><LayerVisibilityControls items={layerVisibilityItems} visibility={accompLayerVisibility} onVisibilityChange={setAccompLayerVisibility} volumes={accompLayerVolumes} onVolumeChange={setAccompLayerVolumes} /></div>
+            </details>
           )}
-          preview={(
-            <>
-              {hasLayerVisibilityControls && (
-                <section className="mb-4 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950/60">
-                  <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 mb-2">Layer Visibility</h2>
-                  <LayerVisibilityControls
-                    items={layerVisibilityItems}
-                    visibility={accompLayerVisibility}
-                    onVisibilityChange={setAccompLayerVisibility}
-                    volumes={accompLayerVolumes}
-                    onVolumeChange={setAccompLayerVolumes}
-                  />
+              {projectPersistence && (
+                <section className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-sm dark:border-zinc-800 dark:bg-zinc-950/50" aria-live="polite">
+                  <span>
+                    Project: <strong>{projectPersistence.status === "saving" ? "Saving" : projectPersistence.status === "saved" ? "Saved" : projectPersistence.status === "conflict" ? "Conflict saved for review" : projectPersistence.status === "error" ? "Save failed" : "Ready"}</strong>
+                    {projectPersistence.detail ? ` · ${projectPersistence.detail}` : ""}
+                  </span>
+                  <Button variant="secondary" size="sm" type="button" onClick={projectPersistence.onCheckpoint} >Save checkpoint</Button>
                 </section>
               )}
-
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Resulting ABC Staff Preview</h3>
-                <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
-                  Bounded preview
-                </span>
-              </div>
-              <GuitarChordAccompaniment
-                sourceAbc={branchSourceAbc ?? activeAbc}
-                overrides={ws.voicingOverrides}
-                onOverridesChange={(voicingOverrides) => updateState({ voicingOverrides })}
-                chordVolume={accompLayerVolumes.ChordProgression ?? 100}
-                abcString={accompanimentAbc}
-                title={appliedWorkflowStep ? `Resulting ABC Staff Preview: Step ${appliedWorkflowStep.label}` : "Accompaniment Music Sheet"}
-                canvasId="composer-accompaniment-preview"
-                {...COMPOSER_STAFF_PLAYBACK_PROPS}
-                renderOptions={getRenderOptionsFor(accompanimentAbc, ACCOMPANIMENT_PREVIEW_RENDER_OPTIONS)}
-              />
-              {appliedWorkflowStep && (
-                <p className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-300">
-                  ABCNotation applied after Step {appliedWorkflowStep.index}: {appliedWorkflowStep.label}
-                </p>
-              )}
-
-              <section className="mt-6 rounded-2xl border border-dashed border-zinc-300 bg-white/70 p-4 dark:border-zinc-700 dark:bg-zinc-950/50">
-                <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Generated ABC Source</h2>
-                <pre className="mt-3 max-h-[min(30vh,300px)] overflow-auto whitespace-pre-wrap rounded-xl bg-zinc-50 p-3 text-xs leading-5 text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
-                  {rawAccompanimentAbc}
-                </pre>
-              </section>
-
+        </aside>
+        <aside className={styles.assistant} aria-label="Accompaniment assistant">
+          <div className={styles.assistantHeading}><span className={styles.spark} aria-hidden="true">♫</span><div><h2>Accompaniment assistant</h2><p>Choose the support for your melody.</p></div></div>
+          <div className={styles.panelBody}>
+              <details className={styles.disclosure}><summary>ABC notation <span>{accompanimentReady ? "View the generated arrangement" : "View the current source"}</span></summary>
+                <pre className="mt-4 max-h-64 overflow-auto whitespace-pre-wrap rounded-lg bg-zinc-100 p-4 font-mono text-xs leading-6 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-400">{rawAccompanimentAbc}</pre>
+              </details>
               {voicingInspector && voicingInspector.targets.length > 0 && (() => {
                 const target = voicingInspector.targets[voicingInspector.selectedTargetIndex] ?? voicingInspector.targets[0];
                 if (!target) return null;
                 return (
-                  <section className="mt-6 rounded-2xl border border-zinc-200 bg-white/70 p-4 dark:border-zinc-800 dark:bg-zinc-950/50">
+                  <details className={styles.disclosure}><summary>Strong-beat voicing <span>Refine chord shapes</span></summary><div className="pt-4">
                     <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                       <div>
                         <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Strong-beat voicing</h2>
@@ -195,35 +167,45 @@ export function AccompanimentStep({
                             synthOptions={{ chordsOff: true }}
                             showLoopControls={false}
                             allowPdfDownload={false}
-                            minWidthClassName="min-w-[320px]"
-                            sheetViewportClassName="overflow-x-auto p-2"
+                            minWidthClassName="min-w-0"
+                            sheetViewportClassName="p-2"
                           />
                         </div>
                       </section>
                     )}
-                  </section>
+                  </div></details>
                 );
               })()}
-
-              {projectPersistence && (
-                <section className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-sm dark:border-zinc-800 dark:bg-zinc-950/50" aria-live="polite">
-                  <span>
-                    Project: <strong>{projectPersistence.status === "saving" ? "Saving" : projectPersistence.status === "saved" ? "Saved" : projectPersistence.status === "conflict" ? "Conflict saved for review" : projectPersistence.status === "error" ? "Save failed" : "Ready"}</strong>
-                    {projectPersistence.detail ? ` · ${projectPersistence.detail}` : ""}
-                  </span>
-                  <button type="button" onClick={projectPersistence.onCheckpoint} className="rounded border px-3 py-1.5 text-sm">Save checkpoint</button>
-                </section>
-              )}
+          </div>
+          {!branchSourceAbc ? (
+            <div className={studio.prerequisite}>
+              <span className={studio.eyebrow}>Before you begin</span>
+              <h3>Start with a harmony you love</h3>
+              <p>Your accompaniment follows the chords you choose. Complete the three harmony steps and select a validated result to begin.</p>
+              <Link className={buttonStyles({ variant: "primary" })} href={`/compose/${slug}/harmony`}>Choose your harmony →</Link>
+              <p className={studio.hint}>Your melody is available to preview here.</p>
+            </div>
+          ) : (
+            <>
+              {selectedInstrument === "piano" && <p className={studio.prerequisite}>Piano is available in the experimental mockups. This workspace creates guitar accompaniment.</p>}
+              <AccompanimentWorkflowWizard
+                mode="accompaniment"
+                presentation="studio"
+                sourceAbc={activeAbc}
+                branchSourceAbc={branchSourceAbc}
+                metadata={{ key: pipeline?.harmonization.key ?? "Unknown", scale: pipeline?.harmonization.scale ?? "Unknown", timeSignature: pipeline?.harmonization.timeSignature ?? "4/4" }}
+                workflow={ws.accompanimentWorkflow}
+                workflowSetup={ws.accompanimentWorkflowSetup}
+                onWorkflowChange={(accompanimentWorkflow) => updateState({ accompanimentWorkflow })}
+                onWorkflowSetupChange={(accompanimentWorkflowSetup) => updateState({ accompanimentWorkflowSetup })}
+              />
+              <div className={styles.nextStep}>
+                <p>{accompanimentReady ? "Review your selected layers when you are happy with the sound." : "Generate suggestions, then choose an accompaniment to hear it in your score."}</p>
+                {accompanimentReady && <Link className={buttonStyles({ variant: "primary" })} href={`/compose/${slug}/review`}>Review & export →</Link>}
+              </div>
             </>
           )}
-        />
-
-        {ws.generatedAccompaniment && !ws.guitarAccompanimentData && (
-          <section className="w-full rounded-2xl border border-amber-200 bg-amber-50 p-6 dark:border-amber-900/70 dark:bg-amber-950/30">
-            <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">Playability Validation Report</h2>
-            <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">⚠️ Max span exceeded in m.4. Converted to arpeggio when required.</p>
-          </section>
-        )}
+        </aside>
       </div>
     );
 }

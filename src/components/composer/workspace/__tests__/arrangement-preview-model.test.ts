@@ -53,15 +53,6 @@ K:C
 [V:Piano] [CEG]2 [DFA]2 [EGB]2 [FAC]2 |
 [V:GuitarSupport] C,2 G,2 E2 G2 |`;
 
-const djembeOnlySetup = {
-  style: "accompaniment" as const,
-  instruments: [
-    { id: "guitar-classic" as const, enabled: false, order: 0 },
-    { id: "indian-harmonium" as const, enabled: false, order: 1 },
-    { id: "djembe" as const, enabled: true, order: 2 },
-  ],
-};
-
 function makeOption(id: string, data: Record<string, unknown> = {}): AccompanimentWorkflowOption {
   return {
     id,
@@ -257,7 +248,7 @@ describe("arrangement preview model", () => {
 
 
 
-  it("adds selected Guitar Classic ABC to Accompaniment with optional TAB", () => {
+  it("adds selected Guitar ABC to Accompaniment with optional TAB", () => {
     let workflow = createAccompanimentWorkflowSession(sampleAbc);
     workflow = selectWorkflowStep(
       workflow,
@@ -278,7 +269,7 @@ describe("arrangement preview model", () => {
       workflow,
       "guitar-classic-abc-notation",
       makeOption("guitar-classic-abc", {
-        guitarClassicAbc: `V:GuitarSupport clef=treble-8 name="Guitar Classic Support"\n%%MIDI program 24\n| E,2 B,2 G2 z2 | B,4 z4 |`,
+        guitarClassicAbc: `V:GuitarSupport clef=treble-8 name="Guitar Support"\n%%MIDI program 25\n| E,2 B,2 G2 z2 | B,4 z4 |`,
       }),
     );
 
@@ -288,7 +279,7 @@ describe("arrangement preview model", () => {
     });
 
     expect(model.accompaniment.rawAbc).toContain("V:GuitarSupport");
-    expect(model.accompaniment.rawAbc).toContain("%%MIDI program 24");
+    expect(model.accompaniment.rawAbc).toContain("%%MIDI program 25");
     expect(model.accompaniment.visibleVoiceNames).toContain("GuitarSupport");
     expect(model.accompaniment.guitarTabEnabled).toBe(true);
     const renderOptions = model.getRenderOptionsFor(model.accompaniment.abc, ACCOMPANIMENT_PREVIEW_RENDER_OPTIONS) as {
@@ -356,34 +347,6 @@ V:Guitar clef=treble-8 name="Layer 2 Guitar Fingerstyle"
     expect(model.harmony.rawAbc).toContain("%%MIDI program 52");
     expect(model.harmony.rawAbc).toContain("%%MIDI beat 64 64 64 1");
     expect(model.harmony.rawAbc).toContain("%%MIDI chordvol 32");
-  });
-
-
-
-  it("applies Djembe support ABC after the Djembe branch completes in a Djembe-only accompaniment setup", () => {
-    let workflow = createAccompanimentWorkflowSession(sampleAbc, djembeOnlySetup);
-    workflow = selectWorkflowStep(
-      workflow,
-      "voice-leading-validation",
-      makeOption("validated-harmony", { validatedAbc: sampleAbc })
-    );
-    workflow = selectWorkflowStep(
-      workflow,
-      "djembe-groove-interlock",
-      makeOption("djembe-groove", { grooveProfile: "devotional", density: "moderate", bassSync: true })
-    );
-    workflow = selectWorkflowStep(
-      workflow,
-      "djembe-fill-validation",
-      makeOption("djembe-fills", { fillPolicy: "cadence-only", backbeatSlaps: true })
-    );
-
-    const model = buildModel({ workflow });
-
-    expect(model.accompaniment.appliedWorkflowStep?.id).toBe("djembe-fill-validation");
-    expect(model.accompaniment.rawAbc).toContain("V:Djembe");
-    expect(model.accompaniment.voiceNames).toContain("Djembe");
-    expect(model.accompaniment.rawAbc).toContain("ABCNotation applied after Step 10: Djembe Fill & Transient Validation");
   });
 
   it("derives guitar tablature render options from score order", () => {

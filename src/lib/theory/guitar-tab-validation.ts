@@ -484,7 +484,7 @@ export function buildValidGuitarTabToolSchema() {
           },
           profileId: {
             type: "string",
-            enum: ["guitar-classic", "standard-six-string"],
+            enum: ["guitar-acoustic", "guitar-classic", "standard-six-string"],
             description: "Physical guitar profile used for fret range and left-hand validation.",
           },
           voicingProfileId: {

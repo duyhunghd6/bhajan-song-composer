@@ -128,7 +128,7 @@ function prepareEventsForSource(
   return { events: prepared };
 }
 
-/** Build the non-solo Guitar Classic support voice from selected physical events. */
+/** Build the non-solo acoustic steel-string Guitar support voice from selected physical events. */
 export function convertGuitarClassicEventsToAbc(
   sourceAbc: string,
   events: GuitarTabEvent[],
@@ -139,7 +139,7 @@ export function convertGuitarClassicEventsToAbc(
   if ("error" in prepared) return migrationFailure(prepared.error);
 
   const validation = validateGuitarTab(prepared.events, {
-    guitarProfile: "guitar-classic",
+    guitarProfile: "guitar-acoustic",
     requireScientificPitch: true,
     requireRenderableTiming: true,
   });
@@ -161,7 +161,7 @@ export function convertGuitarClassicEventsToAbc(
     }
     for (let index = start; index < start + duration; index += 1) {
       if (measure.grid[index]?.tablature?.some((tab) => tab.string === event.string)) {
-        errors.push(`${event.note} overlaps another Guitar Classic event on string ${event.string}.`);
+        errors.push(`${event.note} overlaps another Guitar event on string ${event.string}.`);
         break;
       }
     }
@@ -183,7 +183,7 @@ export function convertGuitarClassicEventsToAbc(
     lineMeasures.map((measure) => renderedByMeasure.get(measure) ?? ""), lineMeasures,
   ));
   return {
-    abc: ['V:GuitarSupport clef=treble-8 name="Guitar Classic Support" stem=down', "%%MIDI program 24", ...lines].join("\n"),
+    abc: ['V:GuitarSupport clef=treble-8 name="Guitar Support" stem=down', "%%MIDI program 25", ...lines].join("\n"),
     errors: [],
     renderedEventCount: prepared.events.length,
     measureCount: measures.length,

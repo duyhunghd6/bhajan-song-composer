@@ -1,4 +1,4 @@
-export const ACCOMPANIMENT_WORKFLOW_VERSION = 8;
+export const ACCOMPANIMENT_WORKFLOW_VERSION = 9;
 
 /**
  * Step 4 selects the deterministic right-hand realization used by Step 6.
@@ -57,26 +57,14 @@ export const ACCOMPANIMENT_WORKFLOW_GUITAR_STEP_IDS = [
   "guitar-classic-abc-notation",
 ] as const;
 
-export const ACCOMPANIMENT_WORKFLOW_HARMONIUM_STEP_IDS = [
-  "harmonium-drone-register",
-  "harmonium-chord-voicing-validation",
-] as const;
-
-export const ACCOMPANIMENT_WORKFLOW_DJEMBE_STEP_IDS = [
-  "djembe-groove-interlock",
-  "djembe-fill-validation",
-] as const;
-
 export const ACCOMPANIMENT_WORKFLOW_STEP_IDS = [
   ...ACCOMPANIMENT_WORKFLOW_SHARED_STEP_IDS,
   ...ACCOMPANIMENT_WORKFLOW_GUITAR_STEP_IDS,
-  ...ACCOMPANIMENT_WORKFLOW_HARMONIUM_STEP_IDS,
-  ...ACCOMPANIMENT_WORKFLOW_DJEMBE_STEP_IDS,
 ] as const;
 
 export type AccompanimentWorkflowStepId = (typeof ACCOMPANIMENT_WORKFLOW_STEP_IDS)[number];
-export type AccompanimentWorkflowScope = "shared" | "guitar" | "harmonium" | "djembe";
-export type AccompanimentInstrumentId = "guitar-classic" | "indian-harmonium" | "djembe";
+export type AccompanimentWorkflowScope = "shared" | "guitar";
+export type AccompanimentInstrumentId = "guitar-classic";
 export type AccompanimentStyleId = "accompaniment";
 
 export interface AccompanimentInstrumentSelection {
@@ -92,9 +80,7 @@ export interface AccompanimentWorkflowSetup {
 }
 
 export const ACCOMPANIMENT_INSTRUMENT_LABELS: Record<AccompanimentInstrumentId, string> = {
-  "guitar-classic": "Guitar Classic",
-  "indian-harmonium": "Indian Harmonium",
-  djembe: "Djembe",
+  "guitar-classic": "Guitar",
 };
 
 export const ACCOMPANIMENT_GUITAR_TAB_VALIDATION_STEP_IDS = [
@@ -217,20 +203,14 @@ export interface AccompanimentWorkflowStepDefinition {
 const SHARED_DEPENDENCIES = [...ACCOMPANIMENT_WORKFLOW_SHARED_STEP_IDS] as const;
 
 export const ACCOMPANIMENT_WORKFLOW_STEPS: AccompanimentWorkflowStepDefinition[] = [
-  { id: "key-beats", index: 1, label: "Key, Scale, Cadence & Strong Beats", shortLabel: "Key & Beats", scope: "shared", description: "Analyze key/scale/raga context, phrase endings, cadence targets, and choose the strong-beat emphasis direction.", dependencies: [], outputFocus: ["detected key/scale", "cadence measures", "phrase boundary notes", "strong-beat emphasis direction"], theoryReference: "THEORY.md §1, §3, §4, and §5." },
+  { id: "key-beats", index: 1, label: "Key, Scale, Cadence & Strong Beats", shortLabel: "Key & Beats", scope: "shared", description: "Read the ABC key and meter, locate metric accents and possible phrase endings, and choose strong-beat emphasis.", dependencies: [], outputFocus: ["detected key/scale", "cadence measures", "phrase boundary notes", "strong-beat emphasis direction"], theoryReference: "THEORY.md §1, §3, §4, and §5." },
   { id: "chord-roles-progression", index: 2, label: "Chord Roles & Progression", shortLabel: "Chords", scope: "shared", description: "Map strong melody notes to chord-tone roles, select a chord progression, and produce harmonized ABC.", dependencies: ["key-beats"], outputFocus: ["chord-tone roles", "progression", "roman numerals", "harmonized ABC", "cadence support"], theoryReference: "THEORY.md §2, §3, §6.4 Steps 2–6." },
-  { id: "voice-leading-validation", index: 3, label: "Voice-leading & Harmonized ABC Validation", shortLabel: "Validate Harmony", scope: "shared", description: "Smooth chord transitions, preserve the melody exactly, and validate beat counts and pitch alignment.", dependencies: ["chord-roles-progression"], outputFocus: ["final harmonized ABC", "voice-leading fixes", "validation notes", "bass root map"], theoryReference: "THEORY.md §3.3 voice leading and §6.2 validation." },
-  { id: "guitar-comping-profile", index: 4, label: "Guitar Classic Comping Profile", shortLabel: "Guitar Profile", scope: "guitar", description: "Choose a singer-support PIMA, pinch, or strum profile with a representative physically validated sample.", dependencies: [...SHARED_DEPENDENCIES], outputFocus: ["guitar style", "picking profile", "treble-led singer-support policy", "representative one-guitar validation sample"], theoryReference: "ARRANGEMENT01-GUITAR.md §2.1–2.4 and §4 one-guitar validation checklist." },
-  { id: "guitar-voicing-bass", index: 5, label: "Guitar Classic Voicing & Bass Plan", shortLabel: "Guitar Voicing", scope: "guitar", description: "Plan open/barre voicings and bounded root/fifth or transition anchors that one guitarist can fret; Step 6 realizes the full texture.", dependencies: ["guitar-comping-profile"], outputFocus: ["voicing map", "structural bass anchors", "bounded transition notes", "meter-grid anchor durations", "fret/register warnings", "one-left-hand validation"], theoryReference: "ARRANGEMENT01-GUITAR.md §2.2–2.4 and §4 validation checklist." },
-  { id: "guitar-classic-abc-notation", index: 6, label: "Guitar Classic ABCNotation & Music Sheet", shortLabel: "Guitar ABC", scope: "guitar", description: "Deterministically convert the selected validated Guitar Classic voicing events into a standard-notation support voice for the Music Sheet.", dependencies: ["guitar-voicing-bass"], outputFocus: ["Guitar Classic support ABC", "measure-aligned durations", "standard notation playback", "conversion validation"], theoryReference: "ARRANGEMENT01-GUITAR.md §2.2 and ABC tablature/string-mapping rules." },
-  { id: "harmonium-drone-register", index: 7, label: "Harmonium Drone & Register Plan", shortLabel: "Harmonium Drone", scope: "harmonium", description: "Choose Indian Harmonium drone, register, bellows-like sustain, and root/fifth anchoring strategy.", dependencies: [...SHARED_DEPENDENCIES], outputFocus: ["drone tones", "register lane", "sustain density", "melody-yield strategy"], theoryReference: "THEORY.md §3 harmony support and devotional harmonium MIDI guidance." },
-  { id: "harmonium-chord-voicing-validation", index: 8, label: "Harmonium Chord Voicing & Validation", shortLabel: "Harmonium Voice", scope: "harmonium", description: "Validate harmonium chordal support, root-fifth drones, and sustained devotional comping without covering the melody.", dependencies: ["harmonium-drone-register"], outputFocus: ["voicing map", "sustain windows", "collision warnings", "final harmonium profile id"], theoryReference: "THEORY.md §3.3 voice leading and MIDI program 20 harmonium mapping." },
-  { id: "djembe-groove-interlock", index: 9, label: "Djembe Groove Interlock", shortLabel: "Djembe Groove", scope: "djembe", description: "Choose Djembe groove profile and align Bass/Tone/Slap strokes with accompaniment transients.", dependencies: [...SHARED_DEPENDENCIES], outputFocus: ["bass/tone/slap palette", "bass transient sync", "subdivision weave", "density guardrails"], theoryReference: "ARRANGEMENT03-ENSEMBLE.md §2.1–2.4 Djembe interlock rules." },
-  { id: "djembe-fill-validation", index: 10, label: "Djembe Fill & Transient Validation", shortLabel: "Djembe Fills", scope: "djembe", description: "Choose Djembe fill policy, backbeat/slap behavior, and transient conflict limits.", dependencies: ["djembe-groove-interlock"], outputFocus: ["fill density", "backbeat policy", "conflict limits", "final djembe profile id"], theoryReference: "ARRANGEMENT03-ENSEMBLE.md §2.3–2.5 and final conflict review hierarchy." },
+  { id: "voice-leading-validation", index: 3, label: "Harmonized ABC Validation", shortLabel: "Validate Harmony", scope: "shared", description: "Check the selected progression for melody preservation, bar durations, chord coverage and strong-beat compatibility.", dependencies: ["chord-roles-progression"], outputFocus: ["final harmonized ABC", "melody preservation", "validation notes", "chord coverage"], theoryReference: "THEORY.md §3.3 voice leading and §6.2 validation." },
+  { id: "guitar-comping-profile", index: 4, label: "Guitar Comping Profile", shortLabel: "Guitar Profile", scope: "guitar", description: "Choose a singer-support PIMA, pinch, or strum profile for the default acoustic steel-string guitar, with a representative physically validated sample.", dependencies: [...SHARED_DEPENDENCIES], outputFocus: ["guitar style", "picking profile", "treble-led singer-support policy", "representative one-guitar validation sample"], theoryReference: "ARRANGEMENT01-GUITAR.md §2.1–2.4 and §4 one-guitar validation checklist." },
+  { id: "guitar-voicing-bass", index: 5, label: "Guitar Voicing & Bass Plan", shortLabel: "Guitar Voicing", scope: "guitar", description: "Plan acoustic steel-string open/barre voicings and bounded root/fifth or transition anchors that one guitarist can fret; Step 6 realizes the full texture.", dependencies: ["guitar-comping-profile"], outputFocus: ["voicing map", "structural bass anchors", "bounded transition notes", "meter-grid anchor durations", "fret/register warnings", "one-left-hand validation"], theoryReference: "ARRANGEMENT01-GUITAR.md §2.2–2.4 and §4 validation checklist." },
+  { id: "guitar-classic-abc-notation", index: 6, label: "Guitar ABCNotation & Music Sheet", shortLabel: "Guitar ABC", scope: "guitar", description: "Deterministically convert the selected validated acoustic steel-string Guitar voicing events into a standard-notation support voice for the Music Sheet.", dependencies: ["guitar-voicing-bass"], outputFocus: ["Guitar support ABC", "measure-aligned durations", "standard notation playback", "conversion validation"], theoryReference: "ARRANGEMENT01-GUITAR.md §2.2 and ABC tablature/string-mapping rules." },
 ];
 
 export const ACCOMPANIMENT_WORKFLOW_BRANCH_STEP_IDS: Record<Exclude<AccompanimentWorkflowScope, "shared">, readonly AccompanimentWorkflowStepId[]> = {
   guitar: ACCOMPANIMENT_WORKFLOW_GUITAR_STEP_IDS,
-  harmonium: ACCOMPANIMENT_WORKFLOW_HARMONIUM_STEP_IDS,
-  djembe: ACCOMPANIMENT_WORKFLOW_DJEMBE_STEP_IDS,
 };

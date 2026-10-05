@@ -1,0 +1,26 @@
+{
+  "id": "fixture-malformed-tool-json-v1",
+  "object": "chat.completion",
+  "created": 1773440008,
+  "model": "gpt-4o",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_malformed_01",
+            "type": "function",
+            "function": {
+              "name": "unauthorized_generation_tool",
+              "arguments": "{ packId: invalid_unquoted_token, options: [ unterminated"
+            }
+          }
+        ]
+      },
+      "finish_reason": "tool_calls"
+    }
+  ]
+}

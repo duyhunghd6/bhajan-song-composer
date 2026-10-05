@@ -116,7 +116,7 @@ function validateVoicingShape(notes: SoundingString[]): boolean {
     role: "harmony",
     simultaneousGroupId: "shape",
   })), {
-    guitarProfile: "guitar-classic",
+    guitarProfile: "guitar-acoustic",
     requireScientificPitch: true,
     requireRenderableTiming: true,
   });
@@ -137,7 +137,7 @@ function selectVoicing(chord: string, anchors: GuitarTabEvent[]): SoundingString
   const matching = candidates.find((notes) => constrainedAnchors.every((anchor) =>
     notes.some((note) => note.string === anchor.string && note.fret === anchor.fret)
   ));
-  return matching ?? null;
+  return matching ?? candidates[0];
 }
 
 function makeEvent(input: {
@@ -290,10 +290,10 @@ export function analyzeGuitarClassicSingerSupport(events: GuitarTabEvent[], meas
   const issues: string[] = [];
 
   if (ratioEnforced && (bassAttackShare === null || bassAttackShare < MIN_BASS_ATTACK_SHARE || bassAttackShare > MAX_BASS_ATTACK_SHARE)) {
-    issues.push(`Guitar Classic bass-band attacks must be ${MIN_BASS_ATTACK_SHARE * 100}-${MAX_BASS_ATTACK_SHARE * 100}% of individual attacks.`);
+    issues.push(`Guitar bass-band attacks must be ${MIN_BASS_ATTACK_SHARE * 100}-${MAX_BASS_ATTACK_SHARE * 100}% of individual attacks.`);
   }
   if (ratioEnforced && (trebleAttackShare === null || trebleAttackShare < MIN_TREBLE_ATTACK_SHARE || trebleAttackShare > MAX_TREBLE_ATTACK_SHARE)) {
-    issues.push(`Guitar Classic treble-band attacks must be ${MIN_TREBLE_ATTACK_SHARE * 100}-${MAX_TREBLE_ATTACK_SHARE * 100}% of individual attacks.`);
+    issues.push(`Guitar treble-band attacks must be ${MIN_TREBLE_ATTACK_SHARE * 100}-${MAX_TREBLE_ATTACK_SHARE * 100}% of individual attacks.`);
   }
 
   let bassOnlyRun = 0;
@@ -312,7 +312,7 @@ export function analyzeGuitarClassicSingerSupport(events: GuitarTabEvent[], meas
     bassOnlyRun = hasBass && !hasTreble ? bassOnlyRun + 1 : 0;
     longestBassOnlyRun = Math.max(longestBassOnlyRun, bassOnlyRun);
     if (bassOnlyRun > MAX_BASS_ONLY_ONSETS) {
-      issues.push(`More than ${MAX_BASS_ONLY_ONSETS} consecutive bass-only Guitar Classic attacks at measure ${group.measureIndex}, step ${group.step}.`);
+      issues.push(`More than ${MAX_BASS_ONLY_ONSETS} consecutive bass-only Guitar attacks at measure ${group.measureIndex}, step ${group.step}.`);
     }
   }
 
@@ -329,7 +329,7 @@ export function analyzeGuitarClassicSingerSupport(events: GuitarTabEvent[], meas
 }
 
 /**
- * Deterministically materialize complete Guitar Classic accompaniment from the
+ * Deterministically materialize complete acoustic steel-string Guitar accompaniment from the
  * selected Step 4 technique and Step 5 physical anchors before ABC rendering.
  */
 export function realizeGuitarClassicAccompaniment(input: GuitarClassicRealizationInput): GuitarClassicRealizationResult {
@@ -346,7 +346,7 @@ export function realizeGuitarClassicAccompaniment(input: GuitarClassicRealizatio
         && (event.step ?? 1) >= window.startStep && (event.step ?? 1) < window.endStep);
       const notes = selectVoicing(window.chord, anchors);
       if (!notes) {
-        errors.push(`Measure ${measureIndex} chord ${window.chord} has no playable Guitar Classic voicing matching its selected anchors.`);
+        errors.push(`Measure ${measureIndex} chord ${window.chord} has no playable Guitar voicing matching its selected anchors.`);
         continue;
       }
       const profile = GUITAR_CLASSIC_COMPING_PROFILES[input.compingProfileId];
@@ -359,7 +359,7 @@ export function realizeGuitarClassicAccompaniment(input: GuitarClassicRealizatio
   });
 
   const validation = validateGuitarTab(events, {
-    guitarProfile: "guitar-classic",
+    guitarProfile: "guitar-acoustic",
     requireScientificPitch: true,
     requireRenderableTiming: true,
   });

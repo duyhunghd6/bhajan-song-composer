@@ -22,8 +22,7 @@ function beatIndicatorWeight(value: string): number {
 }
 
 function isBeatIndicatorNode(node: Element): boolean {
-  // Disable beat indicator processing so they render as normal lyrics text.
-  return false;
+  return beatIndicatorWeight((node.textContent ?? "").trim()) > 0;
 }
 
 function beatIndicatorDedupeKey(node: Element): string {

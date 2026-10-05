@@ -63,7 +63,7 @@ The normal order is source facts → meter-compatible profile shortlist → sect
 ## 3. Shared harmony steps (Steps 1–3)
 <!-- beads-id: br-guide-accompaniment-workflow-s03 -->
 
-These steps are shared with `/compose/:slug/harmony` and are always enabled.
+These steps are shared with `/compose/:slug/harmony` and are always enabled. All three run locally through `src/lib/theory/harmony/workflow.ts`; they never invoke the LLM transport or require AI credentials. The wizard hides prompt input and LLM activity for these steps. Each result still requires explicit selection; lyric chords do not bypass Step 2 selection.
 
 On `/compose/:slug/harmony` the shared steps are expected to stay small and reviewable, in this order:
 
@@ -78,23 +78,36 @@ Harmony work preserves the source melody unless the task explicitly asks for mel
 ### Step 1 — `key-beats`
 <!-- beads-id: br-guide-accompaniment-workflow-s04 -->
 
-Confirm key, scale/raga context, phrase endings, cadence targets, and strong-beat emphasis.
+Confirm the explicit ABC key/mode and meter, inspect exact metric accents and pickup timing, and choose primary/secondary pulses or downbeat emphasis. Phrase-end candidates are the final bar and bars ending in rests; these are heuristics, not inferred raga or tala identities. The ABC key is authoritative.
 
 - In 4/4, beat 1 is very strong, beat 3 is medium, beats 2 and 4 are weak. Melody notes on strong beats should be chord tones (root, 3rd, 5th); weak beats may carry passing, neighbor, or suspension tones.
 - Example for a song in `K:Em`: E natural minor (E–F#–G–A–B–C–D), relative major G, diatonic chords i Em, ii° F#dim, III G, iv Am, v Bm, VI C, VII D. Typical cadences: `Am → Em` (iv–i), `D → Em` (VII–i), `Bm → Em` (v–i).
+
+Harmony automatically processes **Strong Beats** and **Missing Chord** through their Layers & volume checkboxes; there are no separate analysis/fill buttons. `src/lib/theory/harmony/metric-timeline.ts` parses the Melody voice (first voice when unnamed) with abcjs into JSON measures/events, retaining original character offsets and whole-note timing. It accounts for `L:`, rests, tuplets, broken rhythm, bracket pitches, key/bar accidentals, ties, line continuations and meter changes at bar boundaries. An initial short bar is treated as a right-aligned pickup. The analysis samples sounding pitches, including sustains, at metric targets: 1/3 in 4/4, 1 in triple/simple duple, each dotted pulse in compound meter, and explicit additive group starts. Ungrouped odd meters use the downbeat only; free/unsupported meters and mid-bar key/meter changes require manual input. Beat labels count denominator units (6/8 targets are 1 and 4). These are metric accents, not inferred performance accents or a tala detector.
+
+`src/lib/theory/harmony/auto-chords.ts` ranks diatonic triads by strong-beat pitch compatibility and duration-weighted melody coverage, with small tonic, IV/V and prior-chord preferences suitable for the devotional context. It retains three ranked alternatives in the result for callers. One annotation is inserted at the first event of each chordless sounding measure; every existing character, chord (including N.C.), lyric, repeat and other voice stays unchanged. Silent bars and irregular interior/overfull bars are skipped with a visible explanation. A short final bar is accepted as a possible pickup complement. Existing symbols anywhere in a bar protect that whole bar; chord carry does not count as an explicit symbol in a later bar. No automatic key inference overrides `K:`.
+
+The left sidebar contains only Layers & volume. **Strong Beats** adds an Accompaniment-compatible `w:` row of black dots: ⬤ strong, ● medium, • weak. It does not append beat numbers or invent note attacks for held notes. **Missing Chord** inserts real suggested chord symbols into empty measures, so score diagrams and guitar playback use the added harmony. These two switches are independent and off by default; unchecking reconstructs the corresponding projection from the immutable source, removing only the optional additions. The ABC notation panel displays exactly the ABC passed to Music Staff Playback. `src/lib/theory/harmony/analysis-preview.ts` owns the projection and reports skipped bars/unsupported notation.
+
+`src/lib/theory/harmony/time-grid.ts` stores analysis in a derived Harmony TimeGrid using the existing `TimeSliceMeasure[]` / `TimeSliceGridStep` shape: four steps per notated beat, with `grid[].weight` values ⬤, ●, * (weak), or null (subdivision). Weights are present through rests/sustains as metric facts even when their visual layer is off. The beat-lyric renderer samples those weights at note onsets and maps weak * to •. Exact events are retained beside the grid, including polyphonic pitches and source character offsets; sub-grid tuplets produce a sampling diagnostic instead of silently changing source rhythm. A **TimeGrid JSON** disclosure on the right exposes the current derived object. It is recomputed from source/layers in memory, not a second persisted editable Guitar document.
+
+Checkbox projections do not select/publish Step 3 or invalidate branch sources. Explicit score chord edits still use the existing manual draft/Undo/Redo/validation gate. Guitar generation continues to consume only selected Step 3 and compile its canonical editable TimeGrid; Harmony’s analysis grid is not a replacement for that authority. The older workflow candidate analyzer remains separate.
+
+Theory references: [ABC 2.1](https://abcnotation.com/wiki/abc:standard:v2.1) defines durations, tuplets and chord annotations; [Open Music Theory — meter](https://openmusictheory.github.io/meter.html) distinguishes simple and compound grouping. Chord ranking weights are an application heuristic, not a uniquely correct harmonization.
 
 ### Step 2 — `chord-roles-progression`
 <!-- beads-id: br-guide-accompaniment-workflow-s05 -->
 
 Map each strong-beat melody note to possible chord-tone roles, choose a progression, and produce harmonized ABC.
 
-- Embedded `[Chord]` symbols in lyric `w:` lines are treated as user-supplied progression context.
+- Embedded `[Chord]` symbols in lyric `w:` lines are aligned to notes by the ABC parser and inserted as inline annotations. Existing inline chords take precedence at the same event.
+- A bounded beam search ranks up to three distinct complete progressions using duration-weighted melody coverage, selected metric emphasis, tonic cadence preference and common-tone continuity. Existing chords and N.C. are retained. Unsupported modes and irregular interior bars produce actionable errors. Identical inputs produce identical options; a fully supplied progression produces one result.
 - For devotional bhajans in Em, the simplest candidate (`Em → Am → D → Em`, i–iv–VII–i) is usually preferred: meditative, and every chord has an open guitar voicing. Alternatives such as `Em → G → Am → D` or `Em → C → G → D` are offered as further candidates.
 
 ### Step 3 — `voice-leading-validation`
 <!-- beads-id: br-guide-accompaniment-workflow-s06 -->
 
-Smooth chord transitions and validate the harmonized ABC: common tones stay in place, other voices move by the shortest path, no parallel fifths/octaves, the melody is preserved exactly, and beat counts/pitch alignment are validated. The user-selected Step 3 ABC becomes the downstream source.
+Validate the exact selected Step 2 ABC against the original melody timeline: pitches, durations, key, meter and active chord coverage must match. Non-chord tones on strong beats are reported as musical warnings. Chord symbols do not specify realized voices, so parallel fifths/octaves and physical voicing checks belong to the instrument stages; Step 3 does not claim to validate unspecified voices. The user-selected Step 3 ABC becomes the downstream source.
 
 ## 4. Guitar Classic branch (Steps 4–6)
 <!-- beads-id: br-guide-accompaniment-workflow-s07 -->
@@ -166,7 +179,7 @@ Deterministically materialize the selected Step 4 profile and Step 5 anchors, to
 - Preserve the melody ABC exactly unless the specific step allows chord annotations.
 - Do not collapse small steps into one opaque generation unless the user explicitly requests it.
 - Keep generated ABC previewable with `AbcjsPlaybackController`.
-- The accompaniment score’s chord names and SVG diagrams open a guitar-shape picker. A choice applies to its exact measure/beat chord window; “Apply to every” writes a separate override for each matching occurrence. These choices use the existing source-bound `voicingOverrides` persistence and become inactive when the harmony source changes.
+- The Harmony and Accompaniment scores’ chord names and SVG diagrams open a guitar-shape picker. A choice applies to its exact measure/beat chord window; “Apply to every” writes a separate override for each matching occurrence. Both pages use the same canonical harmony source fingerprint (the melody before Step 3 is selected), so mixer changes do not invalidate choices and the same source shares choices across pages. These choices use the existing source-bound `voicingOverrides` persistence and become inactive when the harmony source changes.
 - `src/lib/theory/guitar-chord-score.ts` derives sounding pitches from standard tuning plus frets, excluding muted strings. Playback disables abcjs’s automatic chord track and uses nylon-guitar samples. A score without a Guitar voice receives a chord track; an existing Guitar support voice retains its attack rhythm with pitches restricted to the selected shape. Audition uses the same shape pitches. These are accompaniment playback projections; canonical ABC/Practice publication still follows the existing export source graph. The player’s PDF snapshot includes the displayed diagrams.
 - For multi-instrument ABC, preserve Melody visual line breaks and group by staff system: `[V:Melody]` line N, then each Guitar/Harmonium/Djembe line N for the same measure range, before moving to line N+1.
 - Chord-tone validation (warning-level, non-blocking): generated support notes are expected to belong to the chord annotated for that measure under the current key signature. The chord-tone reference table is injected into the prompt and `validateGuitarVoiceChordTones()` in `src/lib/theory/chord-tone-reference.ts` reports out-of-chord notes as warnings rather than rejecting the step result (see [Guitar Arpeggiation Theory § Phần VI](../theory/guitar-arpeggiation-theory.md)).

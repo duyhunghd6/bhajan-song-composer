@@ -1,0 +1,8 @@
+{
+  "error": {
+    "code": "provider_timeout",
+    "message": "Gateway timeout: upstream LLM provider did not respond within 30000ms deadline",
+    "status": 504,
+    "retryable": true
+  }
+}

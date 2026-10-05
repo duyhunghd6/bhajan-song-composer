@@ -75,3 +75,16 @@ Module roles:
 - Export (`src/components/composer/workspace/export/ExportStep.tsx` → `src/app/actions/publish-arrangement.ts`) is the only durable catalogue-publication seam. The user explicitly selects `melody`, `harmony`, `accompaniment`, and/or `guitar-fingerstyle` layers; publication upserts the selected ABC files and matching `abcNotations` metadata while preserving the song Markdown body.
 - `/practice/:slug` reads published catalogue notation only and must never overlay Composer localStorage drafts.
 - Decision record: [ADR 0001](../adr/0001-composer-publication-and-practice.md).
+
+## 7. Harmony Score Workspace
+<!-- beads-id: br-guide-composer-source-flow-s07 -->
+
+The Harmony score has Explore and Edit modes. Plain left-drag draws a selection rectangle for notes and chords, including when the drag starts on a note. A click on a note or chord name selects one object; a plain click anywhere inside a guitar diagram, including whitespace, opens its shape picker. Shift-click toggles selection and Shift-drag adds a region. Chord text and its guitar diagram represent one selected chord; plain diagram clicks bypass rectangle selection so the picker opens reliably. Escape cancels an active rectangle before clearing an existing selection. Selection never changes musical data or enters Undo history.
+
+Command-drag (Control-drag on Windows/Linux), Space-drag, middle-button pan and Hand mode move the viewport. Scroll, Shift-scroll and pointer-anchored Ctrl/Command-wheel zoom remain view-only. Focus mode expands the score surface. A short Space tap retains playback behavior; playback controls are outside the zoom transform. Double-click or Enter opens the selected chord's inspector; right-click opens its contextual actions.
+
+In Edit mode, Option/Alt-drag vertically changes a note's pitch; an unmodified drag only selects. Note selection, context actions and pitch dragging use the rendered element's exact source occurrence. An edit must roundtrip to canonical melody characters and preserve the surrounding musical body; approximate source-selection offsets alone never authorize a write. Pitch commands preserve rhythm, apply key/bar accidentals and preserve following notes' sounding pitches. Simple tied chains change together. Unsupported compound constructs produce an actionable error instead of a partial edit.
+
+Each completed gesture or context action is one undoable transaction. Melody edits invalidate Harmony and both dependent branches. Undo/Redo restores the melody, workspace decisions and the corresponding persisted Fingerstyle cache. Viewport changes do not enter musical history. History is scoped to the mounted workspace; committed melody and source-bound manual chord drafts survive reload.
+
+Chord-symbol edits are staged as a manual draft bound to both melody and the selected harmony source. They do not silently replace selected Step 3. After Steps 1–2 are selected, **Validate & select manual harmony** checks exact melody preservation, measure-line layout and the shared Step 3 active-chord timeline contract, then selects a new manual Step 3 candidate and invalidates downstream branches. This deterministic gate is not an additional algorithmic proof of voice-leading quality. Guitar shape changes continue to use source-bound voicing overrides.

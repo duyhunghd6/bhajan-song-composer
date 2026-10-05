@@ -22,6 +22,8 @@ selected voice-leading-validation ABC
   → render/play Guitar ABC with abcjs
 ```
 
+Harmony also derives a read-only analysis TimeGrid in `src/lib/theory/harmony/time-grid.ts`, reusing `TimeSliceMeasure[]` for metric weights and optional chord projections. Its object retains an exact event timeline for non-grid rhythms and is inspectable as TimeGrid JSON. This derived view is recomputed in memory from the current source/layers; it is not persisted as, or substituted for, the editable Guitar document. Downstream generation still compiles the explicitly selected Harmony Step 3 source.
+
 The authority boundary is deliberate:
 
 | Representation | Purpose | Editable source of truth? |
@@ -216,6 +218,13 @@ The current persisted event type has physical fields (`string`, `fret`, `finger`
 <!-- beads-id: br-guide-timegrid-conversion-s09 -->
 
 The source melody remains independent of its guitar realization. Adding bass or fills must not change its musical pitch or timing.
+
+### Chord-context carry-forward
+<!-- beads-id: br-guide-timegrid-conversion-s09a -->
+
+Quoted harmonic chord symbols in source ABC are lead-sheet events, not a requirement to repeat a label at every barline. During compilation, an inline chord takes effect at its annotated grid step and remains the active source chord through later steps and chordless measures, until a later inline chord replaces it. A per-measure progression value is only a fallback before source ABC establishes an active inline chord; absent both, the legacy `C` fallback remains available for incomplete source material.
+
+For example, `"Em" E3 B,3 B,2 | E3 "D" E3 D D | E3 B,3 B,2 |` compiles as `Em` for the opening portion of the second measure, `D` from its annotated onset, and `D` throughout the chordless third measure. This active context is source-locked like other chord facts.
 
 | Field or event | Editable in an arrangement edit? | Rule |
 |---|---:|---|

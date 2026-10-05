@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/Button";
 import { useMemo, useState } from "react";
 
 import {
@@ -122,8 +123,8 @@ export default function WorkflowSetupPanel({
               </label>
               <div className="flex items-center gap-1">
                 <span className="hidden cursor-grab select-none rounded-lg border border-zinc-200 px-2 py-1 text-xs text-zinc-500 dark:border-zinc-800 sm:inline" aria-hidden="true">↕</span>
-                <button type="button" disabled={disabled || index === 0} onClick={() => reorder(index, index - 1)} className="rounded-lg border border-zinc-200 px-2 py-1 text-xs font-bold text-zinc-600 disabled:opacity-40 dark:border-zinc-800 dark:text-zinc-300">↑</button>
-                <button type="button" disabled={disabled || index === ordered.length - 1} onClick={() => reorder(index, index + 1)} className="rounded-lg border border-zinc-200 px-2 py-1 text-xs font-bold text-zinc-600 disabled:opacity-40 dark:border-zinc-800 dark:text-zinc-300">↓</button>
+                <Button variant="ghost" size="sm" iconOnly aria-label={`Move ${ACCOMPANIMENT_INSTRUMENT_LABELS[instrument.id]} up`} type="button" disabled={disabled || index === 0} onClick={() => reorder(index, index - 1)} >↑</Button>
+                <Button variant="ghost" size="sm" iconOnly aria-label={`Move ${ACCOMPANIMENT_INSTRUMENT_LABELS[instrument.id]} down`} type="button" disabled={disabled || index === ordered.length - 1} onClick={() => reorder(index, index + 1)} >↓</Button>
               </div>
             </div>
           </li>
@@ -134,9 +135,9 @@ export default function WorkflowSetupPanel({
         <div className="rounded-xl border border-amber-300 bg-white p-3 text-xs text-amber-800 dark:border-amber-800 dark:bg-zinc-950 dark:text-amber-300">
           <p className="font-semibold">Setup changed after this workflow started.</p>
           <p className="mt-1 leading-5">Existing decisions are preserved until you reset, so generated steps do not silently change underneath you.</p>
-          <button type="button" onClick={onResetWithSetup} className="mt-2 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-amber-600">
+          <Button variant="danger" size="sm" type="button" onClick={onResetWithSetup} className="mt-2">
             Reset workflow with this setup
-          </button>
+          </Button>
         </div>
       )}
     </section>

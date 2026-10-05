@@ -50,7 +50,10 @@ export function useScoreSourceSelection({
     const targets = current ? resolveScoreTargets(indexRef.current, text, current) : [];
     highlightedRef.current = applySourceHighlight(highlightedRef.current, targets);
     const first = highlightedRef.current[0];
-    if (first && viewportRef.current) revealInViewport(viewportRef.current, first);
+    if (first && viewportRef.current) {
+      const viewport = viewportRef.current.closest<HTMLElement>("[data-score-scroll-viewport]") ?? viewportRef.current;
+      revealInViewport(viewport, first);
+    }
   }, [viewportRef]);
 
   useEffect(() => {

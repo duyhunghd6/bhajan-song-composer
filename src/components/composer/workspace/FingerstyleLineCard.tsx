@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/Button";
 import { useState, useMemo, useEffect, useCallback } from "react";
 import AbcjsPlaybackController from "@/components/music-sheet/AbcjsPlaybackController";
 import { prepareAbcjsRenderInput } from "@/components/music-sheet/abcjs-playback/render-input";
@@ -29,6 +30,7 @@ import { getComposerFingerstyleDiagnosticsStorageKey } from "./storage";
 import type { FingerstyleLineGenerationClaim } from "./fingerstyle-line-measures";
 
 interface FingerstyleLineCardProps {
+  compact?: boolean;
   songSlug: string;
   sourceFingerprint: string;
   lineIndex: number;
@@ -64,10 +66,10 @@ function CopyButton({ label, text }: { label: string; text: string }) {
     setTimeout(() => setCopied(false), 2000);
   }, [text]);
   return (
-    <button
+    <Button variant="ghost" size="sm"
       type="button"
       onClick={handleCopy}
-      className="flex items-center gap-1 text-[10px] text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded cursor-pointer"
+
     >
       {copied ? (
         <span className="text-emerald-600 dark:text-emerald-400 font-medium">Copied!</span>
@@ -77,13 +79,14 @@ function CopyButton({ label, text }: { label: string; text: string }) {
           <span>{label}</span>
         </>
       )}
-    </button>
+    </Button>
   );
 }
 
 // ── Main line card ─────────────────────────────────────────────────────
 
 export function FingerstyleLineCard({
+  compact = false,
   songSlug,
   sourceFingerprint,
   lineIndex,
@@ -341,7 +344,7 @@ export function FingerstyleLineCard({
   return (
     <section className="rounded-2xl border border-indigo-200 bg-indigo-50/30 p-4 dark:border-indigo-900/50 dark:bg-indigo-950/20">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <h3 className="text-sm font-bold text-indigo-900 dark:text-indigo-200">
           Line {lineIndex + 1} — Measures {measureNums[0]}–{measureNums[measureNums.length - 1]}
         </h3>
@@ -349,37 +352,33 @@ export function FingerstyleLineCard({
           {generationRun?.options.map(option => {
             const isSelected = option.id === generationRun.selectedOptionId;
             return (
-              <button
+              <Button variant="secondary" size="sm"
                 key={option.id}
                 type="button"
                 onClick={() => void handleSelectOption(option.id)}
                 disabled={isGenerating}
                 aria-pressed={isSelected}
-                className={`rounded-lg px-2 py-1 text-[11px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                  isSelected
-                    ? "bg-amber-400 text-amber-950"
-                    : "bg-white text-indigo-700 ring-1 ring-indigo-200 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:text-indigo-200 dark:ring-indigo-800"
-                }`}
+
               >
                 Option {option.ordinal}
-              </button>
+              </Button>
             );
           })}
-          <button
+          <Button variant="primary" size="md"
             type="button"
             onClick={handleGenerate}
             disabled={isGenerateDisabled}
             aria-busy={isGenerating}
-            className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-indigo-700 flex items-center gap-1.5 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+
           >
             <span>✨</span>
             {isGenerating ? "Generating Line..." : "Generate Line with AI"}
-          </button>
+          </Button>
         </div>
       </div>
 
       <p className="mb-4 rounded-xl border border-indigo-200 bg-white/70 px-3 py-2 text-xs text-indigo-900 dark:border-indigo-900/50 dark:bg-indigo-950/30 dark:text-indigo-200">
-        Melody attacks and rests stay pinned to the source. AI first reserves fill positions, then plans chord-derived bass positions and pitches, freezes the TimeGrid, and finally composes only post-bass legal fills.
+        {compact ? "Generate options, then choose the version you want to hear in the score." : "Melody attacks and rests stay pinned to the source. AI first reserves fill positions, then plans chord-derived bass positions and pitches, freezes the TimeGrid, and finally composes only post-bass legal fills."}
       </p>
 
       {generationRun?.options.length ? (
@@ -417,13 +416,14 @@ export function FingerstyleLineCard({
       ) : null}
 
       {melodyPlayability.exceptions.length > 0 && (
-        <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+        <details open={!compact} className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+          <summary className="cursor-pointer font-semibold">Melody requires higher frets · {melodyPlayability.exceptions.length} notes</summary>
           {melodyPlayability.exceptions.map(anchor => (
             <div key={`${anchor.measure}-${anchor.step}`}>
               {anchor.pitch} in measure {anchor.measure}, step {anchor.step} requires string {anchor.preferredPosition.string} fret {anchor.preferredPosition.fret}. Accompaniment and fills remain {generationSettings.skillLevel}-limited to fret {melodyPlayability.accompanimentMaxFret}.
             </div>
           ))}
-        </div>
+        </details>
       )}
       {!melodyPlayability.playable && (
         <div className="mb-4 rounded-xl border border-rose-300 bg-rose-50 px-3 py-2 text-xs text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200">
@@ -431,9 +431,13 @@ export function FingerstyleLineCard({
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-10 gap-4">
+      {compact && error && <p role="alert" className="mb-3 text-xs text-rose-600">{error}</p>}
+      {compact && notices.map(notice => <p key={`${notice.code}-${notice.reason}`} role="status" className="mb-3 text-xs text-amber-700 dark:text-amber-300">{notice.message}</p>)}
+      <details open={!compact} className="min-w-0">
+        <summary className="mb-3 cursor-pointer text-xs font-semibold text-zinc-500">Line preview & details</summary>
+      <div className={compact ? "grid min-w-0 grid-cols-1 gap-4" : "grid grid-cols-1 lg:grid-cols-10 gap-4"}>
         {/* ── Left: TOON Editor + Logs ── */}
-        <div className="flex flex-col h-full lg:col-span-3">
+        <div className={compact ? "flex min-w-0 flex-col" : "flex flex-col h-full lg:col-span-3"}>
           <div className="rounded-xl border border-zinc-200 bg-white p-3 text-xs text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300">
             <div className="font-semibold text-zinc-900 dark:text-zinc-100">Canonical TimeGrid</div>
             <p className="mt-1 text-[11px] text-zinc-500">Source melody, chords, timing, and grid coordinates are locked. AI output and imported v3 JSON are validated before they update this line.</p>
@@ -472,7 +476,7 @@ export function FingerstyleLineCard({
           {/* Diagnostic Logs */}
           {logs.length > 0 && (
             <div className="mt-4 flex flex-col flex-none">
-              <div className="flex items-center justify-between mb-1">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
                 <div>
                   <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
                     LLM + TimeGrid Workflow Diagnostic Logs
@@ -513,12 +517,12 @@ export function FingerstyleLineCard({
         </div>
 
         {/* ── Right: ABC + ASCII Preview ── */}
-        <div className="flex min-w-0 flex-col lg:col-span-7">
-          <div className="flex items-center justify-between mb-1">
+        <div className={compact ? "flex min-w-0 flex-col" : "flex min-w-0 flex-col lg:col-span-7"}>
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
             <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
               Resulting ABC Tablature — Line {lineIndex + 1}
             </label>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {lineAbcResult && (
                 <CopyButton label="Copy ABCJS ABC" text={abcjsRenderInput} />
               )}
@@ -536,9 +540,10 @@ export function FingerstyleLineCard({
                 abcString={lineAbcResult}
                 title={`Line ${lineIndex + 1} Playback`}
                 canvasId={`composer-line-${lineIndex}-preview`}
-                minWidthClassName="min-w-[400px]"
-                sheetViewportClassName="max-h-[600px] overflow-auto"
+                minWidthClassName="min-w-0"
+                sheetViewportClassName=""
                 useContainerWidth={true}
+                notationScale={0.7}
                 showExactRenderAbcCopy={true}
                 // The generated Guitar voice already carries the melody; avoid a second Melody/chord-track attack.
                 synthOptions={{ voicesOff: [0], chordsOff: true }}
@@ -552,7 +557,7 @@ export function FingerstyleLineCard({
             </div>
           )}
           <div className="mt-4">
-            <div className="flex items-center justify-between mb-1">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
               <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
                 Resulting ASCII-GuitarTab
               </label>
@@ -574,6 +579,7 @@ export function FingerstyleLineCard({
           </div>
         </div>
       </div>
+      </details>
     </section>
   );
 }
@@ -587,10 +593,10 @@ export function CopyAsciiGuitarTabButton({ label, text }: { label: string; text:
   }, [text]);
 
   return (
-    <button
+    <Button variant="ghost" size="sm"
       type="button"
       onClick={handleCopy}
-      className="flex items-center gap-1 text-[10px] text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded cursor-pointer whitespace-nowrap"
+
     >
       {copied ? (
         <span className="text-emerald-600 dark:text-emerald-400 font-medium">Copied!</span>
@@ -602,6 +608,6 @@ export function CopyAsciiGuitarTabButton({ label, text }: { label: string; text:
           <span>{label}</span>
         </>
       )}
-    </button>
+    </Button>
   );
 }

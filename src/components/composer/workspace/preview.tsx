@@ -29,9 +29,10 @@ export const ACCOMPANIMENT_PREVIEW_RENDER_OPTIONS = {
 };
 
 export const COMPOSER_STAFF_PLAYBACK_PROPS = {
-  minWidthClassName: "min-w-[520px]",
-  sheetViewportClassName: "max-h-[800px] overflow-auto",
+  minWidthClassName: "min-w-0",
+  sheetViewportClassName: "",
   useContainerWidth: true,
+  notationScale: 0.7,
   hideVoiceNames: true,
   showExactRenderAbcCopy: true,
 };

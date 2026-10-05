@@ -7,13 +7,31 @@ export function AbcjsPlaybackStyles({ resolvedCanvasId }: { resolvedCanvasId: st
         }
         #${resolvedCanvasId}:focus-visible { outline: 2px solid #4f46e5; outline-offset: -2px; }
         #${resolvedCanvasId} .abcjs-note,
-        #${resolvedCanvasId} .abcjs-chord {
+        #${resolvedCanvasId} .abcjs-chord,
+        #${resolvedCanvasId} .guitar-chord-hit-area,
+        #${resolvedCanvasId} [data-guitar-chord] {
           cursor: pointer;
+        }
+        #${resolvedCanvasId} .guitar-chord-hit-area:hover {
+          fill: rgba(99, 102, 241, 0.12);
+          stroke: rgba(79, 70, 229, 0.55);
+          stroke-width: 1.5px;
+        }
+        #${resolvedCanvasId} .abcjs-chord[data-guitar-chord]:hover,
+        #${resolvedCanvasId} svg[data-guitar-chord]:hover {
+          filter: drop-shadow(0 0 3px rgba(79, 70, 229, 0.75));
+        }
+        #${resolvedCanvasId} .guitar-chord-hit-area:focus-visible,
+        #${resolvedCanvasId} [data-guitar-chord]:focus-visible {
+          outline: none;
+          fill: rgba(99, 102, 241, 0.16);
+          stroke: #4f46e5;
+          stroke-width: 2px;
         }
 
         /* Source-linked selection; the playback highlight below wins while playing. */
-        #${resolvedCanvasId} .abcjs-source-selected,
-        #${resolvedCanvasId} .abcjs-source-selected * {
+        #${resolvedCanvasId} .abcjs-source-selected:not([data-score-selection-owned="true"] *),
+        #${resolvedCanvasId} .abcjs-source-selected:not([data-score-selection-owned="true"] *) * {
           fill: #4f46e5 !important;
           stroke: #4f46e5 !important;
         }
@@ -33,21 +51,19 @@ export function AbcjsPlaybackStyles({ resolvedCanvasId }: { resolvedCanvasId: st
         }
 
         #${resolvedCanvasId} .beat-strong {
-          fill: #ef4444 !important; /* Red-500 */
+          fill: #000 !important;
           font-size: 17px !important;
-          filter: drop-shadow(0px 0px 4px rgba(239, 68, 68, 0.6));
         }
 
         #${resolvedCanvasId} .beat-medium {
-          fill: #f59e0b !important; /* Amber-500 */
-          font-size: 16px !important;
-          filter: drop-shadow(0px 0px 3px rgba(245, 158, 11, 0.5));
+          fill: #000 !important;
+          font-size: 12px !important;
         }
 
         #${resolvedCanvasId} .beat-soft {
-          fill: #64748b !important; /* Slate-500 */
+          fill: #000 !important;
           font-size: 10px !important;
-          opacity: 0.6;
+          opacity: 1;
         }
 
         /* Style chords above notes — position is handled by postProcessChords() */
