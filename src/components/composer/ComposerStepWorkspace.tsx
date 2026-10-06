@@ -66,8 +66,14 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
     resetState: resetWorkspaceState,
     isHydrated: isWorkspaceHydrated,
   } = useWorkspaceState(slug);
-  const [layerVisibility, setLayerVisibility] = useState<Record<string, boolean>>(DEFAULT_HARMONY_LAYER_VISIBILITY);
-  const [layerVolumes, setLayerVolumes] = useState<Record<string, number>>(DEFAULT_LAYER_VOLUMES);
+  const layerVisibility = ws.harmonyLayerVisibility ?? DEFAULT_HARMONY_LAYER_VISIBILITY;
+  const layerVolumes = ws.harmonyLayerVolumes ?? DEFAULT_LAYER_VOLUMES;
+  const setLayerVisibility = useCallback((next: SetStateAction<Record<string, boolean>>) => {
+    updateState({ harmonyLayerVisibility: typeof next === "function" ? next(layerVisibility) : next });
+  }, [layerVisibility, updateState]);
+  const setLayerVolumes = useCallback((next: SetStateAction<Record<string, number>>) => {
+    updateState({ harmonyLayerVolumes: typeof next === "function" ? next(layerVolumes) : next });
+  }, [layerVolumes, updateState]);
   const previousHarmonyValidationAbc = useRef<string | null | undefined>(undefined);
   const [selectedStrongBeatIndex, setSelectedStrongBeatIndex] = useState(0);
   const [projectSaveStatus, setProjectSaveStatus] = useState<"idle" | "saving" | "saved" | "conflict" | "error">("idle");
@@ -194,8 +200,6 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
     } catch (e) {
       console.error("Failed to clear composer state from localStorage", e);
     }
-    setLayerVisibility(DEFAULT_HARMONY_LAYER_VISIBILITY);
-    setLayerVolumes(DEFAULT_LAYER_VOLUMES);
   }, [initialMelodyAbc, resetWorkspaceState, slug]);
 
   const hasGuitarBranchWork = hasAccompanimentGuitarBranchWork(ws);
@@ -332,7 +336,7 @@ export default function ComposerStepWorkspace({ slug, step, initialMelodyAbc }: 
         slug={slug}
         melodyAbc={melodyAbc}
         initialMelodyAbc={initialMelodyAbc}
-        hasMounted={hasMounted}
+        hasMounted={hasMounted && isWorkspaceHydrated}
         pipeline={pipeline}
         sourceAbc={harmonyValidationAbc ?? activeAbc}
         harmonyPreview={previewModel.harmony}

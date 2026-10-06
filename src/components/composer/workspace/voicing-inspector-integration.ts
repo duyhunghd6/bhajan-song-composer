@@ -1,3 +1,5 @@
+import { currentStrummingSelection, generateStrummingCandidates, type StrummingCandidate } from "@/lib/theory/harmony/strumming";
+import { ACOUSTIC_STEEL_GUITAR_PROGRAM } from "@/lib/theory/guitar-sound";
 import { Chord, Note } from "@tonaljs/tonal";
 import type { ComposerProjectPayload, JsonValue } from "@/lib/composer-project";
 import { guitarChordShapes } from "@/lib/theory/guitar-chord-score";
@@ -275,7 +277,7 @@ export function buildVoicingAuditionPreview(
   const measures = request.mode === "ab-loop" && current && candidate
     ? [candidateMeasure(current, "A current"), candidateMeasure(candidate, "B candidate")]
     : [candidateMeasure(selected, request.mode === "current" ? "current" : "candidate")];
-  const program = selected.instrument === "guitar-classic" ? 24 : 1;
+  const program = selected.instrument === "guitar-classic" ? ACOUSTIC_STEEL_GUITAR_PROGRAM : 1;
   const title = request.mode === "ab-loop"
     ? `A/B audition · m.${target.context.measure} · ${target.context.chordIdentity}`
     : `${selected.instrument === "guitar-classic" ? "Guitar" : "Piano"} audition · ${target.context.chordIdentity}`;
@@ -332,6 +334,12 @@ export function buildAccompanimentProjectPayload(input: {
   const sourceAbc = input.branchSourceAbc ?? input.activeAbc;
   const sourceFingerprint = fingerprintAccompanimentSource(sourceAbc);
   const workflow = input.workspace.accompanimentWorkflow;
+  const strummingSelection = input.branchSourceAbc ? currentStrummingSelection(input.workspace.harmonyStrumming, sourceAbc) : null;
+  let strumming: StrummingCandidate | null = null;
+  if (strummingSelection) {
+    try { strumming = generateStrummingCandidates(sourceAbc, strummingSelection.styleId, input.workspace.voicingOverrides, strummingSelection.techniques)[strummingSelection.variant]; }
+    catch { /* Invalid or obsolete decisions must not become saved artifacts. */ }
+  }
   const runs = workflow
     ? Object.values(workflow.steps).flatMap((stepState) => stepState.runs.map((run) => ({
       id: run.id,
@@ -359,6 +367,7 @@ export function buildAccompanimentProjectPayload(input: {
     decisions: json({
       voicingOverrides: input.workspace.voicingOverrides,
       accompanimentWorkflow: workflow,
+      harmonyStrumming: strumming,
     }) as Record<string, JsonValue>,
     artifacts: [
       ...(input.workspace.generatedAccompaniment ? [{ id: `accompaniment-abc-${sourceFingerprint}`, kind: "abc" as const, contentType: "text/vnd.abc", uri: "workspace:generated-accompaniment" }] : []),

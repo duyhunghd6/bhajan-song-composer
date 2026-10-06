@@ -63,14 +63,14 @@ The normal order is source facts → meter-compatible profile shortlist → sect
 ## 3. Shared harmony steps (Steps 1–3)
 <!-- beads-id: br-guide-accompaniment-workflow-s03 -->
 
-These steps are shared with `/compose/:slug/harmony` and are always enabled. All three run locally through `src/lib/theory/harmony/workflow.ts`; they never invoke the LLM transport or require AI credentials. The wizard hides prompt input and LLM activity for these steps. Each result still requires explicit selection; lyric chords do not bypass Step 2 selection.
+These steps are shared with `/compose/:slug/harmony` and are always enabled. All three run locally through `src/lib/theory/harmony/workflow.ts`; they never invoke the LLM transport or require AI credentials. The wizard hides prompt input and LLM activity for these steps. Steps 1 and 2 require explicit choices; lyric chords do not bypass Step 2 selection. The internal validation result is automatically selected after the user chooses a progression.
 
 On `/compose/:slug/harmony` the shared steps are expected to stay small and reviewable, in this order:
 
 1. Detect or confirm key, scale/raga context, and meter.
 2. Identify strong-beat targets and cadence points.
 3. Generate multiple harmonization candidates (never a single opaque result).
-4. Let the user select or accept one candidate per step.
+4. Let the user choose an emphasis and then a chord progression; validate the progression automatically.
 5. Preview the exact Step 3 ABC that will feed the Accompaniment and Guitar Fingerstyle branches.
 
 Harmony work preserves the source melody unless the task explicitly asks for melody editing.
@@ -85,7 +85,7 @@ Confirm the explicit ABC key/mode and meter, inspect exact metric accents and pi
 
 Harmony automatically processes **Strong Beats** and **Missing Chord** through their Layers & volume checkboxes; there are no separate analysis/fill buttons. `src/lib/theory/harmony/metric-timeline.ts` parses the Melody voice (first voice when unnamed) with abcjs into JSON measures/events, retaining original character offsets and whole-note timing. It accounts for `L:`, rests, tuplets, broken rhythm, bracket pitches, key/bar accidentals, ties, line continuations and meter changes at bar boundaries. An initial short bar is treated as a right-aligned pickup. The analysis samples sounding pitches, including sustains, at metric targets: 1/3 in 4/4, 1 in triple/simple duple, each dotted pulse in compound meter, and explicit additive group starts. Ungrouped odd meters use the downbeat only; free/unsupported meters and mid-bar key/meter changes require manual input. Beat labels count denominator units (6/8 targets are 1 and 4). These are metric accents, not inferred performance accents or a tala detector.
 
-`src/lib/theory/harmony/auto-chords.ts` ranks diatonic triads by strong-beat pitch compatibility and duration-weighted melody coverage, with small tonic, IV/V and prior-chord preferences suitable for the devotional context. It retains three ranked alternatives in the result for callers. One annotation is inserted at the first event of each chordless sounding measure; every existing character, chord (including N.C.), lyric, repeat and other voice stays unchanged. Silent bars and irregular interior/overfull bars are skipped with a visible explanation. A short final bar is accepted as a possible pickup complement. Existing symbols anywhere in a bar protect that whole bar; chord carry does not count as an explicit symbol in a later bar. No automatic key inference overrides `K:`.
+`src/lib/theory/harmony/auto-chords.ts` ranks diatonic triads by strong-beat pitch compatibility and duration-weighted melody coverage, with small tonic, IV/V and prior-chord preferences suitable for the devotional context. It retains three ranked alternatives in the result for callers. An unannotated opening pickup is left chord-free; explicit pickup chords are preserved. One annotation is inserted at the first event of each other chordless sounding measure; every existing character, chord (including N.C.), lyric, repeat and other voice stays unchanged. Silent bars and irregular interior/overfull bars are skipped with a visible explanation. A short final bar is accepted as a possible pickup complement. Existing symbols anywhere in a bar protect that whole bar; chord carry does not count as an explicit symbol in a later bar. No automatic key inference overrides `K:`.
 
 The left sidebar contains only Layers & volume. **Strong Beats** adds an Accompaniment-compatible `w:` row of black dots: ⬤ strong, ● medium, • weak. It does not append beat numbers or invent note attacks for held notes. **Missing Chord** inserts real suggested chord symbols into empty measures, so score diagrams and guitar playback use the added harmony. These two switches are independent and off by default; unchecking reconstructs the corresponding projection from the immutable source, removing only the optional additions. The ABC notation panel displays exactly the ABC passed to Music Staff Playback. `src/lib/theory/harmony/analysis-preview.ts` owns the projection and reports skipped bars/unsupported notation.
 
@@ -98,7 +98,7 @@ Theory references: [ABC 2.1](https://abcnotation.com/wiki/abc:standard:v2.1) def
 ### Step 2 — `chord-roles-progression`
 <!-- beads-id: br-guide-accompaniment-workflow-s05 -->
 
-Map each strong-beat melody note to possible chord-tone roles, choose a progression, and produce harmonized ABC.
+Map each strong-beat melody note to possible chord-tone roles, choose a progression, and produce harmonized ABC. Step 2 leaves an unannotated opening pickup chord-free; Step 3 accepts it without requiring an active chord. For older selected progressions, Harmony’s preview omits pickup chords absent from the matching melody source; explicit source/lyric chords and manual harmony drafts retain their annotations. Saved Step 3 and downstream provenance remain unchanged.
 
 - Embedded `[Chord]` symbols in lyric `w:` lines are aligned to notes by the ABC parser and inserted as inline annotations. Existing inline chords take precedence at the same event.
 - A bounded beam search ranks up to three distinct complete progressions using duration-weighted melody coverage, selected metric emphasis, tonic cadence preference and common-tone continuity. Existing chords and N.C. are retained. Unsupported modes and irregular interior bars produce actionable errors. Identical inputs produce identical options; a fully supplied progression produces one result.
@@ -107,7 +107,7 @@ Map each strong-beat melody note to possible chord-tone roles, choose a progress
 ### Step 3 — `voice-leading-validation`
 <!-- beads-id: br-guide-accompaniment-workflow-s06 -->
 
-Validate the exact selected Step 2 ABC against the original melody timeline: pitches, durations, key, meter and active chord coverage must match. Non-chord tones on strong beats are reported as musical warnings. Chord symbols do not specify realized voices, so parallel fifths/octaves and physical voicing checks belong to the instrument stages; Step 3 does not claim to validate unspecified voices. The user-selected Step 3 ABC becomes the downstream source.
+Validate the exact selected Step 2 ABC against the original melody timeline: pitches, durations, key, meter and active chord coverage must match. Non-chord tones on strong beats are reported as musical warnings. Chord symbols do not specify realized voices, so parallel fifths/octaves and physical voicing checks belong to the instrument stages; Step 3 does not claim to validate unspecified voices. The automatically selected internal validation ABC becomes the downstream source after explicit Step 2 progression selection.
 
 ## 4. Guitar Classic branch (Steps 4–6)
 <!-- beads-id: br-guide-accompaniment-workflow-s07 -->
@@ -191,7 +191,7 @@ Deterministically materialize the selected Step 4 profile and Step 5 anchors, to
 ```text
 □ 1. Confirm key, scale, cadence, and strong-beat notes
 □ 2. Map melody notes → chord roles; choose a progression
-□ 3. Validate voice leading; user selects the Step 3 ABC
+□ Internal validation runs automatically after Step 2 selection
   ────── shared steps done ──────
 □ 4. Choose Guitar Classic comping profile (PIMA / pinch / strum)
 □ 5. Plan voicing map + bass anchors with grid timing/duration
@@ -224,3 +224,40 @@ Deterministically materialize the selected Step 4 profile and Step 5 anchors, to
 | Music theory foundation (skill) | — | `.claude/skills/music-theory-arrangement/THEORY.md` |
 
 Related: [Guitar Fingerstyle Arrangement Guide](./guitar-fingerstyle-arrangement-guide.md) for the independent solo-guitar sibling branch.
+
+## 11. Harmony Step 3 — Accompaniment Style
+<!-- beads-id: br-guide-accompaniment-workflow-strumming -->
+
+The Harmony route offers an optional **3. Accompaniment Style** section after the source-current chord progression selected in visible Step 2. It is separate from the Accompaniment route’s `guitar-comping-profile` workflow step. Manual chord drafts must be validated before generation.
+
+The deterministic catalogue in `src/lib/theory/harmony/strumming/styles.ts` contains Waltz (Valse, 3/4), straight-eighth Blues (4/4), Slow Rock (6/8 and 12/8), Bolero (2/4 and 4/4), Ballad (3/4, 4/4 and 6/8), Folk (2/4 and 4/4), and Bossa Nova (2/4 and 4/4). Incompatible styles are disabled; selecting a style never changes the melody’s meter. Mixed meters/keys and measures spanning music lines currently show an actionable generation error.
+
+Selecting a style generates seven arrangements: Classic, Gentle, Crisp, Bass & chord, Offbeat lift, Spacious and Full. These vary attack timing, articulation, string subsets and dynamics; each uses the meter-specific gesture sequence described below. Select a result and use the score’s Play control to audition; Save accompaniment commits the choice, while Cancel preview returns to the saved choice. The visible Strumming layer (`GuitarStrumming`) has independent visibility/volume controls. Written guitar gestures drive playback through the strumming performance adapter, without adding a second synthesized chord track.
+
+`WorkspaceState.harmonyStrumming` stores the exact Step 3 source plus style and variant. The deterministic events use the source-bound guitar-shape overrides. The project payload’s `decisions.harmonyStrumming` stores the realized selection, canonical ABC and TimeGrid. Existing local workspace hydration restores the selection; source changes make it inactive and the shared Harmony branch reset clears it. This artifact is not a Step 3 replacement, Fingerstyle input or new published layer.
+
+The Harmony JSON exposes `strumming.events` with exact whole-note onset/duration, one-based grid step/duration, chord, stroke direction, velocity and physical string/fret/MIDI pitches. Grid-aligned pitched attacks also project into measure `tablature`; fractional tuplet positions retain exact timing in the event list. ABC derives from the same events, preserves source melody notes/lyrics, pickups, repeat endings and visual systems, and cuts strokes at chord changes. Mixer settings never rewrite this canonical JSON or saved ABC. Canonical Strumming notes use concert pitch with `clef=treble-8`; `src/components/music-sheet/abcjs-playback/render-input.ts` applies the parser octave correction only to this new voice at render time so abcjs plays the physical MIDI pitches.
+
+### Strumming performance and technique vocabulary
+<!-- beads-id: br-guide-accompaniment-strumming-techniques -->
+
+`strumming.version = 2` events carry `technique`: `strum`, `bass`, `palm-mute`, `dead-strum`, `slap`, `choke` or `rest`. Non-pitched events have empty `notes`; their onset/duration still occupy the rhythmic timeline. The existing style/variant selection IDs remain valid. Source changes still invalidate selection, while current selections regenerate with this gesture vocabulary.
+
+Harmony Step 3’s **Techniques you can play** stores an optional technique allowlist with the preview and saved selection. Missing settings retain all techniques for older projects; an empty list allows ordinary down/up strokes and rests only. Disabled bass/palm mute becomes an ordinary strum; disabled dead strum/slap/choke becomes a rest at the same rhythmic slot. Apply the allowlist after variant generation and when rebuilding saved ABC/TimeGrid, so playback and project exports agree.
+
+Harmony exposes two independent layers: Chord Progression (ChordProgression) controls visible chord names and diagrams without volume; Chord Accompaniment (ChordAccompaniment) controls synthesized chord audio and its volume, even when chord cues are hidden. Chord audio derives from the source and appends its own track without rewriting written Strumming. It defaults off with Strumming and on otherwise; an explicit saved toggle persists. Legacy ChordProgression volume supplies the initial audio volume. These controls never change canonical ABC, TimeGrid or saved musical decisions.
+
+
+- Downstrokes emit physical strings bass-to-treble. Upstrokes emit the top three available strings treble-to-bass, with lighter attacks. The playback adapter rolls attacks across approximately 42 ms (down) or 26 ms (up), bounded by the available note duration at the current tempo. All rolled strings end within the original cutoff; duplicate pitches on different strings remain separate.
+- Palm mute (`PM`) keeps pitched guitar attacks with a short gate, reduced amplitude and a maximum 95 ms note body. This is a shortened steel-string sample approximation, not a dedicated recorded palm-mute sample.
+- Dead strum (`X`) and string slap (`Slap`) render annotated x-head placeholders. Playback replaces each placeholder with a single short GM percussion hit: side-stick (37) or hand-clap (39), respectively. These are preview approximations, not authentic acoustic-guitar recordings. Canonical JSON does not mislabel the placeholders as harmonic pitches.
+- Choke explicitly stops ringing strings; Rest is silence. Both render rests. Chord changes cut sounding windows but never inject new pitched attacks into these protected rest/percussion windows.
+- The strumming player uses a 5 ms release with a matching note-end trim; the default abcjs 200 ms release would spill into silent windows. Mixer gain applies after dynamics to both pitched and percussive events. The render adapter suppresses uniform MIDI beat mixer directives only when Strumming is present, preventing abcjs header directives from muting the Melody globally.
+
+`src/lib/theory/harmony/strumming/patterns.ts` authors separate patterns per meter, including independent 3/4 and 6/8 Ballad patterns and doubled compound pulses for 12/8 Slow Rock. Waltz uses bass/chords with short releases; Blues, Folk and 4/4 Ballad use dead/slap backbeats; Bolero alternates bass, muted strokes and a final choke; Slow Rock places a slap on its second main pulse; Bossa Nova uses syncopated short chords and choke gaps without an imposed heavy slap. These are selectable arrangement examples, not claims that every performance of a genre uses one universal rhythm.
+
+`src/components/music-sheet/abcjs-playback/strumming-audio.ts` realizes the parsed written gestures after steel-string normalization and before sample loading. Source offsets plus expanded playback onsets distinguish repeated occurrences. The existing Step 4 accordion, two-column radio layout, resize behavior and remembered preview remain intact; only a technique legend is added.
+
+Research references: [Fender: palm muting](https://www.fender.com/articles/techniques/3-keys-to-ace-your-palm-muting) distinguishes damped ringing strings from a dead sound; [GuitarLessons: dynamic strumming](https://www.guitarlessons.com/guitar-lessons/rhythm-guitar-quick-start-series/dynamic-strumming-tips) demonstrates bass notes and percussive muted backbeats; [Applied Acoustics Systems: Strum Session manual](https://s3.amazonaws.com/aas_manual/strum-session-2-manual.pdf) describes directional strums, palm muting and fully muted strokes. Sweep durations, gates, samples and catalogue patterns above are implementation choices informed by those techniques.
+
+Harmony now presents two harmonic choices: Step 1 Key & Beats calculates automatically after hydration; selecting its emphasis immediately calculates Step 2 Chords. Selecting a progression automatically validates and selects the internal `voice-leading-validation` result before enabling downstream sources. The validation stage retains its persisted ID and source authority for compatibility, but has no separate UI step or Generate button. Visible Step 3 is the optional Accompaniment Style. Changing emphasis clears later chord/validation and instrument results before recalculation.

@@ -36,4 +36,23 @@ describe('Harmony TimeGrid beat weights', () => {
     expect(on.timeGrid?.measures[1].grid[0].chord).toBe('C');
     expect(off.timeGrid?.measures[1].grid[0].chord).toBe('G');
   });
+  it('keeps the opening pickup chord-free when Missing Chord is enabled', () => {
+    const source = abc('G2 | C8 |');
+    const projection = buildHarmonyLayerProjection(source, { MissingChord: true, StrongBeats: true });
+    expect(projection.timeGrid?.timeline[0].events.flatMap(e => e.chords)).toEqual([]);
+    expect(projection.timeGrid?.measures[0].grid.every(step => step.chord === '')).toBe(true);
+    expect(projection.timeGrid?.measures[1].grid[0].chord).toBe('C');
+    expect(projection.abc).toMatch(/G2 \|\s*"C"\s*C8 \|/);
+  });
+  it('removes legacy generated pickup chords from selected harmony but preserves source chords', () => {
+    const melody = abc('B, |: "C"C8 |');
+    const legacy = abc('"G"B, |: "C"C8 |');
+    for (const MissingChord of [true, false]) {
+      const projection = buildHarmonyLayerProjection(legacy, { MissingChord }, melody);
+      expect(projection.timeGrid?.timeline[0].events.flatMap(e => e.chords)).toEqual([]);
+      expect(projection.abc).toBe(melody);
+    }
+    expect(buildHarmonyLayerProjection(legacy, { MissingChord: true }, legacy).abc).toBe(legacy);
+    expect(buildHarmonyLayerProjection(legacy, { MissingChord: true }).abc).toBe(legacy);
+  });
 });

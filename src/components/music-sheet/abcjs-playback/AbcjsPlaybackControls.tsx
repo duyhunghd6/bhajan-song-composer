@@ -124,11 +124,12 @@ export function AbcjsPlaybackControls({
             {controls && (
               <div className={styles.metadata} title="Sheet Metadata Overrides">
                 <label >
-                  KEY: 
-                  <select 
+                  K
+                  <select
+                    aria-label="Key"
                     value={overrideKey || parsedKey}
                     onChange={(e) => { setOverrideKey(e.target.value); stopSynth(); }}
-                    className={ui.field}
+                    className={`${ui.field} ${styles.metadataField}`}
                   >
                     {["C", "G", "D", "A", "E", "B", "F#", "F", "Bb", "Eb", "Ab", "Db", "Gb", "Am", "Em", "Bm", "F#m", "C#m", "G#m", "Dm", "Gm", "Cm", "Fm", "Bbm", "Ebm"].map(k => (
                       <option key={k} value={k}>{k}</option>
@@ -136,11 +137,12 @@ export function AbcjsPlaybackControls({
                   </select>
                 </label>
                 <label >
-                  SIG: 
-                  <select 
+                  S:
+                  <select
+                    aria-label="Time signature"
                     value={overrideMeter || parsedMeter}
                     onChange={(e) => { setOverrideMeter(e.target.value); stopSynth(); }}
-                    className={ui.field}
+                    className={`${ui.field} ${styles.metadataField}`}
                   >
                     {["4/4", "3/4", "2/4", "6/8", "9/8", "12/8", "C", "C|"].map(m => (
                       <option key={m} value={m}>{m}</option>
@@ -148,7 +150,7 @@ export function AbcjsPlaybackControls({
                   </select>
                 </label>
                 <div className={styles.tempo}>
-                  <span className="opacity-80">BPM:</span>
+                  <span className="opacity-80">B:</span>
                   <Button variant="ghost" size="sm" iconOnly type="button"
                     onClick={() => { const t = Math.max(60, tempo - 5); setTempo(t); stopSynth(); }}
 

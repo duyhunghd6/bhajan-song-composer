@@ -47,6 +47,11 @@ export const DEFAULT_FINGERSTYLE_GENERATION_SETTINGS: FingerstyleGenerationSetti
 export type GeneratedGuitarOrigin = "fingerstyle-timegrid" | null;
 
 export interface WorkspaceState {
+  harmonyLayerVisibility?: Record<string, boolean>;
+  harmonyLayerVolumes?: Record<string, number>;
+  harmonyStrummingPreview?: import("@/lib/theory/harmony/strumming").StrummingSelection | null;
+  harmonyStrummingExpanded?: boolean;
+  harmonyStrumming?: import("@/lib/theory/harmony/strumming").StrummingSelection | null;
   aiSuggestions: HarmonizationOption[];
   selectedCandidateId: string | null;
   acceptedHarmony: TheoryAssistantLayerProposal | null;
@@ -68,6 +73,7 @@ export interface WorkspaceState {
 }
 
 export const DEFAULT_WORKSPACE_STATE: WorkspaceState = {
+  harmonyStrumming: null,
   aiSuggestions: [],
   selectedCandidateId: null,
   acceptedHarmony: null,

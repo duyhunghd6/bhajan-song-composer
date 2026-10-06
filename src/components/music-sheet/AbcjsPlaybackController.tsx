@@ -1,4 +1,7 @@
 "use client";
+import { prepareSteelGuitarAudio } from "./abcjs-playback/guitar-audio";
+import { PlaybackSpeedContext } from "./abcjs-playback/playback-speed";
+import { PlaybackTrace, playbackTraceEvents } from "./abcjs-playback/playback-trace";
 import { ScoreViewport } from "./score-workspace/ScoreViewport";
 import { noteEditKeepsRhythm, retainedScorePosition } from "./score-workspace/note-transport";
 import { attachNoteInteractions } from "./score-workspace/note-interactions";
@@ -54,6 +57,7 @@ export default function AbcjsPlaybackController({
   hideVoiceNames = false,
   showExactRenderAbcCopy = false,
   allowPdfDownload = true,
+  scoreActionsPlacement = "toolbar",
   visualMarkers,
   prepareAudio,
   onScoreRendered,
@@ -69,7 +73,11 @@ export default function AbcjsPlaybackController({
   const [abcjsModule, setAbcjsModule] = useState<AbcjsType | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const isPlayingRef = useRef(false);
-  const [tempo, setTempo] = useState(() => parseAbcTempo(abcString));
+  const [baseTempo, setTempo] = useState(() => parseAbcTempo(abcString));
+  const [playbackRate, setPlaybackRate] = useState(1);
+  const tempo = baseTempo * playbackRate;
+  const traceRef = useRef(new PlaybackTrace());
+  const audioClockRef = useRef<AudioContext | null>(null);
   const [overrideKey, setOverrideKey] = useState<string>("");
   const [overrideMeter, setOverrideMeter] = useState<string>("");
   const [renderError, setRenderError] = useState<string | null>(null);
@@ -110,7 +118,7 @@ export default function AbcjsPlaybackController({
       
       // Find all annotation elements and hide them via inline styles 
       // because html-to-image sometimes fails to capture external display: none rules for SVG text
-      const annotations = containerRef.current.querySelectorAll('.abcjs-annotation');
+      const annotations = containerRef.current.querySelectorAll('.abcjs-annotation:not([data-strumming-technique])');
       annotations.forEach((node) => {
         (node as HTMLElement).style.setProperty('display', 'none', 'important');
       });
@@ -248,6 +256,7 @@ export default function AbcjsPlaybackController({
   const totalMeasures = Math.max(1, Math.ceil(durationSeconds / secondsPerMeasure));
   const loopStartSeconds = (loopStartMeasure - 1) * secondsPerMeasure;
   const setPlaybackState = useCallback((playing: boolean) => {
+    if (!playing) traceRef.current.stop();
     isPlayingRef.current = playing;
     setIsPlaying(playing);
   }, []);
@@ -274,6 +283,7 @@ export default function AbcjsPlaybackController({
     [clearActiveNoteHighlight, onPlaybackCursor, setCurrentSeconds]
   );
   const stopSynthPlayback = useCallback(() => {
+    traceRef.current.stop();
     synthGenerationRef.current++;
     synthInitializationRef.current = null;
     if (synthRef.current) {
@@ -318,14 +328,21 @@ export default function AbcjsPlaybackController({
         const AudioContextClass = window.AudioContext || win.webkitAudioContext;
         if (!AudioContextClass) return null;
         const audioContext = new AudioContextClass();
+        audioClockRef.current = audioContext;
         const CreateSynth = (abcjsModule.synth as { CreateSynth: new () => SynthType }).CreateSynth;
         const synth = new CreateSynth();
         await synth.init({
-          visualObj: prepareAudio ? prepareAudio(visualObjRef.current!) : visualObjRef.current!,
+          visualObj: prepareSteelGuitarAudio(
+            prepareAudio ? prepareAudio(visualObjRef.current!) : visualObjRef.current!, abcString, playbackRate,
+            audio => { if (generation === synthGenerationRef.current) traceRef.current.events = playbackRate === 0.1 ? playbackTraceEvents(audio) : []; },
+          ),
           audioContext,
           millisecondsPerMeasure: visualObjRef.current!.millisecondsPerMeasure?.(tempo),
           options: {
             qpm: tempo,
+            // The default 200 ms release would ring through written choke/rest
+            // windows. Keep a short click-free release inside their boundary.
+            ...(/\bV:GuitarStrumming\b/.test(abcString) ? { fadeLength: 5, noteEnd: 5 } : {}),
             ...synthOptions,
             onEnded: () => {
               if (suppressNextEndedRef.current && synthRef.current?.getIsRunning?.()) {
@@ -357,7 +374,7 @@ export default function AbcjsPlaybackController({
         synthInitializationRef.current = null;
       }
     }
-  }, [abcjsModule, clearActiveNoteHighlight, setPlaybackState, synthOptions, tempo, prepareAudio]);
+  }, [abcjsModule, abcString, clearActiveNoteHighlight, setPlaybackState, synthOptions, tempo, prepareAudio, playbackRate]);
   const playSynth = async () => {
     if (isPlayingRef.current || synthInitializationRef.current) return;
     // Stop any other controller that is currently playing
@@ -393,6 +410,7 @@ export default function AbcjsPlaybackController({
       }
       try {
         synth.start();
+        if (playbackRate === 0.1) traceRef.current.start(resuming ? resumeSeconds : loopMode === "range" ? loopStartSeconds : 0, () => audioClockRef.current?.currentTime ?? 0, resolvedCanvasId);
         setPlaybackState(true);
       } catch (startErr: unknown) {
         const message = startErr instanceof Error ? startErr.message : String(startErr);
@@ -453,6 +471,7 @@ export default function AbcjsPlaybackController({
     if (nextSeek !== null && isPlayingRef.current) {
       suppressNextEndedRef.current = true;
       synthRef.current?.seek(nextSeek, "seconds");
+      if (playbackRate === 0.1) traceRef.current.start(nextSeek, () => audioClockRef.current?.currentTime ?? 0, resolvedCanvasId);
       timingCallbacksRef.current?.setProgress(nextSeek, "seconds");
       return;
     }
@@ -500,6 +519,7 @@ export default function AbcjsPlaybackController({
     let cleanupEditing: (() => void) | undefined;
     let cleanupKeyboard: (() => void) | undefined;
     const stopRenderedPlayback = () => {
+      traceRef.current.stop();
       cleanupEditing?.();
       cleanupKeyboard?.();
       cleanupScore?.();
@@ -630,7 +650,9 @@ export default function AbcjsPlaybackController({
 
   // Register this instance with the global playback registry for exclusive playback
   useEffect(() => {
+    const trace = traceRef.current;
     registerPlayback(resolvedCanvasId, () => {
+      traceRef.current.stop();
       synthGenerationRef.current++;
       synthInitializationRef.current = null;
       // External stop: called by the registry when another instance claims playback
@@ -650,6 +672,7 @@ export default function AbcjsPlaybackController({
       setCurrentSeconds(0);
     });
     return () => {
+      trace.stop();
       unregisterPlayback(resolvedCanvasId);
     };
   }, [resolvedCanvasId, setCurrentSeconds]);
@@ -689,11 +712,12 @@ export default function AbcjsPlaybackController({
       </div>
   );
   return (
+    <PlaybackSpeedContext.Provider value={{ rate: playbackRate, setRate: rate => { stopSynth(); setPlaybackRate(rate); } }}>
     <div aria-label={description ?? title} className="w-full bg-zinc-950 rounded-xl shadow-md overflow-hidden flex flex-col border border-zinc-800">
       {title && <h3 className="sr-only">{title}</h3>}
       {(controls || showLoopControls) && (
         <AbcjsPlaybackControls
-          actions={scoreActions}
+          actions={scoreActionsPlacement === "toolbar" ? scoreActions : null}
           viewportTools={<div ref={setControllerSlot} className="flex items-center gap-1" />}
           controls={controls}
           showLoopControls={showLoopControls}
@@ -711,7 +735,7 @@ export default function AbcjsPlaybackController({
           overrideMeter={overrideMeter}
           parsedMeter={parsedMeter}
           setOverrideMeter={setOverrideMeter}
-          tempo={tempo}
+          tempo={baseTempo}
           setTempo={setTempo}
           totalMeasures={totalMeasures}
           loopStartMeasure={loopStartMeasure}
@@ -721,7 +745,7 @@ export default function AbcjsPlaybackController({
         />
       )}
       {!controls && !showLoopControls && (
-        <div data-ui-tone="inverse" className="flex flex-wrap justify-end gap-1 bg-surface p-1">{scoreActions}<div ref={setControllerSlot} className="flex items-center gap-1" /></div>
+        <div data-ui-tone="inverse" className="flex flex-wrap justify-end gap-1 bg-surface p-1">{scoreActionsPlacement === "toolbar" && scoreActions}<div ref={setControllerSlot} className="flex items-center gap-1" /></div>
       )}
       {renderError && (
         <div
@@ -734,7 +758,11 @@ export default function AbcjsPlaybackController({
       {renderScore ? renderScore(scoreSurface, { isPlaying, togglePlayback: toggleWorkspacePlayback, controllerSlot }) : (
         <ScoreViewport embedded height="auto" controllerSlot={controllerSlot} label={title}>{scoreSurface}</ScoreViewport>
       )}
+      {scoreActionsPlacement === "footer" && scoreActions && (
+        <div data-ui-tone="inverse" aria-label="Score export actions" className="flex justify-end gap-1 border-t border-zinc-800 px-4 py-2">{scoreActions}</div>
+      )}
       <AbcjsPlaybackStyles resolvedCanvasId={resolvedCanvasId} />
     </div>
+    </PlaybackSpeedContext.Provider>
   );
 }

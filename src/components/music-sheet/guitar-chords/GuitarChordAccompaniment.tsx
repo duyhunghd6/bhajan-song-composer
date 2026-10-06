@@ -22,12 +22,20 @@ interface Props extends AbcjsPlaybackControllerProps {
   overrides: VoicingOverride[];
   onOverridesChange: (overrides: VoicingOverride[]) => void;
   chordVolume?: number;
+  /** Written strumming events already contain the selected shape and rhythm. */
+  writtenAccompaniment?: boolean;
+  /** Independent chord playback can use hidden chord cues from the source. */
+  chordAudioAbc?: string;
+  chordAudioEnabled?: boolean;
   onChordEdit?: (occurrence: GuitarChordOccurrence, symbol: string | null) => void;
 }
 
-export default function GuitarChordAccompaniment({ sourceAbc, overrides, onOverridesChange, chordVolume = 100, synthOptions, onChordEdit, ...props }: Props) {
+export default function GuitarChordAccompaniment({ sourceAbc, overrides, onOverridesChange, chordVolume = 100, writtenAccompaniment = false, chordAudioAbc, chordAudioEnabled, synthOptions, onChordEdit, ...props }: Props) {
   const guitarSynthOptions = useMemo(() => ({ ...synthOptions, chordsOff: true }), [synthOptions]);
   const score = useMemo(() => buildGuitarChordScore(props.abcString, sourceAbc, overrides), [props.abcString, sourceAbc, overrides]);
+  const audioScore = useMemo(() => chordAudioAbc === undefined ? score
+    : { ...buildGuitarChordScore(chordAudioAbc, sourceAbc, overrides), guitarVoiceIndices: [] },
+  [chordAudioAbc, score, sourceAbc, overrides]);
   const [contextMenu, setContextMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const contextChord = score.occurrences.find((item) => item.id === contextMenu?.id);
@@ -75,15 +83,17 @@ export default function GuitarChordAccompaniment({ sourceAbc, overrides, onOverr
     const tune = visual as unknown as GuitarParsedTune;
     const projected = Object.create(visual) as GuitarParsedTune;
     projected.setUpAudio = (options) => {
-      const result = realizeGuitarChordAudio(tune.setUpAudio({ ...options, chordsOff: true }), score, options);
-      if (!score.guitarVoiceIndices.length) {
+      const base = tune.setUpAudio({ ...options, chordsOff: true });
+      if (!(chordAudioEnabled ?? !writtenAccompaniment)) return base;
+      const result = realizeGuitarChordAudio(base, audioScore, options);
+      if (!audioScore.guitarVoiceIndices.length) {
         const track = result.tracks.at(-1);
         track?.forEach((event) => { if (event.volume !== undefined) event.volume *= chordVolume / 100; });
       }
       return result;
     };
     return projected as unknown as VisualObj;
-  }, [score, chordVolume]);
+  }, [audioScore, chordVolume, writtenAccompaniment, chordAudioEnabled]);
   const listen = async (shape: GuitarChordShape) => {
     stopAudition();
     claimPlayback(auditionId);
@@ -121,8 +131,7 @@ export default function GuitarChordAccompaniment({ sourceAbc, overrides, onOverr
     close();
   };
   return <>
-    <AbcjsPlaybackController {...props} synthOptions={guitarSynthOptions} prepareAudio={prepareAudio} onScoreRendered={onScoreRendered} />
-    {score.occurrences.length > 0 && <p className="px-4 py-2 text-xs text-zinc-500">{props.renderScore ? "Click a guitar diagram to choose a shape. Click a chord name to select it; double-click or press Enter to open its picker. Right-click for chord actions." : "Click a chord name or diagram to choose a guitar shape."} Playback follows the selected strings and frets.</p>}
+    <AbcjsPlaybackController {...props} scoreActionsPlacement="footer" synthOptions={guitarSynthOptions} prepareAudio={prepareAudio} onScoreRendered={onScoreRendered} />
     {contextMenu && contextChord && createPortal(<div ref={menuRef} role="menu" aria-label={`${contextChord.symbol} chord actions`} tabIndex={-1}
       onKeyDown={(event) => {
         if (event.key === "Escape") { event.preventDefault(); setContextMenu(null); return; }

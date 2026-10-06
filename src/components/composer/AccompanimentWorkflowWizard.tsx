@@ -1,10 +1,10 @@
 "use client";
 
-import { isAlgorithmicHarmonyStep } from "@/lib/theory/harmony/workflow";
+import { generateHarmonyWorkflowStep, isAlgorithmicHarmonyStep } from "@/lib/theory/harmony/workflow";
 import { Button } from "@/components/ui/Button";
 
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { generateAccompanimentWorkflowStep, generateConsolidatedChordIngestionWorkflowSteps } from "@/app/actions/accompaniment-workflow";
 import {
   ACCOMPANIMENT_WORKFLOW_BRANCH_STEP_IDS,
@@ -63,6 +63,7 @@ interface AccompanimentWorkflowWizardProps {
   onWorkflowChange: (workflow: AccompanimentWorkflowSession | null) => void;
   onWorkflowSetupChange: (setup: AccompanimentWorkflowSetup) => void;
   onReset?: () => void;
+  onHarmonyValidated?: () => void;
 }
 
 const BRANCH_LABELS: Record<BranchScope, string> = {
@@ -76,6 +77,7 @@ interface WorkflowStepGridProps {
   expandedStepId?: AccompanimentWorkflowStepId | null;
   compact?: boolean;
   onStepClick: (stepId: AccompanimentWorkflowStepId) => void;
+  children?: ReactNode;
 }
 
 function ScopeBadge({ scope, className = "px-2 py-0.5" }: { scope: AccompanimentWorkflowScope, className?: string }) {
@@ -90,7 +92,7 @@ function ScopeBadge({ scope, className = "px-2 py-0.5" }: { scope: Accompaniment
   );
 }
 
-function WorkflowStepGrid({ steps, session, activeStepId, expandedStepId = activeStepId, onStepClick, compact }: WorkflowStepGridProps) {
+function WorkflowStepGrid({ steps, session, activeStepId, expandedStepId = activeStepId, onStepClick, compact, children }: WorkflowStepGridProps) {
   if (compact && steps.every((step) => step.scope === "shared")) {
     return (
       <div className={harmonyStyles.stepAccordion}>
@@ -109,7 +111,9 @@ function WorkflowStepGrid({ steps, session, activeStepId, expandedStepId = activ
                 <span><strong>{step.index}. {step.shortLabel}</strong><small>{selected?.label ?? (complete ? "Selected" : session ? (unlocked ? "Ready" : "Locked") : "Ready")}</small></span>
                 <span aria-hidden="true">{expanded ? "−" : "+"}</span>
               </button>
-              {expanded && <p className={harmonyStyles.stepAccordionDescription}>{step.description}</p>}
+              {expanded && activeStepId === step.id && (
+                <div className={harmonyStyles.stepAccordionContent}>{children}</div>
+              )}
             </section>
           );
         })}
@@ -141,6 +145,7 @@ function WorkflowStepGrid({ steps, session, activeStepId, expandedStepId = activ
           </Button>
         );
       })}
+      {children}
     </div>
   );
 }
@@ -195,6 +200,7 @@ export default function AccompanimentWorkflowWizard({
   onWorkflowChange,
   onWorkflowSetupChange,
   onReset,
+  onHarmonyValidated,
 }: AccompanimentWorkflowWizardProps) {
   const compactPresentation = mode === "harmony" || presentation === "studio";
   const sourceCurrent = isAccompanimentWorkflowSourceCurrent(workflow, sourceAbc);
@@ -215,7 +221,7 @@ export default function AccompanimentWorkflowWizard({
   );
   const filteredSteps = useMemo(() => {
     if (mode === "harmony") {
-      return visibleSteps.filter((s) => s.scope === "shared");
+      return visibleSteps.filter((s) => s.scope === "shared" && s.id !== "voice-leading-validation");
     } else if (mode === "guitar") {
       return visibleSteps.filter((s) => s.scope === "guitar");
     } else {
@@ -228,7 +234,7 @@ export default function AccompanimentWorkflowWizard({
       ? session.currentStepId
       : filteredSteps[0]?.id ?? "key-beats"
   );
-  const [expandedStepId, setExpandedStepId] = useState<AccompanimentWorkflowStepId | null>(activeStepId);
+  const [expandedStepId, setExpandedStepId] = useState<AccompanimentWorkflowStepId | null>(mode === "harmony" && session && getSelectedWorkflowOption(session, "voice-leading-validation") ? null : activeStepId);
   const selectAccordionStep = (stepId: AccompanimentWorkflowStepId) => {
     if (expandedStepId === stepId) {
       setExpandedStepId(null);
@@ -257,11 +263,14 @@ export default function AccompanimentWorkflowWizard({
     userNote: activeUserNote,
   }) : "";
 
+  const syncedStepId = useRef(session?.currentStepId);
   useEffect(() => {
-    if (!session?.currentStepId) return;
+    if (!session?.currentStepId || syncedStepId.current === session.currentStepId) return;
+    syncedStepId.current = session.currentStepId;
     if (filteredSteps.some((s) => s.id === session.currentStepId)) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setActiveStepId((current) => current === session.currentStepId ? current : session.currentStepId);
+      setExpandedStepId(session.currentStepId);
     }
   }, [session?.currentStepId, filteredSteps]);
 
@@ -272,12 +281,29 @@ export default function AccompanimentWorkflowWizard({
     if (fallback) setActiveStepId(fallback);
   }, [activeStepId, filteredSteps]);
 
+  useEffect(() => {
+    if (mode !== "harmony" || error) return;
+    const next = session ?? createAccompanimentWorkflowSession(sourceAbc, editableSetup);
+    const needsValidation = Boolean(getSelectedWorkflowOption(next, "chord-roles-progression") && !getSelectedWorkflowOption(next, "voice-leading-validation"));
+    const stepId = needsValidation ? "voice-leading-validation" : getSelectedWorkflowOption(next, "key-beats") ? "chord-roles-progression" : "key-beats";
+    if (!needsValidation && next.steps[stepId]?.runs.length) return;
+    try {
+      const run = generateHarmonyWorkflowStep({ stepId, sourceAbc, previousSelections: getSelectedWorkflowContext(next, stepId) });
+      const calculated = mergeRun(next, run, "");
+      onWorkflowChange(needsValidation ? { ...selectOption(calculated, stepId, run.options[0], "", run.id), currentStepId: "chord-roles-progression" } : calculated);
+    } catch (cause) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- report deterministic analysis failure without retrying every render.
+      setError(cause instanceof Error ? cause.message : "Unable to calculate harmony.");
+    }
+  }, [mode, session, sourceAbc, editableSetup, error, onWorkflowChange]);
+
   const beginWorkflow = (setup: AccompanimentWorkflowSetup = editableSetup) => {
     const normalizedSetup = normalizeAccompanimentWorkflowSetup(setup);
     const next = createAccompanimentWorkflowSession(sourceAbc, normalizedSetup);
     onWorkflowSetupChange(normalizedSetup);
     onWorkflowChange(next);
     setActiveStepId(next.currentStepId);
+    setExpandedStepId(next.currentStepId);
     setUserNotes({});
     setSavedNoteStepId(null);
     setGeneratingStepId(null);
@@ -388,21 +414,76 @@ export default function AccompanimentWorkflowWizard({
 
   const handleSelectOption = (option: AccompanimentWorkflowOption, runId: string) => {
     if (!session || !activeStep) return;
-    onWorkflowChange(selectOption(session, activeStep.id, option, activeUserNote, runId));
+    let next = selectOption(session, activeStep.id, option, activeUserNote, runId);
+    setError(null);
+    if (mode === "harmony") {
+      try {
+        if (activeStep.id === "key-beats") {
+          next = clearAccompanimentWorkflowStepResults(next, ["chord-roles-progression", "voice-leading-validation", ...ACCOMPANIMENT_WORKFLOW_BRANCH_STEP_IDS.guitar]);
+          const run = generateHarmonyWorkflowStep({ stepId: "chord-roles-progression", sourceAbc, previousSelections: getSelectedWorkflowContext(next, "chord-roles-progression") });
+          next = mergeRun(next, run, "");
+        } else if (activeStep.id === "chord-roles-progression") {
+          next = clearAccompanimentWorkflowStepResults(next, ["voice-leading-validation", ...ACCOMPANIMENT_WORKFLOW_BRANCH_STEP_IDS.guitar]);
+          const run = generateHarmonyWorkflowStep({ stepId: "voice-leading-validation", sourceAbc, previousSelections: getSelectedWorkflowContext(next, "voice-leading-validation") });
+          next = selectOption(mergeRun(next, run, ""), run.stepId, run.options[0], "", run.id);
+        }
+      } catch (cause) {
+        onWorkflowChange(next);
+        setError(cause instanceof Error ? cause.message : "Unable to calculate harmony.");
+        return;
+      }
+    }
+    if (mode === "harmony") {
+      const nextStep = filteredSteps[filteredSteps.findIndex((step) => step.id === activeStep.id) + 1];
+      next.currentStepId = nextStep?.id ?? activeStep.id;
+      setActiveStepId(next.currentStepId);
+      setExpandedStepId(nextStep?.id ?? null);
+      if (!nextStep) onHarmonyValidated?.();
+    }
+    onWorkflowChange(next);
+    if (mode !== "harmony" && next.currentStepId !== session.currentStepId) setExpandedStepId(next.currentStepId);
   };
 
   if (mode === "accompaniment" && !branchSourceAbc) {
     return (
       <section className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
         <h3 className="font-bold">Harmony validation required</h3>
-        <p className="mt-1 leading-5">Select an option in Harmony step 3, Validate Harmony, before generating accompaniment branches.</p>
+        <p className="mt-1 leading-5">Select an option in Harmony step 2, Chords, before generating accompaniment branches.</p>
       </section>
     );
   }
 
   if (!session) {
+    const initialStepContent = (
+      <>
+        {activeStep && (
+          <section className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/50">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h4 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">{activeStep.index}. {activeStep.label}</h4>
+                <p className="mt-1 text-xs leading-5 text-zinc-600 dark:text-zinc-400">{activeStep.description}</p>
+              </div>
+              {!compactPresentation && <ScopeBadge scope={activeStep.scope} className="px-2 py-1" />}
+            </div>
+            {!algorithmicHarmony && <details className="mt-3 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950/50">
+              <summary className="cursor-pointer text-xs font-bold text-zinc-700 dark:text-zinc-200">Default prompt preview</summary>
+              <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-zinc-500 dark:text-zinc-400">{getAccompanimentWorkflowPromptSummary(activeStep.id)}</p>
+              <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap rounded-lg bg-zinc-50 p-3 text-[11px] leading-5 text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">{promptPreview}</pre>
+            </details>}
+            {algorithmicHarmony && <p className="mt-3 text-xs text-zinc-500">Key and meter analysis runs automatically. Choose an emphasis to calculate chord progressions. No AI connection required.</p>}
+          </section>
+        )}
+        {mode !== "harmony" && <Button variant="primary" size="md" type="button" onClick={() => beginWorkflow()} >
+          {workflow && !sourceCurrent
+            ? "Reset Workflow for Current ABC"
+            : mode === "guitar"
+                ? `Start ${filteredSteps.length}-step Guitar Fingerstyle Workflow`
+                : `Start ${filteredSteps.length}-step Accompaniment Workflow`}
+        </Button>}
+      </>
+    );
     return (
-      <div className={compactPresentation ? harmonyStyles.wizard : "space-y-4 rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950/50"}>
+      <div className={compactPresentation ? `${harmonyStyles.wizard} ${mode === "harmony" ? harmonyStyles.harmonyWizard : ""}` : "space-y-4 rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950/50"}>
         {mode === "accompaniment" && (
           <WorkflowSetupPanel
             setup={editableSetup}
@@ -416,7 +497,7 @@ export default function AccompanimentWorkflowWizard({
           </h3>
           <p className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
             {mode === "harmony"
-              ? "Start with the key and rhythm, explore chords, then review the harmony."
+              ? "Choose key and rhythm emphasis, then select a calculated chord progression."
               : mode === "guitar"
                 ? `${filteredSteps.length} planned review points for the guitar fingerstyle arrangement.`
                 : `${filteredSteps.length} planned review points will be created from the selected instruments. Change the setup above to preview the exact workflow before starting.`}
@@ -434,33 +515,11 @@ export default function AccompanimentWorkflowWizard({
           activeStepId={activeStep?.id ?? activeStepId}
           expandedStepId={expandedStepId}
           onStepClick={selectAccordionStep}
-        />
-        {activeStep && (
-          <section className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/50">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <h4 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">{activeStep.index}. {activeStep.label}</h4>
-                <p className="mt-1 text-xs leading-5 text-zinc-600 dark:text-zinc-400">{activeStep.description}</p>
-              </div>
-              {!compactPresentation && <ScopeBadge scope={activeStep.scope} className="px-2 py-1" />}
-            </div>
-            {!algorithmicHarmony && <details className="mt-3 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950/50">
-              <summary className="cursor-pointer text-xs font-bold text-zinc-700 dark:text-zinc-200">Default prompt preview</summary>
-              <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-zinc-500 dark:text-zinc-400">{getAccompanimentWorkflowPromptSummary(activeStep.id)}</p>
-              <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap rounded-lg bg-zinc-50 p-3 text-[11px] leading-5 text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">{promptPreview}</pre>
-            </details>}
-            {algorithmicHarmony && <p className="mt-3 text-xs text-zinc-500">Analyze key and meter, rank chord progressions, then validate your selection. No AI connection required.</p>}
-          </section>
-        )}
-        <Button variant="primary" size="md" type="button" onClick={() => beginWorkflow()} >
-          {workflow && !sourceCurrent 
-            ? "Reset Workflow for Current ABC" 
-            : mode === "harmony"
-              ? "Start shaping harmony →"
-              : mode === "guitar"
-                ? `Start ${filteredSteps.length}-step Guitar Fingerstyle Workflow`
-                : `Start ${filteredSteps.length}-step Accompaniment Workflow`}
-        </Button>
+        >
+          {mode === "harmony" && initialStepContent}
+          {mode === "harmony" && error && <p role="alert">{error}</p>}
+        </WorkflowStepGrid>
+        {mode !== "harmony" && initialStepContent}
       </div>
     );
   }
@@ -476,7 +535,7 @@ export default function AccompanimentWorkflowWizard({
   const activeLlmLogs = Array.from(new Map([...persistedLlmLogs, ...transientLlmLogs].map((log) => [log.id, log])).values());
 
   return (
-    <div className={compactPresentation ? harmonyStyles.wizard : "space-y-4 rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950/50"}>
+    <div className={compactPresentation ? `${harmonyStyles.wizard} ${mode === "harmony" ? harmonyStyles.harmonyWizard : ""}` : "space-y-4 rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950/50"}>
       {mode === "accompaniment" && (
         <WorkflowSetupPanel
           setup={editableSetup}
@@ -534,6 +593,12 @@ export default function AccompanimentWorkflowWizard({
         </div>
       </div>
 
+      {workflowComplete && mode === "accompaniment" && (
+        <p className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-300">
+          Accompaniment workflow complete. All enabled instrument steps are selected; disabled instruments were skipped by setup and are not required for the result ABC.
+        </p>
+      )}
+
       <WorkflowStepGrid
           compact={compactPresentation}
         steps={filteredSteps}
@@ -541,15 +606,8 @@ export default function AccompanimentWorkflowWizard({
         activeStepId={activeStepId}
         expandedStepId={expandedStepId}
         onStepClick={selectAccordionStep}
-      />
-
-      {workflowComplete && mode === "accompaniment" && (
-        <p className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-300">
-          Accompaniment workflow complete. All enabled instrument steps are selected; disabled instruments were skipped by setup and are not required for the result ABC.
-        </p>
-      )}
-
-      {activeStep && (!compactPresentation || expandedStepId === activeStep.id) ? (
+      >
+      {activeStep ? (
         <section className="space-y-3 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/50">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
@@ -606,7 +664,7 @@ export default function AccompanimentWorkflowWizard({
           {error && <p className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/40 dark:text-rose-300">{error}</p>}
 
           <div className="flex flex-wrap gap-2">
-            <Button variant="primary" size="md"
+            {mode !== "harmony" && <Button variant="primary" size="md"
               type="button"
               disabled={!activeUnlocked || generatingStepId === activeStep.id}
               onClick={generateStep}
@@ -619,7 +677,7 @@ export default function AccompanimentWorkflowWizard({
                   : compactPresentation
                     ? (activeStepState.runs.length ? (algorithmicHarmony ? "Recalculate suggestions" : "Try new suggestions") : "Generate suggestions")
                     : "Generate / Regenerate Options"}
-            </Button>
+            </Button>}
             {canSkipActiveBranch && (
               <Button variant="ghost" size="sm"
                 type="button"
@@ -633,7 +691,7 @@ export default function AccompanimentWorkflowWizard({
             {!activeUnlocked && <span className="self-center text-xs text-zinc-500 dark:text-zinc-400">Select required previous steps before generating this one.</span>}
           </div>
 
-          {(!compactPresentation || activeStepState.runs.length > 0) && <RunOptionList workflow={session} stepId={activeStep.id} onSelect={handleSelectOption} />}
+          {(!compactPresentation || activeStepState.runs.length > 0) && <RunOptionList compact={mode === "harmony"} workflow={session} stepId={activeStep.id} onSelect={handleSelectOption} />}
 
           {!algorithmicHarmony && <WorkflowDetails compact={compactPresentation} label={`Generation activity · ${activeLlmLogs.length} events`}><LlmCallLogPanel logs={activeLlmLogs} /></WorkflowDetails>}
         </section>
@@ -642,6 +700,7 @@ export default function AccompanimentWorkflowWizard({
           No accompaniment instrument steps are enabled. Use Accompaniment setup above to check at least one instrument.
         </p>
       )}
+      </WorkflowStepGrid>
     </div>
   );
 }

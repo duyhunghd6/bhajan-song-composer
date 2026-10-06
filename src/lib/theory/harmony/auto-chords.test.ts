@@ -24,6 +24,23 @@ describe('metric timeline and missing harmony', () => {
     expect(buildMetricTimeline(abc('C12 |', '12/8'))[0].strongBeats.map(b => b.beat)).toEqual([1, 4, 7, 10]);
     expect(buildMetricTimeline(abc('C7 |', '(2+2+3)/8'))[0].strongBeats.map(b => b.beat)).toEqual([1, 3, 5]);
   });
+  it('leaves unannotated opening pickups alone while filling subsequent bars', () => {
+    for (const [body, meter] of [['G2 | C8 |', '4/4'], ['G4 A2 | C8 |', '4/4'], ['G | C6 |', '6/8']]) {
+      const source = abc(body, meter);
+      const result = fillMissingMeasureChords(source);
+      expect(result.suggestions.map(s => s.measureIndex)).toEqual([1]);
+      expect(buildMetricTimeline(result.abc)[0].events.flatMap(e => e.chords)).toEqual([]);
+      expect(result.issues).toEqual([]);
+      expect(fillMissingMeasureChords(result.abc).abc).toBe(result.abc);
+    }
+  });
+  it('preserves explicit pickup chords and still fills a complete opening bar', () => {
+    const source = abc('"G"G2 | C8 |');
+    const result = fillMissingMeasureChords(source);
+    expect(result.abc).toContain('"G"G2 |');
+    expect(result.suggestions.map(s => s.measureIndex)).toEqual([1]);
+    expect(fillMissingMeasureChords(abc('C8 |')).suggestions.map(s => s.measureIndex)).toEqual([0]);
+  });
   it('respects key, carried accidentals, bar resets, ties and bracket chords', () => {
     expect(pcs(abc('F2 =F2 F4 | F8 |', '4/4', '1/8', 'G'))).toEqual([[[6], [5]], [[6], [6]]]);
     expect(pcs(abc('^F8- | F8 |'))).toEqual([[[6], [6]], [[6], [6]]]);

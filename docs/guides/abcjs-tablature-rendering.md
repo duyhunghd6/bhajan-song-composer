@@ -7,6 +7,7 @@ This guide is the source of truth for **how ABC reaches abcjs** and for the Guit
 <!-- beads-id: br-guide-abcjs-tablature-s01 -->
 
 - Theory modules own canonical/generated arrangement ABC. `src/components/music-sheet/AbcjsPlaybackController.tsx` is the playback adapter, and `abcjs-playback/render-input.ts` is the final transient path: `caller ABC → ABCJS-only adaptation → abcjs.renderAbc`.
+- Strumming display maps standard bow marks to ↓/↑, Slap to X, and dead strum to Dead at the render boundary. Only tagged Strumming technique annotations bypass the string-number hiding rule, including PDF capture; canonical ABC and TimeGrid retain their performance semantics.
 - Do not mutate canonical source, persisted drafts, or export data at a component call site to compensate for abcjs layout/playback behavior. Keep key/meter overrides, hidden voice names, inert-grace sanitization, and Guitar string forcing within the render boundary.
 - Callers pass ABC text and render/synth options; the adapter owns abcjs rendering, synth lifecycle, score-to-source selection, cursor events, and visual post-processing (`abcjs-playback/abc-rendering.ts`: tempo parsing, beat indicators, lyrics, tablature staff spacing).
 
@@ -56,6 +57,12 @@ abcjs assigns strings by a lowest-fret heuristic unless told otherwise. Guitar T
 
 Melody, Harmony and Accompaniment use the same guitar-shape picker and diagram/audio model. In Melody, quoted chord symbols in the first voice provide the chord windows. Choosing a shape updates workspace `voicingOverrides`, bound to the exact melody source fingerprint; it does not rewrite melody ABC or validate a downstream Harmony step. An edited source cannot use an override from a different fingerprint. Identical source snapshots can share choices across previews. A source with no chord symbols has no shapes to show.
 
+Staff playback uses Acoustic Guitar (steel strings), zero-based GM program 25. `src/lib/theory/guitar-sound.ts` owns that program for chord-shape realization and auditions. The shared `abcjs-playback/guitar-audio.ts` adapter applies it before sample loading to Guitar voices and legacy nylon program 24 events, and defaults automatic chord/bass synthesis to steel strings. Canonical ABC and exports remain unchanged by this audio projection; other instrument voices retain their programs.
+
+The score viewport context menu offers 0.1x, 0.5x, 1x, 1.25x, 1.5x, 2x and 3x playback speed relative to the toolbar BPM. Changing speed stops playback; Play rebuilds audio and cursor timing at the new rate without rewriting ABC. Strum sweeps and muted-note lengths scale with speed as well. At 0.1x, `[StaffPlayback 0.1x] note` logs final audible scheduled events against the AudioContext clock: note/MIDI, direction, stroke order, score time, duration and actual GM instrument. Pause, rewind, source changes and unmount cancel logging; resume/loop reposition the trace. These diagnostics report the synth schedule, not microphone measurements.
+
+ABCJS engraving sorts chord pitches in place. `abcjs-playback/strumming-pitch-order.ts` retains the written pitch order from the exact render input; the strumming audio adapter restores that order before assigning per-string delays. This keeps upstrokes and downstrokes distinct after rendering, including repeated pitches.
+
 ABC distinguishes a chord symbol (`"Em"E`) from simultaneous pitches (`[EGB]`). The symbol alone does not encode strings, frets, fingers or barre position. Do not encode a shape by changing the harmonic name to something like `"Em-7th-position"`: chord parsing and synthesis expect a musical chord symbol. An annotation such as `"^VII"` can label a position for a reader, but does not enforce its playback or TAB.
 
 For an explicit Guitar voice, write the selected shape's actual concert pitches and string decorations. These two Em shapes have different pitches and strings even though the chord name is the same (standard tuning; frets listed low string to high):
@@ -67,7 +74,7 @@ M:4/4
 L:1/4
 K:C
 V:Guitar clef=treble-8
-%%MIDI program 24
+%%MIDI program 25
 % Open Em: 0 2 2 0 0 0
 "Em"[!6!E,,!5!B,,!4!E,!3!G,!2!B,!1!E]4 |
 % Em at fret 7: X 7 9 9 8 7

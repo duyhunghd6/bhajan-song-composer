@@ -1,3 +1,4 @@
+import { ACOUSTIC_STEEL_GUITAR_PROGRAM } from "./guitar-sound";
 import abcjs from "abcjs";
 import { Chord, Note } from "@tonaljs/tonal";
 import { getGuitarVoicings, type GuitarVoicing } from "./guitar-voicings";
@@ -197,7 +198,7 @@ export function buildGuitarChordScore(abc: string, sourceAbc: string, overrides:
   const meter = abc.match(/^M:\s*(.+)$/m)?.[1] ?? "4/4";
   const tempo = abc.match(/^Q:\s*(.+)$/m)?.[1] ?? "1/4=120";
   return { occurrences, sourceRevisionId,
-    carrierAbc: `X:1\nM:${meter}\nL:1/1\nQ:${tempo}\nK:C\n%%MIDI program 24\n${tokens.join(" ")}`,
+    carrierAbc: `X:1\nM:${meter}\nL:1/1\nQ:${tempo}\nK:C\n%%MIDI program ${ACOUSTIC_STEEL_GUITAR_PROGRAM}\n${tokens.join(" ")}`,
     guitarVoiceIndices: extractAbcVoiceIds(abc).flatMap((voice, index) => /^Guitar/i.test(voice) ? [index] : []),
   };
 }
@@ -226,7 +227,7 @@ export function realizeGuitarChordAudio(base: GuitarAudioSequence, score: Guitar
     for (const index of guitarIndices) {
       const usedAtAttack = new Map<number, Set<GuitarAudioEvent>>();
       tracks[index] = tracks[index].flatMap((event) => {
-        if (event.cmd === "program") return [{ ...event, instrument: 24 }];
+        if (event.cmd === "program") return [{ ...event, instrument: ACOUSTIC_STEEL_GUITAR_PROGRAM }];
         if (event.cmd !== "note" || event.start === undefined || event.pitch === undefined) return [event];
         const used = usedAtAttack.get(event.start) ?? new Set<GuitarAudioEvent>();
         usedAtAttack.set(event.start, used);
@@ -241,7 +242,7 @@ export function realizeGuitarChordAudio(base: GuitarAudioSequence, score: Guitar
         // bass makes shapes with the same lowest string audibly identical.
         if (sourcePitches.length === 1) {
           sounding.forEach((note) => used.add(note));
-          return sounding.map((note) => ({ ...event, pitch: note.pitch, instrument: 24,
+          return sounding.map((note) => ({ ...event, pitch: note.pitch, instrument: ACOUSTIC_STEEL_GUITAR_PROGRAM,
             duration: Math.min(event.duration ?? 0, note.start! + note.duration! - event.start!) }));
         }
         const rank = sourcePitches.indexOf(event.pitch);
@@ -249,16 +250,16 @@ export function realizeGuitarChordAudio(base: GuitarAudioSequence, score: Guitar
         const target = strings[stringIndex];
         const assigned = sounding.reduce((best, note) => Math.abs(note.pitch! - target.pitch!) < Math.abs(best.pitch! - target.pitch!) ? note : best);
         used.add(assigned);
-        return [{ ...event, pitch: assigned.pitch, instrument: 24,
+        return [{ ...event, pitch: assigned.pitch, instrument: ACOUSTIC_STEEL_GUITAR_PROGRAM,
           duration: Math.min(event.duration ?? 0, assigned.start! + assigned.duration! - event.start) }];
       });
     }
   } else {
-    tracks.push([{ cmd: "program", instrument: 24, channel: tracks.length }, ...guitarNotes.map((event) => ({ ...event, instrument: 24, volume: 75 }))]);
+    tracks.push([{ cmd: "program", instrument: ACOUSTIC_STEEL_GUITAR_PROGRAM, channel: tracks.length }, ...guitarNotes.map((event) => ({ ...event, instrument: ACOUSTIC_STEEL_GUITAR_PROGRAM, volume: 75 }))]);
   }
   return { ...base, tracks };
 }
 
 export function guitarShapeAuditionAbc(shape: GuitarChordShape): string {
-  return `X:1\nM:4/4\nL:1/4\nQ:1/4=80\nK:C\n%%MIDI program 24\n[${shape.midi.map(midiToAbc).join("")}]4 |`;
+  return `X:1\nM:4/4\nL:1/4\nQ:1/4=80\nK:C\n%%MIDI program ${ACOUSTIC_STEEL_GUITAR_PROGRAM}\n[${shape.midi.map(midiToAbc).join("")}]4 |`;
 }

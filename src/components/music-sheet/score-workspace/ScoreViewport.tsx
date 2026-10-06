@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { PlaybackSpeedMenu } from "../abcjs-playback/playback-speed";
 import { createPortal } from "react-dom";
 import { anchoredScroll, clampScoreZoom, fitScoreZoom, wheelZoomDelta } from "./viewport-geometry";
 import styles from "./viewport.module.css";
@@ -190,13 +191,10 @@ export function ScoreViewport({ children, height = 560, className = "", label = 
         setSpace(true);
       }}>
       {controllerSlot && createPortal(<div className={styles.toolbar}>
-        <Button size="sm" aria-label="Zoom out" title="Zoom out" onClick={() => changeZoom(zoomRef.current / 1.2)}>−</Button>
         <Button size="sm" aria-label="Score zoom" title="Score view actions" aria-haspopup="menu" onClick={(event) => {
           const rect = event.currentTarget.getBoundingClientRect();
-          setContextMenu({ x: Math.max(8, Math.min(rect.left, window.innerWidth - 228)), y: Math.max(8, Math.min(rect.bottom + 4, window.innerHeight - 172)) });
+          setContextMenu({ x: Math.max(8, Math.min(rect.left, window.innerWidth - 228)), y: Math.max(8, Math.min(rect.bottom + 4, window.innerHeight - 280)) });
         }}>{Math.round(zoom * 100)}%</Button>
-        <Button size="sm" aria-label="Zoom in" title="Zoom in" onClick={() => changeZoom(zoomRef.current * 1.2)}>+</Button>
-        <Button size="sm" aria-label="Fit score width" title="Fit score to available width" onClick={() => changeZoom(scoreWidth ? fitScoreZoom(availableWidth + 32, size.width) : 1)}>Fit</Button>
       </div>, controllerSlot)}
       <div ref={viewport} data-score-scroll-viewport tabIndex={0} aria-label="Scrollable score" style={{ height }}
         className={`${styles.viewport} ${hand || space ? styles.hand : ""} ${dragging ? styles.dragging : ""}`}
@@ -206,7 +204,7 @@ export function ScoreViewport({ children, height = 560, className = "", label = 
           if ((event.target as Element).closest(".abcjs-note, [data-guitar-chord]")) return;
           event.preventDefault();
           event.stopPropagation();
-          setContextMenu({ x: Math.max(8, Math.min(event.clientX, window.innerWidth - 228)), y: Math.max(8, Math.min(event.clientY, window.innerHeight - 172)) });
+          setContextMenu({ x: Math.max(8, Math.min(event.clientX, window.innerWidth - 228)), y: Math.max(8, Math.min(event.clientY, window.innerHeight - 280)) });
         }}
         onPointerDownCapture={(event) => {
           suppressClick.current = false;
@@ -286,6 +284,7 @@ export function ScoreViewport({ children, height = 560, className = "", label = 
             const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
             buttons[(index + (event.key === "ArrowDown" ? 1 : buttons.length - 1)) % buttons.length]?.focus();
           }}>
+          <PlaybackSpeedMenu close={() => { setContextMenu(null); viewport.current?.focus(); }} />
           <Button size="sm" role="menuitem" onClick={() => { changeZoom(scoreWidth ? fitScoreZoom(availableWidth + 32, size.width) : 1); setContextMenu(null); viewport.current?.focus(); }}>Fit width</Button>
           <Button size="sm" role="menuitem" onClick={() => { changeZoom(1); setContextMenu(null); viewport.current?.focus(); }}>Reset view</Button>
           <Button size="sm" role="menuitem" aria-pressed={hand} onClick={() => { setHand(!hand); setContextMenu(null); viewport.current?.focus(); }}>{hand ? "Exit hand mode" : "Hand mode"}</Button>

@@ -105,7 +105,7 @@ describe("Accompaniment voicing inspector integration", () => {
 
     expect(preview?.title).toContain("A/B audition");
     expect(preview?.abc).toContain("X:1\nT:A/B audition");
-    expect(preview?.abc).toContain("%%MIDI program 24");
+    expect(preview?.abc).toContain("%%MIDI program 25");
     expect(preview?.abc.match(/\|/g)).toHaveLength(3);
     expect(sourceAbc).toBe("X:1\nT:Locked source\nM:4/4\nL:1/8\nK:Am\n| A2 c2 e2 a2 |");
   });

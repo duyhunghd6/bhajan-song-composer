@@ -114,12 +114,8 @@ for (const colorScheme of ["light", "dark"] as const) {
       await seedTestProjectStorage(page, slug, { melody: fourFourGapCMajor.sourceAbc });
       await page.goto(`/compose/${slug}/harmony`);
       const assistant = page.getByRole("complementary", { name: "Harmony assistant" });
-      const start = page.getByRole("button", { name: "Start shaping harmony →" });
-      await expect(start).toBeVisible();
-      await expect(start).toHaveCSS("height", "44px");
-      expect((await start.boundingBox())!.width).toBeLessThan((await assistant.boundingBox())!.width - 48);
-      await expect(start).toHaveCSS("background-color", "rgb(233, 165, 42)");
-      await expect(start).toHaveCSS("color", "rgb(36, 26, 8)");
+      await expect(page.getByRole("button", { name: /Primary and secondary pulses/ })).toBeVisible();
+      await expect(page.getByRole("button", { name: /Generate|Start shaping harmony/ })).toHaveCount(0);
       await expect(assistant).toHaveCSS("background-color", colorScheme === "dark" ? "rgb(25, 25, 28)" : "rgb(255, 255, 255)");
       const pdf = page.getByRole("button", { name: "Download PDF", exact: true });
       await expect(pdf).toHaveCSS("width", "44px");

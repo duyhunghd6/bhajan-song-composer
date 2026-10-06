@@ -80,7 +80,7 @@ export function AbcjsPlaybackStyles({ resolvedCanvasId }: { resolvedCanvasId: st
          * string indicator numbers above the standard treble staff notes.
          * We hide them here to prevent visual clutter on the standard notation staff.
          */
-        #${resolvedCanvasId} svg text.abcjs-annotation {
+        #${resolvedCanvasId} svg text.abcjs-annotation:not([data-strumming-technique]) {
           display: none;
         }
 

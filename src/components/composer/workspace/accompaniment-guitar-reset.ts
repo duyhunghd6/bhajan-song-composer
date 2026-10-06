@@ -31,6 +31,8 @@ export function buildHarmonyValidationBranchResetState(state: WorkspaceState): P
     : null;
 
   return {
+    harmonyStrumming: null,
+    harmonyStrummingPreview: null,
     aiAccompanimentSuggestions: [],
     selectedAccompanimentIndex: null,
     generatedAccompaniment: null,

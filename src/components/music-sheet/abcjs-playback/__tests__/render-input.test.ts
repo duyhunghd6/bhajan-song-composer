@@ -165,3 +165,11 @@ K:Em
     expect(renderAbc).toHaveBeenCalledWith("canvas", GANESHA_ABCJS_RENDER_INPUT, options);
   });
 });
+
+it('shows guitar arrows and X for slap only in the strumming voice', () => {
+  const abc = 'X:1\nM:4/4\nL:1/8\nV:Melody\nV:GuitarStrumming clef=treble-8\nK:C\n[V:Melody] !upbow!C8 |\n[V:GuitarStrumming] !downbow![CEG]2 !upbow![GEC]2 "^Slap"!style=x!!downbow!B2 "^X"!style=x!!downbow!B2 |';
+  const rendered = prepareAbcjsRenderInput({ abcString: abc });
+  expect(rendered).toContain('[V:Melody] !upbow!C8');
+  expect(rendered).toContain('[V:GuitarStrumming] "^↓"[CEG]2 "^↑"[GEC]2 "^X"!style=x!B2 "^Dead"!style=x!B2');
+  expect(abc).toContain('"^Slap"!style=x!!downbow!');
+});

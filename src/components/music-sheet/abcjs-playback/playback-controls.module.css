@@ -9,3 +9,5 @@
 .tempo strong { min-width: 24px; text-align: center; color: var(--ds-accent-text); font-variant-numeric: tabular-nums; }
 .range { flex-wrap: wrap; font-size: var(--ds-font-xs); color: var(--ds-text-muted); }
 .range input { width: 56px; }
+
+.metadata select.metadataField { width: 58px; padding-inline: 4px; }

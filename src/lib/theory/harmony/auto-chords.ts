@@ -29,6 +29,8 @@ export function fillMissingMeasureChords(source: string): AutoChordResult {
   for (const measure of measures) {
     const existing = measure.events.flatMap(e => e.chords);
     if (existing.length) { previous = existing.at(-1); continue; }
+    // Opening anacruses may lead into the first harmony without their own chord.
+    if (measure.pickupOffset > 0) continue;
     const label = `Measure ${measure.measureIndex + 1}`;
     if (measure.duration > measure.expectedDuration + 1e-7 || (measure.measureIndex > 0 && measure.measureIndex < measures.length - 1 && measure.duration < measure.expectedDuration - 1e-7)) {
       issues.push(`${label}: irregular bar length; left unchanged.`); continue;

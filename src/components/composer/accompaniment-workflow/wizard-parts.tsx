@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/Button";
 import { useState } from "react";
+import harmonyStyles from "../workspace/harmony.module.css";
 
 import {
   emptyStepState,
@@ -140,10 +141,12 @@ export function LlmCallLogPanel({ logs }: { logs: AccompanimentWorkflowLlmLogEnt
 }
 
 export function RunOptionList({
+  compact = false,
   workflow,
   stepId,
   onSelect,
 }: {
+  compact?: boolean;
   workflow: AccompanimentWorkflowSession;
   stepId: AccompanimentWorkflowStepId;
   onSelect: (option: AccompanimentWorkflowOption, runId: string) => void;
@@ -160,7 +163,7 @@ export function RunOptionList({
   }
 
   return (
-    <div className="space-y-4">
+    <div className={compact ? harmonyStyles.compactRuns : "space-y-4"}>
       {runs.map((run) => (
         <div key={run.id} className="rounded-2xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950/50">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">

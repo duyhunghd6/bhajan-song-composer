@@ -123,6 +123,7 @@ export interface AbcjsPlaybackControllerProps {
   showExactRenderAbcCopy?: boolean;
   /** Allow downloading the rendered ABC sheet as a PDF. */
   allowPdfDownload?: boolean;
+  scoreActionsPlacement?: "toolbar" | "footer";
   /** Decorative timeline positions overlaid after abcjs lays out the score. */
   visualMarkers?: AbcjsVisualMarker[];
   /** Projects audio before soundfont samples are loaded. */

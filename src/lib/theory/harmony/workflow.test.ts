@@ -32,6 +32,15 @@ describe('algorithmic harmony workflow', () => {
     expect(JSON.stringify(result.options[0].data)).toContain('"beat":4');
     expect(chords(source).options.length).toBeGreaterThan(0);
   });
+  it('generates and validates harmony without requiring an opening pickup chord', () => {
+    const sourceAbc = abc('B, |: C8 | G8 :|');
+    for (const selected of chords(sourceAbc).options) {
+      expect(selected.data.harmonizedAbc).toContain('B, |:');
+      expect((selected.data.harmonizedAbc as string).split('|:')[0]).not.toContain('"');
+      const validated = generateHarmonyWorkflowStep({ stepId: 'voice-leading-validation', sourceAbc, previousSelections: [{ ...selected, stepId: 'chord-roles-progression' }] });
+      expect(validated.options[0].data.validatedAbc).toBe(selected.data.harmonizedAbc);
+    }
+  });
   it('rejects missing selections, changed melodies and irregular interior measures', () => {
     expect(() => generateHarmonyWorkflowStep({ stepId: 'voice-leading-validation', sourceAbc: abc('C8 |'), previousSelections: [] })).toThrow('Select');
     expect(() => generateHarmonyWorkflowStep({ stepId: 'voice-leading-validation', sourceAbc: abc('C8 |'), previousSelections: [{ ...key, stepId: 'chord-roles-progression', data: { harmonizedAbc: abc('"G"G8 |') } }] })).toThrow('changed');

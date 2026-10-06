@@ -92,7 +92,8 @@ test(`${step}: guitar diagrams select, audition, persist and scope physical chor
   expect(signatures[0]).not.toEqual(signatures[1]);
   await expect.poll(() => page.evaluate(() => (window as typeof window & { guitarQaAudio: { nonzero: boolean }[] }).guitarQaAudio.some((event) => event.nonzero))).toBe(true);
   expect(samples.length).toBeGreaterThan(0);
-  expect(samples.some((url) => url.includes("acoustic_guitar_nylon"))).toBe(true);
+  expect(samples.some((url) => url.includes("acoustic_guitar_steel"))).toBe(true);
+  expect(samples.some((url) => url.includes("acoustic_guitar_nylon"))).toBe(false);
   await barre.dblclick();
   await expect(dialog).not.toBeVisible();
   await page.reload();

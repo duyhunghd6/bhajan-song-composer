@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import abcjs from "abcjs";
-import { buildGuitarChordScore, createGuitarChordOverride, guitarChordShapes, realizeGuitarChordAudio, type GuitarAudioSequence, type GuitarParsedTune } from "../guitar-chord-score";
+import { buildGuitarChordScore, guitarShapeAuditionAbc, createGuitarChordOverride, guitarChordShapes, realizeGuitarChordAudio, type GuitarAudioSequence, type GuitarParsedTune } from "../guitar-chord-score";
 
 function audio(abc: string): GuitarAudioSequence {
   return (abcjs.parseOnly(abc)[0] as unknown as GuitarParsedTune).setUpAudio({ chordsOff: true });
@@ -8,6 +8,10 @@ function audio(abc: string): GuitarAudioSequence {
 const SOURCE = 'X:1\nM:4/4\nL:1/4\nQ:1/4=100\nK:Em\n|: "Em" E2 "Am" z2 | "Em" E4 :|';
 
 describe("guitar chord score realization", () => {
+  it("auditions shapes using acoustic steel-string samples", () => {
+    const events = audio(guitarShapeAuditionAbc(guitarChordShapes("Em")[0])).tracks[0];
+    expect(events.filter((event) => event.cmd === "note").every((event) => event.instrument === 25)).toBe(true);
+  });
   it("offers a complete dominant seventh and respects the bass of slash chords", () => {
     const b7 = guitarChordShapes("B7");
     expect(b7.length).toBeGreaterThan(0);
@@ -36,7 +40,7 @@ describe("guitar chord score realization", () => {
     const guitar = result.tracks.at(-1)!;
     expect(guitar.filter((event) => event.cmd === "note" && event.start === 1).map((event) => event.pitch)).toEqual(barre.midi);
     expect(guitar.filter((event) => event.cmd === "note" && event.start === 3).map((event) => event.pitch)).toEqual(barre.midi);
-    expect(guitar.every((event) => event.instrument === 24)).toBe(true);
+    expect(guitar.every((event) => event.instrument === 25)).toBe(true);
     expect(result.tracks[0]).toEqual(audio(SOURCE).tracks[0]);
   });
   it("ignores stale source decisions", () => {
@@ -70,7 +74,7 @@ describe("guitar chord score realization", () => {
       for (const start of [0, 0.5]) {
         expect(notes.filter((event) => event.start === start).map((event) => event.pitch)).toEqual(score.occurrences[0].selected!.midi);
       }
-      expect(notes.every((event) => event.duration === 0.5 && event.instrument === 24)).toBe(true);
+      expect(notes.every((event) => event.duration === 0.5 && event.instrument === 25)).toBe(true);
     }
   });
   it("changes a repeated support pitch when the chosen shape moves the bass to another octave", () => {

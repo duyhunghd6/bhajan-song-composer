@@ -116,7 +116,7 @@ K:Em
     expect(result.voiceNames).toEqual(["Guitar"]);
     expect(result.visibleVoiceNames).toEqual(["Guitar"]);
     expect(result.abc).toContain('V:Melody name="Melody"');
-    expect(result.abc).toContain('V:Guitar clef=treble-8 name="Guitar" stem=down\n%%MIDI program 24');
+    expect(result.abc).toContain('V:Guitar clef=treble-8 name="Guitar" stem=down\n%%MIDI program 25');
 
     const melodyBars = splitAbcMeasureSegments(getVoiceMusicBody(result.abc, "Melody"));
     const guitarBars = splitAbcMeasureSegments(getVoiceMusicBody(result.abc, "Guitar"));
@@ -216,7 +216,7 @@ K:Em
     });
 
     expect(result.voiceNames).toEqual(["GuitarLH"]);
-    expect(result.abc).toContain('V:GuitarLH clef=treble-8 name="Guitar"\n%%MIDI program 24');
+    expect(result.abc).toContain('V:GuitarLH clef=treble-8 name="Guitar"\n%%MIDI program 25');
     expect(result.abc).not.toContain("V:Harmonium");
   });
 

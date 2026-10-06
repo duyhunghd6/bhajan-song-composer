@@ -44,7 +44,7 @@ function validate(source: string, abc: string) {
   for (const m of measures) {
     for (const event of m.events) {
       if (event.chords.length) active = event.chords.at(-1)!;
-      if (event.pitches.length && !active) throw new Error(`Measure ${m.measureIndex + 1}: sounding melody has no active chord.`);
+      if (event.pitches.length && !active && !m.pickupOffset) throw new Error(`Measure ${m.measureIndex + 1}: sounding melody has no active chord.`);
       if (active && active !== 'N.C.' && !pitchClasses(active).length) throw new Error(`Unsupported chord: ${active}`);
     }
   }
@@ -68,8 +68,8 @@ function progressions(source: string, measures: MetricMeasure[], downbeatsOnly: 
   let paths: Path[] = [{ score: 0, symbols: [], insertions: [], previous: '' }];
   for (const m of measures) {
     const supplied = m.events.flatMap(e => e.chords);
-    if (supplied.length || !m.events.some(e => e.pitches.length)) {
-      paths = paths.map(p => ({ ...p, previous: supplied.at(-1) ?? p.previous, symbols: [...p.symbols, supplied.join(' → ') || 'rest'] }));
+    if (supplied.length || m.pickupOffset > 0 || !m.events.some(e => e.pitches.length)) {
+      paths = paths.map(p => ({ ...p, previous: supplied.at(-1) ?? p.previous, symbols: [...p.symbols, supplied.join(' → ') || (m.pickupOffset > 0 ? 'pickup' : 'rest')] }));
       continue;
     }
     const { root, mode } = keyContext(m.key);

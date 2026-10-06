@@ -130,3 +130,59 @@ Compact-toolbar deterministic checks: seven layout/gate cases, five keyboard/pla
 <!-- beads-id: br-qa-jev-notes-refresh -->
 
 [Attempt 1](iterations/20261005T082013Z-HARMONY-REFRESH-01-attempt-1-iteration-report.md): startup returned `no close frame received or sent` without a run ID; inspect/addressed close unavailable. CDP inventory showed no Composer tabs, resolving cleanup by absence. MCP BLOCKED, no PASS. Separate deterministic probe reproduced HMR WebSocket failures on LAN origin and a reload. Allow the LAN hostname in Next.js allowedDevOrigins; origin-free curl alone misses this bug. Observe navigation and WebSocket failures independently when rerunning; do not edit the existing Ganesha draft.
+
+## ACCOMPANIMENT-STEEL-CHORD-01 — guitar playback timbre
+<!-- beads-id: br-qa-jev-notes-steel-chord -->
+
+[Attempt 1](iterations/20261005T102833Z-ACCOMPANIMENT-STEEL-CHORD-01-attempt-1-iteration-report.md): browser_start returned `no close frame received or sent`, without a run ID. No inspect or addressed close possible. CDP inventory found no Composer tabs, resolving cleanup by absence. BLOCKED by transport, not application failure. Steel-string soundfont selection requires independent audio-event or sample-request evidence; DOM playback state alone cannot establish timbre. Shared staff playback now uses program 25 for Guitar/legacy nylon voices and default chord/bass synthesis; picker and A/B auditions also use 25. Preserve the existing Ganesha draft. Separate deterministic Playwright uses isolated drafts and synthetic WAV samples; it does not establish subjective sound quality or MCP execution.
+
+## HARMONY-STRUMMING-01 — accompaniment style
+<!-- beads-id: br-qa-jev-notes-strumming -->
+
+[Attempt 1](iterations/20261005T111903Z-HARMONY-STRUMMING-01-attempt-1-iteration-report.md): browser_start returned `no close frame received or sent`, without a run ID. No inspect or addressed close possible. Read-only CDP inventory showed no Composer tabs, resolving cleanup by absence. BLOCKED by transport, not application failure. Harmony now offers 4. Accompaniment Style after validated Step 3; seven styles are listed with incompatible meters disabled. Choosing a compatible style exposes seven radio results and a Strumming mixer layer. Select a radio result, use the score Play button to audition, then Save accompaniment; Cancel preview returns to the saved selection. Preserve existing Ganesha data in the read-only MCP testcase. Deterministic Playwright checks are separate evidence, not MCP execution.
+
+
+## HARMONY-CHOICE-SPACING-01 — option padding and advancement
+<!-- beads-id: br-qa-jev-notes-choice-spacing -->
+
+[Attempt 1](iterations/20261005T151759Z-HARMONY-CHOICE-SPACING-01-attempt-1-iteration-report.md): browser_start returned `no close frame received or sent` without a run ID; inspect/addressed close unavailable. Read-only CDP inventory found no Composer tabs, resolving cleanup by absence. BLOCKED by transport, no MCP PASS. Choice cards now use 12px vertical and 14px horizontal padding with 8px paragraph spacing. Choosing a Harmony option collapses that step and opens the immediate next step even when revisiting completed steps; Step 3 opens Accompaniment Style. Preserve existing Ganesha data for read-only MCP inspection; use isolated drafts for interactive regression coverage.
+
+## HARMONY-STRUMMING-TECHNIQUES-01 — directional and muted strokes
+<!-- beads-id: br-qa-jev-notes-strumming-techniques -->
+
+[Attempt 1](iterations/20261005T153356Z-HARMONY-STRUMMING-TECHNIQUES-01-attempt-1-iteration-report.md): browser_start returned `no close frame received or sent`, without a run ID; inspect/addressed close unavailable. Read-only CDP inventory showed no Composer tab, resolving cleanup by absence. BLOCKED by transport; no MCP PASS. Step 4 retains the user's two radio columns and accordion. Its legend now explains Down/Up, PM, X, Slap, Choke and Rest. Do not infer audible sweeps or silence from DOM: deterministic tests separately inspect realized audio and synthesized buffers. The shared Ganesha draft must remain unchanged in the read-only MCP case.
+
+## HARMONY-TECHNIQUE-OPTIONS-01 — playable techniques
+<!-- beads-id: br-qa-jev-notes-technique-options -->
+
+[Attempt 1](iterations/20261005T161000Z-HARMONY-TECHNIQUE-OPTIONS-01-attempt-1-iteration-report.md): browser_start returned `no close frame received or sent` without a run ID. Inspect/addressed close unavailable; read-only CDP found zero Composer tabs, resolving cleanup by absence. BLOCKED by transport. Step 4 contains five checkboxes under “Techniques you can play”: Bass picking, Palm mute, Dead strum, String slap, Choke. They require a selected style. Preserve shared Ganesha data; use isolated drafts for toggling, saving, reload and cancellation. These settings affect all seven generated results and saved canonical ABC/TimeGrid; DOM alone cannot prove acoustic output.
+
+## HARMONY-STRUMMING-ARROWS-01 — readable stroke symbols
+<!-- beads-id: br-qa-jev-notes-strumming-arrows -->
+
+[Attempt 1](iterations/20261005T235900Z-HARMONY-STRUMMING-ARROWS-01-attempt-1-iteration-report.md): MCP startup blocked by transport, no run ID; inspect/close cannot be addressed. CDP found zero Composer tabs. Rendered Strumming now uses ↓ Down, ↑ Up, X Slap and Dead for dead strum; this supersedes older legend notes. Canonical ABC still uses standard bow decorations and Slap/X annotations; the render adapter translates them and audio reads the translated marks. Verify visible SVG text, since the old global annotation-hiding rule concealed all technique labels. Isolated Playwright passed after scoping that rule; preserve the shared draft in read-only MCP checks.
+
+## STAFF-SPEED-01 — playback speed and slow trace
+<!-- beads-id: br-qa-jev-notes-staff-speed -->
+
+[Attempt 1](iterations/20261006T000250Z-STAFF-SPEED-01-attempt-1-iteration-report.md): browser_start returned `no close frame received or sent`, without a run ID. Inspect/addressed close unavailable; CDP inventory found no Composer tabs, resolving cleanup by absence. BLOCKED by transport. Open the Score zoom toolbar menu or right-click blank score space for Playback speed options 0.1x, 0.5x, 1x, 1.25x, 1.5x, 2x, 3x. Selection stops playback; press Play again. At 0.1x console logs final scheduled note events, direction/order and instrument. DOM alone cannot prove audio order. A separate Playwright regression caught ABCJS engraving sorting upstroke pitches: retaining written pitch order now preserves the correct sweep. Preserve shared Ganesha source and workflow.
+
+## HARMONY-STRUMMING-CHORD-CUES-01 — silent chord cues
+<!-- beads-id: br-qa-jev-notes-strumming-chord-cues -->
+
+[Attempt 1](iterations/20261006-HARMONY-STRUMMING-CHORD-CUES-01-attempt-1-iteration-report.md): MCP startup failed with no run ID; inspect/addressed close unavailable. CDP showed zero Composer tabs. BLOCKED by transport. With current Strumming, turning ChordProgression off retains visible chord symbols and diagrams while written Strumming owns playback. Without Strumming, the previous visibility behavior remains. Isolated Playwright checks visible cues, unchanged TimeGrid and silence during Strumming rest windows; this is separate evidence. Preserve shared settings for read-only MCP inspection.
+
+## HARMONY-CHORD-LAYERS-01 — separate display and sound
+<!-- beads-id: br-qa-jev-notes-chord-layers -->
+
+[Attempt 1](iterations/20261006-HARMONY-CHORD-LAYERS-01-attempt-1-iteration-report.md): MCP transport blocked startup, no run ID; inspect/close unavailable. CDP found zero Composer tabs. Supersedes silent-chord-cues behavior: Chord Progression now controls only visual chord names/diagrams without a volume slider; Chord Accompaniment independently controls chord sound and volume. Default audio off with Strumming, on otherwise; explicit choices persist. Isolated Playwright measured synthesized buffers with four-second synthetic samples to verify sustained chord audio during a Strumming rest when enabled, and silence when disabled. Preserve shared draft/settings in read-only MCP runs.
+
+## HARMONY-PICKUP-02 — opening pickup harmony
+<!-- beads-id: br-qa-jev-notes-pickup02 -->
+
+[Attempt 1](iterations/20261006T010649Z-HARMONY-PICKUP-02-attempt-1-iteration-report.md): browser_start failed with “no close frame received or sent”, no run ID; inspect/addressed close unavailable. CDP showed zero Composer tabs. BLOCKED by transport. Step 2 previously generated pickup chords independently of Missing Chord; Step 3 required them. Both now permit chordless opening pickups. Harmony projection compares with matching melody to omit legacy generated pickup chords while preserving explicit source/lyric chords and manual drafts. Saved selections/provenance remain intact. Verify score and ABC after hydration; deterministic tests remain separate evidence.
+
+## HARMONY-AUTOMATIC-01 — automatic harmony choices
+<!-- beads-id: br-qa-jev-notes-harmony-automatic -->
+
+[Attempt 1](iterations/20261006T010853Z-HARMONY-AUTOMATIC-01-attempt-1-iteration-report.md): browser_start failed with “no close frame received or sent”, no run ID; inspect/addressed close unavailable. Read-only CDP inventory found no Composer tabs, resolving cleanup by absence. BLOCKED by transport. Supersedes earlier manual Generate and separate validation-step instructions: Step 1 calculates automatically after hydration; choosing emphasis immediately calculates Step 2. Selecting a progression automatically validates the internal source result. Visible Step 3 is Accompaniment Style. Use isolated drafts for choices/reload/reselection; do not reset shared Ganesha data. Deterministic Playwright remains separate evidence.
